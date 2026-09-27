@@ -1,0 +1,809 @@
+/* test_main.c -- headless unit tests for frd / mesh / field. `make test` */
+#include "../src/frd.h"
+#include "../src/mesh.h"
+#include "../src/field.h"
+#include "../src/filedlg.h"
+#include "../src/dat.h"
+#include "../src/gauss.h"
+#include "../src/inp.h"
+#include "../src/fbd.h"
+#include "../src/os.h"
+#include "../src/sta.h"
+#include "../src/gpu.h"
+#include "frd_write.h"
+#include <math.h>
+
+static int g_fail = 0, g_checks = 0;
+#define CHECK(c) do { g_checks++; if (!(c)) { g_fail++; \
+    fprintf(stderr, "%s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, #c); } } while (0)
+#define CHECK_EQ(a, b) do { g_checks++; long long _a = (long long)(a), _b = (long long)(b); \
+    if (_a != _b) { g_fail++; fprintf(stderr, "%s:%d: %s == %s failed (%lld vs %lld)\n", \
+    __FILE__, __LINE__, #a, #b, _a, _b); } } while (0)
+#define CHECK_NEAR(a, b, eps) do { g_checks++; double _a = (a), _b = (b); \
+    if (!(fabs(_a - _b) <= (eps))) { g_fail++; fprintf(stderr, "%s:%d: %s ~ %s failed (%g vs %g)\n", \
+    __FILE__, __LINE__, #a, #b, _a, _b); } } while (0)
+
+#include "t_cfg.h"
+#include "t_export.h"
+#include "t_path.h"
+#include "t_video.h"
+
+/* ---- helpers ---- */
+
+typedef struct { char* p; size_t n; } buf_t;
+
+static buf_t slurp(FILE* o) {
+    buf_t b;
+    fflush(o);
+    long n = ftell(o);
+    rewind(o);
+    b.p = malloc((size_t)n + 1);
+    b.n = fread(b.p, 1, (size_t)n, o);
+    fclose(o);
+    return b;
+}
+
+static const char* kDisp[] = { "D1", "D2", "D3" };
+static const char* kStress[] = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" };
+
+/* Two Hex8 sharing a face along x: 12 nodes (ids 100..111), elements 7 and 8
+   with materials 1 and 2, two steps of DISP (+pseudo ALL) and STRESS. */
+static buf_t two_hex(int binary) {
+    uint32_t id[12];
+    double xyz[36];
+    for (int i = 0; i < 12; i++) {
+        id[i] = 100 + i;
+        xyz[3 * i] = i % 3; xyz[3 * i + 1] = (i / 3) % 2; xyz[3 * i + 2] = i / 6;
+    }
+#define N(ix, iy, iz) (100 + (iz) * 6 + (iy) * 3 + (ix))
+    uint32_t conn[16] = {
+        N(0,0,0), N(1,0,0), N(1,1,0), N(0,1,0), N(0,0,1), N(1,0,1), N(1,1,1), N(0,1,1),
+        N(1,0,0), N(2,0,0), N(2,1,0), N(1,1,0), N(1,0,1), N(2,0,1), N(2,1,1), N(1,1,1),
+    };
+#undef N
+    uint32_t eid[2] = { 7, 8 }, mat[2] = { 1, 2 };
+    float disp[36], stress[72];
+    for (int i = 0; i < 12; i++) {
+        disp[3 * i] = -1.5f * i; disp[3 * i + 1] = -2.25f; disp[3 * i + 2] = 0.001f * i;
+        for (int c = 0; c < 6; c++) stress[6 * i + c] = (float)(i * 10 + c) * (c % 2 ? -1.f : 1.f);
+    }
+    FILE* o = tmpfile();
+    fprintf(o, "    1C\n");
+    fw_nodes(o, 12, id, xyz, binary);
+    fw_elems(o, 2, eid, 1, 8, conn, mat, binary);
+    for (int s = 1; s <= 2; s++) {
+        fw_step(o, s, s * 0.5, 12, binary);
+        fw_field(o, "DISP", 3, kDisp, 1, 12, id, disp, binary);
+        fw_step(o, s, s * 0.5, 12, binary);
+        fw_field(o, "STRESS", 6, kStress, 0, 12, id, stress, binary);
+    }
+    fprintf(o, "9999\n");
+    return slurp(o);
+}
+
+static void dump_msgs(const cv_frd* f) {
+    for (size_t i = 0; i < f->msgs.n; i++) fprintf(stderr, "    msg: %s\n", f->msgs.a[i].text);
+}
+
+/* ---- tests ---- */
+
+static void test_numbers(void) {
+    double v;
+    const char* s[] = { "1.00000E+00", " -1.50000E-03", "1.0D+05", "2.0-100", "  42 ", "-0.5", "nan" };
+    double want[] = { 1.0, -1.5e-3, 1e5, 2e-100, 42, -0.5, NAN };
+    for (int i = 0; i < 7; i++) {
+        CHECK(cv_parse_num(s[i], s[i] + strlen(s[i]), &v));
+        if (i == 6) CHECK(v != v);
+        else CHECK_NEAR(v, want[i], fabs(want[i]) * 1e-12);
+    }
+    const char* bad[] = { "", "   ", "abc", "1.0E", "--1", "1.2.3" };
+    for (int i = 0; i < 6; i++) CHECK(!cv_parse_num(bad[i], bad[i] + strlen(bad[i]), &v));
+}
+
+static void check_two_hex(int binary) {
+    buf_t b = two_hex(binary);
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, b.p, b.n));
+    CHECK_EQ(f.msgs.n, 0);
+    dump_msgs(&f);
+    CHECK_EQ(f.n_nodes, 12);
+    CHECK_EQ(f.n_elems, 2);
+    CHECK_EQ(f.elem_id[1], 8);
+    CHECK_EQ(f.emat[1], 2);
+    CHECK_EQ(f.n_steps, 2);
+    if (f.n_steps == 2 && f.steps[1].nfields == 2) {
+        CHECK_NEAR(f.steps[1].time, 1.0, 1e-6);
+        CHECK(!f.steps[1].modal);
+        const cv_field_desc* d = &f.steps[1].fields[0];
+        CHECK(strcmp(d->name, "DISP") == 0);
+        CHECK_EQ(d->ncomp, 3);                    /* pseudo ALL dropped */
+        CHECK(strcmp(d->comp[2], "D3") == 0);
+        CHECK_EQ(d->fmt, binary ? 2 : 1);
+        float v[36];
+        cv_frd_read_field(&f, d, v, NULL);
+        CHECK_NEAR(v[3 * 11], -16.5, 1e-4);       /* adjacent negatives in ASCII */
+        CHECK_NEAR(v[3 * 11 + 1], -2.25, 1e-5);
+        CHECK_NEAR(v[3 * 11 + 2], 0.011, 1e-7);
+        const cv_field_desc* s = &f.steps[1].fields[1];
+        CHECK_EQ(s->ncomp, 6);
+        float st[72];
+        cv_frd_read_field(&f, s, st, NULL);
+        CHECK_NEAR(st[6 * 5 + 3], -53, 1e-4);
+    } else {
+        CHECK(!"steps/fields missing");
+    }
+
+    {   /* per-element means stay inside the nodal range, NaN nodes make NaN elements */
+        float nodal[12], em[2];
+        for (int i = 0; i < 12; i++) nodal[i] = (float)i * 1.5f;
+        cv_elem_mean(&f, nodal, em);
+        float mn, mx;
+        cv_range(nodal, 12, &mn, &mx);
+        CHECK(em[0] >= mn && em[0] <= mx && em[1] >= mn && em[1] <= mx);
+        CHECK(em[1] > em[0]);                     /* element 8 sits at larger x, larger node ids */
+        nodal[3] = NAN;
+        cv_elem_mean(&f, nodal, em);
+        CHECK(em[0] != em[0] && em[1] == em[1]);  /* node 103 belongs to element 7 only */
+    }
+
+    cv_skin sk;
+    CHECK(cv_skin_build(&sk, &f, NULL));
+    CHECK_EQ(sk.n_tri, 20);                       /* 10 exterior quads */
+    CHECK_EQ(sk.n_face, 10);
+    CHECK(f.n_elems == 2 && cv_frd_elem_index(&f, 8) == 1 && cv_frd_elem_index(&f, 9) == UINT32_MAX);
+    CHECK_EQ(sk.n_edge, 20);
+    CHECK_EQ(sk.n_pt, 12);
+    cv_skin_free(&sk);
+
+    cv_groups g;
+    CHECK(cv_groups_build(&g, &f));
+    CHECK_EQ(g.axis[CV_AXIS_MAT].n, 2);
+    CHECK_EQ(g.axis[CV_AXIS_TYPE].n, 1);
+    CHECK_EQ(g.axis[CV_AXIS_TYPE].value[0], 1);
+    g.axis[CV_AXIS_MAT].on[1] = false;            /* hide material 2 */
+    uint8_t vis[2];
+    cv_groups_mask(&g, f.n_elems, vis);
+    CHECK(vis[0] && !vis[1]);
+    CHECK(cv_skin_build(&sk, &f, vis));
+    CHECK_EQ(sk.n_tri, 12);                       /* a lone hex: 6 quads */
+    CHECK_EQ(sk.n_edge, 12);
+    CHECK_EQ(sk.n_pt, 8);
+
+    float o[3] = { 0.5f, 0.5f, 5.f }, dir[3] = { 0, 0, -1 };
+    cv_pick p = cv_pick_ray(&f, &sk, NULL, 0, o, dir);
+    CHECK(p.hit);
+    CHECK_EQ(p.elem, 0);
+    CHECK_NEAR(p.t, 4.0, 1e-5);
+    float o2[3] = { 1.5f, 0.5f, 5.f };            /* element 8 is hidden: miss */
+    CHECK(!cv_pick_ray(&f, &sk, NULL, 0, o2, dir).hit);
+
+    cv_skin_free(&sk);
+
+    /* crop box through the shared face: keep only the element at x < 1 */
+    uint8_t v2[2] = { 1, 1 };
+    float lo[3] = { -1, -1, -1 }, hi[3] = { 1.0f, 2, 2 };
+    cv_crop_mask(&f, lo, hi, v2);
+    CHECK(v2[0] && !v2[1]);
+    CHECK(cv_skin_build(&sk, &f, v2));
+    CHECK_EQ(sk.n_tri, 12);                       /* the cut exposes the shared face */
+    cv_skin_free(&sk);
+
+    cv_groups_free(&g);
+    cv_frd_free(&f);
+    free(b.p);
+}
+
+static void test_ascii(void)  { check_two_hex(0); }
+static void test_binary(void) { check_two_hex(1); }
+
+static void test_truncated(void) {
+    buf_t b = two_hex(0);
+    for (size_t cut = 0; cut < b.n; cut += 37) {
+        cv_frd f;
+        CHECK(cv_frd_parse(&f, b.p, cut));
+        if (cut > 0 && cut < b.n - 5) CHECK(f.msgs.n > 0);   /* at least the missing 9999 */
+        for (int s = 0; s < f.n_steps; s++)
+            for (int k = 0; k < f.steps[s].nfields; k++) {
+                float* v = malloc(sizeof(float) * CV_MAX(1, f.n_nodes) * f.steps[s].fields[k].ncomp);
+                cv_frd_read_field(&f, &f.steps[s].fields[k], v, &f.msgs);
+                free(v);
+            }
+        cv_frd_free(&f);
+        free(f.msgs.a);
+    }
+    free(b.p);
+}
+
+/* Random byte damage must never crash or hang, ASCII and binary. */
+static void test_fuzz(void) {
+    uint32_t rng = 12345;
+    for (int bin = 0; bin < 2; bin++) {
+        buf_t b = two_hex(bin);
+        char* w = malloc(b.n);
+        for (int it = 0; it < 3000; it++) {
+            memcpy(w, b.p, b.n);
+            int flips = 1 + (int)(rng % 8);
+            for (int k = 0; k < flips; k++) {
+                rng = rng * 1664525u + 1013904223u;
+                size_t at = (rng >> 8) % b.n;
+                rng = rng * 1664525u + 1013904223u;
+                const char pool[] = "0123456789-+. E\n\x00\xff" "ABC";
+                w[at] = (rng & 1) ? (char)(rng >> 16) : pool[(rng >> 16) % (sizeof pool - 1)];
+            }
+            cv_frd f;
+            cv_frd_parse(&f, w, b.n);
+            for (int s = 0; s < f.n_steps; s++)
+                for (int k = 0; k < f.steps[s].nfields; k++) {
+                    float* v = malloc(sizeof(float) * CV_MAX(1, f.n_nodes) * f.steps[s].fields[k].ncomp);
+                    cv_frd_read_field(&f, &f.steps[s].fields[k], v, &f.msgs);
+                    free(v);
+                }
+            cv_skin sk;
+            if (cv_skin_build(&sk, &f, NULL)) cv_skin_free(&sk);
+            cv_groups g;
+            if (cv_groups_build(&g, &f)) cv_groups_free(&g);
+            cv_frd_free(&f);
+            free(f.msgs.a);
+        }
+        free(w);
+        free(b.p);
+    }
+    CHECK(1);
+}
+
+static void test_modal_flag(void) {
+    const char* s =
+        "    2C                     1                                     1\n"
+        " -1         1 0.00000E+00 0.00000E+00 0.00000E+00\n -3\n"
+        "    1PSTEP                         1           1           1\n"
+        "    1PMODE                         1\n"
+        "  100CL  101 3521.942762           1                     2    1MODAL      1\n"
+        " -4  DISP        4    1\n -5  D1          1    2    1    0\n"
+        " -1         1 9.63160E+03\n -3\n"
+        "    1PSTEP                         2           1           2\n"
+        "  100CL  102 1.00000E+00           1                     0    2           1\n"
+        " -4  DISP        4    1\n -5  D1          1    2    1    0\n"
+        " -1         1 1.00000E-02\n -3\n9999\n";
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, s, strlen(s)));
+    CHECK_EQ(f.n_steps, 2);
+    if (f.n_steps == 2) { CHECK(f.steps[0].modal); CHECK(!f.steps[1].modal); }
+    cv_frd_free(&f);
+    free(f.msgs.a);
+}
+
+static void test_absurd_header(void) {
+    const char* s = "    2C  999999999999                                                1\n"
+                    " -1         1 0.00000E+00 0.00000E+00 0.00000E+00\n -3\n9999\n";
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, s, strlen(s)));
+    CHECK_EQ(f.n_nodes, 1);
+    CHECK(f.msgs.n >= 1);
+    cv_frd_free(&f);
+    free(f.msgs.a);
+}
+
+/* Element pointing at a node that does not exist is dropped and reported. */
+static void test_missing_node(void) {
+    FILE* o = tmpfile();
+    uint32_t id[4] = { 1, 2, 3, 4 };
+    double xyz[12] = { 0,0,0, 1,0,0, 0,1,0, 0,0,1 };
+    uint32_t conn[8] = { 1, 2, 3, 4, 1, 2, 3, 99 };
+    uint32_t eid[2] = { 1, 2 };
+    fw_nodes(o, 4, id, xyz, 0);
+    fw_elems(o, 2, eid, 3, 4, conn, NULL, 0);
+    fprintf(o, "9999\n");
+    buf_t b = slurp(o);
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, b.p, b.n));
+    CHECK_EQ(f.n_elems, 1);
+    CHECK_EQ(f.msgs.n, 1);
+    cv_skin sk;
+    CHECK(cv_skin_build(&sk, &f, NULL));
+    CHECK_EQ(sk.n_tri, 4);                        /* a tet: 4 triangles */
+    CHECK_EQ(sk.n_edge, 6);
+    cv_skin_free(&sk);
+    cv_frd_free(&f);
+    free(f.msgs.a);
+    free(b.p);
+}
+
+/* >6 components use -2 continuation lines in ASCII; a value for an unknown node
+   is ignored and nodes without values read as NaN. */
+static void test_continuation_and_nan(void) {
+    FILE* o = tmpfile();
+    uint32_t id[3] = { 1, 2, 3 };
+    double xyz[9] = { 0,0,0, 1,0,0, 0,1,0 };
+    fw_nodes(o, 3, id, xyz, 0);
+    const char* comps[8] = { "A", "B", "C", "D", "E", "F", "G", "H" };
+    float v[24];
+    for (int i = 0; i < 24; i++) v[i] = (float)i - 7.f;
+    uint32_t rid[3] = { 1, 2, 77 };                    /* 77 is not a node */
+    fw_step(o, 1, 1.0, 3, 0);
+    fw_field(o, "WIDE", 8, comps, 0, 3, rid, v, 0);
+    fprintf(o, "9999\n");
+    buf_t b = slurp(o);
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, b.p, b.n));
+    CHECK_EQ(f.n_steps, 1);
+    if (f.n_steps == 1 && f.steps[0].nfields == 1) {
+        const cv_field_desc* d = &f.steps[0].fields[0];
+        CHECK_EQ(d->ncomp, 8);
+        float out[24];
+        cv_msgs m = {0};
+        cv_frd_read_field(&f, d, out, &m);
+        CHECK_NEAR(out[7], 0.f, 1e-6);              /* node 1, comp H = 7-7 */
+        CHECK_NEAR(out[8 + 7], 8.f, 1e-6);          /* node 2, comp H */
+        CHECK(out[16] != out[16]);                  /* node 3 has no value: NaN */
+        CHECK_EQ(m.n, 1);                           /* the unknown id 77 */
+        free(m.a);
+    } else {
+        CHECK(!"field missing");
+    }
+    cv_frd_free(&f);
+    free(f.msgs.a);
+    free(b.p);
+}
+
+static void test_field_math(void) {
+    float s1[6] = { 100, 0, 0, 0, 0, 0 };
+    CHECK_NEAR(cv_von_mises(s1), 100, 1e-4);
+    float s2[6] = { 0, 0, 0, 50, 0, 0 };
+    CHECK_NEAR(cv_von_mises(s2), 50 * sqrt(3.0), 1e-3);
+    float v[6] = { 3, 4, 0, 1, NAN, 0 }, out[2];
+    cv_field_scalar(v, 3, 2, CV_COMP_MAG, out);
+    CHECK_NEAR(out[0], 5, 1e-6);
+    CHECK(out[1] != out[1]);
+    float r[4] = { -2, NAN, 5, 1 }, mn, mx;
+    CHECK(cv_range(r, 4, &mn, &mx));
+    CHECK_NEAR(mn, -2, 0); CHECK_NEAR(mx, 5, 0);
+    cv_center_zero(&mn, &mx);
+    CHECK_NEAR(mn, -5, 0);
+    float nan1[1] = { NAN };
+    CHECK(!cv_range(nan1, 1, &mn, &mx));
+    CHECK_NEAR(cv_auto_deform(0.001f, 10.f), 1000.f, 1e-2);
+    CHECK_NEAR(cv_auto_deform(5.f, 10.f), 1.f, 0);        /* never shrink */
+
+    /* banding: band centres, monotone, clamped at both ends, identity when smooth */
+    CHECK_NEAR(cv_band_center(0.f, 12), 0.5 / 12, 1e-7);
+    CHECK_NEAR(cv_band_center(0.999f, 12), 11.5 / 12, 1e-7);
+    CHECK_NEAR(cv_band_center(1.f, 12), 11.5 / 12, 1e-7);
+    CHECK_NEAR(cv_band_center(0.5f, 2), 0.75, 1e-7);
+    CHECK_NEAR(cv_band_center(0.37f, 0), 0.37, 1e-7);
+    for (int b = 1; b <= 24; b++) {
+        float prev = -1;
+        for (int i = 0; i <= 100; i++) { float t = cv_band_center(i / 100.f, b); CHECK(t >= prev && t > 0 && t < 1); prev = t; }
+    }
+
+    cv_field_desc d = {0};
+    strcpy(d.name, "STRESS");
+    d.ncomp = 6;
+    cv_scalar_opt opts[16];
+    int n = cv_field_options(&d, opts, 16);
+    CHECK_EQ(n, 7);
+    CHECK_EQ(opts[0].comp, CV_COMP_MISES);
+}
+
+static void test_portal_wire(void) {
+    char p[256];
+    CHECK(cv_uri_to_path("file:///home/a%20b/x.frd", p, sizeof p));
+    CHECK(strcmp(p, "/home/a b/x.frd") == 0);
+    CHECK(cv_uri_to_path("file://host/tmp/y", p, sizeof p));
+    CHECK(strcmp(p, "/tmp/y") == 0);
+    CHECK(!cv_uri_to_path("http://x/y", p, sizeof p));
+
+    uint8_t msg[1024];
+    size_t n = cv_dbus_build_response(msg, sizeof msg, 0, "file:///data/m%C3%BCller/r.frd");
+    CHECK(n > 0);
+    uint32_t code = 9;
+    CHECK(cv_dbus_parse_response(msg, n, &code, p, sizeof p));
+    CHECK_EQ(code, 0);
+    CHECK(strcmp(p, "/data/m\xc3\xbcller/r.frd") == 0);
+
+    n = cv_dbus_build_response(msg, sizeof msg, 1, NULL);           /* cancelled */
+    CHECK(cv_dbus_parse_response(msg, n, &code, p, sizeof p));
+    CHECK_EQ(code, 1);
+    CHECK(p[0] == 0);
+
+    /* every truncation / byte flip of a valid message must be rejected or parsed safely */
+    n = cv_dbus_build_response(msg, sizeof msg, 0, "file:///a");
+    for (size_t k = 0; k < n; k++) cv_dbus_parse_response(msg, k, &code, p, sizeof p);
+    uint8_t bad[1024];
+    for (size_t k = 0; k < n; k++)
+        for (int v = 0; v < 256; v += 37) {
+            memcpy(bad, msg, n); bad[k] = (uint8_t)v;
+            cv_dbus_parse_response(bad, n, &code, p, sizeof p);
+        }
+#if defined(__linux__)
+    if (getenv("DBUS_SESSION_BUS_ADDRESS")) {                     /* live, invisible */
+        char uniq[128] = "";
+        CHECK(cv_dbus_hello(uniq, sizeof uniq));
+        CHECK(uniq[0] == ':');
+        printf("session bus ok, unique name %s\n", uniq);
+    }
+#endif
+}
+
+static void test_list_dir(void) {
+    cv_dirent* e;
+    int n = cv_list_dir("tests", &e);
+    CHECK(n >= 4);
+    bool found = false;
+    for (int i = 0; i < n; i++) found |= !strcmp(e[i].name, "test_main.c") && !e[i].dir && e[i].size > 0;
+    CHECK(found);
+    free(e);
+    CHECK_EQ(cv_list_dir("/definitely/not/here", &e), -1);
+    char d[1024];
+    CHECK(cv_exe_dir(d, sizeof d));
+    CHECK(cv_is_dir(d));
+}
+
+static void test_dat(void) {
+    const char* txt =
+        "\n                        S T E P       2\n\n"
+        "                                INCREMENT     1\n\n"
+        " displacements (vx,vy,vz) for set NDISP and time  0.1000000E+01\n\n"
+        "        48 -2.841229E-17  9.979220E-04  2.104719E-02\n\n"
+        " stresses (elem, integ.pnt.,sxx,syy,szz,sxy,sxz,syz) for set EALL and time  0.1000000E+01\n\n"
+        "         7   1  1.000000E+02 -2.000000E+01  0.000000E+00  5.0E+00  0.0E+00  0.0E+00\n"
+        "         7   2  1.100000E+02 -2.100000E+01  0.000000E+00  5.0E+00  0.0E+00  0.0E+00\n"
+        "         8   1  garbage\n"
+        "\n"
+        " equivalent plastic strain (elem, integ.pnt.,pe)for set EPEEQ and time  0.2000000E+01\n\n"
+        "         7   1  7.746379E-04\n"
+        "         7   2  8.0E-04\n"
+        " global coordinates (elem, integ.pnt.,x,y,z) for set EALL and time  0.2000000E+01\n\n"
+        "         7   1  1.0 2.0 3.0\n";
+    cv_dat d;
+    CHECK(cv_dat_parse(&d, txt, strlen(txt)));
+    CHECK_EQ(d.n, 3);                                   /* nodal block skipped */
+    if (d.n == 3) {
+        CHECK(strcmp(d.b[0].name, "stresses") == 0);
+        CHECK(strcmp(d.b[0].set, "EALL") == 0);
+        CHECK_EQ(d.b[0].ncomp, 6);
+        CHECK(strcmp(d.b[0].comp[5], "syz") == 0);
+        CHECK_EQ(d.b[0].step, 2);
+        CHECK_NEAR(d.b[0].time, 1.0, 1e-6);
+        CHECK_EQ(d.b[0].n, 3);                          /* garbage row kept as NaN, reported */
+        CHECK_NEAR(d.b[0].vals[6 + 1], -21.0, 1e-4);
+        CHECK(d.b[0].vals[12 + 1] != d.b[0].vals[12 + 1]);
+        CHECK(strcmp(d.b[1].name, "equivalent plastic strain") == 0);
+        CHECK_EQ(d.b[1].ncomp, 1);
+        CHECK_EQ(d.b[1].n, 2);                          /* header without a blank line ends it */
+        CHECK_EQ(d.b[1].ip[1], 2);
+        CHECK(d.b[2].is_coord);
+        CHECK_NEAR(d.b[2].vals[2], 3.0, 1e-6);
+    }
+    CHECK(d.msgs.n >= 1);
+    cv_dat_free(&d);
+    free(d.msgs.a);
+
+    /* damage never crashes */
+    size_t L = strlen(txt);
+    char* w = malloc(L);
+    uint32_t rng = 7;
+    for (int it = 0; it < 2000; it++) {
+        memcpy(w, txt, L);
+        for (int k = 0; k < 4; k++) { rng = rng * 1664525u + 1013904223u; w[(rng >> 8) % L] = (char)(rng >> 20); }
+        cv_dat dd;
+        cv_dat_parse(&dd, w, (size_t)((rng >> 4) % (L + 1)));
+        cv_dat_free(&dd);
+        free(dd.msgs.a);
+    }
+    free(w);
+}
+
+static void test_gauss(void) {
+    /* shape functions: N_i(node_j) = delta_ij, and they sum to 1 everywhere */
+    const int types[10] = { 1, 4, 3, 6, 2, 5, 9, 10, 7, 8 }, nns[10] = { 8, 20, 4, 10, 6, 15, 4, 8, 3, 6 };
+    for (int t = 0; t < 10; t++) {
+        double N[20], x[3];
+        int bad = 0;
+        for (int j = 0; j < nns[t]; j++) {
+            CHECK(cv_node_param(types[t], nns[t], j, x));
+            CHECK(cv_shape(types[t], nns[t], x, N));
+            for (int i = 0; i < nns[t]; i++) if (fabs(N[i] - (i == j)) > 1e-12) bad++;
+        }
+        CHECK_EQ(bad, 0);
+        double y[3] = { 0.21, 0.13, -0.37 }, sum = 0;
+        cv_shape(types[t], nns[t], y, N);
+        for (int i = 0; i < nns[t]; i++) sum += N[i];
+        CHECK_NEAR(sum, 1.0, 1e-12);
+    }
+    /* CalculiX order: C3D8 point 2 is (+,-,-); C3D20 point 27 is (+,+,+) */
+    double x[3];
+    CHECK(cv_ip_param(1, 8, 1, x));
+    CHECK(x[0] > 0 && x[1] < 0 && x[2] < 0);
+    CHECK(cv_ip_param(4, 27, 26, x));
+    CHECK(x[0] > 0.7 && x[1] > 0.7 && x[2] > 0.7);
+    CHECK(cv_ip_param(4, 27, 13, x));
+    CHECK_NEAR(x[0], 0, 0); CHECK_NEAR(x[2], 0, 0);
+    CHECK(!cv_ip_param(1, 5, 0, x));                     /* unknown scheme */
+    CHECK(cv_ip_param(10, 4, 1, x));                     /* S8R point 2: (+,-) on the face */
+    CHECK(x[0] > 0 && x[1] < 0 && x[2] == 0);
+    CHECK(cv_ip_param(7, 1, 0, x));                      /* 3-node triangle: centroid */
+    CHECK_NEAR(x[0], 1.0 / 3, 1e-12);
+    CHECK(cv_ip_param(8, 3, 2, x));
+    CHECK_NEAR(x[1], 2.0 / 3, 1e-9);
+    CHECK(cv_ip_param(3, 15, 14, x));
+
+    /* .frd order: hex20 13-16 <-> 17-20, wedge15 10-12 <-> 13-15, both involutions */
+    CHECK_EQ(cv_frd_node_pos(4, 20, 12), 16);
+    CHECK_EQ(cv_frd_node_pos(4, 20, 19), 15);
+    CHECK_EQ(cv_frd_node_pos(5, 15, 9), 12);
+    CHECK_EQ(cv_frd_node_pos(5, 15, 14), 11);
+    CHECK_EQ(cv_frd_node_pos(6, 10, 7), 7);
+    for (int i = 0; i < 20; i++) CHECK_EQ(cv_frd_node_pos(4, 20, cv_frd_node_pos(4, 20, i)), i);
+}
+
+/* in-memory *INCLUDE files for the .inp tests */
+static bool mem_reader(void* user, const char* path, char** data, size_t* size) {
+    const char** files = user;
+    for (int i = 0; files[i]; i += 2)
+        if (strcmp(files[i], path) == 0) {
+            *size = strlen(files[i + 1]);
+            *data = malloc(*size + 1);
+            memcpy(*data, files[i + 1], *size + 1);
+            return true;
+        }
+    return false;
+}
+
+static void test_inp(void) {
+    /* 20-node hex spanning two lines (deck order), a C3D8 in ELSET via param,
+       node data continued from an include, sets referencing sets, a surface */
+    const char* inc_nodes =
+        "13, 1.0, 1.0, 0.0\n14, 1.0, 0.0, 1.0\n15, 1.0, 0.5, 2.0\n";
+    const char* deck =
+        "*HEADING\nTest deck\n"
+        "** a comment\n"
+        "*NODE, NSET=NALL\n"
+        "1, 0,0,0\n2, 1,0,0\n3, 1,1,0\n4, 0,1,0\n5, 0,0,1\n6, 1,0,1\n7, 1,1,1\n8, 0,1,1\n"
+        "9, 0.5,0,0\n10, 1,0.5,0\n11, 0.5,1,0\n12, 0,0.5,0\n"
+        "*INCLUDE, INPUT=nodes.inc\n"
+        "16, 0,0.5,1\n17, 0,0,0.5\n18, 1,0,0.5\n19, 1,1,0.5\n20, 0,1,0.5\n21, 3,3,3\n"
+        "*ELEMENT, TYPE=C3D20R, ELSET=EBIG\n"
+        "1, 1,2,3,4,5,6,7,8,9,10,\n11,12,13,14,15,16,17,18,19,20\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=ESMALL\n"
+        "2, 1,2,3,4,5,6,7,8\n"
+        "3, 1,2,3,4,5,6,7,99\n"                  /* missing node: dropped */
+        "*ELEMENT, TYPE=U1\n9, 1, 2\n"         /* not drawable: skipped */
+        "*ELEMENT, TYPE=SPRINGA, ELSET=ESPR\n20, 1, 21\n"
+        "*ELEMENT, TYPE=SPRING1, ELSET=EGND\n21, 21\n"
+        "*ELEMENT, TYPE=MASS, ELSET=EM\n22, 21\n"
+        "*SPRING, ELSET=EGND\n3\n1000.\n"
+        "*ELEMENT, TYPE=DCOUP3D, ELSET=EDC\n30, 21\n"
+        "*NSET, NSET=NGEN, GENERATE\n1, 9, 2\n"
+        "*ELSET, ELSET=EBOTH\nEBIG, ESMALL\n"
+        "*NSET, NSET=NBAD\n1, garbage\n"
+        "*SURFACE, NAME=STOP\nEBIG, S2\n2, S1\n"
+        "*NODE\n40, 5, 5, 5\n41, 5, 5, 6\n"
+        "*RIGID BODY, NSET=NGEN, REF NODE=40, ROT NODE=41\n"
+        "*SURFACE, NAME=SCPL\nESMALL, S1\n"
+        "*COUPLING, REF NODE=40, SURFACE=SCPL, CONSTRAINT NAME=CPL1\n*KINEMATIC\n1, 3\n"
+        "*DISTRIBUTING COUPLING, ELSET=EDC\n1, 1.\n2, 1.\n3, 1.\n"
+        "*EQUATION\n3\n5, 1, 1., 6, 1, -1.,\n7, 2, 0.5\n"
+        "*TIE, NAME=T1\nSCPL, STOP\n"
+        "*CONTACT PAIR, INTERACTION=I1, TYPE=NODE TO SURFACE\nSTOP, SCPL\n"
+        "*MATERIAL, NAME=Steel\n*ELASTIC\n210000, 0.3\n"
+        "*SOLID SECTION, ELSET=ESMALL, MATERIAL=STEEL\n"
+        "*BOUNDARY\n1, 1, 3\n2, 2\n"
+        "*STEP\n*STATIC\n*BOUNDARY\nNGEN, 11, 11, 20.0\n*CLOAD\nNGEN, 2, -5.5\n8, 1, 1.0\n"
+        "*DLOAD\nESMALL, P2, 3.0\nEBIG, GRAV, 9810, 0, 0, -1\n*END STEP\n"
+        "*STEP\n*CLOAD\n8, 1, 2.0\n*END STEP\n";
+    const char* files[] = { "nodes.inc", inc_nodes, NULL };
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), mem_reader, (void*)files));
+    CHECK(strcmp(d.heading, "Test deck") == 0);
+    CHECK_EQ(d.mesh.n_nodes, 23);                      /* 12 + 3 included + 6 + 2 ref nodes */
+    CHECK_EQ(d.mesh.n_elems, 3);                       /* + the SPRINGA as a Line2 */
+    CHECK_EQ(d.ndisc, 4);                              /* + the DCOUP3D */
+    if (d.ndisc == 4) {
+        CHECK_EQ(d.disc[0].kind, CV_DISC_SPRING); CHECK_EQ(d.disc[0].nn, 2); CHECK_EQ(d.disc[0].n[1], 21);
+        CHECK_EQ(d.disc[1].nn, 1); CHECK_EQ(d.disc[1].dof, 3);
+        CHECK_EQ(d.disc[2].kind, CV_DISC_MASS);
+    }
+    CHECK(cv_inp_set(&d, "EGND", true) && cv_inp_set(&d, "EGND", true)->n == 1);
+    CHECK_EQ(d.mesh.etype[0], 4);
+    uint32_t e1 = cv_frd_elem_index(&d.mesh, 1);
+    CHECK(e1 != UINT32_MAX);
+    if (e1 != UINT32_MAX) {
+        /* deck node 13 (top mid-edge) lands at .frd position 17 (index 16) */
+        uint32_t n = d.mesh.conn[d.mesh.eoff[e1] + 16];
+        CHECK_EQ(d.mesh.node_id[n], 13);
+        n = d.mesh.conn[d.mesh.eoff[e1] + 12];        /* .frd 13 = deck 17 (vertical) */
+        CHECK_EQ(d.mesh.node_id[n], 17);
+    }
+    const cv_set* s = cv_inp_set(&d, "ngen", false);
+    CHECK(s && s->n == 5);
+    s = cv_inp_set(&d, "EBOTH", true);
+    CHECK(s && s->n == 3);                             /* 1, 2 and the dropped 3 */
+    s = cv_inp_set(&d, "NALL", false);
+    CHECK(s && s->n == 21);                            /* the ref nodes came from a later *NODE without NSET */
+    CHECK_EQ(d.nsurfs, 2);
+    if (d.nsurfs == 2) { CHECK_EQ(d.surfs[0].n, 2); CHECK_EQ(d.surfs[0].face[0], 1); }
+    CHECK_EQ(d.nlinks, 6);
+    if (d.nlinks == 6) {
+        CHECK_EQ(d.links[0].kind, CV_LINK_RIGID); CHECK_EQ(d.links[0].ref, 40); CHECK_EQ(d.links[0].n, 5);
+        CHECK_EQ(d.links[1].kind, CV_LINK_KINEMATIC); CHECK_EQ(d.links[1].surf[0], 1); CHECK(strcmp(d.links[1].name, "CPL1") == 0);
+        CHECK_EQ(d.links[2].kind, CV_LINK_DISTRIBUTING); CHECK_EQ(d.links[2].ref, 21); CHECK_EQ(d.links[2].n, 3);
+        CHECK_EQ(d.links[3].kind, CV_LINK_EQUATION); CHECK_EQ(d.links[3].n, 3); CHECK_EQ(d.links[3].nodes[2], 7);
+        CHECK_EQ(d.links[4].kind, CV_LINK_TIE); CHECK_EQ(d.links[4].surf[0], 1); CHECK_EQ(d.links[4].surf[1], 0);
+        CHECK_EQ(d.links[5].kind, CV_LINK_CONTACT); CHECK(strcmp(d.links[5].name, "I1") == 0);
+    }
+    CHECK_EQ(d.nmats, 1);
+    uint32_t e2 = cv_frd_elem_index(&d.mesh, 2);
+    CHECK(e1 != UINT32_MAX && e2 != UINT32_MAX && d.mesh.emat[e2] == 1 && d.mesh.emat[e1] == 0);
+    CHECK(d.msgs.n >= 3);                              /* bad line, missing node, U1 */
+    CHECK_EQ(d.nbcs, 2 + 5);                           /* 1,1-3  2,2  and NGEN (5 nodes) dof 11 */
+    if (d.nbcs == 7) { CHECK_EQ(d.bcs[0].dof_lo, 1); CHECK_EQ(d.bcs[0].dof_hi, 3); CHECK_EQ(d.bcs[6].dof_lo, 11); }
+    CHECK_EQ(d.ncloads, 5 + 1);                        /* NGEN dof 2, node 8 dof 1 (second step overrides) */
+    bool n8 = false;
+    for (uint32_t i = 0; i < d.ncloads; i++) if (d.cloads[i].node == 8 && d.cloads[i].dof == 1) n8 = d.cloads[i].value == 2.0f;
+    CHECK(n8);
+    CHECK_EQ(d.ndloads, 2);                            /* ESMALL = 2 and (dropped) 3; GRAV skipped */
+    if (d.ndloads == 2) { CHECK_EQ(d.dloads[0].face, 1); CHECK_NEAR(d.dloads[0].value, 3.0, 0); }
+    cv_skin sk;
+    CHECK(cv_skin_build(&sk, &d.mesh, NULL));
+    CHECK_EQ(sk.n_face, 0);                            /* two hexes on the same 8 corners: every face is shared */
+    CHECK_EQ(sk.n_edge, 1);                            /* the spring */
+    cv_skin_free(&sk);
+    cv_inp_free(&d);
+    free(d.msgs.a);
+
+    /* random damage never crashes */
+    size_t L = strlen(deck);
+    char* w = malloc(L);
+    uint32_t rng = 99;
+    for (int it = 0; it < 3000; it++) {
+        memcpy(w, deck, L);
+        for (int k = 0; k < 5; k++) { rng = rng * 1664525u + 1013904223u; w[(rng >> 8) % L] = (char)(rng >> 20); }
+        cv_inp dd;
+        cv_inp_parse(&dd, w, (size_t)((rng >> 4) % (L + 1)), mem_reader, (void*)files);
+        cv_skin k2;
+        if (cv_skin_build(&k2, &dd.mesh, NULL)) cv_skin_free(&k2);
+        cv_inp_free(&dd);
+        free(dd.msgs.a);
+    }
+    free(w);
+}
+
+static void test_fbd(void) {
+    const char* geo =
+        "# written by cgx_2.23\n"
+        " PNT p1 0 0 0\n PNT p2 1 0 0\n PNT p3 1 1 0\n PNT p4 0 1 0\n"
+        " PNT C 0 0 5\n PNT A 1 0 5\n PNT B 0 1 5\n"
+        " PNT s1 0 0 9\n PNT s2 1 1 9\n PNT s3 2 0 9\n"
+        " SEQA Q1 pnt s1 s2 s3\n"
+        " LINE L1 p1 p2 4\n LINE L2 p2 p3 4\n LINE L3 p3 p4 4\n LINE L4 p4 p1 4\n"
+        " LINE ARC A B C 8\n"
+        " LINE SPL s1 s3 Q1 8\n"
+        " GSUR SQ + BLEND + L1 + L2 + L3 + L4\n"
+        " SETA corners p p1 p3\n SETA edges l L1 L2\n SETA face s SQ\n SETA mesh n 7 3 7\n SETA mesh e 2\n SETA empty q x\n"
+        " VALU x 3\n MSHP SQ s 4 1 0\n";
+    cv_fbd g;
+    CHECK(cv_fbd_parse(&g, geo, strlen(geo)));
+    CHECK(!g.needs_cgx);
+    CHECK_EQ(g.npts, 10);
+    CHECK_EQ(g.ncrv, 6);
+    CHECK_EQ(g.nsrf, 1);
+    CHECK_EQ(g.nsets, 4);                               /* "empty" holds nothing */
+    CHECK_EQ(g.sets[3].nnod, 3);                        /* mesh ids as written */
+    CHECK_EQ(g.sets[3].nel, 1);
+    /* the arc stays on its circle (radius 1 around C) */
+    int off_circle = 0;
+    for (uint32_t v = g.coff[4]; v < g.coff[5]; v++) {
+        const float* q = g.cxyz + 3 * v;
+        float r = sqrtf(q[0] * q[0] + q[1] * q[1]);
+        if (fabsf(r - 1.f) > 1e-4f || fabsf(q[2] - 5.f) > 1e-6f) off_circle++;
+    }
+    CHECK_EQ(off_circle, 0);
+    CHECK(g.coff[5] - g.coff[4] > 4);
+    /* the spline starts and ends on its points */
+    const float* s0 = g.cxyz + 3 * g.coff[5];
+    const float* s9 = g.cxyz + 3 * (g.coff[6] - 1);
+    CHECK_NEAR(s0[0], 0, 1e-6); CHECK_NEAR(s9[0], 2, 1e-6);
+    /* the unit square is filled: triangle areas sum to 1 */
+    double area = 0;
+    for (uint32_t t = 0; t < g.ntri; t++) {
+        const float* q = g.txyz + 9 * t;
+        double ux = q[3] - q[0], uy = q[4] - q[1], vx = q[6] - q[0], vy = q[7] - q[1];
+        area += 0.5 * fabs(ux * vy - uy * vx);
+    }
+    CHECK_NEAR(area, 1.0, 1e-4);
+    cv_fbd_free(&g);
+    free(g.msgs.a);
+
+    /* a script with cgx-only commands is recognised as one */
+    const char* script = "pnt p1 0 0 0\npnt p2 1 0 0\nline l1 p1 p2 4\nswep all new tra 0 0 1 4\n";
+    CHECK(cv_fbd_parse(&g, script, strlen(script)));
+    CHECK(g.needs_cgx);
+    CHECK(strstr(g.needs_why, "swep") != NULL);
+    cv_fbd_free(&g);
+    free(g.msgs.a);
+    /* references to undefined points are reported, not fatal */
+    const char* broken = " PNT a 0 0 0\n LINE L a zz 2\n GSUR S + BLEND + L + L + L\n";
+    CHECK(cv_fbd_parse(&g, broken, strlen(broken)));
+    CHECK(g.msgs.n >= 1);
+    cv_fbd_free(&g);
+    free(g.msgs.a);
+
+    size_t L = strlen(geo);
+    char* w = malloc(L);
+    uint32_t rng = 5;
+    for (int it = 0; it < 3000; it++) {
+        memcpy(w, geo, L);
+        for (int k = 0; k < 5; k++) { rng = rng * 1664525u + 1013904223u; w[(rng >> 8) % L] = (char)(rng >> 20); }
+        cv_fbd gg;
+        cv_fbd_parse(&gg, w, (size_t)((rng >> 4) % (L + 1)));
+        cv_fbd_free(&gg);
+        free(gg.msgs.a);
+    }
+    free(w);
+}
+
+static void test_sta(void) {
+    const char* sta =
+        "SUMMARY OF JOB INFORMATION\n"
+        "  STEP      INC     ATT  ITRS     TOT TIME     STEP TIME      INC TIME\n"
+        "     1          1     1     2  0.100000E+01  0.100000E+01  0.100000E+01\n"
+        "     2          4     1U    4  0.100350E+01  0.350000E-02  0.225000E-02\n"
+        "     2          4     2     3  0.100354E+01  0.353516E-02  0.351563E-04\n"
+        "garbage line here\n";
+    const char* cvg =
+        "SUMMARY OF C0NVERGENCE INFORMATION\n"
+        "  STEP   INC  ATT   ITER     CONT.   RESID.        CORR.      RESID.      CORR.\n"
+        "     1     1     1     1        0  0.7734E+03  0.1000E+03  0.0000E+00  0.0000E+00\n"
+        "     1     1     1     2      243  0.3111E-01  0.6636E+00  0.0000E+00  0.0000E+00\n";
+    cv_sta t = {0};
+    CHECK(cv_sta_parse(&t, sta, strlen(sta)));
+    CHECK_EQ(t.ninc, 3);
+    if (t.ninc == 3) {
+        CHECK(!t.inc[0].cutback && t.inc[1].cutback && !t.inc[2].cutback);
+        CHECK_EQ(t.inc[1].iters, 4);
+        CHECK_NEAR(t.inc[2].total_time, 1.00354, 1e-5);
+    }
+    CHECK(cv_cvg_parse(&t, cvg, strlen(cvg)));
+    CHECK_EQ(t.nit, 2);
+    if (t.nit == 2) { CHECK_EQ(t.it[1].contact_elems, 243); CHECK_NEAR(t.it[1].resid_force, 0.03111, 1e-6); CHECK_NEAR(t.it[0].corr_disp, 100, 1e-3); }
+    cv_sta_free(&t);
+    for (size_t k = 0; k < strlen(sta); k += 7) { cv_sta t2 = {0}; cv_sta_parse(&t2, sta, k); cv_cvg_parse(&t2, cvg, k % strlen(cvg)); cv_sta_free(&t2); }
+}
+
+static void test_gpu_env(void) {
+    CHECK(!cv_gpu_is_software_run());
+    cv_gpu_software_mode();
+    CHECK(cv_gpu_is_software_run());
+#if defined(__linux__)
+    CHECK(getenv("LIBGL_ALWAYS_SOFTWARE") && strcmp(getenv("LIBGL_ALWAYS_SOFTWARE"), "1") == 0);
+    CHECK(getenv("GALLIUM_DRIVER") && strcmp(getenv("GALLIUM_DRIVER"), "llvmpipe") == 0);
+#endif
+    CHECK(cv_gpu_busy_percent() < 0 && cv_gpu_load_percent() < 0);   /* nothing initialised: unknown */
+}
+
+int main(void) {
+    test_gpu_env();
+    test_video();
+    test_cfg();
+    test_export();
+    test_path();
+    test_sta();
+    test_fbd();
+    test_inp();
+    test_gauss();
+    test_dat();
+    test_portal_wire();
+    test_list_dir();
+    test_numbers();
+    test_ascii();
+    test_binary();
+    test_truncated();
+    test_fuzz();
+    test_absurd_header();
+    test_modal_flag();
+    test_missing_node();
+    test_continuation_and_nan();
+    test_field_math();
+    printf("%d checks, %d failed\n", g_checks, g_fail);
+    return g_fail ? 1 : 0;
+}

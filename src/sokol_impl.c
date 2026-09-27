@@ -1,0 +1,69 @@
+/* sokol_impl.c -- the single translation unit holding the sokol + Nuklear
+   implementations (compiled as Objective-C on macOS). */
+#define SOKOL_IMPL
+#include "sokol_app.h"
+#include "sokol_gfx.h"
+#include "sokol_log.h"
+#include "sokol_glue.h"
+#define NK_IMPLEMENTATION
+#include "nk.h"
+#include "sokol_nuklear.h"
+
+/* GL_PROGRAM_POINT_SIZE: lets the vertex shader size points. sokol_gfx does not
+   touch it, so enabling it once after sg_setup() is enough. */
+void cv_gl_enable_point_size(void) {
+#ifndef __EMSCRIPTEN__
+    glEnable(0x8642);                          /* always on in GLES / WebGL */
+#endif
+}
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+#if defined(_WIN32)
+/* sokol's WGL loader does not fetch glReadPixels; GL 1.1 is exported by opengl32. */
+__declspec(dllimport) void __stdcall glReadPixels(int, int, int, int, unsigned, unsigned, void*);
+#endif
+
+/* Save the default framebuffer as PNG (--shot). Returns false on failure. */
+bool cv_save_png(const char* path, int w, int h) {
+    unsigned char* px = malloc((size_t)w * h * 4);
+    if (!px) return false;
+    glPixelStorei(0x0D05 /* GL_PACK_ALIGNMENT */, 1);
+    glReadPixels(0, 0, w, h, 0x1908 /* GL_RGBA */, 0x1401 /* GL_UNSIGNED_BYTE */, px);
+    stbi_flip_vertically_on_write(1);
+    int ok = stbi_write_png(path, w, h, 4, px, w * 4);
+    free(px);
+    return ok != 0;
+}
+
+/* A window-space rectangle (top-left origin) as RGBA rows, bottom row first
+   (GL order), alpha forced opaque. Caller frees. */
+unsigned char* cv_read_pixels_region(int x, int y, int w, int h, int fb_h) {
+    if (w <= 0 || h <= 0) return NULL;
+    unsigned char* px = malloc((size_t)w * h * 4);
+    if (!px) return NULL;
+    glPixelStorei(0x0D05 /* GL_PACK_ALIGNMENT */, 1);
+    glReadPixels(x, fb_h - (y + h), w, h, 0x1908 /* GL_RGBA */, 0x1401 /* GL_UNSIGNED_BYTE */, px);
+    for (size_t i = 0; i < (size_t)w * h; i++) px[4 * i + 3] = 255;
+    return px;
+}
+
+/* Save a window-space rectangle (top-left origin, framebuffer pixels) as PNG.
+   Alpha is forced opaque so the image looks the same in every viewer. */
+bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h) {
+    if (w <= 0 || h <= 0) return false;
+    unsigned char* px = malloc((size_t)w * h * 4);
+    if (!px) return false;
+    glPixelStorei(0x0D05 /* GL_PACK_ALIGNMENT */, 1);
+    glReadPixels(x, fb_h - (y + h), w, h, 0x1908 /* GL_RGBA */, 0x1401 /* GL_UNSIGNED_BYTE */, px);
+    for (size_t i = 0; i < (size_t)w * h; i++) px[4 * i + 3] = 255;
+    stbi_flip_vertically_on_write(1);
+    int ok = stbi_write_png(path, w, h, 4, px, w * 4);
+    free(px);
+    return ok != 0;
+}
+
+/* ccxview bakes its own font, so sokol_nuklear's atlas is never initialised;
+   snk_shutdown() clears it and asserts on an uninitialised one. */
+void cv_snk_before_shutdown(void) { nk_font_atlas_init_default(&_snuklear.atlas); }

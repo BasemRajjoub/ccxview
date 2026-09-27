@@ -1,0 +1,13 @@
+build/
+*.png
+*.frd
+!samples/showcase/showcase.frd
+samples/showcase/showcase.12d
+samples/showcase/spooles.out
+samples/showcase/ccx.log
+samples/showcase/*.csv
+samples/showcase/*.vtk
+samples/showcase/*.png
+samples/showcase/*.mp4
+*.mp4
+!docs/demo.gif
