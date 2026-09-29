@@ -1,5 +1,6 @@
 /* cfg.c -- flat "key = value" settings file; see cfg.h. */
 #include "cfg.h"
+#include "os.h"
 #include <ctype.h>
 
 #ifdef _WIN32
@@ -38,29 +39,18 @@ static bool ci_eq(const char* a, const char* b) {
 
 bool cv_cfg_default_path(char* out, size_t n) {
     out[0] = 0;
-#ifdef _WIN32
-    const char* base = getenv("APPDATA");
-    if (!base || !*base) return false;
-    int k = snprintf(out, n, "%s\\ccxview\\ccxview.ini", base);
-    return k > 0 && (size_t)k < n;
-#elif defined(__APPLE__)
+#ifdef __EMSCRIPTEN__
+    /* the browser has no folder of its own: a MEMFS file mirrored to localStorage */
     const char* home = getenv("HOME");
     if (!home || !*home) return false;
-    int k = snprintf(out, n, "%s/Library/Application Support/ccxview/ccxview.ini", home);
-    return k > 0 && (size_t)k < n;
+    int k = snprintf(out, n, "%s/.config/ccxview/ccxview.ini", home);
 #else
-    const char* xdg = getenv("XDG_CONFIG_HOME");
-    char base[900];
-    if (xdg && *xdg) {
-        snprintf(base, sizeof base, "%s", xdg);
-    } else {
-        const char* home = getenv("HOME");
-        if (!home || !*home) return false;
-        snprintf(base, sizeof base, "%s/.config", home);
-    }
-    int k = snprintf(out, n, "%s/ccxview/ccxview.ini", base);
-    return k > 0 && (size_t)k < n;
+    /* portable: the settings travel with the executable */
+    char dir[1024];
+    if (!cv_exe_dir(dir, sizeof dir) || !dir[0]) return false;
+    int k = snprintf(out, n, "%s%cccxview.ini", dir, cv_path_sep());
 #endif
+    return k > 0 && (size_t)k < n;
 }
 
 bool cv_cfg_load(cv_cfg* c, const char* path) {

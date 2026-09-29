@@ -35,6 +35,7 @@ void settings_load(void) {
         G.bg[k] = cv_cfg_get_float(&C, key, G.bg[k]);
     }
     ui_set_zoom(cv_cfg_get_float(&C, "ui_zoom", 1.f));
+    ui_set_theme(cv_cfg_get(&C, "ui_theme", NULL));
     /* sanity: a hand-edited file must not leave the viewer unusable */
     if (G.faces_mode < 0 || G.faces_mode >= FM_N) G.faces_mode = FM_FIELD;
     if (G.cmap < 0 || G.cmap >= CV_CMAP_N) G.cmap = CV_CMAP_FAST;
@@ -101,6 +102,7 @@ void settings_save(int win_w, int win_h) {
         cv_cfg_set_float(&C, key, G.bg[k]);
     }
     cv_cfg_set_float(&C, "ui_zoom", ui_get_zoom());
+    cv_cfg_set(&C, "ui_theme", ui_get_theme());
     if (win_w > 0 && win_h > 0) { cv_cfg_set_int(&C, "window_w", win_w); cv_cfg_set_int(&C, "window_h", win_h); }
     if (cv_cfg_save(&C)) CV_SETTINGS_SAVED(C.path);
 }

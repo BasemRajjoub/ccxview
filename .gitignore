@@ -11,3 +11,4 @@ samples/showcase/*.png
 samples/showcase/*.mp4
 *.mp4
 !docs/demo.gif
+ccxview.ini

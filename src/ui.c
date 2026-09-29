@@ -7,6 +7,7 @@
 #include "sokol_gfx.h"
 #include "nk.h"
 #include "sokol_nuklear.h"
+#include "nuklear_style.c"          /* upstream demo themes: set_style() */
 #include <math.h>
 
 /* ---- scale + font -------------------------------------------------------------- */
@@ -18,7 +19,31 @@ static struct {
     bool   atlas_live;
     sg_image img; sg_view view; sg_sampler smp; snk_image_t snk;
     struct nk_font* font;
+    int    theme;             /* index into themes[] */
+    bool   restyle;           /* theme changed: rebuild the style next frame */
 } U = { 1.f, 0.f };
+
+/* the colours we draw ourselves (hints, plots, legend), derived from the theme */
+static struct {
+    struct nk_color text, dim, warn, accent, accent_text, plot_bg, grid, frame, tick;
+} P;
+
+/* 0 is ccxview's own look; the rest are the upstream demo themes as they are.
+   Only the Catppuccin ones: the older demo themes are flat greys. */
+static const struct { const char* name; int nk; } themes[] = {
+    { "ccxview",              -1 },
+    { "Catppuccin Latte",     THEME_CATPPUCCIN_LATTE },
+    { "Catppuccin Frappe",    THEME_CATPPUCCIN_FRAPPE },
+    { "Catppuccin Macchiato", THEME_CATPPUCCIN_MACCHIATO },
+    { "Catppuccin Mocha",     THEME_CATPPUCCIN_MOCHA },
+};
+enum { NTHEMES = (int)(sizeof themes / sizeof themes[0]) };
+
+const char* ui_get_theme(void) { return themes[U.theme].name; }
+void ui_set_theme(const char* name) {
+    for (int i = 0; i < NTHEMES; i++)
+        if (name && !strcmp(name, themes[i].name)) { U.theme = i; U.restyle = true; return; }
+}
 
 static float desktop_scale(void) {
     const char* e = getenv("CCXVIEW_SCALE");
@@ -75,8 +100,15 @@ static void bake_font(struct nk_context* ctx, float px) {
 
 #define SV(v) ((v).x *= s, (v).y *= s)
 
+static float lum(struct nk_color c) { return (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) / 255.f; }
+
+static struct nk_color mix(struct nk_color a, struct nk_color b, float t) {
+    return nk_rgb((int)(a.r + (b.r - a.r) * t), (int)(a.g + (b.g - a.g) * t), (int)(a.b + (b.b - a.b) * t));
+}
+
 static void restyle(struct nk_context* ctx, float s) {
-    nk_style_default(ctx);
+    if (themes[U.theme].nk < 0) nk_style_default(ctx);
+    else set_style(ctx, (enum theme)themes[U.theme].nk);
     struct nk_style* st = &ctx->style;
     SV(st->window.padding); SV(st->window.spacing); SV(st->window.scrollbar_size);
     SV(st->window.min_size); SV(st->window.group_padding); SV(st->window.popup_padding);
@@ -99,24 +131,54 @@ static void restyle(struct nk_context* ctx, float s) {
     SV(st->tab.node_minimize_button.padding); SV(st->tab.node_maximize_button.padding);
     SV(st->scrollh.padding); SV(st->scrollv.padding);
 
-    /* calmer palette than the default */
-    st->window.fixed_background = nk_style_item_color(nk_rgba(38, 38, 40, 245));
-    st->window.background = nk_rgba(38, 38, 40, 245);
-    st->window.border_color = nk_rgba(64, 64, 68, 255);
-    st->tab.background = nk_style_item_color(nk_rgba(48, 48, 52, 255));
+    if (themes[U.theme].nk < 0) {
+        /* calmer palette than the default */
+        st->window.fixed_background = nk_style_item_color(nk_rgba(38, 38, 40, 245));
+        st->window.background = nk_rgba(38, 38, 40, 245);
+        st->window.border_color = nk_rgba(64, 64, 68, 255);
+        st->tab.background = nk_style_item_color(nk_rgba(48, 48, 52, 255));
 
-    /* the default tick is dark grey on grey: a ticked box read as empty */
-    const struct nk_color box = nk_rgb(70, 70, 76), tick = nk_rgb(96, 170, 240);
-    st->checkbox.normal = st->checkbox.hover = st->checkbox.active = nk_style_item_color(box);
-    st->checkbox.cursor_normal = st->checkbox.cursor_hover = nk_style_item_color(tick);
-    st->option.normal = st->option.hover = st->option.active = nk_style_item_color(box);
-    st->option.cursor_normal = st->option.cursor_hover = nk_style_item_color(tick);
+        /* the default tick is dark grey on grey: a ticked box read as empty */
+        const struct nk_color box = nk_rgb(70, 70, 76), tick = nk_rgb(96, 170, 240);
+        st->checkbox.normal = st->checkbox.hover = st->checkbox.active = nk_style_item_color(box);
+        st->checkbox.cursor_normal = st->checkbox.cursor_hover = nk_style_item_color(tick);
+        st->option.normal = st->option.hover = st->option.active = nk_style_item_color(box);
+        st->option.cursor_normal = st->option.cursor_hover = nk_style_item_color(tick);
+
+        P.text = nk_rgb(225, 225, 225); P.dim = nk_rgb(150, 150, 150); P.warn = nk_rgb(200, 180, 120);
+        P.accent = tick; P.accent_text = nk_rgb(150, 190, 235);
+        P.plot_bg = nk_rgb(28, 28, 30); P.grid = nk_rgb(50, 50, 54); P.frame = nk_rgb(20, 20, 20);
+        P.tick = nk_rgb(200, 200, 200);
+        return;
+    }
+
+    /* an upstream theme: take its colours, only fix a tick that does not show */
+    struct nk_color win = st->window.background, box = st->checkbox.normal.data.color;
+    struct nk_color acc = st->slider.cursor_normal.data.color;
+    bool light = lum(win) > 0.5f;
+    if (fabsf(lum(st->checkbox.cursor_normal.data.color) - lum(box)) < 0.2f) {
+        struct nk_color tick = fabsf(lum(acc) - lum(box)) >= 0.2f ? acc : st->text.color;
+        st->checkbox.cursor_normal = st->checkbox.cursor_hover = nk_style_item_color(tick);
+        st->option.cursor_normal = st->option.cursor_hover = nk_style_item_color(tick);
+    }
+    P.text = st->text.color;
+    P.dim = mix(P.text, win, 0.4f);
+    P.warn = light ? nk_rgb(160, 100, 20) : nk_rgb(200, 180, 120);
+    P.accent = P.accent_text = acc;
+    P.plot_bg = st->edit.normal.data.color;
+    P.grid = mix(P.plot_bg, P.text, 0.2f);
+    P.frame = light ? nk_rgb(60, 60, 60) : nk_rgb(20, 20, 20);
+    P.tick = P.dim;
 }
 
 static void apply_scale(struct nk_context* ctx) {
     float s = desktop_scale() * U.zoom;
-    if (fabsf(s - U.scale) < 0.01f && U.atlas_live) return;
+    if (fabsf(s - U.scale) < 0.01f && U.atlas_live) {
+        if (U.restyle) { U.restyle = false; restyle(ctx, s); }
+        return;
+    }
     U.scale = s;
+    U.restyle = false;
     bake_font(ctx, roundf(13.f * s));
     restyle(ctx, s);
 }
@@ -485,7 +547,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             int nf = gp_fields(names, 32);
             if (nf == 0) {
                 nk_layout_row_dynamic(ctx, row, 1);
-                nk_label_colored(ctx, "(.dat: nothing at this increment)", NK_TEXT_LEFT, nk_rgb(150, 150, 150));
+                nk_label_colored(ctx, "(.dat: nothing at this increment)", NK_TEXT_LEFT, P.dim);
             }
             for (int f = 0; f < nf; f++) {
                 cv_field_desc d;
@@ -549,7 +611,7 @@ static void section_export(struct nk_context* ctx, float s, float row) {
                      G.exp_video ? "" : ", one PNG each");
             if (G.exp_video) snprintf(lab, sizeof lab, "Export animation  (%d steps, %.1f s)", G.frd.n_steps, (float)G.frd.n_steps * hold / fps);
         }
-        if (G.seq_left > 0) nk_label_colored(ctx, "exporting... (stop: status bar)", NK_TEXT_CENTERED, nk_rgb(200, 180, 120));
+        if (G.seq_left > 0) nk_label_colored(ctx, "exporting... (stop: status bar)", NK_TEXT_CENTERED, P.warn);
         else if (nk_button_label(ctx, lab)) app_export_animation();
     }
 
@@ -596,9 +658,9 @@ static void section_view(struct nk_context* ctx, float s, float row) {
         if (nk_checkbox_label(ctx, "Free flight (G)", &fl)) app_set_flight(fl);
         if (G.flight) {
             nk_property_float(ctx, "#speed", 0.005f, &G.fly_speed, 10.f, 0.05f, 0.005f);
-            nk_label_colored(ctx, "WASD move  E/Space up  Q down", NK_TEXT_LEFT, nk_rgb(150, 150, 150));
-            nk_label_colored(ctx, "Shift fast  drag look  wheel speed", NK_TEXT_LEFT, nk_rgb(150, 150, 150));
-            nk_label_colored(ctx, "Esc or G: back to orbit", NK_TEXT_LEFT, nk_rgb(150, 150, 150));
+            nk_label_colored(ctx, "WASD move  E/Space up  Q down", NK_TEXT_LEFT, P.dim);
+            nk_label_colored(ctx, "Shift fast  drag look  wheel speed", NK_TEXT_LEFT, P.dim);
+            nk_label_colored(ctx, "Esc or G: back to orbit", NK_TEXT_LEFT, P.dim);
         }
         tip(ctx, "Light the faces. Off: exact colours, as in the legend");
         nk_checkbox_label(ctx, "Shading (light + shadow)", &G.shading);
@@ -636,6 +698,18 @@ static void section_view(struct nk_context* ctx, float s, float row) {
             } else {
                 bg_pick = false;
             }
+        }
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_static(ctx, 84 * s);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_end(ctx);
+        nk_label(ctx, "UI theme", NK_TEXT_LEFT);
+        {
+            const char* names[NTHEMES];
+            for (int i = 0; i < NTHEMES; i++) names[i] = themes[i].name;
+            tip(ctx, "Colours of the panels and the legend (Nuklear demo themes)");
+            int t = nk_combo(ctx, names, NTHEMES, U.theme, (int)row, nk_vec2(200 * s, 6 * row + 20 * s));
+            if (t != U.theme) { U.theme = t; U.restyle = true; }
         }
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, "Save the 3D view (legend and axes included) as <model>_step<N>.png beside the model");
@@ -769,8 +843,8 @@ static void panel_scene(struct nk_context* ctx, float s, float row) {
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label(ctx, "This .fbd is a cgx script.", NK_TEXT_LEFT);
         if (nk_button_label(ctx, "Evaluate with cgx")) app_eval_cgx();
-        nk_label_colored(ctx, "Runs its commands in a temporary copy", NK_TEXT_LEFT, nk_rgb(200, 180, 120));
-        nk_label_colored(ctx, "of its folder. Only for scripts you trust.", NK_TEXT_LEFT, nk_rgb(200, 180, 120));
+        nk_label_colored(ctx, "Runs its commands in a temporary copy", NK_TEXT_LEFT, P.warn);
+        nk_label_colored(ctx, "of its folder. Only for scripts you trust.", NK_TEXT_LEFT, P.warn);
     }
 
     section_layers(ctx, s, row);
@@ -781,11 +855,11 @@ static void panel_scene(struct nk_context* ctx, float s, float row) {
 
     nk_layout_row_dynamic(ctx, row, 1);
     nk_label(ctx, "", NK_TEXT_LEFT);
-    nk_label_colored(ctx, "drag: orbit   shift/right: pan", NK_TEXT_LEFT, nk_rgb(140, 140, 140));
-    nk_label_colored(ctx, "wheel: zoom   click: probe   F: fit", NK_TEXT_LEFT, nk_rgb(140, 140, 140));
-    nk_label_colored(ctx, "space: play   arrows: step", NK_TEXT_LEFT, nk_rgb(140, 140, 140));
-    nk_label_colored(ctx, "+/-: deform scale   R: reset view   1-6: views", NK_TEXT_LEFT, nk_rgb(140, 140, 140));
-    nk_label_colored(ctx, "H: view only   ctrl +/-/0: UI size", NK_TEXT_LEFT, nk_rgb(140, 140, 140));
+    nk_label_colored(ctx, "drag: orbit   shift/right: pan", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "wheel: zoom   click: probe   F: fit", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "space: play   arrows: step", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "+/-: deform scale   R: reset view   1-6: views", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "H: view only   ctrl +/-/0: UI size", NK_TEXT_LEFT, P.dim);
 }
 
 /* Two lines: what the shape does (deform, animate) above, how the field
@@ -814,7 +888,7 @@ static void panel_toolbar(struct nk_context* ctx, float s, float row) {
     nk_layout_row_push(ctx, 76 * s);
     tip(ctx, G.harmonic ? "Steady-state response: the shape turns through its phase (DISP cos wt - DISPI sin wt)"
                         : "0..1: grow and relax.  -1..1: swing both ways (mode shapes)");
-    if (G.harmonic) { nk_label_colored(ctx, "phase", NK_TEXT_CENTERED, nk_rgb(150, 190, 235)); }
+    if (G.harmonic) { nk_label_colored(ctx, "phase", NK_TEXT_CENTERED, P.accent_text); }
     else G.anim_mode = nk_combo(ctx, anim_names, 2, G.anim_mode, (int)row, nk_vec2(90 * s, 2 * row + 20 * s));
     nk_layout_row_push(ctx, 120 * s);
     tip(ctx, "Seconds per animation cycle");
@@ -868,7 +942,7 @@ static void panel_toolbar(struct nk_context* ctx, float s, float row) {
         char a[32], b[32], lab[80];
         legend_num(a, sizeof a, G.rmin); legend_num(b, sizeof b, G.rmax);
         snprintf(lab, sizeof lab, "locked %s .. %s", a, b);
-        nk_label_colored(ctx, lab, NK_TEXT_LEFT, nk_rgb(200, 180, 120));
+        nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.warn);
     }
     nk_layout_row_end(ctx);
 }
@@ -915,17 +989,17 @@ static void panel_timebar(struct nk_context* ctx, float s, float row, float widt
             float x = x0 + span * (float)i / (float)(n - 1);
             bool major = i == 0 || G.frd.steps[i].step != G.frd.steps[i - 1].step;
             if (major) {
-                nk_stroke_line(cv, x, y1 - sb.h * 0.45f, x, y1, 2.f * s, nk_rgb(96, 170, 240));
+                nk_stroke_line(cv, x, y1 - sb.h * 0.45f, x, y1, 2.f * s, P.accent);
                 char lab[16];
                 snprintf(lab, sizeof lab, "%d", G.frd.steps[i].step);
                 float tw = font->width(font->userdata, font->height, lab, (int)strlen(lab));
                 if (x + 3 * s - last_label > tw + 6 * s && x + 3 * s + tw < sb.x + sb.w) {
                     nk_draw_text(cv, nk_rect(x + 3 * s, y1 - font->height, tw + 2, font->height), lab,
-                                 (int)strlen(lab), font, nk_rgba(0, 0, 0, 0), nk_rgb(150, 190, 235));
+                                 (int)strlen(lab), font, nk_rgba(0, 0, 0, 0), P.accent_text);
                     last_label = x + 3 * s;
                 }
             } else if (dx >= 4 * s) {
-                nk_stroke_line(cv, x, y1 - sb.h * 0.22f, x, y1, 1.f, nk_rgb(120, 120, 124));
+                nk_stroke_line(cv, x, y1 - sb.h * 0.22f, x, y1, 1.f, mix(P.dim, P.plot_bg, 0.25f));
             }
         }
     }
@@ -981,7 +1055,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         legend_num(num, sizeof num, G.rmin);
         snprintf(txt, sizeof txt, "uniform  %s", num);
         nk_draw_text(cv, nk_rect(area.x, area.y, area.w, font->height), txt, (int)strlen(txt), font,
-                     nk_rgba(0, 0, 0, 0), nk_rgb(225, 225, 225));
+                     nk_rgba(0, 0, 0, 0), P.text);
         return;
     }
 
@@ -997,7 +1071,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         nk_fill_rect(cv, nk_rect(area.x, y1, bar_w, y0 - y1 + 1), 0,
                      nk_rgb((int)(c[0] * 255), (int)(c[1] * 255), (int)(c[2] * 255)));
     }
-    nk_stroke_rect(cv, nk_rect(area.x, top, bar_w, h), 0, 1, nk_rgb(20, 20, 20));
+    nk_stroke_rect(cv, nk_rect(area.x, top, bar_w, h), 0, 1, P.frame);
 
     /* labels on band boundaries, every k-th so they never overlap */
     int nlab = G.bands > 0 ? G.bands : 8;
@@ -1010,9 +1084,9 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         legend_num(txt, sizeof txt, v);
         float y = top + h * (1.f - t) - font->height * 0.5f;
         nk_stroke_line(cv, area.x + bar_w, y + font->height * 0.5f, area.x + bar_w + 4 * s,
-                       y + font->height * 0.5f, 1, nk_rgb(200, 200, 200));
+                       y + font->height * 0.5f, 1, P.tick);
         nk_draw_text(cv, nk_rect(area.x + bar_w + 7 * s, y, area.w - bar_w - 7 * s, font->height),
-                     txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), nk_rgb(225, 225, 225));
+                     txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.text);
     }
 }
 
@@ -1048,7 +1122,7 @@ static void panel_status(struct nk_context* ctx, float s, float row, float width
     if (exporting) {                       /* frame export: a real bar, the count, a stop button */
         nk_size cur = (nk_size)done;
         nk_layout_row_push(ctx, midw * 0.45f);
-        nk_style_push_style_item(ctx, &ctx->style.progress.cursor_normal, nk_style_item_color(nk_rgb(96, 170, 240)));
+        nk_style_push_style_item(ctx, &ctx->style.progress.cursor_normal, nk_style_item_color(P.accent));
         nk_progress(ctx, &cur, (nk_size)total, NK_FIXED);
         nk_style_pop_style_item(ctx);
         nk_layout_row_push(ctx, midw * 0.35f);
@@ -1059,7 +1133,7 @@ static void panel_status(struct nk_context* ctx, float s, float row, float width
     } else if (loading) {                  /* no total known: a pulse that shows life */
         nk_size cur = (nk_size)(fmod(cv_now() - G.job.started, 1.5) / 1.5 * 100.0);
         nk_layout_row_push(ctx, midw * 0.45f);
-        nk_style_push_style_item(ctx, &ctx->style.progress.cursor_normal, nk_style_item_color(nk_rgb(96, 170, 240)));
+        nk_style_push_style_item(ctx, &ctx->style.progress.cursor_normal, nk_style_item_color(P.accent));
         nk_progress(ctx, &cur, 100, NK_FIXED);
         nk_style_pop_style_item(ctx);
         nk_layout_row_push(ctx, midw * 0.55f - 2 * ctx->style.window.spacing.x);
@@ -1191,16 +1265,16 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
             struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
             const struct nk_user_font* font = ctx->style.font;
             float lm = 60 * s, x0 = area.x + lm, y0 = area.y + 4 * s, w = area.w - lm - 6 * s, h = area.h - font->height - 8 * s;
-            nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, nk_rgb(28, 28, 30));
+            nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, P.plot_bg);
             float lo = 1e30f, hi = -1e30f, L = CV_MAX(G.path_dist[G.path_n - 1], 1e-30f);
             for (uint32_t i = 0; i < G.path_n; i++) { float v = G.scalar[G.path_nodes[i]]; if (v == v) { lo = CV_MIN(lo, v); hi = CV_MAX(hi, v); } }
             if (lo > hi) { lo = 0; hi = 1; }
             if (hi <= lo) hi = lo + 1;
             for (int k = 0; k <= 4; k++) {                  /* four bands of the value axis */
                 float v = lo + (hi - lo) * k / 4.f, y = y0 + h * (1 - k / 4.f);
-                nk_stroke_line(cv, x0, y, x0 + w, y, 1, nk_rgb(50, 50, 54));
+                nk_stroke_line(cv, x0, y, x0 + w, y, 1, P.grid);
                 legend_num(txt, sizeof txt, v);
-                nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), nk_rgb(150, 150, 150));
+                nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
             }
             float px = 0, py = 0;
             for (uint32_t i = 0; i < G.path_n; i++) {
@@ -1212,7 +1286,7 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
                 px = x; py = y;
             }
             snprintf(txt, sizeof txt, "distance along the surface: 0 .. %.4g", L);
-            nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), nk_rgb(150, 150, 150));
+            nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
         } else if (G.elem_mode) {
             nk_label(ctx, "(per-element mode: switch to nodal values to plot)", NK_TEXT_LEFT);
         }
@@ -1294,7 +1368,7 @@ static void window_find(struct nk_context* ctx, float s, float row) {
         }
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label_colored(ctx, missing ? "not in this model" : "id as in the file; Enter", NK_TEXT_LEFT,
-                         missing ? nk_rgb(240, 120, 120) : nk_rgb(150, 150, 150));
+                         missing ? nk_rgb(240, 120, 120) : P.dim);
     }
     if (nk_window_is_hidden(ctx, "Find")) G.find_open = false;
     nk_end(ctx);
@@ -1371,7 +1445,7 @@ static void window_convergence(struct nk_context* ctx, float s, float row, int f
             struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
             const struct nk_user_font* font = ctx->style.font;
             float lm = 44 * s, x0 = area.x + lm, y0 = area.y + 4 * s, w = area.w - lm - 6 * s, h = area.h - font->height - 8 * s;
-            nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, nk_rgb(28, 28, 30));
+            nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, P.plot_bg);
             float lo = 1e30f, hi = -1e30f;
             for (uint32_t i = 0; i < t->nit; i++) {
                 float v = t->it[i].resid_force;
@@ -1381,10 +1455,10 @@ static void window_convergence(struct nk_context* ctx, float s, float row, int f
             lo = floorf(lo); hi = ceilf(hi); if (hi <= lo) hi = lo + 1;
             for (float d = lo; d <= hi; d += 1) {          /* decades */
                 float y = y0 + h * (1 - (d - lo) / (hi - lo));
-                nk_stroke_line(cv, x0, y, x0 + w, y, 1, nk_rgb(50, 50, 54));
+                nk_stroke_line(cv, x0, y, x0 + w, y, 1, P.grid);
                 snprintf(txt, sizeof txt, "1e%g", d);
                 nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font,
-                             nk_rgba(0, 0, 0, 0), nk_rgb(150, 150, 150));
+                             nk_rgba(0, 0, 0, 0), P.dim);
             }
             float dx = w / (float)(t->nit - 1);
             static const struct nk_color pal[6] = { {96,170,240,255}, {240,170,80,255}, {120,210,120,255}, {220,120,200,255}, {230,230,120,255}, {130,220,220,255} };
@@ -1396,7 +1470,7 @@ static void window_convergence(struct nk_context* ctx, float s, float row, int f
                     bool cb = false;                       /* this attempt ended in a cutback? */
                     for (uint32_t k = 0; k < t->ninc; k++)
                         if (t->inc[k].step == t->it[i - 1].step && t->inc[k].inc == t->it[i - 1].inc && t->inc[k].att == t->it[i - 1].att) cb = t->inc[k].cutback;
-                    nk_stroke_line(cv, x - dx * 0.5f, y0, x - dx * 0.5f, y0 + h, cb ? 2.f : 1.f, cb ? nk_rgb(230, 80, 80) : nk_rgb(70, 70, 76));
+                    nk_stroke_line(cv, x - dx * 0.5f, y0, x - dx * 0.5f, y0 + h, cb ? 2.f : 1.f, cb ? nk_rgb(230, 80, 80) : mix(P.grid, P.dim, 0.2f));
                 }
                 float v = q->resid_force > 0 ? log10f(q->resid_force) : lo;
                 float y = y0 + h * (1 - (v - lo) / (hi - lo));
@@ -1407,7 +1481,7 @@ static void window_convergence(struct nk_context* ctx, float s, float row, int f
                 px = x; py = y;
             }
             snprintf(txt, sizeof txt, "iteration 1 .. %u", t->nit);
-            nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), nk_rgb(150, 150, 150));
+            nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
         }
     }
     if (nk_window_is_hidden(ctx, "Convergence")) G.show_conv = false;
@@ -1527,7 +1601,7 @@ static void window_browser(struct nk_context* ctx, float s, float row, int fw, i
                                  has_sep ? "" : (char[2]){ cv_path_sep(), 0 }, e->name);
                     }
                 }
-                nk_label_colored(ctx, sz, NK_TEXT_RIGHT, nk_rgb(150, 150, 150));
+                nk_label_colored(ctx, sz, NK_TEXT_RIGHT, P.dim);
             }
             nk_group_end(ctx);
         }
@@ -1539,7 +1613,7 @@ static void window_browser(struct nk_context* ctx, float s, float row, int fw, i
         nk_layout_row_template_push_static(ctx, 90 * s);
         nk_layout_row_template_end(ctx);
         const char* hint = (B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) ? B.e[B.sel].name : "double-click a file";
-        nk_label_colored(ctx, hint, NK_TEXT_LEFT, nk_rgb(150, 150, 150));
+        nk_label_colored(ctx, hint, NK_TEXT_LEFT, P.dim);
         if (nk_button_label(ctx, "Cancel")) G.browser_open = false;
         if (nk_button_label(ctx, "Open") && B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) {
             size_t l = strlen(B.dir);
@@ -1566,7 +1640,7 @@ static void drop_hint(struct nk_context* ctx, float s, float row) {
         nk_window_set_bounds(ctx, "hint", r);
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label(ctx, "Drop a .frd, .inp or .fbd file here", NK_TEXT_CENTERED);
-        nk_label_colored(ctx, "or Open... (Ctrl+O)", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(ctx, "or Open... (Ctrl+O)", NK_TEXT_CENTERED, P.dim);
     }
     nk_end(ctx);
 }

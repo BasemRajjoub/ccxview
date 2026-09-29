@@ -13,6 +13,8 @@ float ui_scale(void);
 void  ui_zoom(int dir);      /* +1 bigger, -1 smaller, 0 reset */
 float ui_get_zoom(void);
 void  ui_set_zoom(float z);
+const char* ui_get_theme(void);          /* theme by name, as saved in the settings */
+void  ui_set_theme(const char* name);    /* unknown names are ignored */
 void  ui_focus_open(void);   /* Ctrl+L: cursor into the path box */
 /* a panel under the mouse keeps the event from the 3D view (legend and hint
    never do; the axes gizmo lets the wheel through) */

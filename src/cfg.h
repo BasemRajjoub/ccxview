@@ -1,7 +1,6 @@
-/* cfg.h -- the settings file: a flat "key = value" INI kept in the user's
-   config folder (Linux: $XDG_CONFIG_HOME/ccxview/ccxview.ini or
-   ~/.config/ccxview/ccxview.ini; Windows: %APPDATA%\ccxview\ccxview.ini;
-   macOS: ~/Library/Application Support/ccxview/ccxview.ini). Comments (#, ;)
+/* cfg.h -- the settings file: a flat "key = value" INI kept beside the
+   executable (ccxview.ini), so a copied folder takes its settings along; the
+   web build keeps it in localStorage. Comments (#, ;)
    and unknown keys survive a save. Values are strings; typed getters parse
    them. Headless, never fails on bad input. */
 #ifndef CV_CFG_H
@@ -20,7 +19,7 @@ typedef struct {
     char   path[1024];                 /* where it was loaded from / will be saved */
 } cv_cfg;
 
-bool cv_cfg_default_path(char* out, size_t n);       /* the platform path; false if no home */
+bool cv_cfg_default_path(char* out, size_t n);       /* <exe dir>/ccxview.ini; false if unknown */
 bool cv_cfg_load(cv_cfg* c, const char* path);       /* missing file: empty config, true */
 bool cv_cfg_save(const cv_cfg* c);                   /* to c->path; creates the folder */
 void cv_cfg_free(cv_cfg* c);

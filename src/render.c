@@ -559,16 +559,16 @@ void cv_render_draw(const cv_draw* d) {
                        CV_COLOR_SOLID, nset_rgb, false, d, d->hl_size, false, 0.f, 0);
     }
     {
-        /* supports and loads from the deck: line glyphs pulled in front of the faces */
+        /* supports, loads, links and springs from the deck: line glyphs with their
+           true depth, so faces in front hide them; pulled a hair toward the eye
+           so a glyph lying on a face wins against it */
         static const float bc_rgb[3] = { 0.15f, 0.85f, 0.85f }, ld_rgb[3] = { 1.0f, 0.78f, 0.10f };
-        /* drawn through the faces: a beam's or shell's supports sit on nodes
-           inside the expanded solid, where they would otherwise never be seen */
         if (d->supports && A[CV_AUX_BCLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_BCLN].v, NO_IB, (int)A[CV_AUX_BCLN].n,
-                       CV_COLOR_SOLID, bc_rgb, false, d, 1, true, 0.f, 0);
+                       CV_COLOR_SOLID, bc_rgb, false, d, 1, false, 4 * PULL, 0);
         if (d->loads && A[CV_AUX_LDLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_LDLN].v, NO_IB, (int)A[CV_AUX_LDLN].n,
-                       CV_COLOR_SOLID, ld_rgb, false, d, 1, true, 0.f, 0);
+                       CV_COLOR_SOLID, ld_rgb, false, d, 1, false, 4 * PULL, 0);
         static const float vec_rgb[3] = { 0.95f, 0.95f, 0.95f };
         if (d->vectors && A[CV_AUX_VECLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_VECLN].v, NO_IB, (int)A[CV_AUX_VECLN].n,
@@ -576,11 +576,11 @@ void cv_render_draw(const cv_draw* d) {
         static const float link_rgb[3] = { 0.55f, 0.95f, 0.45f };
         if (d->links && A[CV_AUX_LINKLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_LINKLN].v, NO_IB, (int)A[CV_AUX_LINKLN].n,
-                       CV_COLOR_SOLID, link_rgb, false, d, 1, true, 0.f, 0);
+                       CV_COLOR_SOLID, link_rgb, false, d, 1, false, 4 * PULL, 0);
         static const float disc_rgb[3] = { 0.80f, 0.45f, 0.95f };
         if (d->discrete && A[CV_AUX_DISCLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_DISCLN].v, NO_IB, (int)A[CV_AUX_DISCLN].n,
-                       CV_COLOR_SOLID, disc_rgb, false, d, 1, true, 0.f, 0);
+                       CV_COLOR_SOLID, disc_rgb, false, d, 1, false, 4 * PULL, 0);
     }
     {
         /* cgx geometry: surfaces as patches, curves pulled onto them, points as balls */
