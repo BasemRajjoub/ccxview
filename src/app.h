@@ -201,6 +201,9 @@ typedef struct {
     cv_camera cam;
     bool      sym[3];                /* mirror copies across a plane normal to X, Y, Z */
     int       sym_at[3];             /* CV_SYM_*: where that plane sits */
+    bool      up_z;                  /* turntable about world Z instead of Y */
+    bool      orbit_cursor;          /* drag rotates about the model point under the cursor */
+    bool      zoom_cursor;           /* the wheel zooms toward the cursor */
     bool      flight;                /* free flight: WASD + mouse look */
     float     fly_speed;             /* model diagonals per second */
     int       vp_x, vp_y, vp_w, vp_h;   /* 3D area in window pixels */
@@ -376,5 +379,7 @@ void app_legend_fmt(char* out, size_t n, double v);   /* a legend number in the 
 
 /* camera helpers */
 void cam_basis(const cv_camera* c, v3* eye, v3* fwd, v3* right, v3* up);
+v3   cam_up_axis(void);                  /* world +Y or +Z */
+bool app_cursor_point(float px, float py, v3* out, bool* on_model);
 
 #endif

@@ -575,6 +575,7 @@ bool app_view_save(const char* path) {
     cv_cfg_load(&c, path);
     cv_cfg_set_float(&c, "cam_yaw", G.cam.yaw); cv_cfg_set_float(&c, "cam_pitch", G.cam.pitch);
     cv_cfg_set_float(&c, "cam_dist", G.cam.dist); cv_cfg_set_bool(&c, "cam_ortho", G.cam.ortho);
+    cv_cfg_set_bool(&c, "cam_up_z", G.up_z);           /* yaw and pitch are about this axis */
     cv_cfg_set_float(&c, "cam_x", G.cam.target.x); cv_cfg_set_float(&c, "cam_y", G.cam.target.y); cv_cfg_set_float(&c, "cam_z", G.cam.target.z);
     cv_cfg_set_int(&c, "step", G.step + 1);
     cv_cfg_set(&c, "field", G.field_src == 0 ? G.field_name : "");
@@ -634,6 +635,7 @@ bool app_view_load(const char* path) {
     app_groups_changed();
     G.range_lock = cv_cfg_get_bool(&c, "range_lock", false);
     if (G.range_lock) { G.rmin = cv_cfg_get_float(&c, "rmin", G.rmin); G.rmax = cv_cfg_get_float(&c, "rmax", G.rmax); }
+    G.up_z = cv_cfg_get_bool(&c, "cam_up_z", false);   /* older views: Y up */
     G.cam.yaw = cv_cfg_get_float(&c, "cam_yaw", G.cam.yaw); G.cam.pitch = cv_cfg_get_float(&c, "cam_pitch", G.cam.pitch);
     G.cam.dist = cv_cfg_get_float(&c, "cam_dist", G.cam.dist); G.cam.ortho = cv_cfg_get_bool(&c, "cam_ortho", G.cam.ortho);
     G.cam.target = v3_make(cv_cfg_get_float(&c, "cam_x", G.cam.target.x), cv_cfg_get_float(&c, "cam_y", G.cam.target.y), cv_cfg_get_float(&c, "cam_z", G.cam.target.z));

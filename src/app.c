@@ -53,6 +53,7 @@ static void init(void) {
 
     G.show_faces = G.show_edges = true;
     G.edges_auto = true;
+    G.orbit_cursor = G.zoom_cursor = true;
     G.faces_mode = FM_FIELD;
     G.nodes_field = true;
     G.anim_period = 2.f;
@@ -153,7 +154,7 @@ void app_set_flight(bool on) {
     memset(g_keys, 0, sizeof g_keys);
 }
 
-/* WASD in the view plane, E/Space up, Q down (world Y), Shift x4. */
+/* WASD in the view plane, E/Space up, Q down (the up axis), Shift x4. */
 static void tick_flight(void) {
     if (!G.flight || !G.loaded) return;
     float dt = (float)sapp_frame_duration();
@@ -165,8 +166,8 @@ static void tick_flight(void) {
     if (g_keys[SAPP_KEYCODE_S]) v = v3_sub(v, fwd);
     if (g_keys[SAPP_KEYCODE_D]) v = v3_add(v, right);
     if (g_keys[SAPP_KEYCODE_A]) v = v3_sub(v, right);
-    if (g_keys[SAPP_KEYCODE_E] || g_keys[SAPP_KEYCODE_SPACE]) v.y += 1;
-    if (g_keys[SAPP_KEYCODE_Q]) v.y -= 1;
+    if (g_keys[SAPP_KEYCODE_E] || g_keys[SAPP_KEYCODE_SPACE]) v = v3_add(v, cam_up_axis());
+    if (g_keys[SAPP_KEYCODE_Q]) v = v3_sub(v, cam_up_axis());
     if (v3_dot(v, v) == 0) return;
     float sp = G.fly_speed * G.diag * dt;
     if (g_keys[SAPP_KEYCODE_LEFT_SHIFT] || g_keys[SAPP_KEYCODE_RIGHT_SHIFT]) sp *= 4;
@@ -502,7 +503,7 @@ static void cleanup(void) {
     sg_shutdown();
 }
 
-static struct { bool down; int button; float x0, y0, x, y; bool moved; } drag;
+static struct { bool down; int button; float x0, y0, x, y; bool moved; bool pivot_on; v3 pivot; } drag;
 
 static bool in_view(float x, float y) {
     return x >= G.vp_x && y >= G.vp_y && x < G.vp_x + G.vp_w && y < G.vp_y + G.vp_h;
@@ -525,6 +526,10 @@ static void event(const sapp_event* ev) {
             if (!over_ui && !nk_busy && in_view(ev->mouse_x, ev->mouse_y)) {
                 drag.down = true; drag.moved = false; drag.button = ev->mouse_button;
                 drag.x0 = drag.x = ev->mouse_x; drag.y0 = drag.y = ev->mouse_y;
+                /* rotate about the part of the model that was grabbed; off the model, about the target */
+                bool on = false;
+                drag.pivot_on = G.orbit_cursor && !G.flight && ev->mouse_button == SAPP_MOUSEBUTTON_LEFT &&
+                                app_cursor_point(ev->mouse_x, ev->mouse_y, &drag.pivot, &on) && on;
             }
             break;
         case SAPP_EVENTTYPE_MOUSE_UP:
@@ -561,6 +566,13 @@ static void event(const sapp_event* ev) {
                         v3 eye1, f1, r1, u1;
                         cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
                         G.cam.target = v3_add(eye0, v3_scale(f1, G.cam.dist));
+                    } else if (drag.pivot_on) {                   /* turn about the pivot: it keeps its place in the view */
+                        v3 q = v3_sub(drag.pivot, eye0);
+                        float a = v3_dot(q, r0), b = v3_dot(q, u0), c = v3_dot(q, f0);
+                        v3 eye1, f1, r1, u1;
+                        cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
+                        v3 e = v3_sub(drag.pivot, v3_add(v3_scale(r1, a), v3_add(v3_scale(u1, b), v3_scale(f1, c))));
+                        G.cam.target = v3_add(e, v3_scale(f1, G.cam.dist));
                     }
                 }
             }
@@ -568,7 +580,14 @@ static void event(const sapp_event* ev) {
         case SAPP_EVENTTYPE_MOUSE_SCROLL:
             if (!over_ui && in_view(ev->mouse_x, ev->mouse_y)) {
                 if (G.flight) G.fly_speed = CV_MIN(CV_MAX(G.fly_speed * powf(1.2f, ev->scroll_y), 0.005f), 10.f);
-                else G.cam.dist *= powf(0.88f, ev->scroll_y);
+                else {
+                    /* toward the cursor: scaling the view about the point under it keeps that point in place */
+                    float f = powf(0.88f, ev->scroll_y);
+                    v3 p; bool on;
+                    if (G.zoom_cursor && app_cursor_point(ev->mouse_x, ev->mouse_y, &p, &on))
+                        G.cam.target = v3_add(p, v3_scale(v3_sub(G.cam.target, p), f));
+                    G.cam.dist *= f;
+                }
             }
             break;
         case SAPP_EVENTTYPE_KEY_UP:

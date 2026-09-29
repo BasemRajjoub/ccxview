@@ -111,7 +111,9 @@ Headless modules (`frd`, `mesh`, `field`) never include sokol or Nuklear.
   ortho/perspective. Time bar below: step slider, play, readout.
 - Legend on the right. Status bar: file, counts, warnings badge → message list.
 - Mouse: left-drag orbit, right/middle-drag pan, wheel zoom, click = probe
-  (ray-cast against the skin → element + nearest node + value).
+  (ray-cast against the skin → element + nearest node + value). Orbit turns
+  about the grabbed surface point and the wheel zooms toward the cursor (both
+  optional); the turntable axis is world Y or Z.
 - Open: command-line argument, drag & drop, or the path box.
 
 ## Errors

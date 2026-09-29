@@ -658,7 +658,22 @@ static void section_view(struct nk_context* ctx, float s, float row) {
         tip(ctx, "Parallel projection: no perspective, distances compare directly");
         nk_checkbox_label(ctx, "orthographic", &G.cam.ortho);
         if (nk_button_label(ctx, "Fit (F)")) app_fit();
+        /* mouse navigation */
+        nk_layout_row_dynamic(ctx, row, 3);
+        nk_label(ctx, "Up axis", NK_TEXT_LEFT);
+        {
+            bool z0 = G.up_z;
+            tip(ctx, "Dragging turns the model about this world axis, which stays vertical on screen");
+            if (nk_option_label(ctx, "Y", !G.up_z)) G.up_z = false;
+            tip(ctx, "Dragging turns the model about this world axis, which stays vertical on screen");
+            if (nk_option_label(ctx, "Z", G.up_z)) G.up_z = true;
+            if (G.up_z != z0) app_view(CV_VIEW_ISO);
+        }
         nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "Drag rotates about the point of the model you grab;\noff, or when grabbing empty space, about the view centre");
+        nk_checkbox_label(ctx, "Rotate about the cursor", &G.orbit_cursor);
+        tip(ctx, "The wheel zooms toward the point under the cursor; off, toward the view centre");
+        nk_checkbox_label(ctx, "Zoom toward the cursor", &G.zoom_cursor);
         nk_bool fl = G.flight;
         tip(ctx, "Walk through the model: WASD, E/Space up, Q down, Shift fast, drag to look");
         if (nk_checkbox_label(ctx, "Free flight (G)", &fl)) app_set_flight(fl);
@@ -865,7 +880,8 @@ static void panel_scene(struct nk_context* ctx, float s, float row) {
     nk_label_colored(ctx, "wheel: zoom   click: probe   F: fit", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "space: play   arrows: step", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "+/-: deform scale   R: reset view   1-6: views", NK_TEXT_LEFT, P.dim);
-    nk_label_colored(ctx, "H: view only   ctrl +/-/0: UI size", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "G: free flight   H: view only", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "ctrl +/-/0: UI size", NK_TEXT_LEFT, P.dim);
 }
 
 /* Two lines: what the shape does (deform, animate) above, how the field

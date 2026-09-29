@@ -4,12 +4,18 @@
 
 /* ---- camera ----------------------------------------------------------------------- */
 
+/* Yaw and pitch live in a frame whose up is +Y. A Z-up model turns that frame
+   so its up is world +Z and its front view (yaw 0) looks along +Y. */
+static v3 to_world(v3 f) { return G.up_z ? v3_make(f.x, -f.z, f.y) : f; }
+static v3 to_frame(v3 w) { return G.up_z ? v3_make(w.x, w.z, -w.y) : w; }
+v3 cam_up_axis(void) { return G.up_z ? v3_make(0, 0, 1) : v3_make(0, 1, 0); }
+
 void cam_basis(const cv_camera* c, v3* eye, v3* fwd, v3* right, v3* up) {
     float cp = cosf(c->pitch), sp = sinf(c->pitch), cy = cosf(c->yaw), sy = sinf(c->yaw);
-    v3 dir = v3_make(cp * sy, sp, cp * cy);            /* target -> eye */
+    v3 dir = to_world(v3_make(cp * sy, sp, cp * cy));  /* target -> eye */
     *eye = v3_add(c->target, v3_scale(dir, c->dist));
     *fwd = v3_scale(dir, -1.f);
-    *right = v3_norm(v3_cross(*fwd, v3_make(0, 1, 0)));
+    *right = v3_norm(v3_cross(*fwd, cam_up_axis()));
     *up = v3_cross(*right, *fwd);
 }
 
@@ -193,15 +199,16 @@ void app_fit_element(uint32_t e) {
 }
 
 void app_view(int p) {
-    const float d2r = 3.14159265f / 180.f;
-    switch (p) {
-        case CV_VIEW_PX: G.cam.yaw = 90 * d2r;  G.cam.pitch = 0; break;
-        case CV_VIEW_NX: G.cam.yaw = -90 * d2r; G.cam.pitch = 0; break;
-        case CV_VIEW_PY: G.cam.yaw = 0;          G.cam.pitch = 89.9f * d2r; break;
-        case CV_VIEW_NY: G.cam.yaw = 0;          G.cam.pitch = -89.9f * d2r; break;
-        case CV_VIEW_PZ: G.cam.yaw = 0;          G.cam.pitch = 0; break;
-        case CV_VIEW_NZ: G.cam.yaw = 180 * d2r; G.cam.pitch = 0; break;
-        default:         G.cam.yaw = 35 * d2r;  G.cam.pitch = 30 * d2r; break;
+    const float d2r = 3.14159265f / 180.f, lim = 89.9f * d2r;
+    /* eye direction of each axis view, in world coordinates */
+    static const float D[6][3] = { {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1} };
+    if (p >= CV_VIEW_PX && p <= CV_VIEW_NZ) {
+        const float* w = D[p - CV_VIEW_PX];
+        v3 f = to_frame(v3_make(w[0], w[1], w[2]));
+        G.cam.pitch = CV_MAX(-lim, CV_MIN(lim, asinf(f.y)));
+        G.cam.yaw = fabsf(f.y) > 0.99f ? 0.f : atan2f(f.x, f.z);   /* along the up axis: yaw 0 */
+    } else {                                   /* iso: from above, turned about the up axis */
+        G.cam.yaw = 35 * d2r; G.cam.pitch = 30 * d2r;
     }
     app_fit();
 }
@@ -250,6 +257,37 @@ static void cam_ray(float px, float py, float o[3], float d[3]) {
     }
     o[0] = org.x; o[1] = org.y; o[2] = org.z;
     d[0] = dir.x; d[1] = dir.y; d[2] = dir.z;
+}
+
+/* The point under window pixel (px, py): the model surface (mirror copies too)
+   when the ray hits it (*on_model), else the point at the orbit target's depth. */
+bool app_cursor_point(float px, float py, v3* out, bool* on_model) {
+    *on_model = false;
+    if (!G.loaded) return false;
+    float o[3], d[3];
+    cam_ray(px, py, o, d);
+    float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
+    int en = (G.sym[0] ? 1 : 0) | (G.sym[1] ? 2 : 0) | (G.sym[2] ? 4 : 0);
+    float best = INFINITY;
+    for (int m = 0; m < 8; m++) {
+        if ((m & en) != m) continue;
+        float mo[3], md[3];
+        for (int k = 0; k < 3; k++) {       /* a reflection keeps distances: t compares directly */
+            bool r = m >> k & 1;
+            mo[k] = r ? 2.f * app_sym_plane(k) - o[k] : o[k];
+            md[k] = r ? -d[k] : d[k];
+        }
+        cv_pick p = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, mo, md);
+        if (p.hit && p.t < best) best = p.t;
+    }
+    v3 org = v3_make(o[0], o[1], o[2]), dir = v3_make(d[0], d[1], d[2]);
+    if (best < INFINITY) { *out = v3_add(org, v3_scale(dir, best)); *on_model = true; return true; }
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    float dn = v3_dot(dir, fwd);
+    if (!(dn > 1e-6f)) return false;
+    *out = v3_add(org, v3_scale(dir, v3_dot(v3_sub(G.cam.target, org), fwd) / dn));
+    return true;
 }
 
 void do_pick(float px, float py) {
