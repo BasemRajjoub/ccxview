@@ -392,10 +392,16 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             int fm = nk_combo(ctx, fm_names, FM_N, G.faces_mode, (int)row, nk_vec2(150 * s, 5 * row + 20 * s));
             if (fm != G.faces_mode) app_set_faces_mode(fm);
         }
-        tip(ctx, "Edges of the exterior faces. Hidden while they would be denser than ~3 px.");
+        tip(ctx, "Edges of the exterior faces");
         nk_checkbox_label(ctx, "Edges", &G.show_edges);
         tip(ctx, "Paint the field on the edges too (else dark lines)");
         nk_checkbox_label(ctx, "coloured", &G.edges_field);
+        if (G.show_edges && G.show_faces) {
+            tip(ctx, "Hide the edges while they are denser than ~3 px on screen,\nwhere they would paint the surface black; zoom in to see them");
+            nk_checkbox_label(ctx, "hide when dense", &G.edges_auto);
+            if (G.edges_auto && G.edges_dense) nk_label_colored(ctx, "hidden: zoom in", NK_TEXT_LEFT, P.warn);
+            else nk_spacing(ctx, 1);
+        }
         tip(ctx, "Nodes of the visible elements, as small balls");
         nk_checkbox_label(ctx, "Nodes", &G.show_nodes);
         tip(ctx, "Paint the field on the nodes too");

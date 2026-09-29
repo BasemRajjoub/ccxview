@@ -12,7 +12,7 @@ static bool   loaded;
 
 /* the settings that map one-to-one onto fields of G */
 #define BOOLS(X) \
-    X(show_faces) X(show_edges) X(show_nodes) X(edges_field) X(nodes_field) X(shading) X(center_zero) \
+    X(show_faces) X(show_edges) X(edges_auto) X(show_nodes) X(edges_field) X(nodes_field) X(shading) X(center_zero) \
     X(deform_auto) X(hide_legend) X(hide_axes) X(gp_colored) X(vec_colored) X(legend_reverse) X(legend_grey) \
     X(show_markers) X(show_ghost) X(exp_video) X(exp_lock_range)
 #define INTS(X)   X(faces_mode) X(cmap) X(bands) X(anim_mode) X(legend_fmt) X(legend_decimals) X(exp_kind) X(exp_cycles) X(exp_fps)

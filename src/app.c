@@ -52,6 +52,7 @@ static void init(void) {
     cv_mutex_init(&G.job.lock);
 
     G.show_faces = G.show_edges = true;
+    G.edges_auto = true;
     G.faces_mode = FM_FIELD;
     G.nodes_field = true;
     G.anim_period = 2.f;
@@ -241,10 +242,13 @@ static void frame(void) {
                       : G.faces_mode == FM_PLAIN ? CV_COLOR_SOLID : CV_COLOR_GROUP;
         /* Edges thinner than ~3 px paint more line than face and the surface reads
            as solid black, so the layer steps aside until you zoom in. Wireframe
-           (faces off) always keeps them: there the edges ARE the model. */
+           (faces off) always keeps them: there the edges ARE the model. It hides
+           below 3 px and returns above 4, so a zoom near the limit does not flicker
+           them on and off; the panel says so, and "hide when dense" turns it off. */
         float px_per_unit = (float)G.vp_h / (2.f * G.cam.dist * tanf(G.cam.fovy * 0.5f));
-        bool dense = G.show_faces && G.mean_edge * px_per_unit < 3.f;
-        d.edges = G.show_edges && !dense;   d.edges_color = G.edges_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        float edge_px = G.mean_edge * px_per_unit;
+        if (G.edges_dense ? edge_px > 4.f : edge_px < 3.f) G.edges_dense = !G.edges_dense;
+        d.edges = G.show_edges && !(G.edges_auto && G.show_faces && G.edges_dense);   d.edges_color = G.edges_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         d.points = G.show_nodes;  d.points_color = G.nodes_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         d.point_size = G.point_size * ui_scale();
         d.shade = G.shading;

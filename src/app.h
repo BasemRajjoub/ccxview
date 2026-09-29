@@ -189,6 +189,8 @@ typedef struct {
     bool      show_faces, show_edges, show_nodes;
     int       faces_mode;            /* FM_* */
     bool      edges_field, nodes_field;
+    bool      edges_auto;            /* hide the edges while they are denser than ~3 px */
+    bool      edges_dense;           /* ... and they are now (with hysteresis) */
     float*    axis_rgb[CV_AXIS_N];   /* 3 floats per group value */
     float     point_size;
     bool      shading;               /* off: flat true colours; on: light + shadow */
