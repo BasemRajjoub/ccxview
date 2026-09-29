@@ -88,8 +88,25 @@ void settings_window_size(int* w, int* h) {
     cv_cfg_free(&c);
 }
 
+/* Another ccxview may have opened files since we loaded the file: take its
+   recent list from disk, then ours on top, so neither instance loses the other's. */
+static void merge_disk_recent(void) {
+    cv_cfg d;
+    if (!cv_cfg_load(&d, C.path)) return;
+    const char* p[CV_CFG_RECENT];
+    char mine[CV_CFG_RECENT][1024];
+    int n = cv_cfg_recent(&C, p, CV_CFG_RECENT);
+    for (int i = 0; i < n; i++) snprintf(mine[i], sizeof mine[i], "%s", p[i]);
+    int m = cv_cfg_recent(&d, p, CV_CFG_RECENT);
+    for (int i = m - 1; i >= 0; i--) cv_cfg_add_recent(&C, p[i]);    /* oldest first: each goes to the front */
+    for (int i = n - 1; i >= 0; i--) cv_cfg_add_recent(&C, mine[i]);
+    cv_cfg_free(&d);
+}
+
+/* win_w / win_h <= 0: keep the stored window size */
 void settings_save(int win_w, int win_h) {
     if (!loaded) return;
+    merge_disk_recent();
 #define WB(k) cv_cfg_set_bool(&C, #k, G.k);
 #define WI(k) cv_cfg_set_int(&C, #k, G.k);
 #define WF(k) cv_cfg_set_float(&C, #k, G.k);
@@ -116,6 +133,9 @@ void settings_add_recent(const char* path) {
     snprintf(dir, sizeof dir, "%s", abs);
     char* s = strrchr(dir, cv_path_sep());
     if (s) { *s = 0; cv_cfg_set(&C, "last_dir", dir); }
+    /* written now, not only on a clean exit: closing the console, Ctrl+C or a
+       crash would otherwise lose it. Scripted runs leave the file alone. */
+    if (!O.shot_path && !O.nopts) settings_save(0, 0);
 }
 
 int settings_recent(const char** out, int max) { return loaded ? cv_cfg_recent(&C, out, max) : 0; }
