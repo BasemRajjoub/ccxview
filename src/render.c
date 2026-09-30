@@ -516,12 +516,17 @@ static struct { vset v; uint32_t n; } A[CV_AUX_N];
 static const sg_buffer NO_IB = {0};
 
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n) {
+    cv_render_aux2(which, pos, disp, NULL, scal, n);
+}
+
+void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n) {
     if (which < 0 || which >= CV_AUX_N) return;
-    kill_buf(&A[which].v.pos); kill_buf(&A[which].v.disp); kill_buf(&A[which].v.scal);
+    kill_buf(&A[which].v.pos); kill_buf(&A[which].v.disp); kill_buf(&A[which].v.scal); kill_buf(&A[which].v.disp2);
     A[which].n = 0;
     if (!pos || n == 0) return;
     A[which].v.pos = make_buf(pos, (size_t)n * 12, false);
     A[which].v.disp = make_buf(disp, (size_t)n * 12, false);
+    A[which].v.disp2 = make_buf(disp2, (size_t)n * 12, false);
     A[which].v.scal = make_buf(scal, (size_t)n * 4, false);
     A[which].n = A[which].v.pos.id ? n : 0;
 }

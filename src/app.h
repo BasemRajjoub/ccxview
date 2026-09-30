@@ -414,7 +414,10 @@ bool deck_has_loads(void);
 bool deck_has_discrete(void);
 bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted (tie, contact surfaces) */
 /* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */
-void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir[3], float len, const float d[3], bool twin);
+/* d: 6 wide, DISP then -DISPI (app_node_disp6); disp gets 6 per vertex, uploaded with app_aux_upload */
+void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir[3], float len, const float d[6], bool twin);
+void app_node_disp6(uint32_t node, float d[6]);
+void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);
 bool app_field_is_vector(void);      /* the selected .frd field has 3 components */
 void app_vectors_changed(void);
 bool deck_sibling(const char* path, const char* ext, char* out, size_t n);

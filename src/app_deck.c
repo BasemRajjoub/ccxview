@@ -186,10 +186,39 @@ static void push3(cv_fvec* v, const float* p) {
     if (cv_reserve(*v, v->n + 3)) { v->a[v->n++] = p[0]; v->a[v->n++] = p[1]; v->a[v->n++] = p[2]; }
 }
 
+/* A glyph vertex's displacement is 6 wide: DISP, then the harmonic part (-DISPI),
+   so glyphs follow a steady-state phase animation too; app_aux_upload splits it. */
+static void push6(cv_fvec* v, const float* d) {
+    if (cv_reserve(*v, v->n + 6)) for (int k = 0; k < 6; k++) v->a[v->n++] = d[k];
+}
+
+void app_node_disp6(uint32_t i, float d[6]) {
+    for (int k = 0; k < 3; k++) {
+        d[k] = G.disp ? G.disp[3 * (size_t)i + k] : 0.f;
+        d[3 + k] = G.disp2 ? G.disp2[3 * (size_t)i + k] : 0.f;
+    }
+}
+
+void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal) {
+    uint32_t n = (uint32_t)(pos->n / 3);
+    float* d = n && disp6->n == 2 * pos->n ? malloc((size_t)n * 6 * sizeof(float)) : NULL;
+    if (!d) { cv_render_aux(which, n ? pos->a : NULL, NULL, scal, n); return; }
+    float* d2 = d + 3 * (size_t)n;
+    bool any2 = false;
+    for (size_t i = 0; i < n; i++) for (int k = 0; k < 3; k++) {
+        d[3 * i + k] = disp6->a[6 * i + k];
+        d2[3 * i + k] = disp6->a[6 * i + 3 + k];
+        any2 |= d2[3 * i + k] != 0.f;
+    }
+    cv_render_aux2(which, pos->a, d, any2 ? d2 : NULL, scal, n);
+    free(d);
+}
+
 static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
-    static const float z[3] = { 0, 0, 0 };
+    float d[6];
+    app_node_disp6(i, d);
     push3(pos, G.frd.xyz + 3 * i);
-    push3(disp, G.disp ? G.disp + 3 * i : z);
+    push6(disp, d);
 }
 
 /* ---- glyphs: supports as cones, loads as arrows -------------------------------
@@ -198,8 +227,8 @@ static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
    its node's displacement so the glyphs ride along with the deformed shape. */
 
 static void seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const float* d) {
-    push3(pos, a); push3(disp, d);
-    push3(pos, b); push3(disp, d);
+    push3(pos, a); push6(disp, d);
+    push3(pos, b); push6(disp, d);
 }
 
 static void axis_vec(int k, float sign, float len, float out[3]) {
@@ -208,7 +237,7 @@ static void axis_vec(int k, float sign, float len, float out[3]) {
 }
 
 /* arrow whose head sits at `tip`, shaft along -dir (unit) of length len */
-void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir[3], float len, const float d[3], bool twin) {
+void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir[3], float len, const float d[6], bool twin) {
     float tail[3] = { tip[0] - dir[0] * len, tip[1] - dir[1] * len, tip[2] - dir[2] * len };
     seg(pos, disp, tail, tip, d);
     /* a perpendicular for the head: the axis least aligned with dir */
@@ -234,7 +263,7 @@ void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir
    crossed triangles) with its tip on the node, standing on that axis; a fixed
    rotation about the axis doubles the base (a rotation alone: a shorter cone).
    Temperature: a small cross. */
-static void support(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d[3], unsigned mask, float L) {
+static void support(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d[6], unsigned mask, float L) {
     if (mask & 64) {
         for (int a = 0; a < 3; a++) {
             float u[3], e0[3], e1[3];
@@ -267,9 +296,9 @@ static int bc_mask_cmp(const void* a, const void* b) {
     return x < y ? -1 : x > y;
 }
 
-static void node_pd(uint32_t i, float p[3], float d[3]) {
+static void node_pd(uint32_t i, float p[3], float d[6]) {
     memcpy(p, G.frd.xyz + 3 * i, 3 * sizeof(float));
-    if (G.disp) memcpy(d, G.disp + 3 * i, 3 * sizeof(float)); else d[0] = d[1] = d[2] = 0;
+    app_node_disp6(i, d);
 }
 
 /* Where a deck node is drawn: the shown node when the .frd kept it (or one sits
@@ -277,13 +306,13 @@ static void node_pd(uint32_t i, float p[3], float d[3]) {
    axis nodes are not in the expanded .frd mesh at all. */
 static bool node_visible(uint32_t n) { return !D.nvis || D.nvis[n]; }
 
-static bool deck_node_pd(uint32_t id, float p[3], float d[3]) {
+static bool deck_node_pd(uint32_t id, float p[3], float d[6]) {
     uint32_t n = shown_node(&G.frd, id);
     if (n != UINT32_MAX) { if (!node_visible(n)) return false; node_pd(n, p, d); return true; }
     uint32_t dn = D.d.mesh.n_nodes ? cv_frd_node_index(&D.d.mesh, id) : UINT32_MAX;
     if (dn == UINT32_MAX) return false;
     memcpy(p, D.d.mesh.xyz + 3 * dn, 3 * sizeof(float));
-    d[0] = d[1] = d[2] = 0;
+    for (int k = 0; k < 6; k++) d[k] = 0;
     if (G.crop_on)                                  /* the crop box applies to these too */
         for (int k = 0; k < 3; k++) if (p[k] < G.job.crop_lo[k] || p[k] > G.job.crop_hi[k]) return false;
     return true;
@@ -300,8 +329,8 @@ static void perp_of(const float u[3], float out[3]) {
 }
 
 /* the symbol between a and b (displacements da, db interpolated along it) */
-static void discrete_symbol(cv_fvec* pos, cv_fvec* disp, int kind, const float a0[3], const float da[3],
-                            const float b0[3], const float db[3], float L, int lane) {
+static void discrete_symbol(cv_fvec* pos, cv_fvec* disp, int kind, const float a0[3], const float da[6],
+                            const float b0[3], const float db[6], float L, int lane) {
     float u[3] = { b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2] };
     float len = sqrtf(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
     if (len <= 0) return;
@@ -334,44 +363,42 @@ static void discrete_symbol(cv_fvec* pos, cv_fvec* disp, int kind, const float a
         pts[np][0] = 0.42f; pts[np++][1] = 1;  pts[np][0] = 0.42f; pts[np++][1] = -1;
         pts[np][0] = 0.42f; pts[np++][1] = 0;
     }
-    float prev[3], prevd[3];
+    float prev[3], prevd[6];
     for (int i = 0; i < np; i++) {
-        float t = pts[i][0], q[3], qd[3];
-        for (int k = 0; k < 3; k++) {
-            q[k] = a[k] + u[k] * len * t + w[k] * amp * pts[i][1];
-            qd[k] = da[k] + (db[k] - da[k]) * t;
-        }
-        if (i) { push3(pos, prev); push3(disp, prevd); push3(pos, q); push3(disp, qd); }
+        float t = pts[i][0], q[3], qd[6];
+        for (int k = 0; k < 3; k++) q[k] = a[k] + u[k] * len * t + w[k] * amp * pts[i][1];
+        for (int k = 0; k < 6; k++) qd[k] = da[k] + (db[k] - da[k]) * t;
+        if (i) { push3(pos, prev); push6(disp, prevd); push3(pos, q); push6(disp, qd); }
         memcpy(prev, q, sizeof q); memcpy(prevd, qd, sizeof qd);
     }
     if (kind == CV_DISC_DASHPOT) {                        /* the cylinder around the plate */
         float c0 = 0.35f, c1 = 0.8f, corner[4][2] = { {c0, 1}, {c1, 1}, {c1, -1}, {c0, -1} };
         for (int i = 0; i < 4; i++) {
             if (i == 0) continue;                         /* open end: no bar at c0 */
-            float q0[3], q1[3], d0[3], d1[3];
+            float q0[3], q1[3], d0[6], d1[6];
             for (int k = 0; k < 3; k++) {
                 q0[k] = a[k] + u[k] * len * corner[i - 1][0] + w[k] * amp * corner[i - 1][1];
                 q1[k] = a[k] + u[k] * len * corner[i][0] + w[k] * amp * corner[i][1];
+            }
+            for (int k = 0; k < 6; k++) {
                 d0[k] = da[k] + (db[k] - da[k]) * corner[i - 1][0];
                 d1[k] = da[k] + (db[k] - da[k]) * corner[i][0];
             }
-            push3(pos, q0); push3(disp, d0); push3(pos, q1); push3(disp, d1);
+            push3(pos, q0); push6(disp, d0); push3(pos, q1); push6(disp, d1);
         }
     }
     if (kind == CV_DISC_GAP) {                            /* the other bar */
-        float q0[3], q1[3], d0[3], d1[3];
-        for (int k = 0; k < 3; k++) {
-            q0[k] = a[k] + u[k] * len * 0.58f + w[k] * amp; q1[k] = a[k] + u[k] * len * 0.58f - w[k] * amp;
-            d0[k] = d1[k] = da[k] + (db[k] - da[k]) * 0.58f;
-        }
-        push3(pos, q0); push3(disp, d0); push3(pos, q1); push3(disp, d1);
-        for (int k = 0; k < 3; k++) { q0[k] = a[k] + u[k] * len * 0.58f; d0[k] = da[k] + (db[k] - da[k]) * 0.58f; }
-        push3(pos, q0); push3(disp, d0); push3(pos, b); push3(disp, db);
+        float q0[3], q1[3], d0[6], d1[6];
+        for (int k = 0; k < 3; k++) { q0[k] = a[k] + u[k] * len * 0.58f + w[k] * amp; q1[k] = a[k] + u[k] * len * 0.58f - w[k] * amp; }
+        for (int k = 0; k < 6; k++) d0[k] = d1[k] = da[k] + (db[k] - da[k]) * 0.58f;
+        push3(pos, q0); push6(disp, d0); push3(pos, q1); push6(disp, d1);
+        for (int k = 0; k < 3; k++) q0[k] = a[k] + u[k] * len * 0.58f;
+        push3(pos, q0); push6(disp, d0); push3(pos, b); push6(disp, db);
     }
 }
 
 /* a mass: a small cube of edges around the node */
-static void mass_symbol(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d[3], float h) {
+static void mass_symbol(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d[6], float h) {
     for (int e = 0; e < 12; e++) {
         int axis = e / 4, c = e % 4;
         float q0[3], q1[3];
@@ -380,7 +407,7 @@ static void mass_symbol(cv_fvec* pos, cv_fvec* disp, const float p[3], const flo
             q0[k] = p[k] + s0 * h + (k == axis ? -h : 0);
             q1[k] = p[k] + s0 * h + (k == axis ? h : 0);
         }
-        push3(pos, q0); push3(disp, d); push3(pos, q1); push3(disp, d);
+        push3(pos, q0); push6(disp, d); push3(pos, q1); push6(disp, d);
     }
 }
 
@@ -390,7 +417,7 @@ static void refresh_discrete(void) {
     if (D.on && G.loaded) {
         for (uint32_t i = 0; i < D.d.ndisc; i++) {
             const cv_discrete* q = &D.d.disc[i];
-            float a[3], da[3], b[3], db[3];
+            float a[3], da[6], b[3], db[6];
             if (!deck_node_pd(q->n[0], a, da)) continue;
             if (q->kind == CV_DISC_MASS) { mass_symbol(&lp, &ld, a, da, 0.18f * L); continue; }
             if (q->nn == 2) {
@@ -398,11 +425,12 @@ static void refresh_discrete(void) {
             } else {                                      /* grounded: along its dof, ground bar at the end */
                 int k = q->dof ? (q->dof - 1) % 3 : 1;
                 memcpy(b, a, sizeof b); memcpy(db, da, sizeof db);
-                b[k] -= L; db[k] = 0; db[(k + 1) % 3] = 0; db[(k + 2) % 3] = 0;
+                b[k] -= L;
+                for (int m = 0; m < 6; m++) db[m] = 0;            /* the ground stays */
                 float w[3] = { 0, 0, 0 }; w[(k + 1) % 3] = 0.3f * L;
-                float g0[3], g1[3], z[3] = { 0, 0, 0 };
+                float g0[3], g1[3];
                 for (int m = 0; m < 3; m++) { g0[m] = b[m] - w[m]; g1[m] = b[m] + w[m]; }
-                push3(&lp, g0); push3(&ld, z); push3(&lp, g1); push3(&ld, z);
+                push3(&lp, g0); push6(&ld, db); push3(&lp, g1); push6(&ld, db);
             }
             int lane = 0;                                 /* earlier elements on the same pair */
             for (uint32_t j = 0; j < i; j++) {
@@ -413,7 +441,7 @@ static void refresh_discrete(void) {
             discrete_symbol(&lp, &ld, q->kind, a, da, b, db, L, lane);
         }
     }
-    cv_render_aux(CV_AUX_DISCLN, lp.a, ld.a, NULL, (uint32_t)(lp.n / 3));
+    app_aux_upload(CV_AUX_DISCLN, &lp, &ld, NULL);
     cv_free_vec(lp); cv_free_vec(ld);
 }
 
@@ -440,7 +468,7 @@ static void refresh_links(void) {
         for (int i = 0; i < D.d.nlinks; i++) {
             const cv_link* l = &D.d.links[i];
             if (!D.link_on[i] || l->kind == CV_LINK_TIE || l->kind == CV_LINK_CONTACT) continue;
-            float r[3], rd[3];
+            float r[3], rd[6];
             bool have_ref = l->ref && deck_node_pd(l->ref, r, rd);
             u32vec tgt = {0};
             for (uint32_t j = 0; j < l->n; j++) {
@@ -449,19 +477,19 @@ static void refresh_links(void) {
             }
             if (l->surf[0] >= 0 && l->surf[0] < D.d.nsurfs) surface_nodes(&G.frd, &D.d.surfs[l->surf[0]], &tgt);
             for (size_t j = 0; j < tgt.n; j++) {
-                float p[3], d[3];
+                float p[3], d[6];
                 node_pd(tgt.a[j], p, d);
                 if (l->kind == CV_LINK_EQUATION && j == 0 && !have_ref) { memcpy(r, p, sizeof r); memcpy(rd, d, sizeof rd); have_ref = true; continue; }
                 if (!have_ref) continue;
                 if (l->kind == CV_LINK_EQUATION && G.frd.node_id[tgt.a[j]] == l->ref) continue;
                 seg(&lp, &ld, r, p, rd);
                 /* the far end carries its own displacement: patch the last vertex */
-                memcpy(ld.a + ld.n - 3, d, 3 * sizeof(float));
+                memcpy(ld.a + ld.n - 6, d, 6 * sizeof(float));
             }
             cv_free_vec(tgt);
         }
     }
-    cv_render_aux(CV_AUX_LINKLN, lp.a, ld.a, NULL, (uint32_t)(lp.n / 3));
+    app_aux_upload(CV_AUX_LINKLN, &lp, &ld, NULL);
     cv_free_vec(lp); cv_free_vec(ld);
 }
 
@@ -494,7 +522,7 @@ static void refresh_glyphs(void) {
         for (uint32_t i = 0; i < nm;) {
             uint32_t node = m[i].node, bits = 0;
             for (; i < nm && m[i].node == node; i++) bits |= m[i].mask;
-            float p[3], d[3];
+            float p[3], d[6];
             if (deck_node_pd(node, p, d)) support(&bp, &bd, p, d, bits, L);
         }
         free(m);
@@ -503,7 +531,7 @@ static void refresh_glyphs(void) {
         for (uint32_t i = 0; i < D.d.ndloads; i++) pmax = fmaxf(pmax, fabsf(D.d.dloads[i].value));
         for (uint32_t i = 0; i < D.d.ncloads; i++) {
             const cv_cload* c = &D.d.cloads[i];
-            float p[3], d[3], dir[3];
+            float p[3], d[6], dir[3];
             if (!deck_node_pd(c->node, p, d)) continue;
             axis_vec((c->dof - 1) % 3, c->value < 0 ? -1.f : 1.f, 1.f, dir);
             float len = LL * (vmax > 0 ? 0.5f + 0.5f * fabsf(c->value) / vmax : 1.f);
@@ -516,10 +544,11 @@ static void refresh_glyphs(void) {
             uint32_t c[4];
             int k = e == UINT32_MAX ? 0 : cv_elem_face_corners(f, e, q->face, c);
             if (k < 3) continue;
-            float cen[3] = { 0, 0, 0 }, cd[3] = { 0, 0, 0 }, a[3], b[3], p[3], d[3];
+            float cen[3] = { 0, 0, 0 }, cd[6] = { 0 }, a[3], b[3], p[3], d[6];
             for (int j = 0; j < k; j++) {
                 node_pd(c[j], p, d);
-                for (int m = 0; m < 3; m++) { cen[m] += p[m] / k; cd[m] += d[m] / k; }
+                for (int m = 0; m < 3; m++) cen[m] += p[m] / k;
+                for (int m = 0; m < 6; m++) cd[m] += d[m] / k;
             }
             const float *p0 = f->xyz + 3 * c[0], *p1 = f->xyz + 3 * c[1], *p2 = f->xyz + 3 * c[k - 1];
             for (int m = 0; m < 3; m++) { a[m] = p1[m] - p0[m]; b[m] = p2[m] - p0[m]; }
@@ -533,8 +562,8 @@ static void refresh_glyphs(void) {
             deck_arrow(&lp, &ld, cen, nrm, len, cd, false);
         }
     }
-    cv_render_aux(CV_AUX_BCLN, bp.a, bd.a, NULL, (uint32_t)(bp.n / 3));
-    cv_render_aux(CV_AUX_LDLN, lp.a, ld.a, NULL, (uint32_t)(lp.n / 3));
+    app_aux_upload(CV_AUX_BCLN, &bp, &bd, NULL);
+    app_aux_upload(CV_AUX_LDLN, &lp, &ld, NULL);
     cv_free_vec(bp); cv_free_vec(bd); cv_free_vec(lp); cv_free_vec(ld);
 }
 
@@ -576,8 +605,8 @@ void deck_refresh_highlight(void) {
             }
         }
     }
-    cv_render_aux(CV_AUX_HLPT, pp.a, pd.a, NULL, (uint32_t)(pp.n / 3));
-    cv_render_aux(CV_AUX_HLTRI, tp.a, td.a, NULL, (uint32_t)(tp.n / 3));
+    app_aux_upload(CV_AUX_HLPT, &pp, &pd, NULL);
+    app_aux_upload(CV_AUX_HLTRI, &tp, &td, NULL);
     cv_free_vec(pp); cv_free_vec(pd); cv_free_vec(tp); cv_free_vec(td);
 }
 

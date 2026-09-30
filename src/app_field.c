@@ -340,7 +340,6 @@ static void principal_arrows(const float* v, const uint32_t* ids, size_t n, size
         if (m == m && m > peak) peak = m;
     }
     float L = CV_MAX(G.vec_pct, 0.1f) * 0.01f * G.diag;
-    const float z[3] = { 0, 0, 0 };
     for (size_t j = 0; peak > 0 && j < n; j += stride) {
         uint32_t i = ids ? ids[j] : (uint32_t)j;
         float val[3], vec[3][3];
@@ -348,7 +347,8 @@ static void principal_arrows(const float* v, const uint32_t* ids, size_t n, size
         float h = 0.5f * L * fabsf(val[k]) / peak;
         if (!(h > 0)) continue;
         const float* p = G.frd.xyz + 3 * (size_t)i;
-        const float* d = G.disp ? G.disp + 3 * (size_t)i : z;
+        float d[6];
+        app_node_disp6(i, d);
         size_t before = pos->n;
         for (int sgn = -1; sgn <= 1; sgn += 2) {
             float dir[3] = { vec[k][0] * sgn, vec[k][1] * sgn, vec[k][2] * sgn };
@@ -375,7 +375,7 @@ void refresh_vectors(void) {
     if (G.frd.steps[G.step].fields[fi].ncomp == 6) {
         cv_fvec pos = {0}, disp = {0}, scal = {0};
         if (G.scalar) principal_arrows(v, ids, n, stride, &pos, &disp, &scal);
-        cv_render_aux(CV_AUX_VECLN, pos.a, disp.a, scal.a, (uint32_t)(pos.n / 3));
+        app_aux_upload(CV_AUX_VECLN, &pos, &disp, scal.a);
         cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(scal);
         return;
     }
@@ -395,13 +395,14 @@ void refresh_vectors(void) {
         float dir[3] = { r[0] / m, r[1] / m, r[2] / m }, len = L * m / peak;
         float p[3] = { G.frd.xyz[3 * i], G.frd.xyz[3 * i + 1], G.frd.xyz[3 * i + 2] };
         float tip[3] = { p[0] + dir[0] * len, p[1] + dir[1] * len, p[2] + dir[2] * len };
-        const float z[3] = { 0, 0, 0 };
+        float d[6];
+        app_node_disp6(i, d);
         size_t before = pos.n;
-        deck_arrow(&pos, &disp, tip, dir, len, G.disp ? G.disp + 3 * i : z, false);
+        deck_arrow(&pos, &disp, tip, dir, len, d, false);
         float sv = G.scalar ? G.scalar[i] : NAN;
         for (size_t k = before; k < pos.n; k += 3) cv_push(scal, sv);
     }
-    cv_render_aux(CV_AUX_VECLN, pos.a, disp.a, scal.a, (uint32_t)(pos.n / 3));
+    app_aux_upload(CV_AUX_VECLN, &pos, &disp, scal.a);
     cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(scal);
 }
 
