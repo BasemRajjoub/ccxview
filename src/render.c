@@ -579,6 +579,10 @@ void cv_render_draw(const cv_draw* d) {
         static const float path_rgb[3] = { 1.0f, 0.55f, 0.1f };
         draw_layer(R.pip_line_ni, A[CV_AUX_PATHLN].v, NO_IB, (int)A[CV_AUX_PATHLN].n, CV_COLOR_SOLID, path_rgb, false, d, 1, true, 0.f, 0);
     }
+    if (A[CV_AUX_PICKPT].n) {                /* the picked nodes, on top */
+        static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
+        draw_layer(R.pip_pt_ni, A[CV_AUX_PICKPT].v, NO_IB, (int)A[CV_AUX_PICKPT].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size, true, 0.f, 0);
+    }
     if (d->markers && A[CV_AUX_MARK].n)      /* min (first) and max (second), coloured by the field */
         draw_layer(R.pip_pt_ni, A[CV_AUX_MARK].v, NO_IB, (int)A[CV_AUX_MARK].n,
                    CV_COLOR_NODAL, d->point_rgb, false, d, d->marker_size, true, 0.f, 0);

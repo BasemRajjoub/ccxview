@@ -306,6 +306,7 @@ static void frame(void) {
         memcpy(d.face_rgb, fc, sizeof fc); memcpy(d.edge_rgb, ec, sizeof ec); memcpy(d.point_rgb, pc, sizeof pc);
         d.vp_x = G.vp_x; d.vp_y = G.vp_y; d.vp_w = G.vp_w; d.vp_h = G.vp_h;
     }
+    app_marks_sync();
     cv_gpu_frame_begin();
     sg_begin_pass(&(sg_pass){
         .action = {
@@ -722,7 +723,7 @@ static void event(const sapp_event* ev) {
                 }
             }
             switch (ev->key_code) {
-
+                case SAPP_KEYCODE_ESCAPE: app_pick_cancel(); break;
                 case SAPP_KEYCODE_0: case SAPP_KEYCODE_KP_0:
                     if (ctrl) { ui_zoom(0); }
                     break;

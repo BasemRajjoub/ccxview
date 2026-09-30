@@ -425,7 +425,7 @@ static void apply_load(cv_job* j) {
         unsigned a, b;
         if (sscanf(O.lin_ids, "%u,%u", &a, &b) == 2) {
             uint32_t na = cv_frd_node_index(&G.frd, a), nb = cv_frd_node_index(&G.frd, b);
-            if (na != UINT32_MAX && nb != UINT32_MAX && na != nb) { G.path_surface = false; app_path_start(na); app_path_end(nb); }
+            if (na != UINT32_MAX && nb != UINT32_MAX && na != nb) app_lin_open(na, nb);
             else cv_msg_add(&G.msgs, 0, false, "--linearize: node not in this model");
         }
     }

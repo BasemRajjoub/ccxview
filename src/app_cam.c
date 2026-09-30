@@ -717,6 +717,10 @@ void do_pick(float px, float py) {
     G.probe_on = G.probe.hit;
     G.probe_ip = 0;
     if (G.probe.hit && G.path_arm) app_path_end(G.probe.node);
+    if (G.probe.hit && G.lin_arm) {
+        G.lin_arm = false;
+        if (G.probe.node != G.lin_from) app_lin_open(G.lin_from, G.probe.node);
+    }
     if (G.probe.hit) {
         G.probe_value = !G.has_field ? NAN
                       : (G.elem_mode || G.field_src == 1) ? G.elem_val[G.probe.elem] : G.scalar[G.probe.node];

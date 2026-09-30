@@ -173,8 +173,8 @@ typedef struct {
     int       keep_comp;
     cv_camera keep_cam;
     /* path plot: the field between two picked nodes, on the straight line through the
-       solid (sampled, interpolated in the elements; the stress linearized along it) or
-       on the shortest path over the surface edges */
+       solid (sampled, interpolated in the elements) or on the shortest path over the
+       surface edges */
     uint32_t  path_a;                /* first node, UINT32_MAX none */
     bool      path_arm;              /* waiting for the second click */
     bool      path_surface;          /* along the surface instead of straight */
@@ -192,6 +192,8 @@ typedef struct {
     char      hist_key[200];         /* what the curve was built for */
     /* stress linearization along the straight line between two nodes (ASME) */
     bool      lin_open;
+    bool      lin_arm;               /* waiting for the click on the second node */
+    uint32_t  lin_from;              /* the first node while armed */
     uint32_t  lin_a, lin_b;          /* the end nodes */
     int       lin_fi;                /* the tensor field linearized, -1 none */
     int       lin_n;                 /* sample points */
@@ -331,6 +333,9 @@ void app_set_step(int step);
 void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
 void app_lin_open(uint32_t a, uint32_t b);  /* linearize the stress on the line between two nodes */
 void app_lin_close(void);
+void app_lin_start(uint32_t node);          /* the next picked node ends the line */
+void app_pick_cancel(void);                 /* drop a pending second click */
+void app_marks_sync(void);                  /* the picked-node markers, redrawn when the picks change */
 /* the cap of the clip plane n . x = d through the solid elements, deformed by f1 DISP
    (in the shader) + f2 DISPI; rebuilt only when something changed */
 void app_clip_caps(bool on, const float n[3], float d, float f1, float f2);

@@ -1483,7 +1483,7 @@ static void window_messages(struct nk_context* ctx, float s, float row, int fw, 
 
 static void window_probe(struct nk_context* ctx, float s, float row) {
     if (!G.probe_on || !G.loaded) return;
-    float w = 260 * s, h = row * 8.8f;
+    float w = 260 * s, h = row * 10.f;
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -1504,14 +1504,18 @@ static void window_probe(struct nk_context* ctx, float s, float row) {
     if (G.probe_ip) snprintf(buf, sizeof buf, "point %d: %s = %s", G.probe_ip, G.field_label, num);
     else snprintf(buf, sizeof buf, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
     nk_label(ctx, G.has_field ? buf : "no field", NK_TEXT_LEFT);
-    nk_layout_row_dynamic(ctx, row, 3);
+    nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "Node ids of this element, drawn in the view");
     nk_checkbox_label(ctx, "ids", &G.show_ids);
-    tip(ctx, G.path_arm ? "Now click the end node"
-                        : "Plot the field on the straight line from this node to the next one you click, and linearize the "
-                          "stress along it (ASME): pick the two ends facing each other across the wall");
-    if (nk_button_label(ctx, G.path_arm ? "path: end?" : "path from")) app_path_start(p->node);
-    if (nk_button_label(ctx, "close")) G.probe_on = false;
+    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.lin_arm = G.path_arm = false; }
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, G.lin_arm ? "Now click the node across the wall (Esc cancels)"
+                       : "ASME VIII-2 5-A: membrane, bending and peak stress on the straight line from this node\n"
+                         "to the next one you click (pick the two ends facing each other across the wall)");
+    if (nk_button_label(ctx, G.lin_arm ? "linearize: to?" : "linearize from")) app_lin_start(p->node);
+    tip(ctx, G.path_arm ? "Now click the end node (Esc cancels)"
+                        : "Plot the field on the line (or over the surface) from this node to the next one you click");
+    if (nk_button_label(ctx, G.path_arm ? "plot: to?" : "plot from")) app_path_start(p->node);
     nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "The field at this node (element in per-element mode) against time, over every step");
     if (nk_button_label(ctx, "history")) app_hist_open(p->node, p->elem);
@@ -1524,15 +1528,13 @@ static void window_probe(struct nk_context* ctx, float s, float row) {
     nk_end(ctx);
 }
 
-static void lin_body(struct nk_context* ctx, float s, float row);
-
 /* ---- path plot: the field along the picked surface path ------------------------- */
 static void window_path(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open;
     if (!G.path_open || !G.path_n) { was_open = false; return; }
     if (!was_open) nk_window_show(ctx, "Path", NK_SHOWN);
     was_open = true;
-    if (nk_begin(ctx, "Path", nk_rect(fw * 0.5f, fh * 0.06f, fw * 0.45f, fh * 0.5f),
+    if (nk_begin(ctx, "Path", nk_rect(fw * 0.35f, fh * 0.55f, fw * 0.4f, fh * 0.35f),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         char txt[200];
         nk_layout_row_template_begin(ctx, row);
@@ -1548,29 +1550,17 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
                      G.frd.node_id[G.path_end[0]], G.frd.node_id[G.path_end[1]], G.path_dist[G.path_n - 1]);
         tip(ctx, txt);
         nk_label(ctx, txt, NK_TEXT_LEFT);
-        tip(ctx, "Plot the field over the surface edges instead of along the straight line\n"
-                 "(the linearization always uses the straight line)");
+        tip(ctx, "Follow the shortest path over the surface edges instead of the straight line");
         bool surf = G.path_surface;
         nk_checkbox_label(ctx, "along surface", &G.path_surface);
         if (surf != G.path_surface) { app_path_rebuild(); if (!G.path_n) { nk_end(ctx); return; } }
-        static int tab;                                 /* 0 the field, 1 the linearization */
-        tip(ctx, tab ? "Save the linearization to a CSV next to the result file" : "Save the path values to a CSV next to the result file");
         if (nk_button_label(ctx, "CSV")) {
             char vp[1100];
-            snprintf(vp, sizeof vp, tab ? "%.*s_linearized.csv" : "%.*s_path.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
-            snprintf(G.note, sizeof G.note, (tab ? app_lin_csv(vp) : app_path_csv(vp)) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
+            snprintf(vp, sizeof vp, "%.*s_path.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
+            snprintf(G.note, sizeof G.note, app_path_csv(vp) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
         }
-        nk_layout_row_template_begin(ctx, row);
-        nk_layout_row_template_push_static(ctx, 110 * s);
-        nk_layout_row_template_push_static(ctx, 110 * s);
-        nk_layout_row_template_push_dynamic(ctx);
-        nk_layout_row_template_end(ctx);
-        if (nk_selectable_label(ctx, "field", NK_TEXT_CENTERED, &(nk_bool){ tab == 0 })) tab = 0;
-        if (nk_selectable_label(ctx, "linearization", NK_TEXT_CENTERED, &(nk_bool){ tab == 1 })) tab = 1;
-        nk_label(ctx, "", NK_TEXT_LEFT);
-        if (tab == 1) { lin_body(ctx, s, row); goto done; }
         struct nk_rect area;
-        nk_layout_row_dynamic(ctx, nk_window_get_content_region(ctx).h - 2 * (row + ctx->style.window.spacing.y) - 4 * s, 1);
+        nk_layout_row_dynamic(ctx, nk_window_get_content_region(ctx).h - row - 4 * s, 1);
         if (nk_widget(&area, ctx) != NK_WIDGET_INVALID && G.has_field && !G.elem_mode) {
             struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
             const struct nk_user_font* font = ctx->style.font;
@@ -1602,7 +1592,6 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
             nk_label(ctx, "(per-element mode: switch to nodal values to plot)", NK_TEXT_LEFT);
         }
     }
-done:
     if (nk_window_is_hidden(ctx, "Path")) app_path_clear();
     nk_end(ctx);
 }
@@ -1612,15 +1601,22 @@ static double lin_q(const double t[6]) {
     return G.lin_q == 0 ? cv_mises6(t) : G.lin_q == 1 ? cv_tresca6(t, false) : t[CV_MIN(G.lin_q - 2, 5)];
 }
 
-static void lin_body(struct nk_context* ctx, float s, float row) {
-    {
+static void window_lin(struct nk_context* ctx, float s, float row, int fw, int fh) {
+    static bool was_open;
+    if (!G.lin_open) { was_open = false; return; }
+    if (!was_open) nk_window_show(ctx, "Linearization", NK_SHOWN);
+    was_open = true;
+    if (nk_begin(ctx, "Linearization", nk_rect(fw * 0.5f, fh * 0.06f, fw * 0.45f, fh * 0.46f),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         char txt[200];
         const cv_field_desc* d = G.lin_fi >= 0 ? &G.frd.steps[G.step].fields[G.lin_fi] : NULL;
         nk_layout_row_template_begin(ctx, row);
         nk_layout_row_template_push_dynamic(ctx);
         nk_layout_row_template_push_static(ctx, 110 * s);
+        nk_layout_row_template_push_static(ctx, 60 * s);
         nk_layout_row_template_end(ctx);
-        snprintf(txt, sizeof txt, "%s on the straight line, t = %.4g (ASME VIII-2 5-A)", d ? d->name : "no stress tensor in this step", G.lin_t);
+        snprintf(txt, sizeof txt, "%s, node %u to %u, t = %.4g", d ? d->name : "no stress tensor in this step",
+                 G.frd.node_id[G.lin_a], G.frd.node_id[G.lin_b], G.lin_t);
         nk_label(ctx, txt, NK_TEXT_LEFT);
         char names[8][16] = { "von Mises", "Tresca" };
         const char* items[8];
@@ -1631,6 +1627,11 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
         for (int k = 0; k < 8; k++) items[k] = names[k];
         tip(ctx, "The quantity in the table and the plot (components in the coordinates chosen under Fields)");
         G.lin_q = nk_combo(ctx, items, 8, G.lin_q, (int)row, nk_vec2(130 * s, 8 * row + 20 * s));
+        if (nk_button_label(ctx, "CSV")) {
+            char vp[1100];
+            snprintf(vp, sizeof vp, "%.*s_linearized.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
+            snprintf(G.note, sizeof G.note, app_lin_csv(vp) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
+        }
         double m[6], b[6];
         bool ok = G.lin_n && cv_linearize(G.lin_s, G.lin_n, G.lin_t, m, b);
         if (!ok) {
@@ -1677,7 +1678,7 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
             }
         }
         struct nk_rect area;
-        float used = (ok ? 8 : 4) * (row + ctx->style.window.spacing.y);
+        float used = (ok ? 6 : 2) * (row + ctx->style.window.spacing.y);
         nk_layout_row_dynamic(ctx, CV_MAX(nk_window_get_content_region(ctx).h - used - 4 * s, row), 1);
         if (nk_widget(&area, ctx) != NK_WIDGET_INVALID && G.lin_n > 1) {
             struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
@@ -1736,6 +1737,8 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
             nk_draw_text(cv, nk_rect(x0 + w - tw - 2, y0 + h + 2 * s, tw + 2, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
         }
     }
+    if (nk_window_is_hidden(ctx, "Linearization")) app_lin_close();
+    nk_end(ctx);
 }
 
 /* ---- history plot: the field at the probed node over every step ---------------- */
@@ -2320,6 +2323,15 @@ static void window_axes(struct nk_context* ctx, float s) {
 /* ---- frame ------------------------------------------------------------------------ */
 
 void ui_frame(struct nk_context* ctx, int fw, int fh) {
+    /* Nuklear, closing a window, hands the focus to the one below without raising
+       it; once another window is added on top, that one stays active but read only
+       and its buttons ignore clicks. Raise it. */
+    if (ctx->active && ctx->active != ctx->end && (ctx->active->flags & NK_WINDOW_ROM) &&
+        !(ctx->active->flags & (NK_WINDOW_BACKGROUND | NK_WINDOW_HIDDEN | NK_WINDOW_NO_INPUT))) {
+        struct nk_window* w = ctx->active;
+        nk_window_set_focus(ctx, w->name_string);
+        w->flags &= ~(nk_flags)NK_WINDOW_ROM;
+    }
     apply_scale(ctx);
     const float s = U.scale;
     const float row = roundf(13.f * s) + 10.f * s;
@@ -2410,5 +2422,6 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_find(ctx, s, row);
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
+    window_lin(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);
 }
