@@ -5,7 +5,8 @@
    LCMB, GSUR, GBOD, SETA, ...). A hand-written script that only uses those
    records with plain numbers reads directly too; anything else -- expressions,
    sweeps, copies, loops -- needs cgx to evaluate it first (cv_fbd_parse then
-   reports needs_cgx). Never fails on bad input. */
+   reports needs_cgx). With ELTY records it also meshes what it can (msh) the way
+   cgx's `mesh all` would. Never fails on bad input. */
 #ifndef CV_FBD_H
 #define CV_FBD_H
 
@@ -38,6 +39,10 @@ typedef struct {
     uint32_t  ntri;
     /* named sets */
     cv_gset*  sets;  int nsets;
+    /* the mesh ELTY asks for, made here when cgx is not at hand (4-sided surfaces,
+       6-sided bodies; see fbd.c): Abaqus text for the deck reader, NULL if none */
+    char*     msh;   size_t msh_n;
+    uint32_t  mesh_nodes, mesh_elems;
     bool      needs_cgx;                  /* a script, not evaluated geometry */
     char      needs_why[96];              /* the first command that needs cgx */
     cv_msgs   msgs;

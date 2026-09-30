@@ -36,11 +36,18 @@ Ready-made builds are in [binaries/](binaries/):
   by the field, or by the exact values from a `.dat` file.
 - **Decks too.** Open a `.inp` on its own: mesh, sets, surfaces, materials,
   supports and loads. With the `.frd` beside it, both are shown.
+- **cgx geometry.** A `.fbd` shows its points, lines, surfaces and sets. Scripts
+  are evaluated by cgx when it is installed; the mesh ELTY asks for is made even
+  without cgx for lines, 4-sided surfaces and 6-sided bodies (mapped HE8/HE20,
+  QU4/QU8, TR3/TR6, BE2/BE3).
 - **Animation.** Mode shapes, steady-state phases, deformation cycles, step
   playback. Undeformed ghost, min/max markers, probe, find by id, path plots,
-  compare two runs (A minus B), clip plane, crop box, mirror symmetry,
-  replicate (rows of copies of a periodic model),
-  convergence plot from `.sta`/`.cvg`.
+  compare two runs (A minus B), clip plane with the cut filled, crop box,
+  mirror symmetry, cyclic symmetry, replicate (rows of copies of a periodic
+  model), convergence plot from `.sta`/`.cvg`.
+- **Post-processing.** Principal stresses with direction arrows, cylindrical
+  coordinate systems, unit systems, history of a node or element over all
+  steps, ASME VIII-2 stress linearization along a line through the wall.
 - **Export.** PNG of the view, MP4 video or PNG sequence of a deformation
   cycle or of every step, CSV, VTK for ParaView, and a view file to reproduce
   a picture later. All available from the command line for scripting.

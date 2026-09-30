@@ -37,7 +37,10 @@ static bool read_deck(const char* path, cv_inp* d) {
 }
 
 /* A .fbd: its geometry directly, or -- a script, when asked -- evaluated by cgx
-   in a temporary copy of its folder, with the mesh if the script makes one. */
+   in a temporary copy of its folder, with the mesh if the script makes one.
+   Without a mesh from cgx, the geometry's own ELTY assignments are meshed here. */
+static void fbd_eval_cgx(cv_job* j);
+
 static void worker_fbd(cv_job* j) {
     cv_map m;
     if (!cv_map_open(&m, j->path)) { snprintf(j->err, sizeof j->err, "cannot open %s", j->path); return; }
@@ -45,7 +48,20 @@ static void worker_fbd(cv_job* j) {
     cv_map_close(&m);
     if (!ok) { snprintf(j->err, sizeof j->err, "out of memory reading %s", j->path); return; }
     j->has_fbd = true;
-    if (!j->fbd.needs_cgx || !j->eval_cgx) return;
+    if (j->fbd.needs_cgx && j->eval_cgx) fbd_eval_cgx(j);
+    if (!j->has_deck && j->fbd.msh) {
+        if (cv_inp_parse(&j->deck, j->fbd.msh, j->fbd.msh_n, NULL, NULL) && j->deck.mesh.n_nodes) {
+            geo_sets_into_deck(&j->fbd, &j->deck);
+            snprintf(j->deck_path, sizeof j->deck_path, "%s", j->path);
+            j->has_deck = true;
+        } else {
+            cv_inp_free(&j->deck); free(j->deck.msgs.a); memset(&j->deck, 0, sizeof j->deck);
+        }
+    }
+    free(j->fbd.msh); j->fbd.msh = NULL; j->fbd.msh_n = 0;
+}
+
+static void fbd_eval_cgx(cv_job* j) {
     char cgx[1024];
     if (!cv_cgx_find(cgx, sizeof cgx)) {
         snprintf(j->cgx_log, sizeof j->cgx_log, "cgx not found: put it on PATH or set CCXVIEW_CGX to it");

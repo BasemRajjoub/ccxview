@@ -50,5 +50,8 @@ not done yet.
 
 ## Modelling
 
-- [ ] **Build models from .fbd**: mesh the cgx geometry (not only show it), i.e.
-  run the cgx script far enough to get nodes and elements. *(xyont)*
+- [x] **Build models from .fbd**: mesh the cgx geometry (not only show it), i.e.
+  run the cgx script far enough to get nodes and elements. *(xyont)* — with cgx, the
+  evaluated script's mesh; without, a built-in mapped mesher does what ELTY asks for
+  lines (BE2/3), 4-sided surfaces (QU4/8, TR3/6) and 6-sided bodies (HE8/20), from the
+  line divisions (samples/fbd/block.fbd). Tets and other shapes still need cgx.
