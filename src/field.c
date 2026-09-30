@@ -1,9 +1,31 @@
 /* field.c -- derived scalars and ranges. */
 #include "field.h"
 #include <math.h>
+#include <ctype.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 static bool is_stress(const char* name) {
     return strncmp(name, "STRESS", 6) == 0 || strncmp(name, "ZZS", 3) == 0;
+}
+
+/* 0: not a tensor; 1: shears XY YZ ZX (.frd); 2: shears xy xz yz (.dat).
+   Decided from the last two letters of the component names. */
+static int tensor_order(const cv_field_desc* d) {
+    if (d->ncomp != 6) return 0;
+    char t[6][3];
+    for (int c = 0; c < 6; c++) {
+        size_t k = strlen(d->comp[c]);
+        if (k < 2) return 0;
+        t[c][0] = (char)tolower((unsigned char)d->comp[c][k - 2]);
+        t[c][1] = (char)tolower((unsigned char)d->comp[c][k - 1]);
+        t[c][2] = 0;
+    }
+    if (strcmp(t[0], "xx") || strcmp(t[1], "yy") || strcmp(t[2], "zz") || strcmp(t[3], "xy")) return 0;
+    if (!strcmp(t[4], "yz") && !strcmp(t[5], "zx")) return 1;
+    if (!strcmp(t[4], "xz") && !strcmp(t[5], "yz")) return 2;
+    return 0;
 }
 
 int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
@@ -15,6 +37,17 @@ int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
     if (d->ncomp == 6 && is_stress(d->name) && n < max) {
         snprintf(out[n].label, sizeof out[n].label, "von Mises");
         out[n++].comp = CV_COMP_MISES;
+    }
+    int order = tensor_order(d);
+    if (order) {
+        /* S1..S3 for stresses, E1..E3 for strains, from the component names */
+        char p = (char)toupper((unsigned char)d->comp[0][0]);
+        if (p != 'S' && p != 'E') p = 'P';
+        static const char* what[3] = { "max", "mid", "min" };
+        for (int k = 0; k < 3 && n < max; k++) {
+            snprintf(out[n].label, sizeof out[n].label, "%c%d %s", p, k + 1, what[k]);
+            out[n++].comp = (order == 1 ? CV_COMP_P1 : CV_COMP_P1_XZ) - k;
+        }
     }
     for (int c = 0; c < d->ncomp && n < max; c++) {
         snprintf(out[n].label, sizeof out[n].label, "%s", d->comp[c][0] ? d->comp[c] : "C?");
@@ -29,6 +62,28 @@ float cv_von_mises(const float s[6]) {
     return (float)sqrt(0.5 * (a * a + b * b + c * c) + 3.0 * sh);
 }
 
+void cv_principal(const float s[6], bool xz_order, float out[3]) {
+    double xx = s[0], yy = s[1], zz = s[2], xy = s[3];
+    double yz = xz_order ? s[5] : s[4], zx = xz_order ? s[4] : s[5];
+    double p1 = xy * xy + yz * yz + zx * zx;
+    double e[3];
+    double q = (xx + yy + zz) / 3.0;
+    double p2 = (xx - q) * (xx - q) + (yy - q) * (yy - q) + (zz - q) * (zz - q) + 2.0 * p1;
+    if (p2 <= 1e-30 * (q * q + 1e-300)) {         /* hydrostatic (or zero): all equal */
+        e[0] = e[1] = e[2] = q;
+    } else {
+        /* closed form for symmetric 3x3 (Smith 1961): B = (A - qI) / p, r = det(B) / 2 */
+        double p = sqrt(p2 / 6.0);
+        double a = (xx - q) / p, b = (yy - q) / p, c = (zz - q) / p, u = xy / p, v = yz / p, w = zx / p;
+        double r = 0.5 * (a * (b * c - v * v) - u * (u * c - v * w) + w * (u * v - b * w));
+        double phi = r <= -1 ? M_PI / 3.0 : r >= 1 ? 0.0 : acos(r) / 3.0;
+        e[0] = q + 2.0 * p * cos(phi);
+        e[2] = q + 2.0 * p * cos(phi + 2.0 * M_PI / 3.0);
+        e[1] = 3.0 * q - e[0] - e[2];
+    }
+    for (int k = 0; k < 3; k++) out[k] = (float)e[k];
+}
+
 void cv_field_scalar(const float* v, int nc, uint32_t n, int comp, float* out) {
     for (uint32_t i = 0; i < n; i++) {
         const float* r = v + (size_t)i * nc;
@@ -39,6 +94,11 @@ void cv_field_scalar(const float* v, int nc, uint32_t n, int comp, float* out) {
             out[i] = (float)sqrt(s);                 /* NaN propagates */
         } else if (comp == CV_COMP_MISES && nc >= 6) {
             out[i] = cv_von_mises(r);
+        } else if (comp <= CV_COMP_P1 && comp >= CV_COMP_P3_XZ && nc >= 6) {
+            float e[3];
+            bool xz = comp <= CV_COMP_P1_XZ;
+            cv_principal(r, xz, e);                      /* NaN in, NaN out */
+            out[i] = e[(xz ? CV_COMP_P1_XZ : CV_COMP_P1) - comp];
         } else {
             out[i] = NAN;
         }

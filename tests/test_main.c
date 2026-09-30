@@ -350,6 +350,19 @@ static void test_field_math(void) {
     CHECK_NEAR(cv_von_mises(s1), 100, 1e-4);
     float s2[6] = { 0, 0, 0, 50, 0, 0 };
     CHECK_NEAR(cv_von_mises(s2), 50 * sqrt(3.0), 1e-3);
+    float pr[3];
+    cv_principal(s2, false, pr);                    /* pure shear: +50, 0, -50 */
+    CHECK_NEAR(pr[0], 50, 1e-3); CHECK_NEAR(pr[1], 0, 1e-3); CHECK_NEAR(pr[2], -50, 1e-3);
+    float s3[6] = { 10, 20, 30, 0, 0, 0 };
+    cv_principal(s3, false, pr);
+    CHECK_NEAR(pr[0], 30, 1e-4); CHECK_NEAR(pr[1], 20, 1e-4); CHECK_NEAR(pr[2], 10, 1e-4);
+    float s4[6] = { 2, 3, 4, 1, 0.5f, 0.25f }, s5[6] = { 2, 3, 4, 1, 0.25f, 0.5f }, q4[3], q5[3];
+    cv_principal(s4, false, q4); cv_principal(s5, true, q5);     /* same tensor, .frd vs .dat order */
+    for (int k = 0; k < 3; k++) CHECK_NEAR(q4[k], q5[k], 1e-5);
+    CHECK_NEAR(q4[0] + q4[1] + q4[2], 9, 1e-4);                    /* trace */
+    float s6[6] = { 7, 7, 7, 0, 0, 0 };
+    cv_principal(s6, false, pr);
+    CHECK_NEAR(pr[0], 7, 1e-5); CHECK_NEAR(pr[2], 7, 1e-5);
     float v[6] = { 3, 4, 0, 1, NAN, 0 }, out[2];
     cv_field_scalar(v, 3, 2, CV_COMP_MAG, out);
     CHECK_NEAR(out[0], 5, 1e-6);

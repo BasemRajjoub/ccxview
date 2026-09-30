@@ -539,8 +539,8 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 bool active = G.field_src == 0 && strcmp(d->name, G.field_name) == 0;
                 if (!nk_tree_push_id(ctx, NK_TREE_NODE, d->name, active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
                     continue;
-                cv_scalar_opt opts[CV_MAX_COMP + 2];
-                int n = cv_field_options(d, opts, CV_MAX_COMP + 2);
+                cv_scalar_opt opts[CV_MAX_OPTS];
+                int n = cv_field_options(d, opts, CV_MAX_OPTS);
                 nk_layout_row_dynamic(ctx, row, 1);
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;
@@ -565,8 +565,8 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 snprintf(title, sizeof title, "%s (.dat)", names[f]);
                 if (!nk_tree_push_id(ctx, NK_TREE_NODE, title, active ? NK_MAXIMIZED : NK_MINIMIZED, 300 + f))
                     continue;
-                cv_scalar_opt opts[CV_MAX_COMP + 2];
-                int n = cv_field_options(&d, opts, CV_MAX_COMP + 2);
+                cv_scalar_opt opts[CV_MAX_OPTS];
+                int n = cv_field_options(&d, opts, CV_MAX_OPTS);
                 nk_layout_row_dynamic(ctx, row, 1);
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;

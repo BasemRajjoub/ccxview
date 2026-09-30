@@ -208,15 +208,15 @@ static void pick_default_field(void) {
     for (int p = 0; p < 3 && !G.field_name[0]; p++)
         for (int i = 0; i < s->nfields; i++)
             if (strcmp(s->fields[i].name, pref[p]) == 0) {
-                cv_scalar_opt o[CV_MAX_COMP + 2];
-                cv_field_options(&s->fields[i], o, CV_MAX_COMP + 2);
+                cv_scalar_opt o[CV_MAX_OPTS];
+                cv_field_options(&s->fields[i], o, CV_MAX_OPTS);
                 snprintf(G.field_name, sizeof G.field_name, "%s", pref[p]);
                 G.comp = o[0].comp;
                 break;
             }
     if (!G.field_name[0] && s->nfields) {
-        cv_scalar_opt o[CV_MAX_COMP + 2];
-        cv_field_options(&s->fields[0], o, CV_MAX_COMP + 2);
+        cv_scalar_opt o[CV_MAX_OPTS];
+        cv_field_options(&s->fields[0], o, CV_MAX_OPTS);
         snprintf(G.field_name, sizeof G.field_name, "%s", s->fields[0].name);
         G.comp = o[0].comp;
     }
@@ -418,8 +418,8 @@ static void apply_load(cv_job* j) {
     if (O.field && G.frd.n_steps > 0) {
         int fi = find_field(G.step, O.field);
         if (fi >= 0) {
-            cv_scalar_opt o[CV_MAX_COMP + 2];
-            if (cv_field_options(&G.frd.steps[G.step].fields[fi], o, CV_MAX_COMP + 2) > 0) app_select_src(O.field, o[0].comp, 0);
+            cv_scalar_opt o[CV_MAX_OPTS];
+            if (cv_field_options(&G.frd.steps[G.step].fields[fi], o, CV_MAX_OPTS) > 0) app_select_src(O.field, o[0].comp, 0);
         }
     }
     if (O.gauss && gp_loaded()) {
@@ -428,8 +428,8 @@ static void apply_load(cv_job* j) {
             const char* names[4];
             if (gp_fields(names, 4) > 0) {
                 cv_field_desc d;
-                cv_scalar_opt o[CV_MAX_COMP + 2];
-                if (gp_desc(names[0], &d) && cv_field_options(&d, o, CV_MAX_COMP + 2) > 0) {
+                cv_scalar_opt o[CV_MAX_OPTS];
+                if (gp_desc(names[0], &d) && cv_field_options(&d, o, CV_MAX_OPTS) > 0) {
                     app_set_step(st);
                     app_select_src(names[0], o[0].comp, 1);
                 }

@@ -34,7 +34,7 @@ src/
   os.c/.h       file mapping, threads, mutex, clock
   frd.c/.h      .frd index pass + lazy field decode           (headless)
   mesh.c/.h     topology, groups, visibility, skin, edges, pick (headless)
-  field.c/.h    scalar options, von Mises/magnitude, ranges    (headless)
+  field.c/.h    scalar options, von Mises/magnitude/principal, ranges (headless)
   vmath.h       tiny vec3/mat4
   render.c/.h   sokol_gfx pipelines, buffers, colormaps
   ui.c/.h       Nuklear panels

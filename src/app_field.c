@@ -51,8 +51,8 @@ const float* cache_get(int step, int field) {
 
 /* the option label ("von Mises", "D1", ...) of component `comp` of a field */
 static const char* opt_label(const cv_field_desc* d, int comp) {
-    static cv_scalar_opt opts[CV_MAX_COMP + 2];
-    int n = cv_field_options(d, opts, CV_MAX_COMP + 2);
+    static cv_scalar_opt opts[CV_MAX_OPTS];
+    int n = cv_field_options(d, opts, CV_MAX_OPTS);
     for (int i = 0; i < n; i++) if (opts[i].comp == comp) return opts[i].label;
     return "?";
 }

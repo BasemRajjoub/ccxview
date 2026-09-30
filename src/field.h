@@ -1,24 +1,33 @@
-/* field.h -- scalars that can be painted: components, magnitude, von Mises;
+/* field.h -- scalars that can be painted: components, magnitude, von Mises,
+   principal values;
    ranges, per-element means, auto deformation scale. Headless. */
 #ifndef CV_FIELD_H
 #define CV_FIELD_H
 
 #include "frd.h"
 
-enum { CV_COMP_MAG = -1, CV_COMP_MISES = -2 };
+/* Derived components. Principal values need to know where the shears are:
+   .frd writes XY YZ ZX, the .dat xy xz yz, hence two sets of codes. */
+enum { CV_COMP_MAG = -1, CV_COMP_MISES = -2,
+       CV_COMP_P1 = -3, CV_COMP_P2 = -4, CV_COMP_P3 = -5,               /* shears XY YZ ZX */
+       CV_COMP_P1_XZ = -6, CV_COMP_P2_XZ = -7, CV_COMP_P3_XZ = -8 };     /* shears xy xz yz */
+#define CV_MAX_OPTS (CV_MAX_COMP + 5)   /* components + magnitude, von Mises, 3 principal */
 
 typedef struct {
     char label[40];
-    int  comp;            /* component index, or CV_COMP_MAG / CV_COMP_MISES */
+    int  comp;            /* component index, or one of the CV_COMP_ codes above */
 } cv_scalar_opt;
 
-/* Options for one field, derived ones first (magnitude / von Mises). */
+/* Options for one field, derived ones first (magnitude / von Mises / principal). */
 int   cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
 
 /* One scalar per node from decoded values (vals[node*ncomp + c]). NaN stays NaN. */
 void  cv_field_scalar(const float* vals, int ncomp, uint32_t n, int comp, float* out);
 
 float cv_von_mises(const float s[6]);   /* SXX SYY SZZ SXY SYZ SZX */
+/* Principal values of a symmetric tensor, largest first. Shears XY YZ ZX, or
+   xy xz yz with xz_order. Strains must hold tensor shears (CalculiX does). */
+void  cv_principal(const float s[6], bool xz_order, float out[3]);
 
 /* min/max ignoring NaN. false if every value is NaN. */
 bool  cv_range(const float* v, size_t n, float* mn, float* mx);

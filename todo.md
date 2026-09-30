@@ -20,8 +20,9 @@ not done yet.
 
 ## Post-processing
 
-- [ ] **Principal stresses and strains**: S1, S2, S3 (and E1..E3) as derived
-  components of STRESS / TOSTRAIN, maybe with principal direction arrows. *(linth)*
+- [x] **Principal stresses and strains**: S1, S2, S3 (and E1..E3) as derived
+  components of STRESS / TOSTRAIN, maybe with principal direction arrows. *(linth)* Values done (S1..S3,
+  E1..E3, also on .dat Gauss points); direction arrows not yet.
 - [ ] **Coordinate transformation**: results in a cylindrical (or user) system,
   e.g. radial / hoop / axial stress. *(linth)*
 - [ ] **Cyclic symmetry expansion** beyond the NGRAPH sectors written by ccx. *(linth)*
