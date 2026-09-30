@@ -193,8 +193,8 @@ static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
 }
 
 /* ---- glyphs: supports as T-bars, loads as arrows -------------------------------
-   All in world units, L = bc_pct (supports, springs) or load_pct (loads) % of the
-   model diagonal; every vertex carries
+   All in world units, L = bc_scale (supports, springs) or 1.5 load_scale (loads)
+   times sym_len, the mesh's symbol size; every vertex carries
    its node's displacement so the glyphs ride along with the deformed shape. */
 
 static void seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const float* d) {
@@ -378,7 +378,7 @@ static void mass_symbol(cv_fvec* pos, cv_fvec* disp, const float p[3], const flo
 
 static void refresh_discrete(void) {
     cv_fvec lp = {0}, ld = {0};
-    float L = CV_MAX(G.bc_pct, 0.1f) * 0.01f * G.diag;
+    float L = CV_MAX(G.bc_scale, 0.01f) * G.sym_len;
     if (D.on && G.loaded) {
         for (uint32_t i = 0; i < D.d.ndisc; i++) {
             const cv_discrete* q = &D.d.disc[i];
@@ -470,7 +470,7 @@ static bool surf_shown(int si) {
 static void refresh_glyphs(void) {
     cv_fvec bp = {0}, bd = {0}, lp = {0}, ld = {0};
     const cv_frd* f = &G.frd;
-    float L = CV_MAX(G.bc_pct, 0.1f) * 0.01f * G.diag, LL = CV_MAX(G.load_pct, 0.1f) * 0.01f * G.diag;
+    float L = CV_MAX(G.bc_scale, 0.01f) * G.sym_len, LL = 1.5f * CV_MAX(G.load_scale, 0.01f) * G.sym_len;
     if (D.on && G.loaded) {
         for (uint32_t i = 0; i < D.d.nbcs; i++) {
             const cv_bc* b = &D.d.bcs[i];

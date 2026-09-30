@@ -35,7 +35,7 @@ static const setting S[] = {
     SEC("Layers"),
     B(show_faces), I(faces_mode, 0, FM_N - 1), B(show_edges), B(edges_field), B(edges_auto),
     B(show_nodes), B(nodes_field), F(point_size, 0.5f, 64), B(gp_colored), F(gp_size, 0.5f, 256),
-    B(show_bc), B(show_loads), F(bc_pct, 0.01f, 100), F(load_pct, 0.01f, 100),
+    B(show_bc), B(show_loads), F(bc_scale, 0.01f, 100), F(load_scale, 0.01f, 100),
     B(show_disc), B(show_links), B(show_hl), F(hl_size, 0.5f, 64),
     B(vec_colored), F(vec_pct, 0.01f, 100), F(geo_size, 0.5f, 64), B(show_markers), B(show_ghost),
     SEC("Colours and legend"),
@@ -56,6 +56,7 @@ static const setting S[] = {
     TREE("view", CV_TREE_VIEW), TREE("camera", CV_TREE_CAMERA), TREE("colours", CV_TREE_COLOURS),
     TREE("display", CV_TREE_DISPLAY), TREE("mirror", CV_TREE_MIRROR), TREE("replicate", CV_TREE_REPLICATE),
     TREE("clip", CV_TREE_CLIP), TREE("file", CV_TREE_FILE), TREE("export", CV_TREE_EXPORT),
+    TREE("symbols", CV_TREE_SYMBOLS),
 };
 enum { NS = sizeof S / sizeof S[0] };
 
@@ -107,9 +108,8 @@ void settings_load(void) {
     if (!cv_cfg_default_path(path, sizeof path)) return;
     loaded = cv_cfg_load(&C, path);
     if (!loaded) return;
-    float g = cv_cfg_get_float(&C, "glyph_pct", 0);      /* before the split into bc_pct / load_pct */
-    if (g > 0) G.bc_pct = G.load_pct = g;
-    cv_cfg_unset(&C, "glyph_pct");
+    /* glyph sizes as a percent of the model diagonal, before the mesh-based size: dropped */
+    cv_cfg_unset(&C, "glyph_pct"); cv_cfg_unset(&C, "bc_pct"); cv_cfg_unset(&C, "load_pct");
     if (cv_cfg_get(&C, "export_open", NULL))             /* before the panel sections were all kept */
         G.tree[CV_TREE_EXPORT] = cv_cfg_get_bool(&C, "export_open", false);
     cv_cfg_unset(&C, "export_open");
@@ -128,7 +128,6 @@ bool settings_apply(const char* kv) {
     const setting* e = find(key);
     if (e) { set_from_text(e, val); return true; }
     if (!strcmp(key, "ui_zoom")) { ui_set_zoom((float)atof(val)); return true; }
-    if (!strcmp(key, "glyph_pct")) { G.bc_pct = G.load_pct = (float)atof(val); return true; }
     if (!strcmp(key, "export_open")) { G.tree[CV_TREE_EXPORT] = parse_bool(val); return true; }
     /* per-model things that are never saved here (the view file has them), but handy on the command line */
     if (!strcmp(key, "rep_follow")) { G.rep_follow = parse_bool(val); return true; }

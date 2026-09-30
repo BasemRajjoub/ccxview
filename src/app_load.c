@@ -319,6 +319,21 @@ static void apply_load(cv_job* j) {
         }
         G.mean_edge = n ? (float)(sum / n) : 0.f;
     }
+    /* Symbol size: about two elements, so a support or an arrow reads next to
+       its node without covering the part; within 0.5 .. 4 % of the meshed part
+       (a far reference node or geometry would stretch the whole-model diagonal). */
+    {
+        float lo[3] = { INFINITY, INFINITY, INFINITY }, hi[3] = { -INFINITY, -INFINITY, -INFINITY };
+        for (size_t i = 0; i < G.skin.n_pt; i++) {
+            const float* p = G.frd.xyz + 3 * G.skin.pt[i];
+            for (int k = 0; k < 3; k++) { lo[k] = fminf(lo[k], p[k]); hi[k] = fmaxf(hi[k], p[k]); }
+        }
+        float d = 0;
+        if (G.skin.n_pt) for (int k = 0; k < 3; k++) d += (hi[k] - lo[k]) * (hi[k] - lo[k]);
+        d = d > 0 ? sqrtf(d) : G.diag;
+        float l = G.mean_edge > 0 ? 2.f * G.mean_edge : 0.02f * d;
+        G.sym_len = CV_MIN(CV_MAX(l, 0.005f * d), 0.04f * d);
+    }
 
     /* Auto deformation from the last step that has DISP (usually the largest).
        The same decode catches a diverged run: a result that carries the model

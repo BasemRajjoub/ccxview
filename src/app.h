@@ -22,7 +22,7 @@ enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
 /* the side panel's sections and sub-sections: open or closed, kept in the settings */
 enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
        CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
-       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_N };
+       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_N };
 
 enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
 
@@ -96,6 +96,7 @@ typedef struct {
     v3        vmin, vmax;     /* view box: undeformed + deformed as drawn */
     float     vdiag;
     float     mean_edge;      /* mean skin edge length, for the edge fade */
+    float     sym_len;        /* symbol size from the mesh: a few elements, within 0.5..4 % of the meshed part */
     cv_msgs   msgs;           /* loader + decode messages (frd.msgs holds the parser's) */
     double    load_seconds;
 
@@ -258,7 +259,7 @@ typedef struct {
     bool      show_vec;              /* arrows of the current 3-component field */
     bool      vec_colored;
     float     vec_pct;               /* longest arrow, percent of the model diagonal */
-    float     bc_pct, load_pct;      /* glyph length of supports / springs and of loads, percent of the model diagonal */
+    float     bc_scale, load_scale;  /* supports / springs and load arrows, times sym_len */
 
     /* file dialogs */
     char      exe_dir[1024];

@@ -67,7 +67,7 @@ static void init(void) {
     G.show_bc = G.show_loads = G.show_disc = G.show_links = true;
     G.vec_colored = true;
     G.vec_pct = 5.f;
-    G.bc_pct = 2.f; G.load_pct = 3.f;
+    G.bc_scale = G.load_scale = 1.f;
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
     G.geo_size = 6.f;

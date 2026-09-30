@@ -343,6 +343,53 @@ static void panel_geo_sets(struct nk_context* ctx, float row) {
     nk_tree_pop(ctx);
 }
 
+/* A size as a logarithmic slider (1x sits in the middle of 0.1x .. 10x); the value
+   button sets -1, which the caller turns into its default. True when it changed. */
+static bool sub_push(struct nk_context* ctx, const char* title, int t);
+
+static bool scale_slider(struct nk_context* ctx, float row, const char* label, const char* help, float* v, float lo, float hi) {
+    static const float ratio[3] = { 0.3f, 0.5f, 0.2f };
+    nk_layout_row(ctx, NK_DYNAMIC, row, 3, ratio);
+    tip(ctx, help);
+    nk_label(ctx, label, NK_TEXT_LEFT);
+    float old = *v, t = log10f(CV_MIN(CV_MAX(*v, lo), hi));
+    tip(ctx, help);
+    if (nk_slider_float(ctx, log10f(lo), &t, log10f(hi), 0.01f)) *v = powf(10.f, t);
+    char b[32];
+    snprintf(b, sizeof b, *v < 10 ? "%.2f" : "%.1f", *v);
+    tip(ctx, "Click: back to the default");
+    if (nk_button_label(ctx, b)) *v = -1;    /* the caller's default */
+    return *v != old;
+}
+
+/* Symbol sizes: supports, springs, loads, vector arrows, highlighted sets */
+static void symbol_sizes(struct nk_context* ctx, float s, float row) {
+    bool deck = deck_has_bc() || deck_has_loads() || deck_has_discrete();
+    if (!sub_push(ctx, "Symbol sizes", CV_TREE_SYMBOLS)) return;
+    (void)s;
+    if (deck) {
+        bool ch = false;
+        if (deck_has_bc() || deck_has_discrete()) {
+            ch |= scale_slider(ctx, row, "supports", "Supports, springs and masses, times the mesh's symbol size (about two elements)", &G.bc_scale, 0.1f, 10.f);
+            if (G.bc_scale < 0) G.bc_scale = 1.f;
+        }
+        if (deck_has_loads()) {
+            ch |= scale_slider(ctx, row, "loads", "Load arrows, times the mesh's symbol size", &G.load_scale, 0.1f, 10.f);
+            if (G.load_scale < 0) G.load_scale = 1.f;
+        }
+        if (ch) deck_refresh_highlight();
+    }
+    if (app_field_is_vector() && G.show_vec) {
+        if (scale_slider(ctx, row, "vectors %", "Longest vector arrow, percent of the model diagonal", &G.vec_pct, 0.2f, 50.f)) {
+            if (G.vec_pct < 0) G.vec_pct = 5.f;
+            app_vectors_changed();
+        }
+    }
+    scale_slider(ctx, row, "sets px", "Balls of a highlighted node set or surface, pixels", &G.hl_size, 2.f, 40.f);
+    if (G.hl_size < 0) G.hl_size = 8.f;
+    nk_tree_pop(ctx);
+}
+
 /* ---- Layers: what is drawn and how it is coloured */
 static void section_layers(struct nk_context* ctx, float s, float row) {
     /* layers */
@@ -372,15 +419,6 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             if (deck_get() && deck_get()->nlinks) {
                 tip(ctx, "Rigid bodies, couplings and equations as spiders from the reference node;\ntick single ones under Groups > Couplings");
                 nk_checkbox_label(ctx, "Couplings", &G.show_links);
-            }
-            if (G.show_bc || G.show_loads || G.show_disc) {
-                nk_layout_row_dynamic(ctx, row, 2);
-                float b0 = G.bc_pct, l0 = G.load_pct;
-                tip(ctx, "Support and spring glyph size, percent of the model diagonal");
-                nk_property_float(ctx, "#BC %", 0.2f, &G.bc_pct, 20.f, 0.5f, 0.05f);
-                tip(ctx, "Load arrow length, percent of the model diagonal");
-                nk_property_float(ctx, "#load %", 0.2f, &G.load_pct, 20.f, 0.5f, 0.05f);
-                if (G.bc_pct != b0 || G.load_pct != l0) deck_refresh_highlight();
             }
         }
         nk_layout_row_dynamic(ctx, row, 2);
@@ -430,14 +468,9 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 if (nk_checkbox_label(ctx, "Vectors", &G.show_vec)) app_vectors_changed();
                 tip(ctx, "Colour the arrows by the selected scalar (else white)");
                 nk_checkbox_label(ctx, "coloured", &G.vec_colored);
-                if (G.show_vec) {
-                    nk_layout_row_dynamic(ctx, row, 1);
-                    float v0 = G.vec_pct;
-                    nk_property_float(ctx, "#vec %", 0.2f, &G.vec_pct, 50.f, 0.5f, 0.05f);
-                    if (G.vec_pct != v0) app_vectors_changed();
-                }
             }
         }
+        symbol_sizes(ctx, s, row);
         nk_tree_pop(ctx);
     }
 

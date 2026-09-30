@@ -15,8 +15,8 @@ not done yet.
   Turbo, Viridis, Cool-warm, Heat were there already (legend grey = greyscale).
 - [ ] **Filled clip caps**: fill the cut where the clip plane goes through solid
   elements, instead of showing the open inside. *(Calc_em)*
-- [x] **Separate glyph sizes**: restraints smaller than loads. *(SergioP)* Now `BC %`
-  and `load %` (`bc_pct`, `load_pct`; an old `glyph_pct` sets both).
+- [x] **Separate glyph sizes**: restraints smaller than loads. *(SergioP)* Now a mesh-based size with
+  sliders under Layers > Symbol sizes (`bc_scale`, `load_scale`).
 - [ ] **Windows icon**: a better application icon. *(SergioP)*
 
 ## Post-processing
