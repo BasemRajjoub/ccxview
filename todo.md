@@ -19,7 +19,7 @@ not done yet.
   by the field, deformed with the model.
 - [x] **Separate glyph sizes**: restraints smaller than loads. *(SergioP)* Now a mesh-based size with
   sliders under View > Symbol sizes (`bc_scale`, `load_scale`).
-- [x] **Windows icon**: a better application icon. *(SergioP)* — a bent, contour-coloured mesh on a dark tile (scripts/make_icon.py draws res/ccxview.ico, 16..256 px), linked as a resource and set on the window.
+- [x] **Windows icon**: a better application icon. *(SergioP)* — "ccx" in yellow over a contour colour bar, on black (scripts/make_icon.py draws res/ccxview.ico, 16..256 px), linked as a resource and set on the window.
 
 ## Post-processing
 
