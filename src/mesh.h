@@ -56,6 +56,7 @@ typedef struct {
     uint32_t elem;      /* element index */
     uint32_t node;      /* nearest node of that element to the hit point */
     float    t;         /* ray parameter */
+    uint32_t tri;       /* the skin triangle hit */
 } cv_pick;
 
 /* Deformed position = xyz + disp * scale (disp may be NULL). */

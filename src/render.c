@@ -575,9 +575,14 @@ void cv_render_draw(const cv_draw* d) {
         int m = d->points_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : d->points_color;
         draw_layer(R.pip_pt, mesh, R.ib_pt, (int)R.n_pt, m, d->point_rgb, false, d, d->point_size, false, 0.f, 0);
     }
+    if (d->path && A[CV_AUX_RAYLN].n) {      /* the path's line on through the model, on top */
+        static const float ray_rgb[3] = { 0.2f, 0.85f, 0.3f };
+        draw_layer(R.pip_line_ni, A[CV_AUX_RAYLN].v, NO_IB, (int)A[CV_AUX_RAYLN].n, CV_COLOR_SOLID, ray_rgb, false, d, 1, true, 0.f, 0);
+    }
     if (d->path && A[CV_AUX_PATHLN].n) {     /* the plot line, on top */
         static const float path_rgb[3] = { 1.0f, 0.55f, 0.1f };
         draw_layer(R.pip_line_ni, A[CV_AUX_PATHLN].v, NO_IB, (int)A[CV_AUX_PATHLN].n, CV_COLOR_SOLID, path_rgb, false, d, 1, true, 0.f, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_PATHLN].v, NO_IB, (int)A[CV_AUX_PATHLN].n, CV_COLOR_SOLID, path_rgb, false, d, d->marker_size * 0.4f, true, 0.f, 0);
     }
     if (A[CV_AUX_PICKPT].n) {                /* the picked nodes, on top */
         static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };

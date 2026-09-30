@@ -63,6 +63,8 @@ static void init(void) {
     G.anim_period = 2.f;
     G.anim_factor = 1.f;
     G.fly_speed = 0.25f;
+    G.path_lin = true;                   /* the Path window opens on the linearization */
+    G.path_to = UINT32_MAX;
     G.show_gp = false;                   /* off by default, like nodes */
     G.gp_colored = true;
     G.gp_size = 6.f;

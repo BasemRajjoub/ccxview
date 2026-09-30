@@ -413,21 +413,18 @@ static void apply_load(cv_job* j) {
     if (O.fly) app_set_flight(true);
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
     if (O.compare) app_compare_open(O.compare);
-    if (O.path_ids) {
-        unsigned a, b;
-        if (sscanf(O.path_ids, "%u,%u", &a, &b) == 2) {
-            uint32_t na = cv_frd_node_index(&G.frd, a), nb = cv_frd_node_index(&G.frd, b);
-            if (na != UINT32_MAX && nb != UINT32_MAX) { app_path_start(na); app_path_end(nb); }
-            else cv_msg_add(&G.msgs, 0, false, "--path: node not in this model");
-        }
-    }
-    if (O.lin_ids) {
-        unsigned a, b;
-        if (sscanf(O.lin_ids, "%u,%u", &a, &b) == 2) {
-            uint32_t na = cv_frd_node_index(&G.frd, a), nb = cv_frd_node_index(&G.frd, b);
-            if (na != UINT32_MAX && nb != UINT32_MAX && na != nb) { G.path_surface = false; app_path_start(na); app_path_end(nb); G.path_lin = true; }
-            else cv_msg_add(&G.msgs, 0, false, "--linearize: node not in this model");
-        }
+    for (int q = 0; q < 2; q++) {        /* --path / --linearize A,B or A,normal|x|y|z */
+        const char* s = q ? O.lin_ids : O.path_ids;
+        unsigned a;
+        char w[16];
+        if (!s || sscanf(s, "%u,%15s", &a, w) != 2) continue;
+        int dir = !strcmp(w, "normal") ? 1 : !strcmp(w, "x") ? 2 : !strcmp(w, "y") ? 3 : !strcmp(w, "z") ? 4 : 0;
+        uint32_t na = cv_frd_node_index(&G.frd, a), nb = dir ? 0 : cv_frd_node_index(&G.frd, (uint32_t)strtoul(w, NULL, 10));
+        if (na == UINT32_MAX || nb == UINT32_MAX || (!dir && na == nb)) { cv_msg_add(&G.msgs, 0, false, q ? "--linearize: node not in this model" : "--path: node not in this model"); continue; }
+        G.path_lin = q == 1;
+        if (q) G.path_surface = false;
+        if (dir) app_path_ray(na, dir);
+        else { app_path_start(na); app_path_end(nb); }
     }
     if (O.hist_id > 0) {
         uint32_t n = cv_frd_node_index(&G.frd, (uint32_t)O.hist_id);

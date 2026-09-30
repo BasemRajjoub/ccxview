@@ -386,7 +386,7 @@ static inline void node_pos(const cv_frd* f, const float* disp, float sc, uint32
 
 cv_pick cv_pick_ray(const cv_frd* f, const cv_skin* s, const float* disp, float sc,
                     const float o[3], const float d[3]) {
-    cv_pick r = { false, 0, 0, INFINITY };
+    cv_pick r = { false, 0, 0, INFINITY, UINT32_MAX };
     for (size_t t = 0; t < s->n_tri; t++) {
         float a[3], b[3], c[3];
         node_pos(f, disp, sc, s->tri[3 * t], a);
@@ -406,7 +406,7 @@ cv_pick cv_pick_ray(const cv_frd* f, const cv_skin* s, const float* disp, float 
         float v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * inv;
         if (v < 0.f || u + v > 1.f) continue;
         float tt = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv;
-        if (tt > 0.f && tt < r.t) { r.t = tt; r.hit = true; r.elem = s->tri_elem[t]; }
+        if (tt > 0.f && tt < r.t) { r.t = tt; r.hit = true; r.elem = s->tri_elem[t]; r.tri = (uint32_t)t; }
     }
     if (!r.hit) return r;
     float h[3] = { o[0] + d[0] * r.t, o[1] + d[1] * r.t, o[2] + d[2] * r.t };

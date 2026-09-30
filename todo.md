@@ -38,7 +38,10 @@ not done yet.
   bending, peak. Could build on the existing path plot. *(SergioP)* Probe > path from, click the node across the wall, then linearize in the Path window (or
   `--linearize A,B`): the straight line between the end nodes, 41 points interpolated in the
   solid elements; membrane, membrane + bending, peak and total at both ends as von Mises,
-  Tresca or a component, a plot and CSV.
+  Tresca or a component, a plot and CSV. The Path window's direction list also runs the line from
+  one node along the clicked face's normal or X / Y / Z to where it leaves the solid (the first skin
+  face hit; `--linearize A,normal|x|y|z`); the line is drawn on the model, green where it runs on
+  past the ends. Checked on a synthetic tilted slab with a known through-thickness stress.
 - [x] **Time / increment plots**: a value at a node or element against time or
   increment, over all steps. *(SergioP)* Probe > history (or `--history NODE`): the current
   field and component (element mean in per-element mode) against time or step number, click
