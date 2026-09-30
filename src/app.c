@@ -671,6 +671,9 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 #ifdef __EMSCRIPTEN__
     cv_web_init();
 #endif
+#ifdef _WIN32
+    cv_attach_console();                      /* --check, --help etc. from a terminal */
+#endif
     cv_gpu_remember_args(argc, argv);
     bool software = cv_gpu_is_software_run();
     const char* check = NULL;

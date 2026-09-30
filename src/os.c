@@ -176,6 +176,17 @@ uint64_t cv_file_mtime(const char* path) {
     return t / 10000000ull;                  /* 100 ns ticks -> seconds; the epoch offset does not matter for comparing */
 }
 
+void cv_attach_console(void) {
+    /* A GUI-subsystem exe starts without stdout. Redirected output (> file, a pipe)
+       is inherited and kept; otherwise write to the console of the shell that
+       started us, if any. Double-clicked, there is none and nothing opens. */
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h && h != INVALID_HANDLE_VALUE) return;
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) return;
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
+}
+
 #else  /* POSIX */
 #include <fcntl.h>
 #include <pthread.h>

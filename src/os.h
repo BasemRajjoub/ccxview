@@ -42,4 +42,9 @@ uint64_t cv_rss_bytes(void);
 uint64_t cv_file_size(const char* path);
 uint64_t cv_file_mtime(const char* path);    /* seconds since the epoch, 0 if unknown */
 
+/* Windows GUI build: send stdout/stderr to the parent's console when there is one. */
+#ifdef _WIN32
+void cv_attach_console(void);
+#endif
+
 #endif

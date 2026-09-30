@@ -79,7 +79,7 @@ make                 # Linux/macOS -> build/ccxview
 make PORTABLE=1      # Linux build for glibc >= 2.34
 make win             # Windows exe with mingw-w64 -> build/win/ccxview.exe
 make wasm            # browser build with Emscripten -> docs/index.html
-build.bat            # Windows with MSVC
+build.bat            # Windows with MSVC (no console window; "build.bat console" for one)
 make test            # unit tests
 scripts/pack-binaries.sh   # refresh binaries/
 ```

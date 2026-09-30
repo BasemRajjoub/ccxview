@@ -4,7 +4,8 @@
 #   scripts/pack-binaries.sh   copy the Linux and Windows builds into binaries/
 #   make bundle-mesa   + Mesa llvmpipe in build/lib/mesa (software renderer, large)
 #   scripts/build-portable.sh   the same inside a glibc-2.17 container (podman/docker)
-#   make win        Windows cross build with mingw-w64 -> build/win/ccxview.exe (static runtime)
+#   make win        Windows cross build with mingw-w64 -> build/win/ccxview.exe (static runtime,
+#                   no console window; WIN_CONSOLE=1 for one)
 #   make test       headless unit tests
 #   make bench      headless timing tool
 #   make gen        synthetic .frd generator
@@ -105,6 +106,8 @@ samples: build/gen_frd
 # e.g. -L<dir of libmcfgthread.a> on toolchains that need it (nixpkgs).
 MINGW ?= x86_64-w64-mingw32-gcc
 MINGW_LDFLAGS ?=
+# GUI subsystem: no cmd window behind the viewer. WIN_CONSOLE=1 keeps one (debugging).
+WIN_SUBSYS = $(if $(filter 1,$(WIN_CONSOLE)),-mconsole,-mwindows)
 WIN_SRC = $(CORE) $(APP) vendor/tinyfiledialogs.c
 win: build/win/ccxview.exe
 build/win/sokol_impl.o: src/sokol_impl.c
@@ -113,7 +116,7 @@ build/win/sokol_impl.o: src/sokol_impl.c
 build/win/ccxview.exe: $(WIN_SRC) build/win/sokol_impl.o src/*.h
 	$(MINGW) -O2 -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
 	    -Wno-format-truncation -Wno-cast-function-type -DSOKOL_GLCORE -Ivendor \
-	    $(WIN_SRC) build/win/sokol_impl.o -o $@ $(MINGW_LDFLAGS) -static -static-libgcc \
+	    $(WIN_SRC) build/win/sokol_impl.o -o $@ $(WIN_SUBSYS) $(MINGW_LDFLAGS) -static -static-libgcc \
 	    -lkernel32 -luser32 -lgdi32 -lshell32 -lopengl32 -lcomdlg32 -lole32
 	@echo "built $@ (test with: wine $@ model.frd)"
 
