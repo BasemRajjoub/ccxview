@@ -109,8 +109,10 @@ Dependencies: a C compiler and, on Linux, X11 and OpenGL development headers.
 Everything else is vendored (sokol, Nuklear, stb, minih264e, minimp4,
 tinyfiledialogs).
 
-`samples/showcase/` holds one small solved deck with every element type and
-feature. Design notes in [docs/spec.md](docs/spec.md).
+`samples/showcase/` is the plate with a hole preloaded in the browser build,
+`samples/elements/` one small solved deck with every element type and feature,
+`samples/vessel/` a pressure vessel for the stress linearization. Design notes
+in [docs/spec.md](docs/spec.md).
 
 License: GPL-2.0-or-later, the same as CalculiX. Vendored libraries keep
 their own licences (zlib, MIT, public domain), see [vendor/README.md](vendor/README.md).

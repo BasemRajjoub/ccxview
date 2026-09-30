@@ -11,8 +11,8 @@
 #   make gen        synthetic .frd generator
 #   make corpus     parse every .frd under $(CCX_EXAMPLES)
 #   make fuzz       byte-flip the sample files through every reader (never crash)
-#   make samples    test files into build/samples (showcase + examples + synthetic 1M/5M)
-#   scripts/solve_showcase.sh   regenerate + solve samples/showcase with ccx
+#   make samples    test files into build/samples (showcase + elements + examples + synthetic 1M/5M)
+#   scripts/solve_showcase.sh [showcase|elements]   regenerate + solve a sample deck with ccx
 
 CC      ?= cc
 CFLAGS  ?= -O2 -g
@@ -88,7 +88,8 @@ corpus: build/bench
 # byte-flip every sample file 300 times each; the readers must never crash
 fuzz: build/bench
 	for f in samples/showcase/showcase.frd samples/showcase/showcase.inp samples/showcase/showcase.dat \
-	         samples/showcase/showcase.sta samples/showcase/showcase.cvg; do ./build/bench --fuzz 300 "$$f" || exit 1; done
+	         samples/showcase/showcase.sta samples/showcase/showcase.cvg samples/elements/elements.frd \
+	         samples/elements/elements.inp samples/elements/elements.dat; do ./build/bench --fuzz 300 "$$f" || exit 1; done
 
 SAMPLES = Kasten/Kasten.frd NonLinear/3PB/Biegung.frd Contact/Eyebar/eyebar.frd \
           Elements/Shell/shell.frd Linear/Plates/plates.frd Thermal/Thermografie/Naht.frd \
@@ -97,7 +98,8 @@ SAMPLES = Kasten/Kasten.frd NonLinear/3PB/Biegung.frd Contact/Eyebar/eyebar.frd 
 samples: build/gen_frd
 	@mkdir -p build/samples
 	cp samples/showcase/showcase.inp samples/showcase/showcase.frd samples/showcase/showcase.dat \
-	   samples/showcase/showcase.sta samples/showcase/showcase.cvg build/samples/
+	   samples/showcase/showcase.sta samples/showcase/showcase.cvg samples/elements/elements.inp \
+	   samples/elements/elements.frd samples/elements/elements.dat samples/elements/elements.sta build/samples/
 	-for f in $(SAMPLES); do cp "$(CCX_EXAMPLES)/$$f" "build/samples/$$(echo $$f | tr / _)" 2>/dev/null; done
 	[ -e build/samples/synthetic_1M_ascii.frd ] || ./build/gen_frd 1000000 build/samples/synthetic_1M_ascii.frd
 	[ -e build/samples/synthetic_5M_binary.frd ] || ./build/gen_frd 5000000 build/samples/synthetic_5M_binary.frd --binary

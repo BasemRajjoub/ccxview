@@ -12,3 +12,11 @@ samples/showcase/*.mp4
 *.mp4
 !docs/demo.gif
 ccxview.ini
+!samples/elements/elements.frd
+!samples/vessel/vessel.frd
+samples/*/*.12d
+samples/*/spooles.out
+samples/*/ccx.log
+samples/*/*.csv
+samples/*/*.vtk
+samples/*/*.nam
