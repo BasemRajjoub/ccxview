@@ -183,10 +183,16 @@ void app_set_flight(bool on) {
     memset(g_keys, 0, sizeof g_keys);
 }
 
-/* WASD in the view plane, E/Space up, Q down (the up axis), Shift x4. */
+/* WASD in the view plane, E/Space up, Q down (the up axis), Shift x4. The step
+   is the wall-clock time since the last tick: sapp_frame_duration() is an average
+   over many frames, and moving by the average while the frame rate wobbles (as it
+   does under a stream of mouse-look events) makes the motion stutter. */
 static void tick_flight(void) {
+    static double last;
+    double now = cv_now();
+    float dt = last > 0 ? (float)(now - last) : 0.f;
+    last = now;
     if (!G.flight || !G.loaded) return;
-    float dt = (float)sapp_frame_duration();
     if (dt > 0.1f) dt = 0.1f;
     v3 eye, fwd, right, up;
     cam_basis(&G.cam, &eye, &fwd, &right, &up);
