@@ -347,12 +347,17 @@ static void panel_geo_sets(struct nk_context* ctx, float row) {
    the bar first puts the value there (the knob then sits under the mouse and
    the same press drags on). Call right before nk_slider_*; true when it jumped. */
 static bool slider_jump(struct nk_context* ctx, float lo, float* v, float hi, float step) {
-    if (!nk_widget_is_hovered(ctx) || !nk_input_is_mouse_pressed(&ctx->input, NK_BUTTON_LEFT)) return false;
-    struct nk_rect b = nk_widget_bounds(ctx);
+    /* not nk_widget_is_hovered: that one is false unless this window is Nuklear's
+       active one, and the side panels seldom are */
+    if (!nk_input_is_mouse_pressed(&ctx->input, NK_BUTTON_LEFT) || !ctx->current || !ctx->current->layout ||
+        (ctx->current->flags & NK_WINDOW_ROM)) return false;           /* ROM: a popup is open over it */
+    struct nk_rect b = nk_widget_bounds(ctx), c = ctx->current->layout->clip;
+    struct nk_vec2 at = ctx->input.mouse.buttons[NK_BUTTON_LEFT].clicked_pos;
+    if (!NK_INBOX(at.x, at.y, b.x, b.y, b.w, b.h) || !NK_INBOX(at.x, at.y, c.x, c.y, c.w, c.h)) return false;
     const struct nk_style_slider* st = &ctx->style.slider;
     float x0 = b.x + st->padding.x, w = b.w - 2 * st->padding.x;
     if (w <= 0 || hi <= lo) return false;
-    float t = CV_MIN(CV_MAX((ctx->input.mouse.pos.x - x0) / w, 0.f), 1.f);
+    float t = CV_MIN(CV_MAX((at.x - x0) / w, 0.f), 1.f);
     float nv = lo + t * (hi - lo);
     if (step > 0) nv = CV_MIN(lo + roundf((nv - lo) / step) * step, hi);
     bool ch = nv != *v;
