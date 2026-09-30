@@ -443,6 +443,7 @@ void app_fit_element(uint32_t e) {
 
 void app_view(int p) {
     const float d2r = 3.14159265f / 180.f, lim = 89.9f * d2r;
+    app_view_push();
     /* eye direction of each axis view, in world coordinates */
     static const float D[6][3] = { {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1} };
     if (p >= CV_VIEW_PX && p <= CV_VIEW_NZ) {
@@ -455,6 +456,119 @@ void app_view(int p) {
     }
     free_from_turntable();                     /* presets set the free orientation too */
     app_fit();
+}
+
+/* ---- navigation, as CAD and FE pre-processors have it ------------------------------ */
+
+/* The whole camera turned by angle a about a world axis through pivot: the
+   pivot keeps its place on screen. Done on the free orientation; a turntable
+   takes back the nearest angles (a tilt of its up axis is lost). */
+void cam_turn(v3 axis, float a, v3 pivot) {
+    bool tt = !G.orbit_free;
+    if (tt || !(v3_dot(G.cam.fdir, G.cam.fdir) > 0.5f)) free_from_turntable();
+    axis = v3_norm(axis);
+    G.cam.fdir = v3_norm(rot(G.cam.fdir, axis, a));
+    G.cam.fup = v3_norm(rot(G.cam.fup, axis, a));
+    G.cam.target = v3_add(pivot, rot(v3_sub(G.cam.target, pivot), axis, a));
+    if (tt) turntable_from_free();
+}
+
+/* Roll about the line of sight. A turntable keeps its up axis vertical, so
+   rolling needs the free rotation: switched on, false returned. */
+bool cam_roll(float a) {
+    bool was = G.orbit_free;
+    if (!was) app_set_orbit_free(true);
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    cam_turn(fwd, a, G.cam.target);
+    return was;
+}
+
+/* world length of one pixel at the depth of p */
+float app_pixel_size(v3 p) {
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    float z = G.cam.ortho ? G.cam.dist : CV_MAX(v3_dot(v3_sub(p, eye), fwd), 1e-6f * CV_MAX(G.diag, 1e-6f));
+    return 2.f * z * tanf(G.cam.fovy * 0.5f) / (float)CV_MAX(G.vp_h, 1);
+}
+
+/* the eye stays at its depth: a pan that brings p to the centre, which then
+   becomes the orbit target */
+static void center_on(v3 p) {
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    float z = v3_dot(v3_sub(p, eye), fwd);
+    G.cam.target = p;
+    if (!G.cam.ortho && z > 1e-6f * CV_MAX(G.diag, 1e-6f)) G.cam.dist = z;
+}
+
+/* Middle click / C, like Abaqus' "set rotation centre" and Revit's middle
+   click: the point under the cursor moves to the view centre. */
+bool app_center_at(float px, float py) {
+    v3 p; bool on;
+    if (!app_cursor_point(px, py, &p, &on)) return false;
+    center_on(p);
+    return true;
+}
+
+/* Normal to (SolidWorks' "normal to", FreeCAD's "align to face"): the face
+   under the cursor faces the viewer. Its plane from three hits a few pixels
+   apart; the view's up is kept as far as it can be. */
+bool app_normal_to(float px, float py) {
+    v3 p0, p1, p2; bool o0, o1, o2;
+    const float h = 3.f;
+    if (!app_cursor_point(px, py, &p0, &o0) || !o0) return false;
+    if (!app_cursor_point(px + h, py, &p1, &o1) || !o1) { if (!app_cursor_point(px - h, py, &p1, &o1) || !o1) return false; }
+    if (!app_cursor_point(px, py + h, &p2, &o2) || !o2) { if (!app_cursor_point(px, py - h, &p2, &o2) || !o2) return false; }
+    v3 n = v3_cross(v3_sub(p1, p0), v3_sub(p2, p0));
+    if (!(v3_dot(n, n) > 0)) return false;
+    n = v3_norm(n);
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    if (v3_dot(n, fwd) > 0) n = v3_scale(n, -1.f);            /* the side the viewer is on */
+    v3 u = v3_sub(up, v3_scale(n, v3_dot(up, n)));
+    if (v3_dot(u, u) < 1e-6f) u = v3_sub(right, v3_scale(n, v3_dot(right, n)));
+    bool tt = !G.orbit_free;
+    G.cam.fdir = n; G.cam.fup = v3_norm(u);
+    if (tt) turntable_from_free();                            /* square to the face, up axis kept upright */
+    G.cam.target = p0;
+    return true;
+}
+
+/* Box zoom: the box drawn fills the view. Aimed at the model under the box
+   centre (else the target's depth), the eye brought as close as the box asks. */
+void app_box_zoom(float x0, float y0, float x1, float y1) {
+    float bw = fabsf(x1 - x0), bh = fabsf(y1 - y0);
+    if (bw < 4 && bh < 4) return;
+    float f = CV_MAX(bw / (float)CV_MAX(G.vp_w, 1), bh / (float)CV_MAX(G.vp_h, 1));
+    v3 p; bool on;
+    if (!app_cursor_point(0.5f * (x0 + x1), 0.5f * (y0 + y1), &p, &on)) return;
+    center_on(p);
+    G.cam.dist = CV_MAX(G.cam.dist * f, 1e-5f * CV_MAX(G.diag, 1e-6f));
+}
+
+/* ---- view history: back / forward, like a browser (Ctrl+Z / Ctrl+Y) */
+enum { VIEW_HIST = 32 };
+static struct { cv_camera back[VIEW_HIST], fwd[VIEW_HIST]; int nb, nf; } VH;
+
+static void hist_add(cv_camera* s, int* n, const cv_camera* c) {
+    if (*n == VIEW_HIST) { memmove(s, s + 1, (VIEW_HIST - 1) * sizeof *s); (*n)--; }
+    s[(*n)++] = *c;
+}
+
+void app_view_push(void) {
+    if (VH.nb && !memcmp(&VH.back[VH.nb - 1], &G.cam, sizeof G.cam)) return;
+    hist_add(VH.back, &VH.nb, &G.cam);
+    VH.nf = 0;
+}
+
+bool app_view_undo(int dir) {
+    cv_camera* from = dir < 0 ? VH.back : VH.fwd;
+    int* nfrom = dir < 0 ? &VH.nb : &VH.nf;
+    if (!*nfrom) return false;
+    if (dir < 0) hist_add(VH.fwd, &VH.nf, &G.cam); else hist_add(VH.back, &VH.nb, &G.cam);
+    G.cam = from[--*nfrom];
+    return true;
 }
 
 void cam_matrices(float* mvp, float* mv, float* proj_out) {

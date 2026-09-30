@@ -42,7 +42,7 @@ static const setting S[] = {
     I(cmap, 0, CV_CMAP_N - 1), I(bands, 0, 64), B(center_zero), B(legend_reverse), B(legend_grey),
     I(legend_fmt, 0, 2), I(legend_decimals, 0, 9), B(hide_legend),
     SEC("Camera"),
-    B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor),
+    B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor), B(wheel_invert), B(show_pivot),
     { "cam_ortho", 'b', &G.cam.ortho, 0, 0 }, F(fly_speed, 0.005f, 10),
     SEC("Display"),
     B(shading), B(hide_axes),

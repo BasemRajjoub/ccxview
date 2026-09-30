@@ -65,7 +65,14 @@ Or Open... (Ctrl+O), drop a file on the window, or type a path in the box.
 
 | Input | Action |
 |---|---|
-| left drag / right drag / wheel | orbit / pan / zoom (about the point under the cursor; View panel: up axis Y or Z, turntable or free rotation, cursor pivot on/off) |
+| left drag / right or middle drag / wheel | orbit / pan / zoom (about the point under the cursor; View panel: up axis Y or Z, turntable or free rotation, cursor pivot on/off, rotation centre mark) |
+| X / Y / Z held + drag | orbit about that world axis only |
+| Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
+| Alt+drag, Alt+← → | roll about the line of sight |
+| middle click, C | centre the view on the point under the cursor (new rotation centre) |
+| N | look normal to the face under the cursor |
+| Ctrl+← → ↑ ↓ | turn the view 15° (with Shift 90°) |
+| Ctrl+Z / Ctrl+Y | view back / forward |
 | click / double-click | probe / zoom to element |
 | F, R, 1..6 | fit, reset, look from ±X ±Y ±Z |
 | space, ← → | play, step |

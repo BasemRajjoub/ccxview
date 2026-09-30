@@ -211,7 +211,7 @@ bool ui_mouse_captured(struct nk_context* ctx, bool wheel) {
             return true;
         struct nk_rect b = w->bounds;
         if (!(mx >= b.x && my >= b.y && mx < b.x + b.w && my < b.y + b.h)) continue;
-        if ((w->flags & NK_WINDOW_NO_INPUT) && (!strcmp(w->name_string, "hint") || !strcmp(w->name_string, "overlay"))) continue;
+        if ((w->flags & NK_WINDOW_NO_INPUT) && (!strcmp(w->name_string, "hint") || !strcmp(w->name_string, "overlay") || !strcmp(w->name_string, "navmark"))) continue;
         if (wheel && (!strcmp(w->name_string, "axes") || !strcmp(w->name_string, "Legend"))) continue;
         return true;
     }
@@ -776,6 +776,16 @@ static void section_view(struct nk_context* ctx, float s, float row) {
         nk_checkbox_label(ctx, "Rotate about the cursor", &G.orbit_cursor);
         tip(ctx, "The wheel zooms toward the point under the cursor; off, toward the view centre");
         nk_checkbox_label(ctx, "Zoom toward the cursor", &G.zoom_cursor);
+        tip(ctx, "Wheel up zooms out instead of in");
+        nk_checkbox_label(ctx, "Invert wheel zoom", &G.wheel_invert);
+        tip(ctx, "While navigating, mark the point the view turns or zooms about:\nan axis cross at the rotation centre, a ring at the zoom point");
+        nk_checkbox_label(ctx, "Show rotation centre", &G.show_pivot);
+        nk_layout_row_dynamic(ctx, row, 2);
+        tip(ctx, "The view before the last change (Ctrl+Z)");
+        if (nk_button_label(ctx, "< view back")) app_view_undo(-1);
+        tip(ctx, "Forward again (Ctrl+Y)");
+        if (nk_button_label(ctx, "view forward >")) app_view_undo(+1);
+        nk_layout_row_dynamic(ctx, row, 1);
         nk_bool fl = G.flight;
         tip(ctx, "Walk through the model: WASD, E/Space up, Q down, Shift fast, drag to look");
         if (nk_checkbox_label(ctx, "Free flight (G)", &fl)) app_set_flight(fl);
@@ -1032,7 +1042,12 @@ static void panel_scene(struct nk_context* ctx, float s, float row) {
 
     nk_layout_row_dynamic(ctx, row, 1);
     nk_label(ctx, "", NK_TEXT_LEFT);
-    nk_label_colored(ctx, "drag: orbit   shift/right: pan", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "drag: orbit   shift/right/middle: pan", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "hold X/Y/Z + drag: about that axis", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "ctrl drag: box zoom   ctrl right: zoom", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "alt drag: roll   middle click, C: centre", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "N: normal to face   ctrl Z/Y: view back/fwd", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "ctrl arrows: turn 15 (shift 90)   alt: roll", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "wheel: zoom   click: probe   F: fit", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "space: play   arrows: step", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "+/-: deform scale   R: reset view   1-6: views", NK_TEXT_LEFT, P.dim);
@@ -1507,6 +1522,59 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
 }
 
 /* ---- overlay: text in the 3D view (node / element ids of the picked element) ---- */
+/* The navigation mark: while the mouse turns, pans or zooms the view, what it
+   happens about -- an axis cross (X red, Y green, Z blue) with a ring at the
+   rotation centre, a ring and cross hair at the zoom point. Only while the
+   drag lasts: gone with the button. The box of a box zoom always. */
+static void window_nav(struct nk_context* ctx, float s) {
+    if (!G.loaded || !G.nav_live || G.nav_mode == CV_NAV_NONE) return;
+    bool box = G.nav_mode == CV_NAV_BOX;
+    if (!box && !G.show_pivot) return;
+    struct nk_rect wr = nk_rect(G.vp_x, G.vp_y, G.vp_w, G.vp_h);
+    nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(nk_rgba(0, 0, 0, 0)));
+    nk_style_push_float(ctx, &ctx->style.window.border, 0);
+    if (nk_begin(ctx, "navmark", wr, NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_NO_INPUT | NK_WINDOW_BACKGROUND)) {
+        nk_window_set_bounds(ctx, "navmark", wr);
+        struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
+        const nk_byte al = 255;
+        struct nk_color ink = nk_rgba(255, 220, 60, al), shade = nk_rgba(0, 0, 0, (nk_byte)(al * 0.6f));
+        float sx, sy;
+        if (box) {
+            float x0 = CV_MIN(G.nav_box[0], G.nav_box[2]), y0 = CV_MIN(G.nav_box[1], G.nav_box[3]);
+            struct nk_rect r = nk_rect(x0, y0, fabsf(G.nav_box[2] - G.nav_box[0]), fabsf(G.nav_box[3] - G.nav_box[1]));
+            nk_fill_rect(cv, r, 0, nk_rgba(120, 180, 255, 40));
+            nk_stroke_rect(cv, r, 0, 1.5f * s, nk_rgba(120, 180, 255, 220));
+        } else if (app_project(G.nav_pt, &sx, &sy)) {
+            float t = 2.f * s;
+            if (G.nav_mode == CV_NAV_ROTATE || G.nav_mode == CV_NAV_ROLL) {
+                float L = 28.f * s * app_pixel_size(G.nav_pt);
+                static const struct { float x, y, z; nk_byte r, g, b; } ax[3] = {
+                    { 1, 0, 0, 235, 70, 70 }, { 0, 1, 0, 80, 210, 80 }, { 0, 0, 1, 80, 140, 255 } };
+                for (int k = 0; k < 3; k++) {
+                    float ex, ey;
+                    v3 e = v3_add(G.nav_pt, v3_make(ax[k].x * L, ax[k].y * L, ax[k].z * L));
+                    if (!app_project(e, &ex, &ey)) continue;
+                    nk_stroke_line(cv, sx, sy, ex, ey, t + 2 * s, shade);
+                    nk_stroke_line(cv, sx, sy, ex, ey, t, nk_rgba(ax[k].r, ax[k].g, ax[k].b, al));
+                }
+                float R = (G.nav_mode == CV_NAV_ROLL ? 34.f : 9.f) * s;
+                nk_stroke_circle(cv, nk_rect(sx - R, sy - R, 2 * R, 2 * R), t + 2 * s, shade);
+                nk_stroke_circle(cv, nk_rect(sx - R, sy - R, 2 * R, 2 * R), t, ink);
+                nk_fill_circle(cv, nk_rect(sx - 3 * s, sy - 3 * s, 6 * s, 6 * s), ink);
+            } else {
+                float R = (G.nav_mode == CV_NAV_ZOOM ? 11.f : 6.f) * s, H = R + 6 * s;
+                nk_stroke_circle(cv, nk_rect(sx - R, sy - R, 2 * R, 2 * R), t + 2 * s, shade);
+                nk_stroke_circle(cv, nk_rect(sx - R, sy - R, 2 * R, 2 * R), t, ink);
+                nk_stroke_line(cv, sx - H, sy, sx + H, sy, t, ink);
+                nk_stroke_line(cv, sx, sy - H, sx, sy + H, t, ink);
+            }
+        }
+    }
+    nk_end(ctx);
+    nk_style_pop_float(ctx);
+    nk_style_pop_style_item(ctx);
+}
+
 static void window_overlay(struct nk_context* ctx, float s) {
     if (!G.loaded || !G.probe_on || !G.show_ids || G.probe.elem >= G.frd.n_elems) return;
     struct nk_rect wr = nk_rect(G.vp_x, G.vp_y, G.vp_w, G.vp_h);
@@ -2031,6 +2099,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_convergence(ctx, s, row, fw, fh);
     window_legend_settings(ctx, s, row);
     window_overlay(ctx, s);
+    window_nav(ctx, s);
     window_find(ctx, s, row);
     window_path(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);

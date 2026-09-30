@@ -54,6 +54,7 @@ static void init(void) {
     G.show_faces = G.show_edges = true;
     G.edges_auto = true;
     G.orbit_cursor = G.zoom_cursor = true;
+    G.show_pivot = true;
     G.faces_mode = FM_FIELD;
     G.nodes_field = true;
     G.anim_period = 2.f;
@@ -522,10 +523,89 @@ static void cleanup(void) {
     sg_shutdown();
 }
 
-static struct { bool down; int button; float x0, y0, x, y; bool moved; bool pivot_on; v3 pivot; } drag;
+/* A drag and what it does, fixed when the button goes down:
+     left: orbit (shift: pan, ctrl: box zoom, alt: roll; X/Y/Z held: about that world axis)
+     right / middle: pan (ctrl: zoom by dragging up and down)
+   A click without moving: left probes, middle centres the view on the point. */
+static struct { bool down; int button, mode; float x0, y0, x, y; bool moved, pivot_on; v3 pivot; cv_camera cam0; } drag;
+static float g_mx, g_my;                 /* last mouse position, for the keys that act at the cursor */
+static double g_wheel_t;                 /* last wheel zoom: a run of turns is one step of the view history */
 
 static bool in_view(float x, float y) {
     return x >= G.vp_x && y >= G.vp_y && x < G.vp_x + G.vp_w && y < G.vp_y + G.vp_h;
+}
+
+static void nav_mark(int mode, v3 p) { G.nav_mode = mode; G.nav_pt = p; }
+
+static void note(const char* s) { snprintf(G.note, sizeof G.note, "%s", s); G.note_t = cv_now(); }
+
+static void roll_by(float a) {
+    if (!cam_roll(a)) note("Rotation set to free: a turntable cannot roll");
+}
+
+/* one mouse move of a drag */
+static void drag_move(float dx, float dy, bool shift) {
+    v3 eye0, f0, r0, u0;
+    cam_basis(&G.cam, &eye0, &f0, &r0, &u0);
+    int mode = drag.mode;
+    if (mode == CV_NAV_ROTATE && shift) mode = CV_NAV_PAN;
+    switch (mode) {
+        case CV_NAV_PAN: {
+            float k = 2.f * G.cam.dist * tanf(G.cam.fovy * 0.5f) / (float)CV_MAX(G.vp_h, 1);
+            G.cam.target = v3_add(G.cam.target, v3_add(v3_scale(r0, -dx * k), v3_scale(u0, dy * k)));
+            nav_mark(CV_NAV_PAN, G.cam.target);
+            break;
+        }
+        case CV_NAV_ZOOM: {                          /* drag up: closer */
+            float f = powf(1.01f, dy);
+            if (G.zoom_cursor) G.cam.target = v3_add(drag.pivot, v3_scale(v3_sub(G.cam.target, drag.pivot), f));
+            G.cam.dist *= f;
+            nav_mark(CV_NAV_ZOOM, G.zoom_cursor ? drag.pivot : G.cam.target);
+            break;
+        }
+        case CV_NAV_ROLL: {                          /* the angle swept about the view centre */
+            float cx = G.vp_x + 0.5f * G.vp_w, cy = G.vp_y + 0.5f * G.vp_h;
+            float a = atan2f(drag.y - cy, drag.x - cx) - atan2f(drag.y - dy - cy, drag.x - dx - cx);
+            if (a > 3.14159265f) a -= 6.2831853f;
+            if (a < -3.14159265f) a += 6.2831853f;
+            roll_by(-a);
+            nav_mark(CV_NAV_ROLL, G.cam.target);
+            break;
+        }
+        case CV_NAV_BOX:
+            G.nav_box[2] = drag.x; G.nav_box[3] = drag.y;
+            G.nav_mode = CV_NAV_BOX;
+            break;
+        case CV_NAV_LOOK: {                          /* flight: turn about the eye, not the target */
+            cam_orbit(-dx * 0.004f, dy * 0.004f);
+            v3 eye1, f1, r1, u1;
+            cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
+            G.cam.target = v3_add(eye0, v3_scale(f1, G.cam.dist));
+            break;
+        }
+        default: {                                   /* orbit */
+            v3 pv = drag.pivot_on ? drag.pivot : G.cam.target;
+            const float k = 0.008f;
+            int ax = g_keys[SAPP_KEYCODE_X] ? 0 : g_keys[SAPP_KEYCODE_Y] ? 1 : g_keys[SAPP_KEYCODE_Z] ? 2 : -1;
+            if (ax >= 0) {                           /* ParaView: about a world axis only */
+                v3 w = v3_make(ax == 0, ax == 1, ax == 2);
+                float s = v3_dot(w, u0) < 0 ? -1.f : 1.f;      /* follow the mouse when the axis points down */
+                cam_turn(w, -s * (fabsf(dx) >= fabsf(dy) ? dx : dy) * k, pv);
+            } else {
+                cam_orbit(-dx * k, dy * k);
+                if (drag.pivot_on) {                  /* turn about the pivot: it keeps its place in the view */
+                    v3 q = v3_sub(drag.pivot, eye0);
+                    float a = v3_dot(q, r0), b = v3_dot(q, u0), c = v3_dot(q, f0);
+                    v3 eye1, f1, r1, u1;
+                    cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
+                    v3 e = v3_sub(drag.pivot, v3_add(v3_scale(r1, a), v3_add(v3_scale(u1, b), v3_scale(f1, c))));
+                    G.cam.target = v3_add(e, v3_scale(f1, G.cam.dist));
+                }
+            }
+            nav_mark(CV_NAV_ROTATE, drag.pivot_on ? drag.pivot : G.cam.target);
+            break;
+        }
+    }
 }
 
 static void event(const sapp_event* ev) {
@@ -543,61 +623,72 @@ static void event(const sapp_event* ev) {
             break;
         case SAPP_EVENTTYPE_MOUSE_DOWN:
             if (!over_ui && !nk_busy && in_view(ev->mouse_x, ev->mouse_y)) {
+                bool ctrl = (ev->modifiers & (SAPP_MODIFIER_CTRL | SAPP_MODIFIER_SUPER)) != 0;
+                bool alt = (ev->modifiers & SAPP_MODIFIER_ALT) != 0, shift = (ev->modifiers & SAPP_MODIFIER_SHIFT) != 0;
+                bool left = ev->mouse_button == SAPP_MOUSEBUTTON_LEFT;
                 drag.down = true; drag.moved = false; drag.button = ev->mouse_button;
                 drag.x0 = drag.x = ev->mouse_x; drag.y0 = drag.y = ev->mouse_y;
+                drag.cam0 = G.cam;
+                drag.mode = G.flight ? (left ? CV_NAV_LOOK : CV_NAV_PAN)
+                          : left ? (ctrl ? CV_NAV_BOX : alt ? CV_NAV_ROLL : shift ? CV_NAV_PAN : CV_NAV_ROTATE)
+                          : ctrl ? CV_NAV_ZOOM : CV_NAV_PAN;
                 /* rotate about the part of the model that was grabbed; off the model, about the target */
                 bool on = false;
-                drag.pivot_on = G.orbit_cursor && !G.flight && ev->mouse_button == SAPP_MOUSEBUTTON_LEFT &&
-                                app_cursor_point(ev->mouse_x, ev->mouse_y, &drag.pivot, &on) && on;
+                drag.pivot_on = false;
+                if (drag.mode == CV_NAV_ROTATE && G.orbit_cursor)
+                    drag.pivot_on = app_cursor_point(ev->mouse_x, ev->mouse_y, &drag.pivot, &on) && on;
+                else if (drag.mode == CV_NAV_ZOOM && !app_cursor_point(ev->mouse_x, ev->mouse_y, &drag.pivot, &on))
+                    drag.pivot = G.cam.target;
+                if (drag.mode == CV_NAV_BOX) {
+                    G.nav_box[0] = G.nav_box[2] = drag.x0; G.nav_box[1] = G.nav_box[3] = drag.y0;
+                }
             }
             break;
         case SAPP_EVENTTYPE_MOUSE_UP:
-            if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_LEFT) {
+            if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_LEFT && drag.mode != CV_NAV_BOX) {
                 static double last_click;
                 double now = cv_now();
                 do_pick(ev->mouse_x, ev->mouse_y);
-                if (now - last_click < 0.35 && G.probe_on) app_fit_element(G.probe.elem);   /* double click */
+                if (now - last_click < 0.35 && G.probe_on) { app_view_push(); app_fit_element(G.probe.elem); }   /* double click */
                 last_click = now;
             }
+            if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_MIDDLE && !G.flight) {
+                app_view_push();
+                app_center_at(ev->mouse_x, ev->mouse_y);
+            }
+            if (drag.down && drag.mode == CV_NAV_BOX && drag.moved) {
+                app_view_push();
+                app_box_zoom(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]);
+            }
             drag.down = false;
+            G.nav_live = false;
             break;
         case SAPP_EVENTTYPE_MOUSE_MOVE:
+            g_mx = ev->mouse_x; g_my = ev->mouse_y;
             if (drag.down) {
                 float dx = ev->mouse_x - drag.x, dy = ev->mouse_y - drag.y;
                 drag.x = ev->mouse_x; drag.y = ev->mouse_y;
-                if (fabsf(drag.x - drag.x0) + fabsf(drag.y - drag.y0) > 4) drag.moved = true;
-                bool pan = drag.button != SAPP_MOUSEBUTTON_LEFT || (ev->modifiers & SAPP_MODIFIER_SHIFT);
-                if (pan) {
-                    v3 eye, fwd, right, up;
-                    cam_basis(&G.cam, &eye, &fwd, &right, &up);
-                    float k = 2.f * G.cam.dist * tanf(G.cam.fovy * 0.5f) / (float)CV_MAX(G.vp_h, 1);
-                    G.cam.target = v3_add(G.cam.target, v3_add(v3_scale(right, -dx * k), v3_scale(up, dy * k)));
-                } else {
-                    v3 eye0, f0, r0, u0;
-                    cam_basis(&G.cam, &eye0, &f0, &r0, &u0);
-                    float k = G.flight ? 0.004f : 0.008f;       /* looking wants finer control */
-                    cam_orbit(-dx * k, dy * k);
-                    if (G.flight) {                               /* turn about the eye, not the target */
-                        v3 eye1, f1, r1, u1;
-                        cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
-                        G.cam.target = v3_add(eye0, v3_scale(f1, G.cam.dist));
-                    } else if (drag.pivot_on) {                   /* turn about the pivot: it keeps its place in the view */
-                        v3 q = v3_sub(drag.pivot, eye0);
-                        float a = v3_dot(q, r0), b = v3_dot(q, u0), c = v3_dot(q, f0);
-                        v3 eye1, f1, r1, u1;
-                        cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
-                        v3 e = v3_sub(drag.pivot, v3_add(v3_scale(r1, a), v3_add(v3_scale(u1, b), v3_scale(f1, c))));
-                        G.cam.target = v3_add(e, v3_scale(f1, G.cam.dist));
+                if (!drag.moved && fabsf(drag.x - drag.x0) + fabsf(drag.y - drag.y0) > 4) {
+                    drag.moved = true;
+                    if (drag.mode != CV_NAV_BOX) {       /* the view before the drag, for Ctrl+Z */
+                        cv_camera now = G.cam;
+                        G.cam = drag.cam0; app_view_push(); G.cam = now;
                     }
                 }
+                if (!drag.moved && drag.mode == CV_NAV_BOX) break;    /* a click, not a box */
+                G.nav_live = drag.mode != CV_NAV_LOOK;
+                drag_move(dx, dy, (ev->modifiers & SAPP_MODIFIER_SHIFT) != 0);
             }
             break;
         case SAPP_EVENTTYPE_MOUSE_SCROLL:
             if (!over_ui && in_view(ev->mouse_x, ev->mouse_y)) {
                 if (G.flight) G.fly_speed = CV_MIN(CV_MAX(G.fly_speed * powf(1.2f, ev->scroll_y), 0.005f), 10.f);
                 else {
+                    double now = cv_now();
+                    if (now - g_wheel_t > 0.5) app_view_push();
+                    g_wheel_t = now;
                     /* toward the cursor: scaling the view about the point under it keeps that point in place */
-                    float f = powf(0.88f, ev->scroll_y);
+                    float f = powf(0.88f, G.wheel_invert ? -ev->scroll_y : ev->scroll_y);
                     v3 p; bool on;
                     if (G.zoom_cursor && app_cursor_point(ev->mouse_x, ev->mouse_y, &p, &on))
                         G.cam.target = v3_add(p, v3_scale(v3_sub(G.cam.target, p), f));
@@ -643,12 +734,40 @@ static void event(const sapp_event* ev) {
                     break;
                 case SAPP_KEYCODE_O: if (ctrl) app_open_dialog(); break;
                 case SAPP_KEYCODE_L: if (ctrl) ui_focus_open(); break;
-                case SAPP_KEYCODE_F: if (ctrl) G.find_open = true; else app_fit(); break;
+                case SAPP_KEYCODE_F: if (ctrl) G.find_open = true; else { app_view_push(); app_fit(); } break;
                 case SAPP_KEYCODE_E: if (ctrl) app_export_png(); break;
                 case SAPP_KEYCODE_G: if (!ctrl && !ev->key_repeat) app_set_flight(!G.flight); break;
                 case SAPP_KEYCODE_SPACE: G.playing = !G.playing; G.last_tick = 0; break;
-                case SAPP_KEYCODE_RIGHT: app_set_step(G.step + 1); break;
-                case SAPP_KEYCODE_LEFT:  app_set_step(G.step - 1); break;
+                case SAPP_KEYCODE_Z: if (ctrl) app_view_undo((ev->modifiers & SAPP_MODIFIER_SHIFT) ? +1 : -1); break;
+                case SAPP_KEYCODE_Y: if (ctrl) app_view_undo(+1); break;
+                case SAPP_KEYCODE_C:
+                    if (!ctrl && !G.flight && in_view(g_mx, g_my)) {
+                        app_view_push();
+                        app_center_at(g_mx, g_my);
+                    }
+                    break;
+                case SAPP_KEYCODE_N:
+                    if (!ctrl && !G.flight && in_view(g_mx, g_my)) {
+                        cv_camera c = G.cam;
+                        if (app_normal_to(g_mx, g_my)) { cv_camera n = G.cam; G.cam = c; app_view_push(); G.cam = n; }
+                        else note("Normal to: point at a face of the model");
+                    }
+                    break;
+                /* arrows: steps; Ctrl: turn the view 15 degrees (Shift: 90), Alt: roll */
+                case SAPP_KEYCODE_RIGHT: case SAPP_KEYCODE_LEFT: case SAPP_KEYCODE_UP: case SAPP_KEYCODE_DOWN: {
+                    bool alt = (ev->modifiers & SAPP_MODIFIER_ALT) != 0;
+                    int k = ev->key_code;
+                    if ((ctrl || alt) && !G.flight) {
+                        float a = ((ev->modifiers & SAPP_MODIFIER_SHIFT) ? 90.f : 15.f) * 3.14159265f / 180.f;
+                        app_view_push();
+                        if (alt) { if (k == SAPP_KEYCODE_LEFT || k == SAPP_KEYCODE_RIGHT) roll_by(k == SAPP_KEYCODE_RIGHT ? -a : a); }
+                        else if (k == SAPP_KEYCODE_LEFT || k == SAPP_KEYCODE_RIGHT) cam_orbit(k == SAPP_KEYCODE_RIGHT ? -a : a, 0);
+                        else cam_orbit(0, k == SAPP_KEYCODE_UP ? -a : a);
+                    }
+                    else if (k == SAPP_KEYCODE_RIGHT) app_set_step(G.step + 1);
+                    else if (k == SAPP_KEYCODE_LEFT) app_set_step(G.step - 1);
+                    break;
+                }
                 case SAPP_KEYCODE_HOME:  app_set_step(0); break;
                 case SAPP_KEYCODE_END:   app_set_step(G.frd.n_steps - 1); break;
                 default: break;

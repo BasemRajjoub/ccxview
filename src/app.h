@@ -216,6 +216,12 @@ typedef struct {
     bool      orbit_free;            /* free orbit: dragging turns about the screen's axes, no fixed up */
     bool      orbit_cursor;          /* drag rotates about the model point under the cursor */
     bool      zoom_cursor;           /* the wheel zooms toward the cursor */
+    bool      wheel_invert;          /* wheel up zooms out */
+    bool      show_pivot;            /* mark the point the view turns / zooms about while navigating */
+    int       nav_mode;              /* CV_NAV_*: what the mouse is doing to the view */
+    bool      nav_live;              /* a drag is on: the mark shows only then */
+    v3        nav_pt;                /* the pivot / zoom point */
+    float     nav_box[4];            /* box zoom: x0, y0, x1, y1 in window pixels */
     bool      flight;                /* free flight: WASD + mouse look */
     float     fly_speed;             /* model diagonals per second */
     int       vp_x, vp_y, vp_w, vp_h;   /* 3D area in window pixels */
@@ -317,6 +323,15 @@ void app_compare_close(void);
 bool app_view_save(const char* path);    /* camera, step, field, layers -> a small INI */
 bool app_view_load(const char* path);
 void app_view(int preset);
+enum { CV_NAV_NONE, CV_NAV_ROTATE, CV_NAV_PAN, CV_NAV_ZOOM, CV_NAV_ROLL, CV_NAV_BOX, CV_NAV_LOOK };
+void cam_turn(v3 axis, float a, v3 pivot);       /* the camera turned about a world axis through pivot */
+bool cam_roll(float a);                          /* about the view axis; false: turntable, switched to free */
+bool app_center_at(float px, float py);         /* the point under the pixel to the view centre (and pivot) */
+bool app_normal_to(float px, float py);         /* look straight at the face under the pixel */
+void app_box_zoom(float x0, float y0, float x1, float y1);
+float app_pixel_size(v3 p);                      /* world length of one pixel at p's depth */
+void app_view_push(void);                        /* remember the view for undo */
+bool app_view_undo(int dir);                     /* -1: back, +1: forward */
 void app_colormap(int cm);
 void app_set_faces_mode(int fm);
 void app_set_flight(bool on);
