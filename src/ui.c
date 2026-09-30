@@ -650,6 +650,11 @@ static void legend_controls(struct nk_context* ctx, float s, float row);
 /* replicate: rows of copies of a periodic model along X / Y / Z */
 static void view_replicate(struct nk_context* ctx, float s, float row) {
     static const char* ax[3] = { "Along X", "Along Y", "Along Z" };
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "With Deform on, each copy sits one deformed cell edge from the next, so a periodic\n"
+             "cell under shear or stretch stays joined (from the mean displacement of opposite faces).\n"
+             "Off: the copies keep the undeformed spacing");
+    nk_checkbox_label(ctx, "follow deformation", &G.rep_follow);
     for (int k = 0; k < 3; k++) {
         nk_layout_row_template_begin(ctx, row);
         nk_layout_row_template_push_static(ctx, 80 * s);

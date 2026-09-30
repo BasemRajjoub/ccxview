@@ -598,6 +598,7 @@ bool app_view_save(const char* path) {
         snprintf(key, sizeof key, "rep%d", k); cv_cfg_set_bool(&c, key, G.rep[k]);
         snprintf(key, sizeof key, "rep_n%d", k); cv_cfg_set_int(&c, key, G.rep_n[k]);
         snprintf(key, sizeof key, "rep_gap%d", k); cv_cfg_set_float(&c, key, G.rep_gap[k]);
+        if (k == 0) cv_cfg_set_bool(&c, "rep_follow", G.rep_follow);
     }
     const char* layer_keys[] = { "show_faces", "show_edges", "show_nodes", "show_gp", "show_vec", "show_markers", "show_ghost", "shading" };
     const bool  layer_vals[] = { G.show_faces, G.show_edges, G.show_nodes, G.show_gp, G.show_vec, G.show_markers, G.show_ghost, G.shading };
@@ -633,6 +634,7 @@ bool app_view_load(const char* path) {
         snprintf(key, sizeof key, "rep%d", k); G.rep[k] = cv_cfg_get_bool(&c, key, G.rep[k]);
         snprintf(key, sizeof key, "rep_n%d", k); G.rep_n[k] = CV_MAX(2, CV_MIN(cv_cfg_get_int(&c, key, G.rep_n[k]), 100));
         snprintf(key, sizeof key, "rep_gap%d", k); G.rep_gap[k] = cv_cfg_get_float(&c, key, G.rep_gap[k]);
+        if (k == 0) G.rep_follow = cv_cfg_get_bool(&c, "rep_follow", G.rep_follow);
     }
     G.show_faces = cv_cfg_get_bool(&c, "show_faces", G.show_faces); G.show_edges = cv_cfg_get_bool(&c, "show_edges", G.show_edges);
     G.show_nodes = cv_cfg_get_bool(&c, "show_nodes", G.show_nodes); G.show_gp = cv_cfg_get_bool(&c, "show_gp", G.show_gp);

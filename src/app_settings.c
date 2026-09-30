@@ -131,6 +131,7 @@ bool settings_apply(const char* kv) {
     if (!strcmp(key, "glyph_pct")) { G.bc_pct = G.load_pct = (float)atof(val); return true; }
     if (!strcmp(key, "export_open")) { G.tree[CV_TREE_EXPORT] = parse_bool(val); return true; }
     /* per-model things that are never saved here (the view file has them), but handy on the command line */
+    if (!strcmp(key, "rep_follow")) { G.rep_follow = parse_bool(val); return true; }
     if (!strncmp(key, "rep", 3)) {           /* rep0..2, rep_n0..2, rep_gap0..2: replicate along X, Y, Z */
         size_t n = strlen(key);
         int k = key[n - 1] - '0';

@@ -487,6 +487,7 @@ static void refresh_disp(void) {
         free(G.disp); G.disp = NULL;
         cv_render_displacement(NULL, 0);
         refresh_disp2();
+        app_rep_refresh();
         return;
     }
     int nc = G.frd.steps[G.step].fields[fi].ncomp;
@@ -499,6 +500,7 @@ static void refresh_disp(void) {
         }
     cv_render_displacement(G.disp, G.frd.n_nodes);
     refresh_disp2();
+    app_rep_refresh();
     /* A mode shape's amplitude is arbitrary (CalculiX mass-normalises it), so in
        auto mode each modal increment is scaled on its own to ~10% of the model;
        every other increment keeps the one true-scale factor. */

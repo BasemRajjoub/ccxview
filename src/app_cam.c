@@ -157,15 +157,118 @@ static void mirror_extend(float* l, float* h) {
 /* ---- replicate: rows of copies of a periodic model --------------------------------
    The model (with its mirror copies: a symmetric cell made whole first) is
    drawn again n times along an axis, one pitch apart; axes combine into a
-   grid. Like the mirror copies, the same buffers with a shifted model matrix. */
+   grid. Like the mirror copies, the same buffers with a shifted model matrix.
+
+   Following the deformation: a periodic solution has u(x + L_k) = u(x) + H L_k,
+   so a deformed copy sits one deformed cell edge L_k + H L_k away, not L_k
+   (under shear the rows slide). H L_k is the mean displacement of the cell's
+   max-k face minus that of its min-k face: exact for a periodic mesh, close
+   otherwise. Only nodes of elements count, so the reference nodes of a
+   periodic-boundary setup, wherever they sit, change neither the cell box nor
+   the jumps. */
 
 enum { REP_MAX_DRAWN = 4096 };     /* instances drawn at most, all axes together */
 
-/* the pitch: the length of the (mirrored) undeformed model plus the gap */
+static struct {
+    bool  ok;                      /* the cell box is known */
+    float lo[3], hi[3];            /* box of the element nodes */
+    float tol;                     /* a node this close to a face is on it */
+    bool  has[2];                  /* 0: DISP, 1: the imaginary part (harmonic) */
+    float a[2][3][2][3];           /* [part][axis][min face, max face]: mean displacement */
+} RJ;
+
+void app_rep_refresh(void) {
+    uint32_t N = G.frd.n_nodes;
+    RJ.ok = false; RJ.has[0] = RJ.has[1] = false;
+    if (!N || !G.frd.n_elems || !G.frd.eoff) return;
+    uint8_t* used = calloc(N, 1);
+    if (!used) return;
+    for (uint32_t i = 0; i < G.frd.eoff[G.frd.n_elems]; i++)
+        if (G.frd.conn[i] < N) used[G.frd.conn[i]] = 1;
+    for (int k = 0; k < 3; k++) { RJ.lo[k] = INFINITY; RJ.hi[k] = -INFINITY; }
+    for (uint32_t i = 0; i < N; i++) {
+        if (!used[i]) continue;
+        const float* p = G.frd.xyz + 3 * i;
+        for (int k = 0; k < 3; k++) { RJ.lo[k] = fminf(RJ.lo[k], p[k]); RJ.hi[k] = fmaxf(RJ.hi[k], p[k]); }
+    }
+    if (!(RJ.lo[0] <= RJ.hi[0])) { free(used); return; }
+    float ext = fmaxf(RJ.hi[0] - RJ.lo[0], fmaxf(RJ.hi[1] - RJ.lo[1], RJ.hi[2] - RJ.lo[2]));
+    RJ.tol = fmaxf(ext * 1e-4f, 1e-30f);
+    RJ.ok = true;
+    const float* parts[2] = { G.disp, G.disp2 };
+    for (int q = 0; q < 2; q++) {
+        const float* u = parts[q];
+        if (!u) continue;
+        double s[3][2][3] = { 0 }; uint32_t n[3][2] = { 0 };
+        for (uint32_t i = 0; i < N; i++) {
+            if (!used[i]) continue;
+            const float* p = G.frd.xyz + 3 * i;
+            for (int k = 0; k < 3; k++)
+                for (int side = 0; side < 2; side++) {
+                    if (fabsf(p[k] - (side ? RJ.hi[k] : RJ.lo[k])) > RJ.tol) continue;
+                    for (int c = 0; c < 3; c++) s[k][side][c] += u[3 * i + c];
+                    n[k][side]++;
+                }
+        }
+        for (int k = 0; k < 3; k++)
+            for (int side = 0; side < 2; side++)
+                for (int c = 0; c < 3; c++)
+                    RJ.a[q][k][side][c] = n[k][side] ? (float)(s[k][side][c] / n[k][side]) : 0.f;
+        RJ.has[q] = true;
+    }
+    free(used);
+}
+
+/* the cell: box of the element nodes (the model box before the first refresh) */
+static void cell_box(float* l, float* h) {
+    if (RJ.ok) { for (int k = 0; k < 3; k++) { l[k] = RJ.lo[k]; h[k] = RJ.hi[k]; } return; }
+    l[0] = G.bmin.x; l[1] = G.bmin.y; l[2] = G.bmin.z;
+    h[0] = G.bmax.x; h[1] = G.bmax.y; h[2] = G.bmax.z;
+}
+
+/* the pitch: the length of the (mirrored) undeformed cell plus the gap */
 float app_rep_pitch(int k) {
-    float l[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, h[3] = { G.bmax.x, G.bmax.y, G.bmax.z };
+    float l[3], h[3];
+    cell_box(l, h);
     mirror_extend(l, h);
     return (h[k] - l[k]) + G.rep_gap[k];
+}
+
+/* Face jump along axis k of the cell made whole by the mirror copies. A copy
+   mirrored across the plane normal to m carries the reflected displacement:
+   a face along another axis is half original, half reflected, so its mean
+   loses the m component; the far face along m is the reflected image of the
+   near one. */
+static void rep_jump(int q, int k, float J[3]) {
+    float a[3][2][3], l[3], h[3];
+    memcpy(a, RJ.a[q], sizeof a);
+    cell_box(l, h);
+    for (int m = 0; m < 3; m++) {
+        if (!G.sym[m]) continue;
+        float c = app_sym_plane(m), nl = fminf(l[m], 2 * c - h[m]), nh = fmaxf(h[m], 2 * c - l[m]);
+        for (int j = 0; j < 3; j++)
+            if (j != m) a[j][0][m] = a[j][1][m] = 0.f;
+        float lo[3], hi[3];
+        memcpy(lo, a[m][0], sizeof lo); memcpy(hi, a[m][1], sizeof hi);
+        if (nh > h[m] + RJ.tol) { memcpy(a[m][1], lo, sizeof lo); a[m][1][m] = -lo[m]; }
+        if (nl < l[m] - RJ.tol) { memcpy(a[m][0], hi, sizeof hi); a[m][0][m] = -hi[m]; }
+        l[m] = nl; h[m] = nh;
+    }
+    for (int c = 0; c < 3; c++) J[c] = a[k][1][c] - a[k][0][c];
+}
+
+/* the shift from one copy to the next along axis k, deformed as drawn */
+static void rep_vec(int k, float P[3]) {
+    P[0] = P[1] = P[2] = 0.f;
+    P[k] = app_rep_pitch(k);
+    if (!G.rep_follow || !G.deform || !RJ.ok) return;
+    float f[2] = { G.deform_scale * G.anim_factor, G.deform_scale * G.anim_factor2 };
+    for (int q = 0; q < 2; q++) {
+        if (!RJ.has[q] || f[q] == 0.f) continue;
+        float J[3];
+        rep_jump(q, k, J);
+        for (int c = 0; c < 3; c++) P[c] += f[q] * J[c];
+    }
 }
 
 static int rep_count(int k) { return G.rep[k] ? CV_MAX(1, CV_MIN(G.rep_n[k], 100)) : 1; }
@@ -186,10 +289,14 @@ static void copy_of(int i, int* mask, float off[3]) {
     int ms[8], nm = mirror_masks(ms);
     *mask = ms[i % nm];
     int r = i / nm;
+    off[0] = off[1] = off[2] = 0.f;
     for (int k = 0; k < 3; k++) {
-        int n = rep_count(k);
-        off[k] = (float)(r % n) * app_rep_pitch(k);
+        int n = rep_count(k), j = r % n;
         r /= n;
+        if (!j) continue;
+        float P[3];
+        rep_vec(k, P);
+        for (int c = 0; c < 3; c++) off[c] += (float)j * P[c];
     }
 }
 
@@ -217,10 +324,17 @@ void copy_ray(int i, const float o[3], const float d[3], float mo[3], float md[3
 static void sym_extend(v3* lo, v3* hi) {
     float* l = &lo->x; float* h = &hi->x;
     mirror_extend(l, h);
+    float add_lo[3] = { 0 }, add_hi[3] = { 0 };
     for (int k = 0; k < 3; k++) {
-        float span = (float)(rep_count(k) - 1) * app_rep_pitch(k);
-        if (span > 0) h[k] += span; else l[k] += span;
+        if (rep_count(k) < 2) continue;
+        float P[3];
+        rep_vec(k, P);
+        for (int c = 0; c < 3; c++) {
+            float span = (float)(rep_count(k) - 1) * P[c];
+            if (span > 0) add_hi[c] += span; else add_lo[c] += span;
+        }
     }
+    for (int c = 0; c < 3; c++) { l[c] += add_lo[c]; h[c] += add_hi[c]; }
 }
 
 /* model matrix of mirror copy `m` (bit k = reflected across the k plane) */

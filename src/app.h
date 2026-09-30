@@ -210,6 +210,7 @@ typedef struct {
     bool      rep[3];                /* replicate: a row of copies along X, Y, Z (periodic models) */
     int       rep_n[3];              /* copies along that axis, the model included */
     float     rep_gap[3];            /* space between copies; 0: they touch (pitch = length of the model) */
+    bool      rep_follow;            /* copies follow the deformation: shifted by the deformed cell edges */
     bool      up_z;                  /* turntable about world Z instead of Y */
     bool      orbit_free;            /* free orbit: dragging turns about the screen's axes, no fixed up */
     bool      orbit_cursor;          /* drag rotates about the model point under the cursor */
@@ -293,7 +294,8 @@ int  app_check(const char* path);    /* --check: headless parse, messages to std
 void app_sym_toggled(int axis);      /* picks the plane, reframes */
 void app_sym_changed(void);          /* plane moved: reframe */
 float app_sym_plane(int axis);
-float app_rep_pitch(int axis);       /* distance between replicated copies along the axis */
+float app_rep_pitch(int axis);       /* distance between replicated copies along the axis, undeformed */
+void app_rep_refresh(void);          /* after the displacements change: the cell's face jumps */
 int  app_copies(void);               /* instances drawn: the model, mirror and replicate copies */
 void app_copy_matrix(int i, float* M);   /* model matrix of instance i (0: identity) */
 void app_export_png(void);

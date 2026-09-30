@@ -84,6 +84,7 @@ static void init(void) {
     G.legend_decimals = 3;
     G.clip_pos = 0.5f;
     G.rep_n[0] = G.rep_n[1] = G.rep_n[2] = 3;
+    G.rep_follow = true;
     G.tree[CV_TREE_LAYERS] = G.tree[CV_TREE_GROUPS] = G.tree[CV_TREE_FIELDS] = G.tree[CV_TREE_VIEW] = 1;
     G.tree[CV_TREE_CAMERA] = G.tree[CV_TREE_COLOURS] = 1;
     G.exp_video = true; G.exp_cycles = 1; G.exp_fps = 30; G.exp_lock_range = true;
