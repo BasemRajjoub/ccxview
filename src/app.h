@@ -247,7 +247,7 @@ typedef struct {
     bool      show_vec;              /* arrows of the current 3-component field */
     bool      vec_colored;
     float     vec_pct;               /* longest arrow, percent of the model diagonal */
-    float     glyph_pct;             /* glyph length, percent of the model diagonal */
+    float     bc_pct, load_pct;      /* glyph length of supports / springs and of loads, percent of the model diagonal */
 
     /* file dialogs */
     char      exe_dir[1024];

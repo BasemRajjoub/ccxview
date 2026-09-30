@@ -374,11 +374,13 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 nk_checkbox_label(ctx, "Couplings", &G.show_links);
             }
             if (G.show_bc || G.show_loads || G.show_disc) {
-                nk_layout_row_dynamic(ctx, row, 1);
-                float g0 = G.glyph_pct;
-                tip(ctx, "Glyph length in percent of the model diagonal");
-                nk_property_float(ctx, "#glyph %", 0.2f, &G.glyph_pct, 20.f, 0.5f, 0.05f);
-                if (G.glyph_pct != g0) deck_refresh_highlight();
+                nk_layout_row_dynamic(ctx, row, 2);
+                float b0 = G.bc_pct, l0 = G.load_pct;
+                tip(ctx, "Support and spring glyph size, percent of the model diagonal");
+                nk_property_float(ctx, "#BC %", 0.2f, &G.bc_pct, 20.f, 0.5f, 0.05f);
+                tip(ctx, "Load arrow length, percent of the model diagonal");
+                nk_property_float(ctx, "#load %", 0.2f, &G.load_pct, 20.f, 0.5f, 0.05f);
+                if (G.bc_pct != b0 || G.load_pct != l0) deck_refresh_highlight();
             }
         }
         nk_layout_row_dynamic(ctx, row, 2);

@@ -16,7 +16,7 @@ static bool   loaded;
     X(deform_auto) X(hide_legend) X(hide_axes) X(gp_colored) X(vec_colored) X(legend_reverse) X(legend_grey) \
     X(show_markers) X(show_ghost) X(exp_video) X(exp_lock_range) X(up_z) X(orbit_cursor) X(zoom_cursor)
 #define INTS(X)   X(faces_mode) X(cmap) X(bands) X(anim_mode) X(legend_fmt) X(legend_decimals) X(exp_kind) X(exp_cycles) X(exp_fps)
-#define FLOATS(X) X(anim_period) X(fps) X(point_size) X(gp_size) X(glyph_pct) X(vec_pct) X(geo_size) X(hl_size)
+#define FLOATS(X) X(anim_period) X(fps) X(point_size) X(gp_size) X(bc_pct) X(load_pct) X(vec_pct) X(geo_size) X(hl_size)
 
 void settings_load(void) {
     char path[1024];
@@ -26,6 +26,8 @@ void settings_load(void) {
 #define RB(k) G.k = cv_cfg_get_bool(&C, #k, G.k);
 #define RI(k) G.k = cv_cfg_get_int(&C, #k, G.k);
 #define RF(k) G.k = cv_cfg_get_float(&C, #k, G.k);
+    float g = cv_cfg_get_float(&C, "glyph_pct", 0);      /* before the split into bc_pct / load_pct */
+    if (g > 0) G.bc_pct = G.load_pct = g;
     BOOLS(RB) INTS(RI) FLOATS(RF)
 #undef RB
 #undef RI
@@ -65,6 +67,7 @@ bool settings_apply(const char* kv) {
 #undef AI
 #undef AF
     if (!strcmp(key, "ui_zoom")) { ui_set_zoom((float)atof(val)); known = true; }
+    if (!strcmp(key, "glyph_pct")) { G.bc_pct = G.load_pct = (float)atof(val); known = true; }
     /* per-session things that are never saved, but handy on the command line */
     if (!strcmp(key, "clip_on")) { G.clip_on = atoi(val) != 0; known = true; }
     if (!strcmp(key, "clip_axis")) { G.clip_axis = atoi(val) % 3; known = true; }

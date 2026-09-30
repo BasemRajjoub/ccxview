@@ -13,8 +13,8 @@ not done yet.
   Turbo, Viridis, Cool-warm, Heat were there already (legend grey = greyscale).
 - [ ] **Filled clip caps**: fill the cut where the clip plane goes through solid
   elements, instead of showing the open inside. *(Calc_em)*
-- [ ] **Separate glyph sizes**: restraints smaller than loads. Today one `glyph_pct`
-  sets both; split it into `bc_pct` and `load_pct`. *(SergioP)*
+- [x] **Separate glyph sizes**: restraints smaller than loads. *(SergioP)* Now `BC %`
+  and `load %` (`bc_pct`, `load_pct`; an old `glyph_pct` sets both).
 - [ ] **Windows icon**: a better application icon. *(SergioP)*
 
 ## Post-processing
