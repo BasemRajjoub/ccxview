@@ -192,7 +192,7 @@ static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
     push3(disp, G.disp ? G.disp + 3 * i : z);
 }
 
-/* ---- glyphs: supports as T-bars, loads as arrows -------------------------------
+/* ---- glyphs: supports as cones, loads as arrows -------------------------------
    All in world units, L = bc_scale (supports, springs) or 1.5 load_scale (loads)
    times sym_len, the mesh's symbol size; every vertex carries
    its node's displacement so the glyphs ride along with the deformed shape. */
@@ -229,8 +229,10 @@ void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir
     }
 }
 
-/* support at node p for DOF k (1..6, 11): translation = T-bar along -axis,
-   rotation = short double bar, temperature = a small cross */
+/* support at node p for DOF k (1..6, 11), as in most FE pre-processors: a
+   cone (two crossed triangles) with its tip on the node, standing on the
+   fixed axis; a rotation is a shorter cone with a double base; a temperature
+   a small cross. A node held in x, y, z shows three cones. */
 static void support(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d[3], int dof, float L) {
     if (dof == 11) {
         for (int a = 0; a < 3; a++) {
@@ -242,20 +244,18 @@ static void support(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d
         return;
     }
     bool rot = dof > 3;
-    int k = (dof - 1) % 3, j = (k + 1) % 3;
-    float len = rot ? 0.6f * L : L;
-    float u[3], foot[3], bar[3];
-    axis_vec(k, -1, len, u);
-    for (int i = 0; i < 3; i++) foot[i] = p[i] + u[i];
-    seg(pos, disp, p, foot, d);
-    axis_vec(j, 1, 0.3f * L, bar);
-    float b0[3], b1[3];
-    for (int i = 0; i < 3; i++) { b0[i] = foot[i] - bar[i]; b1[i] = foot[i] + bar[i]; }
-    seg(pos, disp, b0, b1, d);
-    if (rot) {                                  /* second bar a little up the stem */
-        float f2[3];
-        for (int i = 0; i < 3; i++) { f2[i] = foot[i] - u[i] * 0.3f; b0[i] = f2[i] - bar[i]; b1[i] = f2[i] + bar[i]; }
-        seg(pos, disp, b0, b1, d);
+    int k = (dof - 1) % 3;
+    float h = rot ? 0.7f * L : L, r = 0.35f * L;
+    for (int m = 1; m <= 2; m++) {                 /* the two triangles, across the other axes */
+        int j = (k + m) % 3;
+        float b0[3], b1[3];
+        memcpy(b0, p, sizeof b0); memcpy(b1, p, sizeof b1);
+        b0[k] -= h; b1[k] -= h; b0[j] -= r; b1[j] += r;
+        seg(pos, disp, p, b0, d); seg(pos, disp, p, b1, d); seg(pos, disp, b0, b1, d);
+        if (rot) {                                  /* the second base, a little further out */
+            b0[k] -= 0.25f * h; b1[k] -= 0.25f * h;
+            seg(pos, disp, b0, b1, d);
+        }
     }
 }
 

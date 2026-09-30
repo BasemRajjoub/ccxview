@@ -16,7 +16,7 @@ not done yet.
 - [ ] **Filled clip caps**: fill the cut where the clip plane goes through solid
   elements, instead of showing the open inside. *(Calc_em)*
 - [x] **Separate glyph sizes**: restraints smaller than loads. *(SergioP)* Now a mesh-based size with
-  sliders under Layers > Symbol sizes (`bc_scale`, `load_scale`).
+  sliders under View > Symbol sizes (`bc_scale`, `load_scale`).
 - [ ] **Windows icon**: a better application icon. *(SergioP)*
 
 ## Post-processing

@@ -343,6 +343,33 @@ static void panel_geo_sets(struct nk_context* ctx, float row) {
     nk_tree_pop(ctx);
 }
 
+/* Nuklear's slider moves only when its knob is grabbed: a press elsewhere on
+   the bar first puts the value there (the knob then sits under the mouse and
+   the same press drags on). Call right before nk_slider_*; true when it jumped. */
+static bool slider_jump(struct nk_context* ctx, float lo, float* v, float hi, float step) {
+    if (!nk_widget_is_hovered(ctx) || !nk_input_is_mouse_pressed(&ctx->input, NK_BUTTON_LEFT)) return false;
+    struct nk_rect b = nk_widget_bounds(ctx);
+    const struct nk_style_slider* st = &ctx->style.slider;
+    float x0 = b.x + st->padding.x, w = b.w - 2 * st->padding.x;
+    if (w <= 0 || hi <= lo) return false;
+    float t = CV_MIN(CV_MAX((ctx->input.mouse.pos.x - x0) / w, 0.f), 1.f);
+    float nv = lo + t * (hi - lo);
+    if (step > 0) nv = CV_MIN(lo + roundf((nv - lo) / step) * step, hi);
+    bool ch = nv != *v;
+    *v = nv;
+    return ch;
+}
+static bool ui_slider_float(struct nk_context* ctx, float lo, float* v, float hi, float step) {
+    bool j = slider_jump(ctx, lo, v, hi, step);
+    return nk_slider_float(ctx, lo, v, hi, step) || j;
+}
+static bool ui_slider_int(struct nk_context* ctx, int lo, int* v, int hi, int step) {
+    float f = (float)*v;
+    bool j = slider_jump(ctx, (float)lo, &f, (float)hi, (float)step);
+    *v = (int)lroundf(f);
+    return nk_slider_int(ctx, lo, v, hi, step) || j;
+}
+
 /* A size as a logarithmic slider (1x sits in the middle of 0.1x .. 10x); the value
    button sets -1, which the caller turns into its default. True when it changed. */
 static bool sub_push(struct nk_context* ctx, const char* title, int t);
@@ -354,7 +381,7 @@ static bool scale_slider(struct nk_context* ctx, float row, const char* label, c
     nk_label(ctx, label, NK_TEXT_LEFT);
     float old = *v, t = log10f(CV_MIN(CV_MAX(*v, lo), hi));
     tip(ctx, help);
-    if (nk_slider_float(ctx, log10f(lo), &t, log10f(hi), 0.01f)) *v = powf(10.f, t);
+    if (ui_slider_float(ctx, log10f(lo), &t, log10f(hi), 0.01f)) *v = powf(10.f, t);
     char b[32];
     snprintf(b, sizeof b, *v < 10 ? "%.2f" : "%.1f", *v);
     tip(ctx, "Click: back to the default");
@@ -407,7 +434,7 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
         if (deck_has_bc() || deck_has_loads() || deck_has_discrete()) {   /* the deck's supports, loads, springs */
             nk_layout_row_dynamic(ctx, row, 2);
             if (deck_has_bc() || deck_has_loads()) {
-                tip(ctx, "*BOUNDARY: T-bar along each fixed translation, double bar for a rotation,\ncross for a temperature");
+                tip(ctx, "*BOUNDARY: a cone per fixed dof, tip on the node (double base for a rotation),\ncross for a temperature");
                 nk_checkbox_label(ctx, "Supports", &G.show_bc);
                 tip(ctx, "*CLOAD as arrows at the nodes, *DLOAD pressures at the faces;\nlength follows the magnitude");
                 nk_checkbox_label(ctx, "Loads", &G.show_loads);
@@ -470,7 +497,6 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 nk_checkbox_label(ctx, "coloured", &G.vec_colored);
             }
         }
-        symbol_sizes(ctx, s, row);
         nk_tree_pop(ctx);
     }
 
@@ -828,6 +854,7 @@ static void section_view(struct nk_context* ctx, float s, float row) {
         nk_tree_state_pop(ctx);
     }
 
+    symbol_sizes(ctx, s, row);
     if (sub_push(ctx, "Mirror", CV_TREE_MIRROR)) {
         /* the model mirrored across planes normal to X / Y / Z */
         {
@@ -873,7 +900,7 @@ static void section_view(struct nk_context* ctx, float s, float row) {
             nk_layout_row_template_end(ctx);
             tip(ctx, "Keep the other side instead");
             nk_checkbox_label(ctx, "flip", &G.clip_flip);
-            nk_slider_float(ctx, 0.f, &G.clip_pos, 1.f, 0.002f);
+            ui_slider_float(ctx, 0.f, &G.clip_pos, 1.f, 0.002f);
         }
         /* crop box: elements whose centre is outside are removed, so the cut
            shows real element faces, not a hollow shell */
@@ -1136,7 +1163,7 @@ static void panel_timebar(struct nk_context* ctx, float s, float row, float widt
         ctx->input.mouse.scroll_delta.y = 0;
         st = G.step;
     }
-    if (n > 1 && nk_slider_int(ctx, 0, &st, n - 1, 1) && st != G.step) app_set_step(st);
+    if (n > 1 && ui_slider_int(ctx, 0, &st, n - 1, 1) && st != G.step) app_set_step(st);
     if (n <= 1) nk_spacing(ctx, 1);
     if (n > 1) {
         /* Ticks under the slider: a short one per increment when they fit, a tall
