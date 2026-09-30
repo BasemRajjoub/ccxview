@@ -50,9 +50,32 @@ const float* cache_get(int step, int field) {
 }
 
 /* the option label ("von Mises", "D1", ...) of component `comp` of a field */
+int app_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
+    int n = cv_field_options(d, out, max);
+    if (G.csys > 0 && cv_cyl_applies(d))
+        for (int i = 0; i < n; i++) if (out[i].comp >= 0) {
+            char nm[12];
+            cv_cyl_comp_name(d, out[i].comp, nm);
+            snprintf(out[i].label, sizeof out[i].label, "%s", nm);
+        }
+    return n;
+}
+
+/* values of a field turned into the chosen cylindrical system: a copy, or NULL
+   when the global values stand (no system chosen, or a scalar field) */
+static float* to_csys(const cv_field_desc* d, const cv_frd* f, const float* vals) {
+    if (G.csys <= 0 || !vals || !cv_cyl_applies(d)) return NULL;
+    size_t bytes = (size_t)CV_MAX(f->n_nodes, 1) * (size_t)d->ncomp * sizeof(float);
+    float* t = malloc(bytes);
+    if (!t) return NULL;
+    memcpy(t, vals, bytes);
+    cv_cyl_values(d, f->xyz, f->n_nodes, G.csys - 1, G.csys_o, t);
+    return t;
+}
+
 static const char* opt_label(const cv_field_desc* d, int comp) {
     static cv_scalar_opt opts[CV_MAX_OPTS];
-    int n = cv_field_options(d, opts, CV_MAX_OPTS);
+    int n = app_field_options(d, opts, CV_MAX_OPTS);
     for (int i = 0; i < n; i++) if (opts[i].comp == comp) return opts[i].label;
     return "?";
 }
@@ -468,6 +491,7 @@ static bool subtract_compare(const cv_field_desc* d) {
     float* sb = malloc((size_t)CV_MAX(G.cmp.n_nodes, 1) * sizeof(float));
     if (!vb || !sb) { free(vb); free(sb); return false; }
     cv_frd_read_field(&G.cmp, db, vb, NULL);
+    if (G.csys > 0 && G.comp >= 0 && cv_cyl_applies(db)) cv_cyl_values(db, G.cmp.xyz, G.cmp.n_nodes, G.csys - 1, G.csys_o, vb);
     cv_field_scalar(vb, db->ncomp, G.cmp.n_nodes, G.comp, sb);
     for (uint32_t i = 0; i < G.frd.n_nodes; i++) G.scalar[i] -= sb[i];
     free(vb); free(sb);
@@ -484,7 +508,9 @@ void refresh_field(void) {
         if (vals && G.scalar && G.elem_val) {
             CV_ASSERT(d->ncomp >= 1 && d->ncomp <= CV_MAX_COMP);
             CV_ASSERT(G.comp < d->ncomp);
-            cv_field_scalar(vals, d->ncomp, G.frd.n_nodes, G.comp, G.scalar);
+            float* tv = G.comp >= 0 ? to_csys(d, &G.frd, vals) : NULL;   /* invariants need no turning */
+            cv_field_scalar(tv ? tv : vals, d->ncomp, G.frd.n_nodes, G.comp, G.scalar);
+            free(tv);
             bool diff = subtract_compare(d);
             cv_elem_mean(&G.frd, G.scalar, G.elem_val);
             G.has_field = true;

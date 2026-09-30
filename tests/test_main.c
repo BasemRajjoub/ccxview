@@ -363,6 +363,25 @@ static void test_field_math(void) {
     float s6[6] = { 7, 7, 7, 0, 0, 0 };
     cv_principal(s6, false, pr);
     CHECK_NEAR(pr[0], 7, 1e-5); CHECK_NEAR(pr[2], 7, 1e-5);
+    {   /* cylindrical about Z: at (0,2,5) radial is +y, hoop is -x */
+        cv_field_desc dv = { .ncomp = 3 }, dt = { .ncomp = 6 };
+        static const char* tn[6] = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" };
+        for (int c = 0; c < 6; c++) snprintf(dt.comp[c], sizeof dt.comp[c], "%s", tn[c]);
+        for (int c = 0; c < 3; c++) snprintf(dv.comp[c], sizeof dv.comp[c], "D%d", c + 1);
+        float xyz[3] = { 0, 2, 5 }, o[3] = { 0, 0, 0 };
+        float vv[3] = { 1, 3, 7 };
+        cv_cyl_values(&dv, xyz, 1, 2, o, vv);
+        CHECK_NEAR(vv[0], 3, 1e-6); CHECK_NEAR(vv[1], -1, 1e-6); CHECK_NEAR(vv[2], 7, 1e-6);
+        float tt[6] = { 10, 20, 30, 4, 5, 6 };            /* SXX SYY SZZ SXY SYZ SZX */
+        cv_cyl_values(&dt, xyz, 1, 2, o, tt);
+        CHECK_NEAR(tt[0], 20, 1e-5); CHECK_NEAR(tt[1], 10, 1e-5); CHECK_NEAR(tt[2], 30, 1e-5);
+        CHECK_NEAR(tt[3], -4, 1e-5);                       /* Srt = -SXY */
+        CHECK_NEAR(tt[4], -6, 1e-5);                       /* Sta = -SZX */
+        CHECK_NEAR(tt[5], 5, 1e-5);                        /* Sar = SYZ */
+        char nm[12];
+        cv_cyl_comp_name(&dt, 5, nm); CHECK(!strcmp(nm, "Sar"));
+        cv_cyl_comp_name(&dv, 1, nm); CHECK(!strcmp(nm, "Dt"));
+    }
     float v[6] = { 3, 4, 0, 1, NAN, 0 }, out[2];
     cv_field_scalar(v, 3, 2, CV_COMP_MAG, out);
     CHECK_NEAR(out[0], 5, 1e-6);

@@ -28,6 +28,67 @@ static int tensor_order(const cv_field_desc* d) {
     return 0;
 }
 
+int cv_tensor_order(const cv_field_desc* d) { return tensor_order(d); }
+
+void cv_cyl_basis(const float p[3], const float o[3], int axis, float Q[3][3]) {
+    double A[3] = { 0, 0, 0 }, d[3], r[3];
+    A[axis] = 1;
+    for (int k = 0; k < 3; k++) d[k] = (double)p[k] - o[k];
+    double da = d[axis];
+    for (int k = 0; k < 3; k++) r[k] = d[k] - da * A[k];
+    double l = sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+    if (!(l > 1e-12 * (fabs(da) + 1e-30))) { r[0] = r[1] = r[2] = 0; r[(axis + 1) % 3] = 1; l = 1; }
+    for (int k = 0; k < 3; k++) r[k] /= l;
+    double t[3] = { A[1] * r[2] - A[2] * r[1], A[2] * r[0] - A[0] * r[2], A[0] * r[1] - A[1] * r[0] };
+    for (int k = 0; k < 3; k++) { Q[0][k] = (float)r[k]; Q[1][k] = (float)t[k]; Q[2][k] = (float)A[k]; }
+}
+
+bool cv_cyl_applies(const cv_field_desc* d) { return d->ncomp == 3 || tensor_order(d) != 0; }
+
+void cv_cyl_values(const cv_field_desc* d, const float* xyz, uint32_t n, int axis, const float o[3], float* v) {
+    int ord = tensor_order(d);
+    if (d->ncomp != 3 && !ord) return;
+    /* where the shears sit: (i,j) of components 3, 4, 5 */
+    int si[3][2] = { { 0, 1 }, { 1, 2 }, { 2, 0 } };
+    if (ord == 2) { si[1][0] = 0; si[1][1] = 2; si[2][0] = 1; si[2][1] = 2; }
+    for (uint32_t i = 0; i < n; i++) {
+        float Q[3][3];
+        cv_cyl_basis(xyz + 3 * (size_t)i, o, axis, Q);
+        if (d->ncomp == 3) {
+            float* r = v + 3 * (size_t)i;
+            double w[3];
+            for (int a = 0; a < 3; a++) w[a] = (double)Q[a][0] * r[0] + (double)Q[a][1] * r[1] + (double)Q[a][2] * r[2];
+            for (int a = 0; a < 3; a++) r[a] = (float)w[a];
+        } else {
+            float* r = v + 6 * (size_t)i;
+            double S[3][3], QS[3][3], T[3][3];
+            for (int a = 0; a < 3; a++) S[a][a] = r[a];
+            for (int k = 0; k < 3; k++) S[si[k][0]][si[k][1]] = S[si[k][1]][si[k][0]] = r[3 + k];
+            for (int a = 0; a < 3; a++)
+                for (int b = 0; b < 3; b++) QS[a][b] = Q[a][0] * S[0][b] + Q[a][1] * S[1][b] + Q[a][2] * S[2][b];
+            for (int a = 0; a < 3; a++)
+                for (int b = 0; b < 3; b++) T[a][b] = QS[a][0] * Q[b][0] + QS[a][1] * Q[b][1] + QS[a][2] * Q[b][2];
+            for (int a = 0; a < 3; a++) r[a] = (float)T[a][a];
+            for (int k = 0; k < 3; k++) r[3 + k] = (float)T[si[k][0]][si[k][1]];
+        }
+    }
+}
+
+void cv_cyl_comp_name(const cv_field_desc* d, int c, char out[12]) {
+    const char* s = d->comp[c];
+    int k = (int)strlen(s);
+    if (d->ncomp == 3 && k >= 1) {
+        snprintf(out, 12, "%.*s%c", k - 1, s, "rta"[c]);
+    } else if (tensor_order(d) && k >= 2) {
+        char a = (char)tolower((unsigned char)s[k - 2]), b = (char)tolower((unsigned char)s[k - 1]);
+        a = a == 'x' ? 'r' : a == 'y' ? 't' : 'a';
+        b = b == 'x' ? 'r' : b == 'y' ? 't' : 'a';
+        snprintf(out, 12, "%.*s%c%c", k - 2, s, a, b);
+    } else {
+        snprintf(out, 12, "%s", s);
+    }
+}
+
 int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
     int n = 0;
     if (d->ncomp == 3 && n < max) {

@@ -599,6 +599,8 @@ bool app_view_save(const char* path) {
     cv_cfg_set(&c, "field", G.field_src == 0 ? G.field_name : "");
     cv_cfg_set_int(&c, "comp", G.comp);
     cv_cfg_set_bool(&c, "elem_mode", G.elem_mode);
+    cv_cfg_set_int(&c, "csys", G.csys);
+    cv_cfg_set_float(&c, "csys_x", G.csys_o[0]); cv_cfg_set_float(&c, "csys_y", G.csys_o[1]); cv_cfg_set_float(&c, "csys_z", G.csys_o[2]);
     cv_cfg_set_bool(&c, "deform", G.deform); cv_cfg_set_float(&c, "deform_scale", G.deform_scale);
     cv_cfg_set_bool(&c, "range_lock", G.range_lock); cv_cfg_set_float(&c, "rmin", G.rmin); cv_cfg_set_float(&c, "rmax", G.rmax);
     cv_cfg_set_bool(&c, "clip_on", G.clip_on); cv_cfg_set_int(&c, "clip_axis", G.clip_axis);
@@ -634,6 +636,9 @@ bool app_view_load(const char* path) {
     const char* f = cv_cfg_get(&c, "field", "");
     if (f[0] && find_field(G.step, f) >= 0) { snprintf(G.field_name, sizeof G.field_name, "%s", f); G.comp = cv_cfg_get_int(&c, "comp", G.comp); G.field_src = 0; }
     G.elem_mode = cv_cfg_get_bool(&c, "elem_mode", G.elem_mode);
+    G.csys = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "csys", G.csys), 3));
+    G.csys_o[0] = cv_cfg_get_float(&c, "csys_x", G.csys_o[0]); G.csys_o[1] = cv_cfg_get_float(&c, "csys_y", G.csys_o[1]);
+    G.csys_o[2] = cv_cfg_get_float(&c, "csys_z", G.csys_o[2]);
     G.deform = cv_cfg_get_bool(&c, "deform", G.deform);
     G.deform_scale = cv_cfg_get_float(&c, "deform_scale", G.deform_scale); G.deform_auto = false;
     G.clip_on = cv_cfg_get_bool(&c, "clip_on", G.clip_on); G.clip_axis = cv_cfg_get_int(&c, "clip_axis", G.clip_axis) % 3;

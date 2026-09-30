@@ -29,6 +29,19 @@ float cv_von_mises(const float s[6]);   /* SXX SYY SZZ SXY SYZ SZX */
    xy xz yz with xz_order. Strains must hold tensor shears (CalculiX does). */
 void  cv_principal(const float s[6], bool xz_order, float out[3]);
 
+/* 0: not a tensor; 1: shears XY YZ ZX (.frd); 2: shears xy xz yz (.dat). */
+int   cv_tensor_order(const cv_field_desc* d);
+
+/* Cylindrical coordinates about an axis (0 X, 1 Y, 2 Z) through o: r, t (hoop), a (axial).
+   Q holds the unit vectors e_r, e_t, e_a as rows; on the axis e_r is any normal. */
+void  cv_cyl_basis(const float p[3], const float o[3], int axis, float Q[3][3]);
+/* Vectors (3 components) and tensors (6) can be turned; the rest stays global. */
+bool  cv_cyl_applies(const cv_field_desc* d);
+/* Values vals[node*ncomp + c] turned in place into the local system at each node. */
+void  cv_cyl_values(const cv_field_desc* d, const float* xyz, uint32_t n, int axis, const float o[3], float* vals);
+/* Component name in the local system: D1 -> Dr, SXY -> Srt, SZX -> Sar. */
+void  cv_cyl_comp_name(const cv_field_desc* d, int c, char out[12]);
+
 /* min/max ignoring NaN. false if every value is NaN. */
 bool  cv_range(const float* v, size_t n, float* mn, float* mx);
 

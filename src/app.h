@@ -282,6 +282,8 @@ typedef struct {
     int       legend_fmt;            /* 0 auto, 1 fixed decimals, 2 scientific */
     int       legend_decimals;
     int       units;                 /* CV_UNITS_*: unit set for labels (0: none shown) */
+    int       csys;                  /* results in: 0 global, 1..3 cylindrical about X, Y, Z */
+    float     csys_o[3];             /* ... through this point */
     bool      legend_edit;           /* the legend settings window is open */
 } cv_app;
 
@@ -290,6 +292,8 @@ extern cv_app G;
 enum { CV_UNITS_NONE, CV_UNITS_MM, CV_UNITS_M, CV_UNITS_IN, CV_UNITS_N };
 extern const char* const cv_units_name[CV_UNITS_N];
 const char* app_unit(const char* field, int comp);   /* "" when unknown or no unit set */
+/* cv_field_options with component names in the chosen coordinate system */
+int  app_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
 
 /* actions the UI calls */
 void app_open(const char* path);

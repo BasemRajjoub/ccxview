@@ -24,8 +24,10 @@ not done yet.
 - [x] **Principal stresses and strains**: S1, S2, S3 (and E1..E3) as derived
   components of STRESS / TOSTRAIN, maybe with principal direction arrows. *(linth)* Values done (S1..S3,
   E1..E3, also on .dat Gauss points); direction arrows not yet.
-- [ ] **Coordinate transformation**: results in a cylindrical (or user) system,
-  e.g. radial / hoop / axial stress. *(linth)*
+- [x] **Coordinate transformation**: results in a cylindrical (or user) system,
+  e.g. radial / hoop / axial stress. *(linth)* Fields > coordinates: cylindrical about
+  X, Y or Z through a point; vectors (Dr Dt Da) and tensors (Srr Stt Saa Srt Sta Sar) of the
+  .frd turned per node, invariants unchanged; saved in the view state.
 - [ ] **Cyclic symmetry expansion** beyond the NGRAPH sectors written by ccx. *(linth)*
 - [ ] **ASME stress linearization** along a path through the thickness: membrane,
   bending, peak. Could build on the existing path plot. *(SergioP)*

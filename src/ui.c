@@ -592,6 +592,25 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             nk_bool em = G.elem_mode;
             tip(ctx, "One value per element (mean of its nodes) instead of a smooth nodal field");
             if (nk_checkbox_label(ctx, "Per element (flat)", &em)) app_set_elem_mode(em);
+            {   /* components of vectors and tensors in a cylindrical system */
+                static const char* cs[] = { "coordinates: global x y z", "cylindrical about X", "cylindrical about Y", "cylindrical about Z" };
+                tip(ctx, "Vector and tensor components in a cylindrical system: r radial, t hoop, a axial (.frd fields; invariants stay)");
+                int c = nk_combo(ctx, cs, 4, G.csys, (int)row, nk_vec2(240 * s, 4 * row + 20 * s));
+                bool ch = c != G.csys;
+                G.csys = c;
+                if (G.csys) {
+                    float st = G.diag * 0.01f + 1e-30f;
+                    static const char* nm[3] = { "#x0", "#y0", "#z0" };
+                    nk_layout_row_dynamic(ctx, row, 3);
+                    for (int k = 0; k < 3; k++) {
+                        tip(ctx, "A point on the axis");
+                        float v = nk_propertyf(ctx, nm[k], -1e30f, G.csys_o[k], 1e30f, st, st * 0.1f);
+                        if (v != G.csys_o[k]) { G.csys_o[k] = v; ch = true; }
+                    }
+                    nk_layout_row_dynamic(ctx, row, 1);
+                }
+                if (ch) app_select(G.field_name, G.comp);
+            }
             if (G.cmp_on) {
                 char lab[96];
                 snprintf(lab, sizeof lab, "minus %s", cv_basename(G.cmp_path));
@@ -604,7 +623,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 if (!nk_tree_push_id(ctx, NK_TREE_NODE, d->name, active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
                     continue;
                 cv_scalar_opt opts[CV_MAX_OPTS];
-                int n = cv_field_options(d, opts, CV_MAX_OPTS);
+                int n = app_field_options(d, opts, CV_MAX_OPTS);
                 nk_layout_row_dynamic(ctx, row, 1);
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;
