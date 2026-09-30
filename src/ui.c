@@ -200,7 +200,7 @@ static bool g_focus_open;          /* Ctrl+L: put the cursor in the path box */
 void ui_focus_open(void) { g_focus_open = true; }
 
 /* Whether a Nuklear window under the mouse should keep the event from the 3D
-   view. The legend and the drop hint only display, so they let everything
+   view. The legend and an empty drop hint only display, so they let everything
    through; the axes gizmo takes clicks but not the wheel. */
 bool ui_mouse_captured(struct nk_context* ctx, bool wheel) {
     float mx = ctx->input.mouse.pos.x, my = ctx->input.mouse.pos.y;
@@ -211,7 +211,7 @@ bool ui_mouse_captured(struct nk_context* ctx, bool wheel) {
             return true;
         struct nk_rect b = w->bounds;
         if (!(mx >= b.x && my >= b.y && mx < b.x + b.w && my < b.y + b.h)) continue;
-        if (!strcmp(w->name_string, "hint") || !strcmp(w->name_string, "overlay")) continue;
+        if ((w->flags & NK_WINDOW_NO_INPUT) && (!strcmp(w->name_string, "hint") || !strcmp(w->name_string, "overlay"))) continue;
         if (wheel && (!strcmp(w->name_string, "axes") || !strcmp(w->name_string, "Legend"))) continue;
         return true;
     }
@@ -824,6 +824,22 @@ static void section_view(struct nk_context* ctx, float s, float row) {
 
 }
 
+/* The recent files as one left-aligned button each (full path in the tooltip),
+   in the empty view: no file open yet, so they are what you most likely want. */
+static void recent_buttons(struct nk_context* ctx, float row) {
+    const char* recent[CV_CFG_RECENT];
+    int nr = settings_recent(recent, CV_CFG_RECENT);
+    if (!nr || app_busy()) return;
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label_colored(ctx, "Recent files", NK_TEXT_LEFT, P.dim);
+    nk_style_push_flags(ctx, &ctx->style.button.text_alignment, NK_TEXT_LEFT);
+    for (int i = 0; i < nr; i++) {
+        tip(ctx, recent[i]);
+        if (nk_button_label(ctx, cv_basename(recent[i]))) app_open(recent[i]);
+    }
+    nk_style_pop_flags(ctx);
+}
+
 static void panel_scene(struct nk_context* ctx, float s, float row) {
     /* open */
     nk_layout_row_template_begin(ctx, row);
@@ -837,7 +853,7 @@ static void panel_scene(struct nk_context* ctx, float s, float row) {
     G.open_buf[G.open_len] = 0;
     if (ev & NK_EDIT_COMMITED) app_open(G.open_buf);          /* typed path + Enter */
     if (nk_button_label(ctx, G.dlg_running ? "..." : "Open...")) app_open_dialog();
-    {                                        /* recent files: a drop-down under the path box */
+    if (G.loaded) {                          /* recent files: a drop-down under the path box (the empty view lists them) */
         const char* recent[CV_CFG_RECENT];
         int nr = settings_recent(recent, CV_CFG_RECENT);
         if (nr) {
@@ -1656,13 +1672,20 @@ static void window_browser(struct nk_context* ctx, float s, float row, int fw, i
 /* Big hint in the empty view: this is where files go. */
 static void drop_hint(struct nk_context* ctx, float s, float row) {
     if (G.loaded || app_busy()) return;
-    float w = 420 * s, h = 2 * row + 2 * ctx->style.window.padding.y + 2 * ctx->style.window.spacing.y;
+    const char* recent[CV_CFG_RECENT];
+    int nr = settings_recent(recent, CV_CFG_RECENT);
+    int rows = 2 + (nr ? 2 + nr : 0);          /* + a gap, "Recent files" and one button each */
+    float w = 420 * s, h = rows * row + 2 * ctx->style.window.padding.y + rows * ctx->style.window.spacing.y;
     struct nk_rect r = nk_rect(G.vp_x + (G.vp_w - w) / 2, G.vp_y + (G.vp_h - h) / 2, w, h);
-    if (nk_begin(ctx, "hint", r, NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_NO_INPUT | NK_WINDOW_BACKGROUND)) {
+    /* input only with buttons in it: an empty hint must not keep a drag from the view.
+       With buttons it is a normal window, a background one loses its clicks to the overlay. */
+    nk_flags fl = NK_WINDOW_NO_SCROLLBAR | (nr ? 0 : NK_WINDOW_BACKGROUND | NK_WINDOW_NO_INPUT);
+    if (nk_begin(ctx, "hint", r, fl)) {
         nk_window_set_bounds(ctx, "hint", r);
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label(ctx, "Drop a .frd, .inp or .fbd file here", NK_TEXT_CENTERED);
         nk_label_colored(ctx, "or Open... (Ctrl+O)", NK_TEXT_CENTERED, P.dim);
+        if (nr) { nk_label(ctx, "", NK_TEXT_LEFT); recent_buttons(ctx, row); }
     }
     nk_end(ctx);
 }
