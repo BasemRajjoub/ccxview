@@ -42,6 +42,10 @@ void  cv_cyl_values(const cv_field_desc* d, const float* xyz, uint32_t n, int ax
 /* Component name in the local system: D1 -> Dr, SXY -> Srt, SZX -> Sar. */
 void  cv_cyl_comp_name(const cv_field_desc* d, int c, char out[12]);
 
+/* Principal values (largest first) and their unit directions vec[k] of a
+   symmetric tensor, by Jacobi rotations. false for NaN input. */
+bool  cv_principal_dirs(const float s[6], bool xz_order, float val[3], float vec[3][3]);
+
 /* min/max ignoring NaN. false if every value is NaN. */
 bool  cv_range(const float* v, size_t n, float* mn, float* mx);
 

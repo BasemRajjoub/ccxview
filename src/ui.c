@@ -496,8 +496,9 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             }
             if (app_field_is_vector()) {             /* arrows of DISP, FORC, FLUX, ... */
                 nk_layout_row_dynamic(ctx, row, 2);
-                tip(ctx, "The field as arrows at the nodes, the longest one 'vec %' of the model");
-                if (nk_checkbox_label(ctx, "Vectors", &G.show_vec)) app_vectors_changed();
+                tip(ctx, G.comp < CV_COMP_MISES ? "The principal direction at the nodes: arrow pairs out for tension, in for compression"
+                                                : "The field as arrows at the nodes, the longest one 'vec %' of the model");
+                if (nk_checkbox_label(ctx, G.comp < CV_COMP_MISES ? "Directions" : "Vectors", &G.show_vec)) app_vectors_changed();
                 tip(ctx, "Colour the arrows by the selected scalar (else white)");
                 nk_checkbox_label(ctx, "coloured", &G.vec_colored);
             }

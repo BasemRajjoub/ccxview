@@ -322,7 +322,45 @@ static void refresh_field_dat(void) {
 bool app_field_is_vector(void) {
     if (!G.loaded || G.field_src != 0) return false;
     int fi = find_field(G.step, G.field_name);
-    return fi >= 0 && G.frd.steps[G.step].fields[fi].ncomp == 3;
+    if (fi < 0) return false;
+    const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
+    return d->ncomp == 3 || (G.comp <= CV_COMP_P1 && G.comp >= CV_COMP_P3_XZ && cv_tensor_order(d));
+}
+
+/* a principal value as a pair of arrows through the node along its direction:
+   pointing out for tension, in for compression (the usual stress-cross picture) */
+static void principal_arrows(const float* v, const uint32_t* ids, size_t n, size_t stride, cv_fvec* pos, cv_fvec* disp, cv_fvec* scal) {
+    bool xz = G.comp <= CV_COMP_P1_XZ;
+    int k = (xz ? CV_COMP_P1_XZ : CV_COMP_P1) - G.comp;
+    float peak = 0;
+    for (size_t j = 0; j < n; j += stride) {
+        uint32_t i = ids ? ids[j] : (uint32_t)j;
+        float m = fabsf(G.scalar[i]);
+        if (m == m && m > peak) peak = m;
+    }
+    float L = CV_MAX(G.vec_pct, 0.1f) * 0.01f * G.diag;
+    const float z[3] = { 0, 0, 0 };
+    for (size_t j = 0; peak > 0 && j < n; j += stride) {
+        uint32_t i = ids ? ids[j] : (uint32_t)j;
+        float val[3], vec[3][3];
+        if (!cv_principal_dirs(v + 6 * (size_t)i, xz, val, vec)) continue;
+        float h = 0.5f * L * fabsf(val[k]) / peak;
+        if (!(h > 0)) continue;
+        const float* p = G.frd.xyz + 3 * (size_t)i;
+        const float* d = G.disp ? G.disp + 3 * (size_t)i : z;
+        size_t before = pos->n;
+        for (int sgn = -1; sgn <= 1; sgn += 2) {
+            float dir[3] = { vec[k][0] * sgn, vec[k][1] * sgn, vec[k][2] * sgn };
+            if (val[k] >= 0) {
+                float tip[3] = { p[0] + dir[0] * h, p[1] + dir[1] * h, p[2] + dir[2] * h };
+                deck_arrow(pos, disp, tip, dir, h, d, false);
+            } else {                                    /* head at the node, shaft outside */
+                float in[3] = { -dir[0], -dir[1], -dir[2] };
+                deck_arrow(pos, disp, p, in, h, d, false);
+            }
+        }
+        for (size_t q = before; q < pos->n; q += 3) cv_push(*scal, G.scalar[i]);
+    }
 }
 
 void refresh_vectors(void) {
@@ -333,6 +371,13 @@ void refresh_vectors(void) {
     const uint32_t* ids = G.skin.n_pt ? G.skin.pt : NULL;
     size_t n = ids ? G.skin.n_pt : G.frd.n_nodes;
     size_t stride = n / 200000 + 1;                     /* huge models: a sample */
+    if (G.frd.steps[G.step].fields[fi].ncomp == 6) {
+        cv_fvec pos = {0}, disp = {0}, scal = {0};
+        if (G.scalar) principal_arrows(v, ids, n, stride, &pos, &disp, &scal);
+        cv_render_aux(CV_AUX_VECLN, pos.a, disp.a, scal.a, (uint32_t)(pos.n / 3));
+        cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(scal);
+        return;
+    }
     float peak = 0;
     for (size_t j = 0; j < n; j += stride) {
         uint32_t i = ids ? ids[j] : (uint32_t)j;

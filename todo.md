@@ -23,7 +23,8 @@ not done yet.
 
 - [x] **Principal stresses and strains**: S1, S2, S3 (and E1..E3) as derived
   components of STRESS / TOSTRAIN, maybe with principal direction arrows. *(linth)* Values done (S1..S3,
-  E1..E3, also on .dat Gauss points); direction arrows not yet.
+  E1..E3, also on .dat Gauss points); with S1..S3 of a .frd field chosen, Layers > Directions draws
+  arrow pairs along the principal direction at the nodes (out: tension, in: compression).
 - [x] **Coordinate transformation**: results in a cylindrical (or user) system,
   e.g. radial / hoop / axial stress. *(linth)* Fields > coordinates: cylindrical about
   X, Y or Z through a point; vectors (Dr Dt Da) and tensors (Srr Stt Saa Srt Sta Sar) of the

@@ -145,6 +145,46 @@ void cv_principal(const float s[6], bool xz_order, float out[3]) {
     for (int k = 0; k < 3; k++) out[k] = (float)e[k];
 }
 
+bool cv_principal_dirs(const float s[6], bool xz_order, float val[3], float vec[3][3]) {
+    double a[3][3], v[3][3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
+    double yz = xz_order ? s[5] : s[4], zx = xz_order ? s[4] : s[5];
+    a[0][0] = s[0]; a[1][1] = s[1]; a[2][2] = s[2];
+    a[0][1] = a[1][0] = s[3]; a[1][2] = a[2][1] = yz; a[0][2] = a[2][0] = zx;
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) if (a[i][j] != a[i][j]) return false;
+    for (int sweep = 0; sweep < 30; sweep++) {
+        double off = fabs(a[0][1]) + fabs(a[0][2]) + fabs(a[1][2]);
+        double diag = fabs(a[0][0]) + fabs(a[1][1]) + fabs(a[2][2]);
+        if (off <= 1e-15 * diag || off == 0) break;
+        for (int p = 0; p < 2; p++)
+            for (int q = p + 1; q < 3; q++) {
+                if (a[p][q] == 0) continue;
+                double th = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+                double t = (th >= 0 ? 1 : -1) / (fabs(th) + sqrt(th * th + 1));
+                double c = 1 / sqrt(t * t + 1), sn = t * c;
+                for (int k = 0; k < 3; k++) {           /* A <- A J */
+                    double kp = a[k][p], kq = a[k][q];
+                    a[k][p] = c * kp - sn * kq; a[k][q] = sn * kp + c * kq;
+                }
+                for (int k = 0; k < 3; k++) {           /* A <- J^T A */
+                    double pk = a[p][k], qk = a[q][k];
+                    a[p][k] = c * pk - sn * qk; a[q][k] = sn * pk + c * qk;
+                }
+                for (int k = 0; k < 3; k++) {           /* V <- V J: columns are the directions */
+                    double kp = v[k][p], kq = v[k][q];
+                    v[k][p] = c * kp - sn * kq; v[k][q] = sn * kp + c * kq;
+                }
+            }
+    }
+    int o[3] = { 0, 1, 2 };
+    for (int i = 0; i < 2; i++)
+        for (int j = i + 1; j < 3; j++) if (a[o[j]][o[j]] > a[o[i]][o[i]]) { int t = o[i]; o[i] = o[j]; o[j] = t; }
+    for (int k = 0; k < 3; k++) {
+        val[k] = (float)a[o[k]][o[k]];
+        for (int c = 0; c < 3; c++) vec[k][c] = (float)v[c][o[k]];
+    }
+    return true;
+}
+
 void cv_field_scalar(const float* v, int nc, uint32_t n, int comp, float* out) {
     for (uint32_t i = 0; i < n; i++) {
         const float* r = v + (size_t)i * nc;
