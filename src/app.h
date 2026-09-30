@@ -122,7 +122,7 @@ typedef struct {
     float     gp_size;
     bool      gp_on_top;      /* Gauss points drawn through the faces */
     int       probe_ip;       /* point hit by the probe (1-based), 0 none */
-    char      field_label[64];
+    char      field_label[96];   /* with the unit in [] when a unit set is chosen */
 
     cv_cache_entry cache[CV_CACHE_N];
     uint64_t  cache_clock;
@@ -281,10 +281,15 @@ typedef struct {
     bool      legend_grey;           /* greyscale, for printing */
     int       legend_fmt;            /* 0 auto, 1 fixed decimals, 2 scientific */
     int       legend_decimals;
+    int       units;                 /* CV_UNITS_*: unit set for labels (0: none shown) */
     bool      legend_edit;           /* the legend settings window is open */
 } cv_app;
 
 extern cv_app G;
+
+enum { CV_UNITS_NONE, CV_UNITS_MM, CV_UNITS_M, CV_UNITS_IN, CV_UNITS_N };
+extern const char* const cv_units_name[CV_UNITS_N];
+const char* app_unit(const char* field, int comp);   /* "" when unknown or no unit set */
 
 /* actions the UI calls */
 void app_open(const char* path);

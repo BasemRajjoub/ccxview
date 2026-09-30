@@ -57,6 +57,54 @@ static const char* opt_label(const cv_field_desc* d, int comp) {
     return "?";
 }
 
+/* ---- units: CalculiX has none, the user says which consistent set the model uses ---- */
+const char* const cv_units_name[CV_UNITS_N] = {
+    "units: none", "units: t mm s N MPa °C", "units: kg m s N Pa °C", "units: in lbf s psi °F",
+};
+
+enum { U_NONE, U_LEN, U_STRESS, U_FORCE, U_TEMP, U_ENERGY_D, U_VELO, U_FLUX, U_N };
+
+static int quantity(const char* f, int comp) {
+    static const struct { const char* name; int q; } T[] = {
+        { "DISP", U_LEN }, { "DISPI", U_LEN }, { "PDISP", U_LEN }, { "MDISP", U_LEN }, { "MAXU", U_LEN },
+        { "STRESS", U_STRESS }, { "STRESSI", U_STRESS }, { "PSTRESS", U_STRESS }, { "ZZSTR", U_STRESS },
+        { "ZZSTRI", U_STRESS }, { "MAXS", U_STRESS }, { "PRESS", U_STRESS },
+        { "FORC", U_FORCE }, { "FORCI", U_FORCE }, { "RF", U_FORCE },
+        { "NDTEMP", U_TEMP }, { "NT", U_TEMP }, { "ENER", U_ENERGY_D }, { "VELO", U_VELO },
+        { "HFL", U_FLUX },
+        { "TOSTRAIN", U_NONE }, { "MESTRAIN", U_NONE }, { "PE", U_NONE }, { "SDV", U_NONE },
+        /* .dat phrases */
+        { "displacements", U_LEN }, { "stresses", U_STRESS }, { "forces", U_FORCE },
+        { "temperatures", U_TEMP }, { "velocities", U_VELO }, { "heat flux", U_FLUX },
+        { "internal energy density", U_ENERGY_D },
+    };
+    if (!strcmp(f, "CONTACT")) return comp >= 0 && comp < 3 ? U_LEN : U_STRESS;   /* COPEN CSLIP1 CSLIP2 | CPRESS CSHEAR1 CSHEAR2 */
+    for (size_t i = 0; i < sizeof T / sizeof T[0]; i++) {
+        size_t n = strlen(T[i].name);
+        if (!strncmp(f, T[i].name, n) && (f[n] == 0 || f[n] == ' ' || f[n] == '(')) return T[i].q;
+    }
+    return -1;
+}
+
+const char* app_unit(const char* field, int comp) {
+    static const char* const U[CV_UNITS_N][U_N] = {
+        { 0 },
+        { "", "mm", "MPa", "N", "°C", "mJ/mm³", "mm/s", "mW/mm²" },
+        { "", "m", "Pa", "N", "°C", "J/m³", "m/s", "W/m²" },
+        { "", "in", "psi", "lbf", "°F", "in·lbf/in³", "in/s", "in·lbf/(s·in²)" },
+    };
+    if (G.units <= 0 || G.units >= CV_UNITS_N || !field) return "";
+    int q = quantity(field, comp);
+    return q < 0 ? "" : U[G.units][q];
+}
+
+/* " [MPa]" appended to a label, nothing without a unit */
+static void add_unit(char* lab, size_t cap, const char* field, int comp) {
+    const char* u = app_unit(field, comp);
+    size_t n = strlen(lab);
+    if (u[0] && n < cap) snprintf(lab + n, cap - n, " [%s]", u);
+}
+
 int find_field(int step, const char* name) {
     if (step < 0 || step >= G.frd.n_steps) return -1;
     const cv_step* s = &G.frd.steps[step];
@@ -236,6 +284,7 @@ static void refresh_field_dat(void) {
         cv_field_desc d;
         const char* lab = gp_desc(G.field_name, &d) ? opt_label(&d, G.comp) : "?";
         snprintf(G.field_label, sizeof G.field_label, "%s %s (Gauss)", G.field_name, lab);
+        add_unit(G.field_label, sizeof G.field_label, G.field_name, G.comp);
         app_refresh_range();
     } else {
         snprintf(G.field_label, sizeof G.field_label, "%s (not in this increment)", G.field_name);
@@ -440,6 +489,7 @@ void refresh_field(void) {
             cv_elem_mean(&G.frd, G.scalar, G.elem_val);
             G.has_field = true;
             snprintf(G.field_label, sizeof G.field_label, "%s%s %s", diff ? "A-B " : "", d->name, opt_label(d, G.comp));
+            add_unit(G.field_label, sizeof G.field_label, d->name, G.comp);
         }
     }
     if (!G.has_field) {

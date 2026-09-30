@@ -1682,6 +1682,11 @@ static void legend_controls(struct nk_context* ctx, float s, float row) {
         static const char* fmts[] = { "numbers: auto", "numbers: fixed", "numbers: scientific" };
         G.legend_fmt = nk_combo(ctx, fmts, 3, G.legend_fmt, (int)row, nk_vec2(200 * s, 3 * row + 20 * s));
         if (G.legend_fmt) nk_property_int(ctx, "#decimals", 0, &G.legend_decimals, 9, 1, 0.2f);
+        tip(ctx, "The consistent unit set the model was built in (CalculiX has none): shown in [] in the legend, probe and plots");
+        {
+            int u = nk_combo(ctx, (const char**)cv_units_name, CV_UNITS_N, G.units, (int)row, nk_vec2(260 * s, CV_UNITS_N * row + 20 * s));
+            if (u != G.units) { bool lk = G.range_lock; float a = G.rmin, b = G.rmax; G.units = u; app_select(G.field_name, G.comp); if (lk) { G.range_lock = true; G.rmin = a; G.rmax = b; } }
+        }
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Centre the view on the field's minimum / maximum");
         if (nk_button_label(ctx, "go to min") && G.min_at != UINT32_MAX) { G.show_markers = true; app_find(G.elem_mode ? G.frd.elem_id[G.min_at] : G.frd.node_id[G.min_at], G.elem_mode); }
@@ -1694,7 +1699,7 @@ static void window_legend_settings(struct nk_context* ctx, float s, float row) {
     if (!G.legend_edit || !G.loaded) { was_open = false; return; }
     if (!was_open) nk_window_show(ctx, "Legend settings", NK_SHOWN);
     was_open = true;
-    float w = 300 * s, h = 13.5f * row;
+    float w = 300 * s, h = 14.7f * row;
     if (nk_begin(ctx, "Legend settings", nk_rect(G.vp_x + G.vp_w - w - 180 * s, G.vp_y + 10 * s, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         legend_controls(ctx, s, row);
@@ -2066,6 +2071,11 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
         bool by_field = G.has_field && !by_group;
         if ((by_field || by_group) && !G.hide_legend) {
             float lw = 150 * s, lh = CV_MIN(440 * s, G.vp_h - 20 * s);
+            if (by_field) {                       /* as wide as the title (field, component, unit) */
+                const struct nk_user_font* f = ctx->style.font;
+                float tw = f->width(f->userdata, f->height, G.field_label, (int)strlen(G.field_label));
+                lw = CV_MIN(CV_MAX(lw, tw + 24 * s), 380 * s);
+            }
             r = nk_rect(W - lw - 10 * s, G.vp_y + 10 * s, lw, lh);
             /* draggable (by its top line); once moved it keeps its place, clamped to the view */
             struct nk_window* lw_win = nk_window_find(ctx, "Legend");

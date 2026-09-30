@@ -31,8 +31,10 @@ not done yet.
   bending, peak. Could build on the existing path plot. *(SergioP)*
 - [ ] **Time / increment plots**: a value at a node or element against time or
   increment, over all steps. *(SergioP)*
-- [ ] **Unit systems**: the user picks a unit set, results show units in the
-  legend and probe. *(SergioP)*
+- [x] **Unit systems**: the user picks a unit set, results show units in the
+  legend and probe. *(SergioP)* Legend settings > units (t-mm-s, kg-m-s, in-lbf-s);
+  the unit follows the field (length, stress, force, temperature, energy density, ...)
+  in the legend, probe, path plot and CSV header.
 
 ## Modelling
 
