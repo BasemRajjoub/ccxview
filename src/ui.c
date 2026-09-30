@@ -607,7 +607,6 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                         float v = nk_propertyf(ctx, nm[k], -1e30f, G.csys_o[k], 1e30f, st, st * 0.1f);
                         if (v != G.csys_o[k]) { G.csys_o[k] = v; ch = true; }
                     }
-                    nk_layout_row_dynamic(ctx, row, 1);
                 }
                 if (ch) app_select(G.field_name, G.comp);
             }
