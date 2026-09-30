@@ -471,7 +471,7 @@ bool app_find(uint32_t id, bool element) {
         for (uint32_t k = 0; k < G.frd.n_elems && e == UINT32_MAX; k++)     /* any element holding it */
             for (uint32_t j = G.frd.eoff[k]; j < G.frd.eoff[k + 1]; j++) if (G.frd.conn[j] == n) { e = k; break; }
     }
-    G.probe.hit = true; G.probe.elem = e == UINT32_MAX ? 0 : e; G.probe.node = n; G.probe.t = 0;
+    G.probe.hit = true; G.probe.elem = e == UINT32_MAX ? 0 : e; G.probe.node = n; G.probe.t = 0; G.probe.tri = UINT32_MAX;
     G.probe_on = e != UINT32_MAX;
     G.probe_ip = 0;
     G.probe_value = !G.has_field ? NAN : G.elem_mode ? (e != UINT32_MAX ? G.elem_val[e] : NAN) : G.scalar[n];

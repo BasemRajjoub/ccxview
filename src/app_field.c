@@ -958,16 +958,35 @@ static void tri_normal(size_t t, double s[3]) {
 }
 
 /* the surface normals at a skin node, one per face through it (the sign does not
-   matter: path_ray tries both ways). The clicked face's alone when there is one;
-   else the triangles around the node (the nearest corner node for a mid-edge
-   one) grouped by direction, so a node on an edge (a model cut at a symmetry
-   plane, say) gives each face's normal and not the bisector. */
+   matter: path_ray tries both ways): the area-weighted mean of the skin
+   triangles around the node (the nearest corner node for a mid-edge one) that
+   lie on one smooth surface, so a faceted curve gives its true normal. With a
+   clicked triangle, the one surface it is on: the triangles within 30 degrees
+   of it. Without, the triangles grouped by direction, so a node on an edge (a
+   model cut at a symmetry plane, say) gives each face's normal and not the
+   bisector. */
 #define NRM_MAX 6
 static int node_normals(uint32_t n, uint32_t tri, float d[NRM_MAX][3]) {
     double s[3], l;
     if (tri < G.skin.n_tri) {
-        tri_normal(tri, s);
-        if ((l = sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2])) > 0) { for (int k = 0; k < 3; k++) d[0][k] = (float)(s[k] / l); return 1; }
+        double c[3], cl;
+        tri_normal(tri, c);
+        if ((cl = sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2])) > 0) {
+            for (int pass = 0; pass < 2; pass++, n = snap_to_edges(n)) {
+                double m[3] = { 0, 0, 0 };
+                for (size_t t = 0; t < G.skin.n_tri; t++) {
+                    const uint32_t* v = G.skin.tri + 3 * t;
+                    if (v[0] != n && v[1] != n && v[2] != n) continue;
+                    tri_normal(t, s);
+                    l = sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
+                    if (l > 0 && (s[0] * c[0] + s[1] * c[1] + s[2] * c[2]) / (l * cl) > 0.866)
+                        for (int k = 0; k < 3; k++) m[k] += s[k];
+                }
+                if ((l = sqrt(m[0] * m[0] + m[1] * m[1] + m[2] * m[2])) > 0) { for (int k = 0; k < 3; k++) d[0][k] = (float)(m[k] / l); return 1; }
+            }
+            for (int k = 0; k < 3; k++) d[0][k] = (float)(c[k] / cl);   /* the node is not on it: the face alone */
+            return 1;
+        }
     }
     for (int pass = 0; pass < 2; pass++, n = snap_to_edges(n)) {
         double g[NRM_MAX][3] = { { 0 } };
