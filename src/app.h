@@ -112,6 +112,7 @@ typedef struct {
     char      field_name[64];   /* .frd names are short; .dat names are phrases */
     int       comp;
     bool      has_field;      /* current step has the selected field */
+    unsigned  field_gen;      /* bumped when the values or displacements change */
     bool      elem_mode;
     int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points) */
     uint8_t*  vis;            /* last visibility mask (groups + crop), NULL = all */
@@ -156,8 +157,9 @@ typedef struct {
     int       tree[CV_TREE_N];       /* CV_TREE_*: panel section expanded (nk_collapse_states) */
     int       seq_warm;              /* frames to let pass before recording: the arming frame is drawn with the old state */
     void*     video;                 /* an MP4 being written (cv_video*), frames of the sequence go there */
-    /* clip plane: everything beyond it is cut away at draw time (no cap) */
+    /* clip plane: everything beyond it is cut away at draw time */
     bool      clip_on;
+    bool      clip_cap;              /* fill the cut through solid elements */
     int       clip_axis;             /* 0..2 normal along X / Y / Z */
     bool      clip_flip;
     float     clip_pos;              /* fraction of the model box along that axis */
@@ -324,6 +326,9 @@ void app_set_step(int step);
 void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
 void app_lin_open(uint32_t a, uint32_t b);  /* linearize the stress on the line between two nodes */
 void app_lin_close(void);
+/* the cap of the clip plane n . x = d through the solid elements, deformed by f1 DISP
+   (in the shader) + f2 DISPI; rebuilt only when something changed */
+void app_clip_caps(bool on, const float n[3], float d, float f1, float f2);
 bool app_lin_csv(const char* path);
 void app_hist_close(void);
 bool app_hist_csv(const char* path);

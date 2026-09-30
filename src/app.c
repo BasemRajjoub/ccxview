@@ -84,6 +84,7 @@ static void init(void) {
     G.cam.dist = 3;
     G.legend_decimals = 3;
     G.clip_pos = 0.5f;
+    G.clip_cap = true;
     G.rep_n[0] = G.rep_n[1] = G.rep_n[2] = 3;
     G.rep_follow = true;
     G.cyc_n = G.cyc_show = 12; G.cyc_axis = 2;
@@ -292,6 +293,7 @@ static void frame(void) {
             d.clip_n[0] = d.clip_n[1] = d.clip_n[2] = 0; d.clip_n[k] = sgn;
             d.clip_d = sgn * (lo[k] + (hi[k] - lo[k]) * G.clip_pos);
         }
+        app_clip_caps(d.clip, d.clip_n, d.clip_d, d.def_scale, d.def_scale2);
         d.hl_size = G.hl_size * ui_scale();
         d.gauss_on_top = G.gp_on_top;
         d.gauss_points_color = G.gp_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;

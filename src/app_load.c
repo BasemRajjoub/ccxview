@@ -620,6 +620,7 @@ bool app_view_save(const char* path) {
     cv_cfg_set_bool(&c, "range_lock", G.range_lock); cv_cfg_set_float(&c, "rmin", G.rmin); cv_cfg_set_float(&c, "rmax", G.rmax);
     cv_cfg_set_bool(&c, "clip_on", G.clip_on); cv_cfg_set_int(&c, "clip_axis", G.clip_axis);
     cv_cfg_set_bool(&c, "clip_flip", G.clip_flip); cv_cfg_set_float(&c, "clip_pos", G.clip_pos);
+    cv_cfg_set_bool(&c, "clip_cap", G.clip_cap);
     cv_cfg_set_bool(&c, "crop_on", G.crop_on);
     for (int k = 0; k < 3; k++) {
         char key[16];
@@ -661,6 +662,7 @@ bool app_view_load(const char* path) {
     G.deform_scale = cv_cfg_get_float(&c, "deform_scale", G.deform_scale); G.deform_auto = false;
     G.clip_on = cv_cfg_get_bool(&c, "clip_on", G.clip_on); G.clip_axis = cv_cfg_get_int(&c, "clip_axis", G.clip_axis) % 3;
     G.clip_flip = cv_cfg_get_bool(&c, "clip_flip", G.clip_flip); G.clip_pos = cv_cfg_get_float(&c, "clip_pos", G.clip_pos);
+    G.clip_cap = cv_cfg_get_bool(&c, "clip_cap", G.clip_cap);
     G.crop_on = cv_cfg_get_bool(&c, "crop_on", G.crop_on);
     for (int k = 0; k < 3; k++) {
         char key[16];

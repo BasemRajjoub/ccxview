@@ -13,8 +13,10 @@ not done yet.
 - [x] **More colour maps**, rainbow / jet among them. *(Calc_em)* Jet, Inferno and Rainbow desaturated
   (xyont) added; Rainbow,
   Turbo, Viridis, Cool-warm, Heat were there already (legend grey = greyscale).
-- [ ] **Filled clip caps**: fill the cut where the clip plane goes through solid
-  elements, instead of showing the open inside. *(Calc_em)*
+- [x] **Filled clip caps**: fill the cut where the clip plane goes through solid
+  elements, instead of showing the open inside. *(Calc_em)* Clip plane > fill (on by
+  default): the section of every visible solid (split into tets over its corners), coloured
+  by the field, deformed with the model.
 - [x] **Separate glyph sizes**: restraints smaller than loads. *(SergioP)* Now a mesh-based size with
   sliders under View > Symbol sizes (`bc_scale`, `load_scale`).
 - [ ] **Windows icon**: a better application icon. *(SergioP)*

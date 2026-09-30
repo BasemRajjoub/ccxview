@@ -955,19 +955,22 @@ static void section_view(struct nk_context* ctx, float s, float row) {
     }
 
     if (sub_push(ctx, "Clip & crop", CV_TREE_CLIP)) {
-        /* clip plane: cut at draw time along an axis; hollow inside (no cap) */
+        /* clip plane: cut at draw time along an axis; the cut through solids filled */
         nk_layout_row_dynamic(ctx, row, 2);
-        tip(ctx, "Cut the drawing at a plane (the inside shows hollow; the crop box below removes whole elements)");
+        tip(ctx, "Cut the drawing at a plane (the crop box below removes whole elements instead)");
         nk_checkbox_label(ctx, "Clip plane", &G.clip_on);
         if (G.clip_on) {
             static const char* axes[] = { "normal X", "normal Y", "normal Z" };
             G.clip_axis = nk_combo(ctx, axes, 3, G.clip_axis, (int)row, nk_vec2(120 * s, 3 * row + 20 * s));
             nk_layout_row_template_begin(ctx, row);
             nk_layout_row_template_push_static(ctx, 50 * s);
+            nk_layout_row_template_push_static(ctx, 50 * s);
             nk_layout_row_template_push_dynamic(ctx);
             nk_layout_row_template_end(ctx);
             tip(ctx, "Keep the other side instead");
             nk_checkbox_label(ctx, "flip", &G.clip_flip);
+            tip(ctx, "Fill the cut through solid elements, coloured by the field (off: hollow)");
+            nk_checkbox_label(ctx, "fill", &G.clip_cap);
             ui_slider_float(ctx, 0.f, &G.clip_pos, 1.f, 0.002f);
         }
         /* crop box: elements whose centre is outside are removed, so the cut

@@ -551,6 +551,10 @@ void cv_render_draw(const cv_draw* d) {
                        d->face_rgb, d->shade, d, 1, false, 0.f, 0);
         }
     }
+    if (d->faces && d->clip && A[CV_AUX_CAPTRI].n) {   /* the cut filled, coloured like the faces */
+        int m = d->faces_color == CV_COLOR_NODAL || d->faces_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        draw_layer(R.pip_tri_ni, A[CV_AUX_CAPTRI].v, NO_IB, (int)A[CV_AUX_CAPTRI].n, m, d->face_rgb, d->shade, d, 1, false, 0.f, 0);
+    }
     if (d->ghost && d->def_scale != 0.f) {   /* the shape before deformation, faint */
         static const float ghost_rgb[3] = { 0.55f, 0.55f, 0.55f };
         cv_draw g = *d;

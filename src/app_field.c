@@ -686,6 +686,78 @@ bool app_lin_csv(const char* path) {
     return fclose(o) == 0;
 }
 
+/* ---- clip caps: the plane cut through the solid elements, filled ---------------------
+   Each solid is split into tetrahedra over its corners; a tet crossing the plane
+   gives one or two triangles. Vertices carry the undeformed position (with the
+   DISPI part baked in), DISP and the value, interpolated along the cut edges, so
+   the shader's deformation puts them exactly on the plane; a hair inside it, so the
+   clip does not discard them. */
+
+typedef struct { cv_fvec pos, disp, val; float n[3], eps; bool has_disp; } cap_out;
+
+static void cap_vertex(cap_out* o, const float X[][3], const float U[][3], const float* S, int i, int j, float t) {
+    for (int k = 0; k < 3; k++) cv_push(o->pos, X[i][k] + t * (X[j][k] - X[i][k]) - o->eps * o->n[k]);
+    if (o->has_disp) for (int k = 0; k < 3; k++) cv_push(o->disp, U[i][k] + t * (U[j][k] - U[i][k]));
+    cv_push(o->val, S[i] + t * (S[j] - S[i]));
+}
+
+static void cap_tet(cap_out* o, const int v[4], const float* sd, const float X[][3], const float U[][3], const float* S) {
+    int in[4], out[4], ni = 0, no = 0;
+    for (int k = 0; k < 4; k++) { if (sd[v[k]] > 0) out[no++] = v[k]; else in[ni++] = v[k]; }
+    if (!ni || !no) return;
+    #define CUT(a, b) cap_vertex(o, X, U, S, a, b, sd[a] / (sd[a] - sd[b]))
+    if (no == 1) { CUT(out[0], in[0]); CUT(out[0], in[1]); CUT(out[0], in[2]); }
+    else if (ni == 1) { CUT(in[0], out[0]); CUT(in[0], out[1]); CUT(in[0], out[2]); }
+    else {                                              /* a quad: (a,c) (a,d) (b,d) (b,c) */
+        CUT(out[0], in[0]); CUT(out[0], in[1]); CUT(out[1], in[1]);
+        CUT(out[0], in[0]); CUT(out[1], in[1]); CUT(out[1], in[0]);
+    }
+    #undef CUT
+}
+
+void app_clip_caps(bool on, const float n[3], float dd, float f1, float f2) {
+    static char key[256];
+    char k[256];
+    on = on && G.clip_cap && G.loaded && G.frd.n_elems <= 4000000;
+    snprintf(k, sizeof k, "%d|%g|%g|%g|%g|%g|%g|%u|%p|%zu|%d|%d|%d", on, n[0], n[1], n[2], dd, f1, f2, G.field_gen,
+             (void*)G.skin.tri, G.skin.n_tri, G.elem_mode, G.has_field, G.field_src);
+    if (!strcmp(k, key)) return;
+    snprintf(key, sizeof key, "%s", k);
+    cap_out o = { .n = { n[0], n[1], n[2] }, .eps = 1e-5f * G.diag, .has_disp = G.disp != NULL };
+    static const int hex[6][4] = { { 0, 1, 2, 6 }, { 0, 2, 3, 6 }, { 0, 3, 7, 6 }, { 0, 7, 4, 6 }, { 0, 4, 5, 6 }, { 0, 5, 1, 6 } };
+    static const int wedge[3][4] = { { 0, 1, 2, 3 }, { 1, 2, 3, 4 }, { 2, 3, 4, 5 } };
+    static const int tet[1][4] = { { 0, 1, 2, 3 } };
+    bool nodal = G.has_field && G.field_src == 0 && !G.elem_mode && G.scalar;
+    bool elem = G.has_field && G.field_src == 0 && G.elem_mode && G.elem_val;
+    for (uint32_t e = 0; on && e < G.frd.n_elems; e++) {
+        if (G.vis && !G.vis[e]) continue;
+        int t = G.frd.etype[e], nc = t == 1 || t == 4 ? 8 : t == 2 || t == 5 ? 6 : t == 3 || t == 6 ? 4 : 0;
+        uint32_t b = G.frd.eoff[e];
+        if (!nc || G.frd.eoff[e + 1] - b < (uint32_t)nc) continue;
+        float X[8][3], U[8][3], S[8], sd[8];
+        int pos = 0, neg = 0;
+        for (int i = 0; i < nc; i++) {
+            uint32_t nd = G.frd.conn[b + i];
+            const float* x = G.frd.xyz + 3 * (size_t)nd;
+            float p = 0;
+            for (int c = 0; c < 3; c++) {
+                X[i][c] = x[c] + (G.disp2 ? f2 * G.disp2[3 * (size_t)nd + c] : 0.f);
+                U[i][c] = G.disp ? G.disp[3 * (size_t)nd + c] : 0.f;
+                p += n[c] * (X[i][c] + f1 * U[i][c]);
+            }
+            sd[i] = p - dd;
+            S[i] = nodal ? G.scalar[nd] : elem ? G.elem_val[e] : 0.f;
+            if (sd[i] > 0) pos++; else neg++;
+        }
+        if (!pos || !neg) continue;
+        const int (*tt)[4] = nc == 8 ? hex : nc == 6 ? wedge : tet;
+        int nt = nc == 8 ? 6 : nc == 6 ? 3 : 1;
+        for (int q = 0; q < nt; q++) cap_tet(&o, tt[q], sd, X, U, S);
+    }
+    cv_render_aux(CV_AUX_CAPTRI, o.pos.a, o.has_disp ? o.disp.a : NULL, o.val.a, (uint32_t)(o.pos.n / 3));
+    cv_free_vec(o.pos); cv_free_vec(o.disp); cv_free_vec(o.val);
+}
+
 void app_path_clear(void) {
     free(G.path_nodes); free(G.path_dist);
     G.path_nodes = NULL; G.path_dist = NULL; G.path_n = 0;
@@ -833,6 +905,7 @@ void refresh_field(void) {
         cv_render_scalar(G.scalar, G.frd.n_nodes);
         app_refresh_range();
     }
+    G.field_gen++;
     refresh_tri_values();
     refresh_gauss();
     refresh_vectors();
@@ -865,6 +938,7 @@ static void refresh_disp2(void) {
 }
 
 static void refresh_disp(void) {
+    G.field_gen++;
     int fi = find_field(G.step, "DISP");
     const float* v = fi >= 0 ? cache_get(G.step, fi) : NULL;
     if (!v || G.frd.steps[G.step].fields[fi].ncomp < 3) {
