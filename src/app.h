@@ -22,7 +22,7 @@ enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
 /* the side panel's sections and sub-sections: open or closed, kept in the settings */
 enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
        CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
-       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_N };
+       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_N };
 
 enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
 
@@ -219,6 +219,11 @@ typedef struct {
     int       rep_n[3];              /* copies along that axis, the model included */
     float     rep_gap[3];            /* space between copies; 0: they touch (pitch = length of the model) */
     bool      rep_follow;            /* copies follow the deformation: shifted by the deformed cell edges */
+    bool      cyc_on;                /* cyclic symmetry: the sector turned about an axis */
+    int       cyc_n;                 /* sectors in 360 degrees */
+    int       cyc_show;              /* sectors drawn, the model included (1..cyc_n) */
+    int       cyc_axis;              /* 0 X, 1 Y, 2 Z */
+    float     cyc_o[3];              /* a point on the axis */
     bool      up_z;                  /* turntable about world Z instead of Y */
     bool      orbit_free;            /* free orbit: dragging turns about the screen's axes, no fixed up */
     bool      orbit_cursor;          /* drag rotates about the model point under the cursor */

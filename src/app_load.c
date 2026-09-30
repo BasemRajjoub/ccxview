@@ -622,7 +622,10 @@ bool app_view_save(const char* path) {
         snprintf(key, sizeof key, "rep_n%d", k); cv_cfg_set_int(&c, key, G.rep_n[k]);
         snprintf(key, sizeof key, "rep_gap%d", k); cv_cfg_set_float(&c, key, G.rep_gap[k]);
         if (k == 0) cv_cfg_set_bool(&c, "rep_follow", G.rep_follow);
+        snprintf(key, sizeof key, "cyc_o%d", k); cv_cfg_set_float(&c, key, G.cyc_o[k]);
     }
+    cv_cfg_set_bool(&c, "cyc_on", G.cyc_on); cv_cfg_set_int(&c, "cyc_n", G.cyc_n);
+    cv_cfg_set_int(&c, "cyc_show", G.cyc_show); cv_cfg_set_int(&c, "cyc_axis", G.cyc_axis);
     const char* layer_keys[] = { "show_faces", "show_edges", "show_nodes", "show_gp", "show_vec", "show_markers", "show_ghost", "shading" };
     const bool  layer_vals[] = { G.show_faces, G.show_edges, G.show_nodes, G.show_gp, G.show_vec, G.show_markers, G.show_ghost, G.shading };
     for (size_t i = 0; i < CV_COUNT(layer_keys); i++) cv_cfg_set_bool(&c, layer_keys[i], layer_vals[i]);
@@ -661,7 +664,12 @@ bool app_view_load(const char* path) {
         snprintf(key, sizeof key, "rep_n%d", k); G.rep_n[k] = CV_MAX(2, CV_MIN(cv_cfg_get_int(&c, key, G.rep_n[k]), 100));
         snprintf(key, sizeof key, "rep_gap%d", k); G.rep_gap[k] = cv_cfg_get_float(&c, key, G.rep_gap[k]);
         if (k == 0) G.rep_follow = cv_cfg_get_bool(&c, "rep_follow", G.rep_follow);
+        snprintf(key, sizeof key, "cyc_o%d", k); G.cyc_o[k] = cv_cfg_get_float(&c, key, G.cyc_o[k]);
     }
+    G.cyc_on = cv_cfg_get_bool(&c, "cyc_on", G.cyc_on);
+    G.cyc_n = CV_MAX(1, CV_MIN(cv_cfg_get_int(&c, "cyc_n", G.cyc_n), 720));
+    G.cyc_show = CV_MAX(1, CV_MIN(cv_cfg_get_int(&c, "cyc_show", G.cyc_show), G.cyc_n));
+    G.cyc_axis = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "cyc_axis", G.cyc_axis), 2));
     G.show_faces = cv_cfg_get_bool(&c, "show_faces", G.show_faces); G.show_edges = cv_cfg_get_bool(&c, "show_edges", G.show_edges);
     G.show_nodes = cv_cfg_get_bool(&c, "show_nodes", G.show_nodes); G.show_gp = cv_cfg_get_bool(&c, "show_gp", G.show_gp);
     G.show_vec = cv_cfg_get_bool(&c, "show_vec", G.show_vec); G.show_markers = cv_cfg_get_bool(&c, "show_markers", G.show_markers);

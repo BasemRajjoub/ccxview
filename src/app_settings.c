@@ -56,7 +56,7 @@ static const setting S[] = {
     TREE("view", CV_TREE_VIEW), TREE("camera", CV_TREE_CAMERA), TREE("colours", CV_TREE_COLOURS),
     TREE("display", CV_TREE_DISPLAY), TREE("mirror", CV_TREE_MIRROR), TREE("replicate", CV_TREE_REPLICATE),
     TREE("clip", CV_TREE_CLIP), TREE("file", CV_TREE_FILE), TREE("export", CV_TREE_EXPORT),
-    TREE("symbols", CV_TREE_SYMBOLS),
+    TREE("symbols", CV_TREE_SYMBOLS), TREE("cyclic", CV_TREE_CYCLIC),
 };
 enum { NS = sizeof S / sizeof S[0] };
 

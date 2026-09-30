@@ -279,16 +279,34 @@ static int mirror_masks(int* out) {
     return n;
 }
 
+static int cyc_count(void) {
+    if (!G.cyc_on) return 1;
+    int n = CV_MAX(1, CV_MIN(G.cyc_n, 720));
+    return CV_MAX(1, CV_MIN(G.cyc_show, n));
+}
+
+/* rotation of sector j about the cyclic axis: R (row major) */
+static void cyc_rot(int j, float R[3][3]) {
+    double a = 2.0 * 3.14159265358979323846 * j / CV_MAX(1, G.cyc_n), c = cos(a), s = sin(a);
+    int x = (G.cyc_axis + 1) % 3, y = (G.cyc_axis + 2) % 3, z = G.cyc_axis;
+    memset(R, 0, 9 * sizeof(float));
+    R[z][z] = 1.f;
+    R[x][x] = (float)c; R[x][y] = (float)-s;
+    R[y][x] = (float)s; R[y][y] = (float)c;
+}
+
 int app_copies(void) {
-    int ms[8], n = mirror_masks(ms) * rep_count(0) * rep_count(1) * rep_count(2);
+    int ms[8], n = mirror_masks(ms) * cyc_count() * rep_count(0) * rep_count(1) * rep_count(2);
     return CV_MIN(n, REP_MAX_DRAWN);
 }
 
-/* instance i: mirror mask and shift */
-static void copy_of(int i, int* mask, float off[3]) {
+/* instance i: mirror mask, cyclic sector and shift */
+static void copy_of(int i, int* mask, int* sector, float off[3]) {
     int ms[8], nm = mirror_masks(ms);
     *mask = ms[i % nm];
-    int r = i / nm;
+    int r = i / nm, nc = cyc_count();
+    *sector = r % nc;
+    r /= nc;
     off[0] = off[1] = off[2] = 0.f;
     for (int k = 0; k < 3; k++) {
         int n = rep_count(k), j = r % n;
@@ -301,22 +319,44 @@ static void copy_of(int i, int* mask, float off[3]) {
 }
 
 void app_copy_matrix(int i, float* M) {
-    int m; float off[3];
-    copy_of(i, &m, off);
-    sym_matrix(m, M);
-    for (int k = 0; k < 3; k++) M[12 + k] += off[k];    /* shift after the reflection */
+    int m, j; float off[3], S[16];
+    copy_of(i, &m, &j, off);
+    sym_matrix(m, S);
+    if (j) {                                            /* turn about the axis through cyc_o */
+        float R[3][3], T[16] = { 0 };
+        cyc_rot(j, R);
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) T[c * 4 + r] = R[r][c];
+            T[12 + r] = G.cyc_o[r] - (R[r][0] * G.cyc_o[0] + R[r][1] * G.cyc_o[1] + R[r][2] * G.cyc_o[2]);
+        }
+        T[15] = 1.f;
+        m4_mul(M, T, S);
+    } else {
+        memcpy(M, S, sizeof S);
+    }
+    for (int k = 0; k < 3; k++) M[12 + k] += off[k];    /* shift after the reflection and turn */
 }
 
-/* A world ray in the frame of instance i: undo the shift, then the reflection
-   (its own inverse). Neither changes lengths, so hit distances compare directly. */
+/* A world ray in the frame of instance i: undo the shift, the turn, then the
+   reflection (its own inverse). None changes lengths, so hit distances compare. */
 void copy_ray(int i, const float o[3], const float d[3], float mo[3], float md[3]) {
-    int m; float off[3];
-    copy_of(i, &m, off);
+    int m, j; float off[3], p[3], q[3];
+    copy_of(i, &m, &j, off);
+    for (int k = 0; k < 3; k++) { p[k] = o[k] - off[k]; q[k] = d[k]; }
+    if (j) {                                            /* R^T about cyc_o */
+        float R[3][3], a[3], b[3];
+        cyc_rot(j, R);
+        for (int k = 0; k < 3; k++) a[k] = p[k] - G.cyc_o[k];
+        for (int k = 0; k < 3; k++) {
+            b[k] = R[0][k] * q[0] + R[1][k] * q[1] + R[2][k] * q[2];
+            p[k] = G.cyc_o[k] + R[0][k] * a[0] + R[1][k] * a[1] + R[2][k] * a[2];
+        }
+        memcpy(q, b, sizeof q);
+    }
     for (int k = 0; k < 3; k++) {
         bool r = m >> k & 1;
-        float p = o[k] - off[k];
-        mo[k] = r ? 2.f * app_sym_plane(k) - p : p;
-        md[k] = r ? -d[k] : d[k];
+        mo[k] = r ? 2.f * app_sym_plane(k) - p[k] : p[k];
+        md[k] = r ? -q[k] : q[k];
     }
 }
 
@@ -324,6 +364,21 @@ void copy_ray(int i, const float o[3], const float d[3], float mo[3], float md[3
 static void sym_extend(v3* lo, v3* hi) {
     float* l = &lo->x; float* h = &hi->x;
     mirror_extend(l, h);
+    if (cyc_count() > 1) {                              /* all turned corners */
+        float L[3] = { l[0], l[1], l[2] }, H[3] = { h[0], h[1], h[2] };
+        for (int j = 1, n = cyc_count(); j < n; j++) {
+            float R[3][3];
+            cyc_rot(j, R);
+            for (int c = 0; c < 8; c++) {
+                float p[3] = { c & 1 ? H[0] : L[0], c & 2 ? H[1] : L[1], c & 4 ? H[2] : L[2] }, a[3];
+                for (int k = 0; k < 3; k++) a[k] = p[k] - G.cyc_o[k];
+                for (int k = 0; k < 3; k++) {
+                    float w = G.cyc_o[k] + R[k][0] * a[0] + R[k][1] * a[1] + R[k][2] * a[2];
+                    l[k] = fminf(l[k], w); h[k] = fmaxf(h[k], w);
+                }
+            }
+        }
+    }
     float add_lo[3] = { 0 }, add_hi[3] = { 0 };
     for (int k = 0; k < 3; k++) {
         if (rep_count(k) < 2) continue;

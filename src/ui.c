@@ -760,6 +760,35 @@ static void view_replicate(struct nk_context* ctx, float s, float row) {
     }
 }
 
+static void view_cyclic(struct nk_context* ctx, float s, float row) {
+    static const char* ax[3] = { "axis X", "axis Y", "axis Z" };
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "Draw the sector again turned about an axis, one copy per sector (static cyclic:\n"
+             "every copy shows the same values; vector and tensor components are not turned,\n"
+             "so pick cylindrical coordinates in Fields to compare them)");
+    bool ch = nk_checkbox_label(ctx, "Cyclic copies", &G.cyc_on);
+    int a = nk_combo(ctx, ax, 3, G.cyc_axis, (int)row, nk_vec2(120 * s, 3 * row + 20 * s));
+    if (a != G.cyc_axis) { G.cyc_axis = a; ch = true; }
+    nk_layout_row_dynamic(ctx, row, 2);
+    int n = G.cyc_n, sh = G.cyc_show;
+    tip(ctx, "Sectors in the full circle: the copy angle is 360 / n");
+    nk_property_int(ctx, "#sectors", 1, &n, 720, 1, 0.2f);
+    tip(ctx, "Sectors drawn, the model included");
+    nk_property_int(ctx, "#drawn", 1, &sh, CV_MAX(n, 1), 1, 0.2f);
+    if (n != G.cyc_n) { if (G.cyc_show == G.cyc_n) sh = n; G.cyc_n = n; ch = true; }
+    sh = CV_MIN(sh, G.cyc_n);
+    if (sh != G.cyc_show) { G.cyc_show = sh; ch = true; }
+    float st = CV_MAX(G.diag * 0.01f, 1e-6f);
+    static const char* nm[3] = { "#x0", "#y0", "#z0" };
+    nk_layout_row_dynamic(ctx, row, 3);
+    for (int k = 0; k < 3; k++) {
+        tip(ctx, "A point on the axis");
+        float v = nk_propertyf(ctx, nm[k], -1e30f, G.cyc_o[k], 1e30f, st, st * 0.1f);
+        if (v != G.cyc_o[k]) { G.cyc_o[k] = v; ch = true; }
+    }
+    if (ch) app_sym_changed();
+}
+
 /* ---- View: camera, colours, display, symmetry, cuts, the file */
 static void section_view(struct nk_context* ctx, float s, float row) {
     if (!nk_tree_state_push(ctx, NK_TREE_TAB, "View", (enum nk_collapse_states*)&G.tree[CV_TREE_VIEW])) return;
@@ -917,6 +946,11 @@ static void section_view(struct nk_context* ctx, float s, float row) {
 
     if (sub_push(ctx, "Replicate", CV_TREE_REPLICATE)) {
         view_replicate(ctx, s, row);
+        nk_tree_state_pop(ctx);
+    }
+
+    if (sub_push(ctx, "Cyclic symmetry", CV_TREE_CYCLIC)) {
+        view_cyclic(ctx, s, row);
         nk_tree_state_pop(ctx);
     }
 

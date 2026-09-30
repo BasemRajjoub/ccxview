@@ -29,7 +29,9 @@ not done yet.
   e.g. radial / hoop / axial stress. *(linth)* Fields > coordinates: cylindrical about
   X, Y or Z through a point; vectors (Dr Dt Da) and tensors (Srr Stt Saa Srt Sta Sar) of the
   .frd turned per node, invariants unchanged; saved in the view state.
-- [ ] **Cyclic symmetry expansion** beyond the NGRAPH sectors written by ccx. *(linth)*
+- [x] **Cyclic symmetry expansion** beyond the NGRAPH sectors written by ccx. *(linth)* View >
+  Cyclic symmetry: n sectors in 360°, how many drawn, axis and a point on it (static: the
+  copies show the same values; saved in the view state).
 - [ ] **ASME stress linearization** along a path through the thickness: membrane,
   bending, peak. Could build on the existing path plot. *(SergioP)*
 - [x] **Time / increment plots**: a value at a node or element against time or
