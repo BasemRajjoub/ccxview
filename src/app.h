@@ -172,11 +172,16 @@ typedef struct {
     char      keep_field[64];
     int       keep_comp;
     cv_camera keep_cam;
-    /* path plot: the field along the shortest surface path between two picked nodes */
+    /* path plot: the field between two picked nodes, on the straight line through the
+       solid (sampled, interpolated in the elements; the stress linearized along it) or
+       on the shortest path over the surface edges */
     uint32_t  path_a;                /* first node, UINT32_MAX none */
     bool      path_arm;              /* waiting for the second click */
-    uint32_t* path_nodes;  uint32_t path_n;
+    bool      path_surface;          /* along the surface instead of straight */
+    uint32_t  path_end[2];           /* the picked nodes */
+    uint32_t* path_nodes;  uint32_t path_n;   /* surface: the nodes; straight: path_n samples */
     float*    path_dist;
+    uint32_t* path_el;  float* path_w;        /* straight: element (UINT32_MAX outside) and 20 weights per sample */
     bool      path_open;             /* the plot window */
     /* history: the current field at one node (or element) over every step */
     bool      hist_open;
@@ -358,7 +363,9 @@ void app_reload(void);                   /* open the same file again, keeping ca
 void app_path_start(uint32_t node);      /* first node of the path; the next pick ends it */
 void app_path_end(uint32_t node);
 void app_path_clear(void);
-bool app_path_csv(const char* path);     /* dist, id, x, y, z, value per node */
+bool app_path_csv(const char* path);     /* dist, (id,) x, y, z, value per point */
+float app_path_value(uint32_t i);        /* the shown nodal field at path point i, NaN where none */
+void app_path_rebuild(void);             /* after path_surface changed */
 bool app_compare_open(const char* path); /* second .frd on the same mesh; false with a message when not */
 void app_compare_close(void);
 bool app_view_save(const char* path);    /* camera, step, field, layers -> a small INI */

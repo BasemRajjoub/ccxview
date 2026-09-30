@@ -1507,7 +1507,9 @@ static void window_probe(struct nk_context* ctx, float s, float row) {
     nk_layout_row_dynamic(ctx, row, 3);
     tip(ctx, "Node ids of this element, drawn in the view");
     nk_checkbox_label(ctx, "ids", &G.show_ids);
-    tip(ctx, G.path_arm ? "Now click the end node" : "Plot the field along the surface from this node to the next one you click");
+    tip(ctx, G.path_arm ? "Now click the end node"
+                        : "Plot the field on the straight line from this node to the next one you click, and linearize the "
+                          "stress along it (ASME): pick the two ends facing each other across the wall");
     if (nk_button_label(ctx, G.path_arm ? "path: end?" : "path from")) app_path_start(p->node);
     if (nk_button_label(ctx, "close")) G.probe_on = false;
     nk_layout_row_dynamic(ctx, row, 2);
@@ -1533,19 +1535,22 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
         char txt[200];
         nk_layout_row_template_begin(ctx, row);
         nk_layout_row_template_push_dynamic(ctx);
-        nk_layout_row_template_push_static(ctx, 90 * s);
+        nk_layout_row_template_push_static(ctx, 120 * s);
         nk_layout_row_template_push_static(ctx, 60 * s);
         nk_layout_row_template_end(ctx);
-        snprintf(txt, sizeof txt, "%s along %u nodes, length %.4g   (nodes %u .. %u)", G.has_field ? G.field_label : "no field",
-                 G.path_n, G.path_dist[G.path_n - 1], G.frd.node_id[G.path_nodes[0]], G.frd.node_id[G.path_nodes[G.path_n - 1]]);
+        if (G.path_surface)
+            snprintf(txt, sizeof txt, "%s, nodes %u .. %u over %u surface nodes, length %.4g", G.has_field ? G.field_label : "no field",
+                     G.frd.node_id[G.path_end[0]], G.frd.node_id[G.path_end[1]], G.path_n, G.path_dist[G.path_n - 1]);
+        else
+            snprintf(txt, sizeof txt, "%s, nodes %u .. %u, length %.4g", G.has_field ? G.field_label : "no field",
+                     G.frd.node_id[G.path_end[0]], G.frd.node_id[G.path_end[1]], G.path_dist[G.path_n - 1]);
+        tip(ctx, txt);
         nk_label(ctx, txt, NK_TEXT_LEFT);
-        tip(ctx, "Stress linearization (ASME VIII-2 5-A) on the straight line between the two end nodes:\n"
-                 "pick them facing each other across the wall");
-        if (nk_button_label(ctx, "Linearize")) {
-            app_lin_open(G.path_nodes[0], G.path_nodes[G.path_n - 1]);
-            nk_end(ctx);
-            return;
-        }
+        tip(ctx, "Follow the shortest path over the surface edges instead of the straight line\n"
+                 "(the straight line is also linearized, ASME VIII-2 5-A)");
+        bool surf = G.path_surface;
+        nk_checkbox_label(ctx, "along surface", &G.path_surface);
+        if (surf != G.path_surface) { app_path_rebuild(); if (!G.path_n) { nk_end(ctx); return; } }
         if (nk_button_label(ctx, "CSV")) {
             char vp[1100];
             snprintf(vp, sizeof vp, "%.*s_path.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
@@ -1559,7 +1564,7 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
             float lm = 60 * s, x0 = area.x + lm, y0 = area.y + 4 * s, w = area.w - lm - 6 * s, h = area.h - font->height - 8 * s;
             nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, P.plot_bg);
             float lo = 1e30f, hi = -1e30f, L = CV_MAX(G.path_dist[G.path_n - 1], 1e-30f);
-            for (uint32_t i = 0; i < G.path_n; i++) { float v = G.scalar[G.path_nodes[i]]; if (v == v) { lo = CV_MIN(lo, v); hi = CV_MAX(hi, v); } }
+            for (uint32_t i = 0; i < G.path_n; i++) { float v = app_path_value(i); if (v == v) { lo = CV_MIN(lo, v); hi = CV_MAX(hi, v); } }
             if (lo > hi) { lo = 0; hi = 1; }
             if (hi <= lo) hi = lo + 1;
             for (int k = 0; k <= 4; k++) {                  /* four bands of the value axis */
@@ -1569,15 +1574,16 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
                 nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
             }
             float px = 0, py = 0;
+            bool prev = false;
             for (uint32_t i = 0; i < G.path_n; i++) {
-                float v = G.scalar[G.path_nodes[i]];
+                float v = app_path_value(i);
                 float x = x0 + w * G.path_dist[i] / L, y = y0 + h * (1 - (v - lo) / (hi - lo));
-                if (v != v) continue;
-                if (i) nk_stroke_line(cv, px, py, x, y, 2.f, nk_rgb(255, 140, 30));
-                nk_fill_circle(cv, nk_rect(x - 2 * s, y - 2 * s, 4 * s, 4 * s), nk_rgb(255, 200, 120));
-                px = x; py = y;
+                if (v != v) { prev = false; continue; }          /* outside the solid: a gap */
+                if (prev) nk_stroke_line(cv, px, py, x, y, 2.f, nk_rgb(255, 140, 30));
+                if (G.path_surface) nk_fill_circle(cv, nk_rect(x - 2 * s, y - 2 * s, 4 * s, 4 * s), nk_rgb(255, 200, 120));
+                px = x; py = y; prev = true;
             }
-            snprintf(txt, sizeof txt, "distance along the surface: 0 .. %.4g", L);
+            snprintf(txt, sizeof txt, "distance along the %s: 0 .. %.4g", G.path_surface ? "surface" : "line", L);
             nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
         } else if (G.elem_mode) {
             nk_label(ctx, "(per-element mode: switch to nodal values to plot)", NK_TEXT_LEFT);
@@ -1597,7 +1603,7 @@ static void window_lin(struct nk_context* ctx, float s, float row, int fw, int f
     if (!G.lin_open) { was_open = false; return; }
     if (!was_open) nk_window_show(ctx, "Linearization", NK_SHOWN);
     was_open = true;
-    if (nk_begin(ctx, "Linearization", nk_rect(fw * 0.3f, fh * 0.4f, fw * 0.45f, fh * 0.5f),
+    if (nk_begin(ctx, "Linearization", nk_rect(fw * 0.5f, fh * 0.06f, fw * 0.45f, fh * 0.46f),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         char txt[200];
         const cv_field_desc* d = G.lin_fi >= 0 ? &G.frd.steps[G.step].fields[G.lin_fi] : NULL;

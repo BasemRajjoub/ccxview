@@ -410,28 +410,21 @@ void app_vectors_changed(void) { refresh_vectors(); }
 
 /* ---- path plot ------------------------------------------------------------------- */
 
+static void path_vertex(cv_fvec* pos, cv_fvec* disp, uint32_t n) {
+    float d[6];
+    app_node_disp6(n, d);
+    for (int k = 0; k < 3; k++) cv_push(*pos, G.frd.xyz[3 * (size_t)n + k]);
+    for (int k = 0; k < 6; k++) cv_push(*disp, d[k]);
+}
+
+/* the path (straight: its two ends) or, without one, the linearization line */
 void refresh_path(void) {
-    const float z[3] = { 0, 0, 0 };
-    if (G.lin_open && G.loaded) {                       /* the linearization line, straight */
-        float pos[6], disp[6];
-        memcpy(pos, G.frd.xyz + 3 * G.lin_a, 3 * sizeof(float)); memcpy(pos + 3, G.frd.xyz + 3 * G.lin_b, 3 * sizeof(float));
-        memcpy(disp, G.disp ? G.disp + 3 * G.lin_a : z, 3 * sizeof(float));
-        memcpy(disp + 3, G.disp ? G.disp + 3 * G.lin_b : z, 3 * sizeof(float));
-        cv_render_aux(CV_AUX_PATHLN, pos, disp, NULL, 2);
-        return;
-    }
-    if (!G.path_n || !G.loaded) { cv_render_aux(CV_AUX_PATHLN, NULL, NULL, NULL, 0); return; }
     cv_fvec pos = {0}, disp = {0};
-    for (uint32_t i = 0; i + 1 < G.path_n; i++) {
-        for (int e = 0; e < 2; e++) {
-            uint32_t n = G.path_nodes[i + e];
-            if (cv_reserve(pos, pos.n + 3) && cv_reserve(disp, disp.n + 3)) {
-                memcpy(pos.a + pos.n, G.frd.xyz + 3 * n, 3 * sizeof(float)); pos.n += 3;
-                memcpy(disp.a + disp.n, G.disp ? G.disp + 3 * n : z, 3 * sizeof(float)); disp.n += 3;
-            }
-        }
-    }
-    cv_render_aux(CV_AUX_PATHLN, pos.a, disp.a, NULL, (uint32_t)(pos.n / 3));
+    if (G.loaded && G.path_n && G.path_surface && G.path_nodes)
+        for (uint32_t i = 0; i + 1 < G.path_n; i++) { path_vertex(&pos, &disp, G.path_nodes[i]); path_vertex(&pos, &disp, G.path_nodes[i + 1]); }
+    else if (G.loaded && G.path_n) { path_vertex(&pos, &disp, G.path_end[0]); path_vertex(&pos, &disp, G.path_end[1]); }
+    else if (G.loaded && G.lin_open) { path_vertex(&pos, &disp, G.lin_a); path_vertex(&pos, &disp, G.lin_b); }
+    app_aux_upload(CV_AUX_PATHLN, &pos, &disp, NULL);
     cv_free_vec(pos); cv_free_vec(disp);
 }
 
@@ -576,17 +569,49 @@ static bool elem_locate(uint32_t e, const double p[3], double N[20]) {
     return in && cv_shape(t, (int)nn, xi, N);
 }
 
-/* the tensor at p interpolated in element e; false when outside it or a value is missing */
-static bool elem_tensor(uint32_t e, const double p[3], const float* S, float out[6]) {
-    double N[20], v[6] = { 0 };
-    if (!elem_locate(e, p, N)) return false;
+/* Where n points evenly on the straight line A..B sit in the solid: the element
+   (UINT32_MAX outside) and its 20 shape-function weights. Only the elements whose
+   box meets the line's box are tried, the last hit first. */
+static void line_locate(const float A[3], const float B[3], int n, uint32_t* el, float* w) {
+    float tol = 1e-4f * G.diag, lo[3], hi[3];
+    for (int k = 0; k < 3; k++) { lo[k] = fminf(A[k], B[k]) - tol; hi[k] = fmaxf(A[k], B[k]) + tol; }
+    CV_VEC(uint32_t) cand = {0};
+    for (uint32_t e = 0; e < G.frd.n_elems; e++) {
+        int t = G.frd.etype[e];
+        if (t < 1 || t > 6) continue;
+        float bl[3] = { INFINITY, INFINITY, INFINITY }, bh[3] = { -INFINITY, -INFINITY, -INFINITY };
+        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
+            const float* q = G.frd.xyz + 3 * (size_t)G.frd.conn[j];
+            for (int k = 0; k < 3; k++) { bl[k] = fminf(bl[k], q[k]); bh[k] = fmaxf(bh[k], q[k]); }
+        }
+        if (bh[0] < lo[0] || bh[1] < lo[1] || bh[2] < lo[2] || bl[0] > hi[0] || bl[1] > hi[1] || bl[2] > hi[2]) continue;
+        cv_push(cand, e);
+    }
+    uint32_t hint = UINT32_MAX;
+    for (int i = 0; i < n; i++) {
+        double f = n > 1 ? (double)i / (n - 1) : 0, p[3], N[20];
+        for (int k = 0; k < 3; k++) p[k] = A[k] + f * (B[k] - A[k]);
+        el[i] = UINT32_MAX;
+        bool ok = hint != UINT32_MAX && elem_locate(hint, p, N);
+        for (size_t c = 0; !ok && c < cand.n; c++) if ((ok = elem_locate(cand.a[c], p, N))) hint = cand.a[c];
+        if (!ok) continue;
+        el[i] = hint;
+        for (int k = 0; k < 20; k++) w[20 * i + k] = (float)N[k];
+    }
+    cv_free_vec(cand);
+}
+
+/* nc values per node interpolated in element e with weights w; false where one is missing */
+static bool line_interp(uint32_t e, const float* w, const float* v, int nc, float* out) {
+    if (e == UINT32_MAX) return false;
     int t = G.frd.etype[e];
     uint32_t b = G.frd.eoff[e], nn = G.frd.eoff[e + 1] - b;
+    double s[6] = { 0 };
     for (uint32_t i = 0; i < nn; i++) {
-        const float* s = S + 6 * (size_t)G.frd.conn[b + (uint32_t)cv_frd_node_pos(t, (int)nn, (int)i)];
-        for (int c = 0; c < 6; c++) v[c] += N[i] * s[c];
+        const float* q = v + nc * (size_t)G.frd.conn[b + (uint32_t)cv_frd_node_pos(t, (int)nn, (int)i)];
+        for (int c = 0; c < nc; c++) s[c] += w[i] * q[c];
     }
-    for (int c = 0; c < 6; c++) { if (v[c] != v[c]) return false; out[c] = (float)v[c]; }
+    for (int c = 0; c < nc; c++) { if (s[c] != s[c]) return false; out[c] = (float)s[c]; }
     return true;
 }
 
@@ -607,44 +632,25 @@ static void refresh_lin(void) {
     if (!v) return;
     float* tv = to_csys(d, &G.frd, v);
     const float* S = tv ? tv : v;
-    uint32_t ne = G.frd.n_elems;
-    float* box = malloc((size_t)CV_MAX(ne, 1) * 6 * sizeof(float));
+    static uint32_t el[LIN_N];
+    static float w[LIN_N * 20];
     G.lin_s = malloc(LIN_N * 6 * sizeof(float));
-    if (!box || !G.lin_s) { free(box); free(tv); free(G.lin_s); G.lin_s = NULL; return; }
-    float tol = 1e-4f * G.diag;
-    for (uint32_t e = 0; e < ne; e++) {
-        float* bx = box + 6 * (size_t)e;
-        bx[0] = bx[1] = bx[2] = INFINITY; bx[3] = bx[4] = bx[5] = -INFINITY;
-        int t = G.frd.etype[e];
-        if (t < 1 || t > 6) continue;
-        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
-            const float* q = G.frd.xyz + 3 * (size_t)G.frd.conn[j];
-            for (int k = 0; k < 3; k++) { bx[k] = fminf(bx[k], q[k] - tol); bx[3 + k] = fmaxf(bx[3 + k], q[k] + tol); }
-        }
-    }
-    uint32_t hint = UINT32_MAX;
+    if (!G.lin_s) { free(tv); return; }
+    line_locate(A, B, LIN_N, el, w);
     for (int i = 0; i < LIN_N; i++) {
-        double f = (double)i / (LIN_N - 1), p[3];
-        for (int k = 0; k < 3; k++) p[k] = A[k] + f * (B[k] - A[k]);
         float* o = G.lin_s + 6 * i;
-        bool ok = hint != UINT32_MAX && elem_tensor(hint, p, S, o);
-        for (uint32_t e = 0; !ok && e < ne; e++) {
-            const float* bx = box + 6 * (size_t)e;
-            if (p[0] < bx[0] || p[1] < bx[1] || p[2] < bx[2] || p[0] > bx[3] || p[1] > bx[4] || p[2] > bx[5]) continue;
-            if ((ok = elem_tensor(e, p, S, o))) hint = e;
-        }
-        if (!ok) for (int c = 0; c < 6; c++) o[c] = NAN;
+        if (!line_interp(el[i], w + 20 * i, S, 6, o)) for (int c = 0; c < 6; c++) o[c] = NAN;
     }
     G.lin_n = LIN_N;
-    free(box); free(tv);
+    free(tv);
 }
 
 void app_lin_open(uint32_t a, uint32_t b) {
     G.lin_open = true;
     G.lin_a = a; G.lin_b = b;
     G.lin_key[0] = 0;
-    app_path_clear();                                   /* the straight line replaces the path */
     refresh_lin();
+    refresh_path();
 }
 
 void app_lin_close(void) {
@@ -759,10 +765,16 @@ void app_clip_caps(bool on, const float n[3], float dd, float f1, float f2) {
     cv_free_vec(o.pos); cv_free_vec(o.disp); cv_free_vec(o.val);
 }
 
+static void path_free(void) {
+    free(G.path_nodes); free(G.path_dist); free(G.path_el); free(G.path_w);
+    G.path_nodes = NULL; G.path_dist = NULL; G.path_el = NULL; G.path_w = NULL; G.path_n = 0;
+}
+
 void app_path_clear(void) {
-    free(G.path_nodes); free(G.path_dist);
-    G.path_nodes = NULL; G.path_dist = NULL; G.path_n = 0;
+    bool had = G.path_n > 0;
+    path_free();
     G.path_a = UINT32_MAX; G.path_arm = false; G.path_open = false;
+    if (had) app_lin_close();                           /* the linearization belongs to the path */
     refresh_path();
 }
 
@@ -795,17 +807,49 @@ static uint32_t snap_to_edges(uint32_t n) {
     return best;
 }
 
-void app_path_end(uint32_t node) {
-    uint32_t a = snap_to_edges(G.path_a);
-    node = snap_to_edges(node);
-    G.path_arm = false;
-    if (a == UINT32_MAX || node == a) return;
-    if (!cv_path_find(&G.frd, &G.skin, a, node, &G.path_nodes, &G.path_n, &G.path_dist)) {
-        cv_msg_add(&G.msgs, 0, false, "no surface path between the two nodes");
-        return;
+#define PATH_SN 121                                 /* samples on a straight path */
+
+/* the path between path_end[0] and [1]: straight, sampled in the elements and
+   linearized at once, or over the surface edges */
+void app_path_rebuild(void) {
+    path_free();
+    uint32_t a = G.path_end[0], b = G.path_end[1];
+    if (G.path_surface) {
+        app_lin_close();
+        a = snap_to_edges(a); b = snap_to_edges(b);
+        if (a == b || !cv_path_find(&G.frd, &G.skin, a, b, &G.path_nodes, &G.path_n, &G.path_dist)) {
+            path_free();
+            cv_msg_add(&G.msgs, 0, false, "no surface path between the two nodes");
+        }
+    } else {
+        G.path_dist = malloc(PATH_SN * sizeof(float));
+        G.path_el = malloc(PATH_SN * sizeof(uint32_t));
+        G.path_w = malloc(PATH_SN * 20 * sizeof(float));
+        if (G.path_dist && G.path_el && G.path_w) {
+            const float *A = G.frd.xyz + 3 * (size_t)a, *B = G.frd.xyz + 3 * (size_t)b;
+            float L = sqrtf((B[0] - A[0]) * (B[0] - A[0]) + (B[1] - A[1]) * (B[1] - A[1]) + (B[2] - A[2]) * (B[2] - A[2]));
+            line_locate(A, B, PATH_SN, G.path_el, G.path_w);
+            for (int i = 0; i < PATH_SN; i++) G.path_dist[i] = L * i / (PATH_SN - 1);
+            G.path_n = PATH_SN;
+            app_lin_open(a, b);
+        } else path_free();
     }
-    G.path_open = true;
     refresh_path();
+}
+
+void app_path_end(uint32_t node) {
+    G.path_arm = false;
+    if (G.path_a == UINT32_MAX || node == G.path_a) return;
+    G.path_end[0] = G.path_a; G.path_end[1] = node;
+    app_path_rebuild();
+    G.path_open = G.path_n > 0;
+}
+
+float app_path_value(uint32_t i) {
+    if (!G.scalar || i >= G.path_n) return NAN;
+    if (G.path_surface) return G.path_nodes ? G.scalar[G.path_nodes[i]] : NAN;
+    float v;
+    return G.path_el && line_interp(G.path_el[i], G.path_w + 20 * i, G.scalar, 1, &v) ? v : NAN;
 }
 
 bool app_path_csv(const char* path) {
@@ -813,11 +857,15 @@ bool app_path_csv(const char* path) {
     FILE* o = fopen(path, "w");
     if (!o) return false;
     fprintf(o, "distance,id,x,y,z,%s\n", G.has_field ? G.field_label : "value");
+    const float *A = G.frd.xyz + 3 * (size_t)G.path_end[0], *B = G.frd.xyz + 3 * (size_t)G.path_end[1];
     for (uint32_t i = 0; i < G.path_n; i++) {
-        uint32_t n = G.path_nodes[i];
-        const float* p = G.frd.xyz + 3 * n;
-        float v = G.has_field && !G.elem_mode ? G.scalar[n] : NAN;
-        fprintf(o, "%.9g,%u,%.9g,%.9g,%.9g,", G.path_dist[i], G.frd.node_id[n], p[0], p[1], p[2]);
+        float p[3], f = G.path_n > 1 ? (float)i / (G.path_n - 1) : 0;
+        uint32_t id = 0;
+        if (G.path_surface) { memcpy(p, G.frd.xyz + 3 * (size_t)G.path_nodes[i], sizeof p); id = G.frd.node_id[G.path_nodes[i]]; }
+        else for (int k = 0; k < 3; k++) p[k] = A[k] + f * (B[k] - A[k]);
+        float v = G.has_field && !G.elem_mode ? app_path_value(i) : NAN;
+        if (id) fprintf(o, "%.9g,%u,%.9g,%.9g,%.9g,", G.path_dist[i], id, p[0], p[1], p[2]);
+        else fprintf(o, "%.9g,,%.9g,%.9g,%.9g,", G.path_dist[i], p[0], p[1], p[2]);
         if (v == v) fprintf(o, "%.9g\n", v); else fprintf(o, "nan\n");
     }
     return fclose(o) == 0;

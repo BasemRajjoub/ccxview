@@ -456,7 +456,11 @@ static void do_data(P* p, const char* s, const char* e) {
             else if (!strcmp(lab, "P") || !strcmp(lab, "PPOS") || !strcmp(lab, "PNEG")) face = 1;   /* a shell's face */
             if (!face) return;
             cv_dload d = { 0, (uint8_t)(face - 1), (float)v };
-            if (!each_elem(p, f[0], add_dload, &d)) p->bad_lines++;
+            if (each_elem(p, f[0], add_dload, &d)) return;
+            int si = !strcmp(lab, "P") ? find_surf(p, f[0]) : -1;   /* SURFACE, P, value: its faces */
+            if (si < 0) { p->bad_lines++; return; }
+            const vsurf* sf = &p->surfs.a[si];
+            for (size_t j = 0; j < sf->elem.n; j++) { d.face = sf->face.a[j]; add_dload(p, sf->elem.a[j], &d); }
             return;
         }
         case S_NODE: {
