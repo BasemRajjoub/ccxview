@@ -1568,11 +1568,22 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
         if (!ok) {
             int out = 0;
             for (int i = 0; i < G.lin_n; i++) out += G.lin_s[6 * i] != G.lin_s[6 * i];
-            nk_layout_row_dynamic(ctx, row, 1);
-            if (G.lin_n) snprintf(txt, sizeof txt, "The line leaves the solid at %d of %d points: pick end nodes facing each other across the wall", out, G.lin_n);
+            bool fix = G.lin_n && G.path_dir != 1 && G.path_end[0] < G.frd.n_nodes;   /* offer the line through the wall */
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_dynamic(ctx);
+            if (fix) nk_layout_row_template_push_static(ctx, 140 * s);
+            nk_layout_row_template_end(ctx);
+            if (G.lin_n) snprintf(txt, sizeof txt, "Leaves the solid (%d of %d points): not across the wall", out, G.lin_n);
             else snprintf(txt, sizeof txt, "Nothing to linearize: this step has no stress tensor");
-            tip(ctx, txt);
+            tip(ctx, G.lin_n ? "Linearization needs a straight line through the wall: pick a node on the opposite face,\n"
+                               "or go along the normal from the first node" : txt);
             nk_label_colored(ctx, txt, NK_TEXT_LEFT, nk_rgb(230, 120, 60));
+            if (fix) {
+                char b[64];
+                snprintf(b, sizeof b, "From node %u along the surface normal to the far face", G.frd.node_id[G.path_end[0]]);
+                tip(ctx, b);
+                if (nk_button_label(ctx, "along the normal")) { G.path_dir = 1; app_path_rebuild(); return; }
+            }
         }
         if (ok) {
             const float* s0 = G.lin_s; const float* s1 = G.lin_s + 6 * (G.lin_n - 1);
@@ -1785,11 +1796,19 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
                      "(the linearization always uses the straight line)");
             bool surf = G.path_surface;
             nk_checkbox_label(ctx, "along surface", &G.path_surface);
-            if (surf != G.path_surface) { app_path_rebuild(); if (!G.path_n) { nk_end(ctx); return; } }
+            if (surf != G.path_surface) {
+                if (G.path_surface) G.path_lin = false;     /* a surface path is plotted, not linearized */
+                app_path_rebuild();
+                if (!G.path_n) { nk_end(ctx); return; }
+            }
         }
         tip(ctx, "ASME VIII-2 5-A stress linearization on the straight line: membrane, bending and peak\n"
                  "(off: the field along the path). The line should cross the wall.");
-        nk_checkbox_label(ctx, "linearize", &G.path_lin);
+        if (nk_checkbox_label(ctx, "linearize", &G.path_lin) && G.path_lin && G.path_surface) {
+            G.path_surface = false;                         /* linearization is on the straight line */
+            app_path_rebuild();
+            if (!G.path_n) { nk_end(ctx); return; }
+        }
         if (G.path_lin) lin_quantity(ctx, s, row);
         nk_spacing(ctx, 1);
         tip(ctx, G.path_lin ? "Save the linearization to a CSV next to the result file" : "Save the path values to a CSV next to the result file");
