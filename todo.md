@@ -10,7 +10,8 @@ not done yet.
   and below the min get their own colours (e.g. grey / magenta) instead of the end
   colours of the map. *(linth)* Above light grey, below darker grey, both shown
   in the legend.
-- [x] **More colour maps**, rainbow / jet among them. *(Calc_em)* Jet and Inferno added; Rainbow,
+- [x] **More colour maps**, rainbow / jet among them. *(Calc_em)* Jet, Inferno and Rainbow desaturated
+  (xyont) added; Rainbow,
   Turbo, Viridis, Cool-warm, Heat were there already (legend grey = greyscale).
 - [ ] **Filled clip caps**: fill the cut where the clip plane goes through solid
   elements, instead of showing the open inside. *(Calc_em)*

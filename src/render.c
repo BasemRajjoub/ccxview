@@ -10,7 +10,8 @@ void cv_gl_enable_point_size(void);   /* sokol_impl.c: glEnable(GL_PROGRAM_POINT
    Viridis, Inferno and Turbo: the usual polynomial fits. Rainbow and Jet last, on
    purpose; later maps are appended so saved indices keep their meaning. */
 
-const char* const cv_cmap_names[CV_CMAP_N] = { "Fast", "Cool-warm", "Viridis", "Turbo", "Heat", "Rainbow", "Jet", "Inferno" };
+const char* const cv_cmap_names[CV_CMAP_N] = { "Fast", "Cool-warm", "Viridis", "Turbo", "Heat", "Rainbow", "Jet", "Inferno",
+                                               "Rainbow desat." };
 
 static const float kFast[32][3] = {
     {0.0549f,0.0549f,0.4706f},{0.1098f,0.1373f,0.5333f},{0.1490f,0.2118f,0.5961f},{0.1843f,0.2863f,0.6588f},
@@ -87,6 +88,17 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
             o[0] = clamp01(fminf(x - 1.5f, 4.5f - x));
             o[1] = clamp01(fminf(x - 0.5f, 3.5f - x));
             o[2] = clamp01(fminf(x + 0.5f, 2.5f - x));
+            return;
+        }
+        case CV_CMAP_RAINBOW_DESAT: {           /* ParaView's: the rainbow with darker, calmer ends */
+            static const float r[8][3] = {
+                {0.2784f,0.2784f,0.8588f}, {0.0f,0.0f,0.3608f}, {0.0f,1.0f,1.0f}, {0.0f,0.5020f,0.0f},
+                {1.0f,1.0f,0.0f}, {1.0f,0.3804f,0.0f}, {0.4196f,0.0f,0.0f}, {0.8784f,0.3020f,0.3020f},
+            };
+            float s = t * 7.f;
+            int i = (int)s; if (i > 6) i = 6;
+            float f = s - (float)i;
+            for (int k = 0; k < 3; k++) o[k] = r[i][k] + (r[i + 1][k] - r[i][k]) * f;
             return;
         }
         default: {

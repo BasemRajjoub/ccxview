@@ -902,6 +902,46 @@ static void panel_scene(struct nk_context* ctx, float s, float row) {
     nk_label_colored(ctx, "ctrl +/-/0: UI size", NK_TEXT_LEFT, P.dim);
 }
 
+/* a strip of colour map cm across r */
+static void cmap_strip(struct nk_command_buffer* cv, struct nk_rect r, int cm) {
+    enum { NS = 24 };
+    for (int i = 0; i < NS; i++) {
+        float c[3];
+        cv_colormap_rgb(cm, ((float)i + 0.5f) / NS, c);
+        nk_fill_rect(cv, nk_rect(r.x + r.w * i / NS, r.y, r.w / NS + 1, r.h), 0, nk_rgb_f(c[0], c[1], c[2]));
+    }
+}
+
+/* The colour map picker: each map shows as a strip beside its name, the closed
+   box too -- a name alone ("Fast") says little about what the colours are. */
+static void cmap_combo(struct nk_context* ctx, float s, float row) {
+    struct nk_command_buffer* wc = nk_window_get_canvas(ctx);
+    struct nk_rect b = nk_widget_bounds(ctx);
+    const struct nk_user_font* f = ctx->style.font;
+    float sw = 40 * s, spw = f->width(f->userdata, f->height, " ", 1);
+    char lab[64];
+    int ns = spw > 0 ? (int)ceilf((sw + 6 * s) / spw) : 0;
+    snprintf(lab, sizeof lab, "%*s%s", CV_MIN(ns, 30), "", cv_cmap_names[G.cmap]);
+    tip(ctx, "Colour map for the field");
+    bool open = nk_combo_begin_label(ctx, lab, nk_vec2(230 * s, CV_CMAP_N * (row + ctx->style.window.spacing.y) + 12 * s));
+    if (open) {
+        for (int cm = 0; cm < CV_CMAP_N; cm++) {
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_static(ctx, 48 * s);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_end(ctx);
+            struct nk_rect r;
+            if (nk_widget(&r, ctx) != NK_WIDGET_INVALID)
+                cmap_strip(nk_window_get_canvas(ctx), nk_rect(r.x, r.y + 3, r.w, r.h - 6), cm);
+            if (nk_combo_item_label(ctx, cv_cmap_names[cm], NK_TEXT_LEFT) && cm != G.cmap) app_colormap(cm);
+        }
+        nk_combo_end(ctx);
+    }
+    /* over the closed box, after it is drawn (and after an open list, which it does not overlap) */
+    float pad = ctx->style.combo.content_padding.x + 2 * s, h = b.h * 0.5f;
+    cmap_strip(wc, nk_rect(b.x + pad, b.y + (b.h - h) * 0.5f, sw, h), G.cmap);
+}
+
 /* Two lines: what the shape does (deform, animate) above, how the field
    looks (colormap, bands, range) below. Camera controls live in the View tree. */
 static void panel_toolbar(struct nk_context* ctx, float s, float row) {
@@ -939,28 +979,8 @@ static void panel_toolbar(struct nk_context* ctx, float s, float row) {
 
     /* line 2: colours */
     nk_layout_row_begin(ctx, NK_STATIC, row, 8);
-    nk_layout_row_push(ctx, 110 * s);
-    tip(ctx, "Colour map for the field");
-    if (nk_combo_begin_label(ctx, cv_cmap_names[G.cmap], nk_vec2(170 * s, CV_CMAP_N * (row + ctx->style.window.spacing.y) + 12 * s))) {
-        for (int cm = 0; cm < CV_CMAP_N; cm++) {
-            nk_layout_row_template_begin(ctx, row);
-            nk_layout_row_template_push_static(ctx, 48 * s);
-            nk_layout_row_template_push_dynamic(ctx);
-            nk_layout_row_template_end(ctx);
-            struct nk_rect r;
-            if (nk_widget(&r, ctx) != NK_WIDGET_INVALID) {        /* a strip of the map */
-                struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
-                enum { NS = 16 };
-                for (int i = 0; i < NS; i++) {
-                    float c[3];
-                    cv_colormap_rgb(cm, ((float)i + 0.5f) / NS, c);
-                    nk_fill_rect(cv, nk_rect(r.x + r.w * i / NS, r.y + 3, r.w / NS + 1, r.h - 6), 0, nk_rgb_f(c[0], c[1], c[2]));
-                }
-            }
-            if (nk_combo_item_label(ctx, cv_cmap_names[cm], NK_TEXT_LEFT) && cm != G.cmap) app_colormap(cm);
-        }
-        nk_combo_end(ctx);
-    }
+    nk_layout_row_push(ctx, 150 * s);
+    cmap_combo(ctx, s, row);
     /* the combo shows the usual counts; any other number (legend settings) shows as "N bands" */
     static const int band_vals[] = { 0, 6, 12, 24 };
     char custom[24];
