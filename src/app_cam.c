@@ -11,12 +11,73 @@ static v3 to_frame(v3 w) { return G.up_z ? v3_make(w.x, w.z, -w.y) : w; }
 v3 cam_up_axis(void) { return G.up_z ? v3_make(0, 0, 1) : v3_make(0, 1, 0); }
 
 void cam_basis(const cv_camera* c, v3* eye, v3* fwd, v3* right, v3* up) {
+    if (G.orbit_free && v3_dot(c->fdir, c->fdir) > 0.5f && v3_dot(c->fup, c->fup) > 0.5f) {
+        *eye = v3_add(c->target, v3_scale(c->fdir, c->dist));
+        *fwd = v3_scale(c->fdir, -1.f);
+        *right = v3_norm(v3_cross(*fwd, c->fup));
+        *up = v3_cross(*right, *fwd);
+        return;
+    }
     float cp = cosf(c->pitch), sp = sinf(c->pitch), cy = cosf(c->yaw), sy = sinf(c->yaw);
     v3 dir = to_world(v3_make(cp * sy, sp, cp * cy));  /* target -> eye */
     *eye = v3_add(c->target, v3_scale(dir, c->dist));
     *fwd = v3_scale(dir, -1.f);
     *right = v3_norm(v3_cross(*fwd, cam_up_axis()));
     *up = v3_cross(*right, *fwd);
+}
+
+/* the free orientation from the turntable angles */
+static void free_from_turntable(void) {
+    bool f = G.orbit_free;
+    G.orbit_free = false;
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    G.orbit_free = f;
+    G.cam.fdir = v3_scale(fwd, -1.f);
+    G.cam.fup = up;
+}
+
+/* v turned by angle a about unit axis k (Rodrigues) */
+static v3 rot(v3 v, v3 k, float a) {
+    float c = cosf(a), s = sinf(a);
+    return v3_add(v3_add(v3_scale(v, c), v3_scale(v3_cross(k, v), s)), v3_scale(k, v3_dot(k, v) * (1.f - c)));
+}
+
+/* A drag: turntable turns about the world up axis and tilts, stopping short
+   of the poles; free orbit turns about the screen's vertical and horizontal
+   axes, so the model can go any way round (the up axis is not kept). */
+void cam_orbit(float yaw, float pitch) {
+    if (!G.orbit_free) {
+        G.cam.yaw += yaw;
+        G.cam.pitch += pitch;
+        const float lim = 89.9f * 3.14159265f / 180.f;
+        if (G.cam.pitch > lim) G.cam.pitch = lim;
+        if (G.cam.pitch < -lim) G.cam.pitch = -lim;
+        return;
+    }
+    if (!(v3_dot(G.cam.fdir, G.cam.fdir) > 0.5f)) free_from_turntable();
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    v3 d = rot(rot(G.cam.fdir, up, yaw), right, -pitch);
+    v3 u = rot(rot(up, up, yaw), right, -pitch);
+    d = v3_norm(d);
+    u = v3_norm(v3_sub(u, v3_scale(d, v3_dot(u, d))));     /* keep them square */
+    G.cam.fdir = d; G.cam.fup = u;
+}
+
+/* the turntable angles nearest a free orientation (its roll is lost) */
+static void turntable_from_free(void) {
+    v3 f = to_frame(G.cam.fdir);
+    float y = CV_MAX(-1.f, CV_MIN(1.f, f.y));
+    const float lim = 89.9f * 3.14159265f / 180.f;
+    G.cam.pitch = CV_MAX(-lim, CV_MIN(lim, asinf(y)));
+    if (fabsf(y) < 0.999f) G.cam.yaw = atan2f(f.x, f.z);
+}
+
+void app_set_orbit_free(bool on) {
+    if (on == G.orbit_free) return;
+    if (on) free_from_turntable(); else if (v3_dot(G.cam.fdir, G.cam.fdir) > 0.5f) turntable_from_free();
+    G.orbit_free = on;
 }
 
 static int cmp_float(const void* a, const void* b) {
@@ -210,6 +271,7 @@ void app_view(int p) {
     } else {                                   /* iso: from above, turned about the up axis */
         G.cam.yaw = 35 * d2r; G.cam.pitch = 30 * d2r;
     }
+    free_from_turntable();                     /* presets set the free orientation too */
     app_fit();
 }
 

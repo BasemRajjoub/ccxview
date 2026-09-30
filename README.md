@@ -63,7 +63,7 @@ Or Open... (Ctrl+O), drop a file on the window, or type a path in the box.
 
 | Input | Action |
 |---|---|
-| left drag / right drag / wheel | orbit / pan / zoom (about the point under the cursor; View panel: up axis Y or Z, cursor pivot on/off) |
+| left drag / right drag / wheel | orbit / pan / zoom (about the point under the cursor; View panel: up axis Y or Z, turntable or free rotation, cursor pivot on/off) |
 | click / double-click | probe / zoom to element |
 | F, R, 1..6 | fit, reset, look from ±X ±Y ±Z |
 | space, ← → | play, step |

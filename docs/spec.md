@@ -113,7 +113,7 @@ Headless modules (`frd`, `mesh`, `field`) never include sokol or Nuklear.
 - Mouse: left-drag orbit, right/middle-drag pan, wheel zoom, click = probe
   (ray-cast against the skin → element + nearest node + value). Orbit turns
   about the grabbed surface point and the wheel zooms toward the cursor (both
-  optional); the turntable axis is world Y or Z.
+  optional); the turntable axis is world Y or Z, or free orbit (no fixed up).
 - Open: command-line argument, drag & drop, or the path box.
 
 ## Errors

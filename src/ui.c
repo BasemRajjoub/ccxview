@@ -671,6 +671,11 @@ static void section_view(struct nk_context* ctx, float s, float row) {
             if (nk_option_label(ctx, "Z", G.up_z)) G.up_z = true;
             if (G.up_z != z0) app_view(CV_VIEW_ISO);
         }
+        nk_label(ctx, "Rotation", NK_TEXT_LEFT);
+        tip(ctx, "Turntable: the up axis stays vertical on screen, like FreeCAD's turntable");
+        if (nk_option_label(ctx, "turntable", !G.orbit_free)) app_set_orbit_free(false);
+        tip(ctx, "Free: drag turns the model any way round (trackball), the up axis is not kept.\nA view preset (1-6, Iso) sets it upright again");
+        if (nk_option_label(ctx, "free", G.orbit_free)) app_set_orbit_free(true);
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, "Drag rotates about the point of the model you grab;\noff, or when grabbing empty space, about the view centre");
         nk_checkbox_label(ctx, "Rotate about the cursor", &G.orbit_cursor);

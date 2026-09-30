@@ -23,7 +23,8 @@ enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, 
 
 typedef struct {
     v3    target;
-    float dist, yaw, pitch, fovy;
+    float dist, yaw, pitch, fovy;    /* turntable: yaw / pitch about the up axis */
+    v3    fdir, fup;                 /* free orbit: unit target -> eye, and the screen's up */
     bool  ortho;
 } cv_camera;
 
@@ -202,6 +203,7 @@ typedef struct {
     bool      sym[3];                /* mirror copies across a plane normal to X, Y, Z */
     int       sym_at[3];             /* CV_SYM_*: where that plane sits */
     bool      up_z;                  /* turntable about world Z instead of Y */
+    bool      orbit_free;            /* free orbit: dragging turns about the screen's axes, no fixed up */
     bool      orbit_cursor;          /* drag rotates about the model point under the cursor */
     bool      zoom_cursor;           /* the wheel zooms toward the cursor */
     bool      flight;                /* free flight: WASD + mouse look */
@@ -380,6 +382,8 @@ void app_legend_fmt(char* out, size_t n, double v);   /* a legend number in the 
 /* camera helpers */
 void cam_basis(const cv_camera* c, v3* eye, v3* fwd, v3* right, v3* up);
 v3   cam_up_axis(void);                  /* world +Y or +Z */
+void cam_orbit(float yaw, float pitch);  /* turn by a drag: turntable or free, per G.orbit_free */
+void app_set_orbit_free(bool on);        /* switch, keeping the current view */
 bool app_cursor_point(float px, float py, v3* out, bool* on_model);
 
 #endif

@@ -573,11 +573,7 @@ static void event(const sapp_event* ev) {
                     v3 eye0, f0, r0, u0;
                     cam_basis(&G.cam, &eye0, &f0, &r0, &u0);
                     float k = G.flight ? 0.004f : 0.008f;       /* looking wants finer control */
-                    G.cam.yaw -= dx * k;
-                    G.cam.pitch += dy * k;
-                    const float lim = 89.9f * 3.14159265f / 180.f;
-                    if (G.cam.pitch > lim) G.cam.pitch = lim;
-                    if (G.cam.pitch < -lim) G.cam.pitch = -lim;
+                    cam_orbit(-dx * k, dy * k);
                     if (G.flight) {                               /* turn about the eye, not the target */
                         v3 eye1, f1, r1, u1;
                         cam_basis(&G.cam, &eye1, &f1, &r1, &u1);

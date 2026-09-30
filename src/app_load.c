@@ -576,6 +576,9 @@ bool app_view_save(const char* path) {
     cv_cfg_set_float(&c, "cam_yaw", G.cam.yaw); cv_cfg_set_float(&c, "cam_pitch", G.cam.pitch);
     cv_cfg_set_float(&c, "cam_dist", G.cam.dist); cv_cfg_set_bool(&c, "cam_ortho", G.cam.ortho);
     cv_cfg_set_bool(&c, "cam_up_z", G.up_z);           /* yaw and pitch are about this axis */
+    cv_cfg_set_bool(&c, "cam_free", G.orbit_free);     /* free orbit: the direction and up below rule */
+    cv_cfg_set_float(&c, "cam_dx", G.cam.fdir.x); cv_cfg_set_float(&c, "cam_dy", G.cam.fdir.y); cv_cfg_set_float(&c, "cam_dz", G.cam.fdir.z);
+    cv_cfg_set_float(&c, "cam_ux", G.cam.fup.x); cv_cfg_set_float(&c, "cam_uy", G.cam.fup.y); cv_cfg_set_float(&c, "cam_uz", G.cam.fup.z);
     cv_cfg_set_float(&c, "cam_x", G.cam.target.x); cv_cfg_set_float(&c, "cam_y", G.cam.target.y); cv_cfg_set_float(&c, "cam_z", G.cam.target.z);
     cv_cfg_set_int(&c, "step", G.step + 1);
     cv_cfg_set(&c, "field", G.field_src == 0 ? G.field_name : "");
@@ -638,6 +641,14 @@ bool app_view_load(const char* path) {
     G.up_z = cv_cfg_get_bool(&c, "cam_up_z", false);   /* older views: Y up */
     G.cam.yaw = cv_cfg_get_float(&c, "cam_yaw", G.cam.yaw); G.cam.pitch = cv_cfg_get_float(&c, "cam_pitch", G.cam.pitch);
     G.cam.dist = cv_cfg_get_float(&c, "cam_dist", G.cam.dist); G.cam.ortho = cv_cfg_get_bool(&c, "cam_ortho", G.cam.ortho);
+    G.orbit_free = false;                               /* the angles as saved, then the free orientation over them */
+    app_set_orbit_free(true);
+    G.orbit_free = cv_cfg_get_bool(&c, "cam_free", false);
+    if (G.orbit_free) {
+        v3 d = v3_make(cv_cfg_get_float(&c, "cam_dx", G.cam.fdir.x), cv_cfg_get_float(&c, "cam_dy", G.cam.fdir.y), cv_cfg_get_float(&c, "cam_dz", G.cam.fdir.z));
+        v3 u = v3_make(cv_cfg_get_float(&c, "cam_ux", G.cam.fup.x), cv_cfg_get_float(&c, "cam_uy", G.cam.fup.y), cv_cfg_get_float(&c, "cam_uz", G.cam.fup.z));
+        if (v3_dot(d, d) > 0.5f && v3_dot(u, u) > 0.5f) { G.cam.fdir = v3_norm(d); G.cam.fup = v3_norm(u); }
+    }
     G.cam.target = v3_make(cv_cfg_get_float(&c, "cam_x", G.cam.target.x), cv_cfg_get_float(&c, "cam_y", G.cam.target.y), cv_cfg_get_float(&c, "cam_z", G.cam.target.z));
     view_bounds();
     cv_cfg_free(&c);
