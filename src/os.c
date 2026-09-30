@@ -187,6 +187,17 @@ void cv_attach_console(void) {
     freopen("CONOUT$", "w", stderr);
 }
 
+void cv_set_window_icon(const void* hwnd) {
+    HINSTANCE mod = GetModuleHandleW(NULL);
+    static const struct { int metric_x, metric_y; WPARAM which; } k[2] = {
+        { SM_CXICON, SM_CYICON, ICON_BIG }, { SM_CXSMICON, SM_CYSMICON, ICON_SMALL } };
+    for (int i = 0; i < 2 && hwnd; i++) {
+        HANDLE ic = LoadImageW(mod, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(k[i].metric_x),
+                               GetSystemMetrics(k[i].metric_y), LR_DEFAULTCOLOR);
+        if (ic) SendMessageW((HWND)hwnd, WM_SETICON, k[i].which, (LPARAM)ic);
+    }
+}
+
 #else  /* POSIX */
 #include <fcntl.h>
 #include <pthread.h>

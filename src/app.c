@@ -40,6 +40,9 @@ unsigned char* cv_read_pixels_region(int x, int y, int w, int h, int fb_h);
 void cv_snk_before_shutdown(void);
 
 static void init(void) {
+#ifdef _WIN32
+    cv_set_window_icon(sapp_win32_get_hwnd());
+#endif
     sg_setup(&(sg_desc){ .environment = sglue_environment(), .logger.func = app_log });
     snk_setup(&(snk_desc_t){
         .dpi_scale = 1.0f,               /* we work in framebuffer pixels; ui.c scales */

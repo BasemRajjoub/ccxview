@@ -1,0 +1,2 @@
+/* ccxview Windows resources: the application icon (scripts/make_icon.py draws it) */
+1 ICON "ccxview.ico"

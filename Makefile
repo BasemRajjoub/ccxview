@@ -105,6 +105,7 @@ samples: build/gen_frd
 # ---- Windows cross build (mingw-w64). MINGW names the compiler; MINGW_LDFLAGS adds
 # e.g. -L<dir of libmcfgthread.a> on toolchains that need it (nixpkgs).
 MINGW ?= x86_64-w64-mingw32-gcc
+WINDRES ?= $(MINGW:gcc=windres)
 MINGW_LDFLAGS ?=
 # GUI subsystem: no cmd window behind the viewer. WIN_CONSOLE=1 keeps one (debugging).
 WIN_SUBSYS = $(if $(filter 1,$(WIN_CONSOLE)),-mconsole,-mwindows)
@@ -113,10 +114,13 @@ win: build/win/ccxview.exe
 build/win/sokol_impl.o: src/sokol_impl.c
 	@mkdir -p build/win
 	$(MINGW) -O2 -std=c99 -w -DSOKOL_GLCORE -Ivendor -c $< -o $@
-build/win/ccxview.exe: $(WIN_SRC) build/win/sokol_impl.o src/*.h
+build/win/icon.o: res/ccxview.rc res/ccxview.ico
+	@mkdir -p build/win
+	$(WINDRES) $< -O coff -o $@
+build/win/ccxview.exe: $(WIN_SRC) build/win/sokol_impl.o build/win/icon.o src/*.h
 	$(MINGW) -O2 -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
 	    -Wno-format-truncation -Wno-cast-function-type -DSOKOL_GLCORE -Ivendor \
-	    $(WIN_SRC) build/win/sokol_impl.o -o $@ $(WIN_SUBSYS) $(MINGW_LDFLAGS) -static -static-libgcc \
+	    $(WIN_SRC) build/win/sokol_impl.o build/win/icon.o -o $@ $(WIN_SUBSYS) $(MINGW_LDFLAGS) -static -static-libgcc \
 	    -lkernel32 -luser32 -lgdi32 -lshell32 -lopengl32 -lcomdlg32 -lole32
 	@echo "built $@ (test with: wine $@ model.frd)"
 

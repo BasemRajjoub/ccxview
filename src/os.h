@@ -45,6 +45,8 @@ uint64_t cv_file_mtime(const char* path);    /* seconds since the epoch, 0 if un
 /* Windows GUI build: send stdout/stderr to the parent's console when there is one. */
 #ifdef _WIN32
 void cv_attach_console(void);
+/* the window's title bar and taskbar icon from the exe's icon resource (res/ccxview.rc) */
+void cv_set_window_icon(const void* hwnd);
 #endif
 
 #endif
