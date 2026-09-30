@@ -1,6 +1,7 @@
 /* app_field.c -- decoded-field cache, colourings, displacement and the current
    step: everything that turns .frd values into what the renderer draws. */
 #include "app_int.h"
+#include "gauss.h"
 #include "path.h"
 #include <math.h>
 
@@ -409,9 +410,17 @@ void app_vectors_changed(void) { refresh_vectors(); }
 /* ---- path plot ------------------------------------------------------------------- */
 
 void refresh_path(void) {
+    const float z[3] = { 0, 0, 0 };
+    if (G.lin_open && G.loaded) {                       /* the linearization line, straight */
+        float pos[6], disp[6];
+        memcpy(pos, G.frd.xyz + 3 * G.lin_a, 3 * sizeof(float)); memcpy(pos + 3, G.frd.xyz + 3 * G.lin_b, 3 * sizeof(float));
+        memcpy(disp, G.disp ? G.disp + 3 * G.lin_a : z, 3 * sizeof(float));
+        memcpy(disp + 3, G.disp ? G.disp + 3 * G.lin_b : z, 3 * sizeof(float));
+        cv_render_aux(CV_AUX_PATHLN, pos, disp, NULL, 2);
+        return;
+    }
     if (!G.path_n || !G.loaded) { cv_render_aux(CV_AUX_PATHLN, NULL, NULL, NULL, 0); return; }
     cv_fvec pos = {0}, disp = {0};
-    const float z[3] = { 0, 0, 0 };
     for (uint32_t i = 0; i + 1 < G.path_n; i++) {
         for (int e = 0; e < 2; e++) {
             uint32_t n = G.path_nodes[i + e];
@@ -505,6 +514,174 @@ bool app_hist_csv(const char* path) {
     for (int i = 0; i < G.hist_n; i++) {
         fprintf(o, "%d,%.9g,", G.hist_step[i] + 1, G.hist_t[i]);
         if (G.hist_v[i] == G.hist_v[i]) fprintf(o, "%.9g\n", G.hist_v[i]); else fprintf(o, "nan\n");
+    }
+    return fclose(o) == 0;
+}
+
+/* ---- stress linearization: a tensor along a straight line through the solid ------
+   Sampled at LIN_N points by locating each in a solid element (Newton on the shape
+   functions) and interpolating the nodal values there. */
+
+#define LIN_N 41
+
+/* the tensor linearized: the field shown when it is an .frd tensor, else STRESS */
+static int lin_field(void) {
+    int fi = G.field_src == 0 ? find_field(G.step, G.field_name) : -1;
+    if (fi >= 0 && cv_tensor_order(&G.frd.steps[G.step].fields[fi]) == 1) return fi;
+    fi = find_field(G.step, "STRESS");
+    return fi >= 0 && cv_tensor_order(&G.frd.steps[G.step].fields[fi]) == 1 ? fi : -1;
+}
+
+/* natural coordinates of p in solid element e; N: its shape functions there */
+static bool elem_locate(uint32_t e, const double p[3], double N[20]) {
+    int t = G.frd.etype[e];
+    uint32_t b = G.frd.eoff[e], nn = G.frd.eoff[e + 1] - b;
+    if (t < 1 || t > 6 || nn > 20) return false;
+    double X[20][3], xi[3];
+    for (uint32_t i = 0; i < nn; i++) {
+        const float* q = G.frd.xyz + 3 * (size_t)G.frd.conn[b + (uint32_t)cv_frd_node_pos(t, (int)nn, (int)i)];
+        for (int k = 0; k < 3; k++) X[i][k] = q[k];
+    }
+    bool tet = t == 3 || t == 6, wedge = t == 2 || t == 5;
+    xi[0] = xi[1] = tet ? 0.25 : wedge ? 1.0 / 3 : 0; xi[2] = tet ? 0.25 : 0;
+    for (int it = 0; it < 30; it++) {
+        double f[3], J[3][3];
+        for (int c = -1; c < 3; c++) {                  /* x(xi) and its derivatives */
+            double y[3] = { xi[0], xi[1], xi[2] }, x[3] = { 0, 0, 0 };
+            if (c >= 0) y[c] += 1e-6;
+            if (!cv_shape(t, (int)nn, y, N)) return false;
+            for (uint32_t i = 0; i < nn; i++) for (int k = 0; k < 3; k++) x[k] += N[i] * X[i][k];
+            if (c < 0) for (int k = 0; k < 3; k++) f[k] = x[k] - p[k];
+            else for (int k = 0; k < 3; k++) J[k][c] = (x[k] - p[k] - f[k]) / 1e-6;
+        }
+        double det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1]) - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
+                   + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
+        if (!(fabs(det) > 1e-300)) return false;
+        double d[3];
+        for (int c = 0; c < 3; c++) {                   /* Cramer: J d = -f */
+            double A[3][3];
+            memcpy(A, J, sizeof A);
+            for (int k = 0; k < 3; k++) A[k][c] = -f[k];
+            d[c] = (A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0])
+                  + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0])) / det;
+        }
+        for (int k = 0; k < 3; k++) xi[k] = CV_MAX(-3.0, CV_MIN(3.0, xi[k] + d[k]));
+        if (fabs(d[0]) + fabs(d[1]) + fabs(d[2]) < 1e-10) break;
+    }
+    const double e1 = 1e-3;
+    bool in = tet   ? xi[0] >= -e1 && xi[1] >= -e1 && xi[2] >= -e1 && xi[0] + xi[1] + xi[2] <= 1 + e1
+            : wedge ? xi[0] >= -e1 && xi[1] >= -e1 && xi[0] + xi[1] <= 1 + e1 && fabs(xi[2]) <= 1 + e1
+                    : fabs(xi[0]) <= 1 + e1 && fabs(xi[1]) <= 1 + e1 && fabs(xi[2]) <= 1 + e1;
+    return in && cv_shape(t, (int)nn, xi, N);
+}
+
+/* the tensor at p interpolated in element e; false when outside it or a value is missing */
+static bool elem_tensor(uint32_t e, const double p[3], const float* S, float out[6]) {
+    double N[20], v[6] = { 0 };
+    if (!elem_locate(e, p, N)) return false;
+    int t = G.frd.etype[e];
+    uint32_t b = G.frd.eoff[e], nn = G.frd.eoff[e + 1] - b;
+    for (uint32_t i = 0; i < nn; i++) {
+        const float* s = S + 6 * (size_t)G.frd.conn[b + (uint32_t)cv_frd_node_pos(t, (int)nn, (int)i)];
+        for (int c = 0; c < 6; c++) v[c] += N[i] * s[c];
+    }
+    for (int c = 0; c < 6; c++) { if (v[c] != v[c]) return false; out[c] = (float)v[c]; }
+    return true;
+}
+
+static void refresh_lin(void) {
+    if (!G.lin_open || !G.loaded) return;
+    int fi = lin_field();
+    char key[200];
+    snprintf(key, sizeof key, "%d|%d|%d|%g|%g|%g|%u|%u", G.step, fi, G.csys, G.csys_o[0], G.csys_o[1], G.csys_o[2], G.lin_a, G.lin_b);
+    if (!strcmp(key, G.lin_key)) return;
+    snprintf(G.lin_key, sizeof G.lin_key, "%s", key);
+    free(G.lin_s); G.lin_s = NULL; G.lin_n = 0;
+    G.lin_fi = fi;
+    const float *A = G.frd.xyz + 3 * (size_t)G.lin_a, *B = G.frd.xyz + 3 * (size_t)G.lin_b;
+    G.lin_t = sqrtf((B[0] - A[0]) * (B[0] - A[0]) + (B[1] - A[1]) * (B[1] - A[1]) + (B[2] - A[2]) * (B[2] - A[2]));
+    if (fi < 0) return;
+    const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
+    const float* v = cache_get(G.step, fi);
+    if (!v) return;
+    float* tv = to_csys(d, &G.frd, v);
+    const float* S = tv ? tv : v;
+    uint32_t ne = G.frd.n_elems;
+    float* box = malloc((size_t)CV_MAX(ne, 1) * 6 * sizeof(float));
+    G.lin_s = malloc(LIN_N * 6 * sizeof(float));
+    if (!box || !G.lin_s) { free(box); free(tv); free(G.lin_s); G.lin_s = NULL; return; }
+    float tol = 1e-4f * G.diag;
+    for (uint32_t e = 0; e < ne; e++) {
+        float* bx = box + 6 * (size_t)e;
+        bx[0] = bx[1] = bx[2] = INFINITY; bx[3] = bx[4] = bx[5] = -INFINITY;
+        int t = G.frd.etype[e];
+        if (t < 1 || t > 6) continue;
+        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
+            const float* q = G.frd.xyz + 3 * (size_t)G.frd.conn[j];
+            for (int k = 0; k < 3; k++) { bx[k] = fminf(bx[k], q[k] - tol); bx[3 + k] = fmaxf(bx[3 + k], q[k] + tol); }
+        }
+    }
+    uint32_t hint = UINT32_MAX;
+    for (int i = 0; i < LIN_N; i++) {
+        double f = (double)i / (LIN_N - 1), p[3];
+        for (int k = 0; k < 3; k++) p[k] = A[k] + f * (B[k] - A[k]);
+        float* o = G.lin_s + 6 * i;
+        bool ok = hint != UINT32_MAX && elem_tensor(hint, p, S, o);
+        for (uint32_t e = 0; !ok && e < ne; e++) {
+            const float* bx = box + 6 * (size_t)e;
+            if (p[0] < bx[0] || p[1] < bx[1] || p[2] < bx[2] || p[0] > bx[3] || p[1] > bx[4] || p[2] > bx[5]) continue;
+            if ((ok = elem_tensor(e, p, S, o))) hint = e;
+        }
+        if (!ok) for (int c = 0; c < 6; c++) o[c] = NAN;
+    }
+    G.lin_n = LIN_N;
+    free(box); free(tv);
+}
+
+void app_lin_open(uint32_t a, uint32_t b) {
+    G.lin_open = true;
+    G.lin_a = a; G.lin_b = b;
+    G.lin_key[0] = 0;
+    app_path_clear();                                   /* the straight line replaces the path */
+    refresh_lin();
+}
+
+void app_lin_close(void) {
+    free(G.lin_s); G.lin_s = NULL; G.lin_n = 0;
+    bool was = G.lin_open;
+    G.lin_open = false; G.lin_key[0] = 0;
+    if (was) refresh_path();
+}
+
+bool app_lin_csv(const char* path) {
+    if (!G.lin_n || G.lin_fi < 0) return false;
+    const cv_field_desc* d = &G.frd.steps[G.step].fields[G.lin_fi];
+    double m[6], b[6];
+    bool ok = cv_linearize(G.lin_s, G.lin_n, G.lin_t, m, b);
+    FILE* o = fopen(path, "w");
+    if (!o) return false;
+    fprintf(o, "# %s linearized from node %u to node %u, t = %.9g, step %d\n", d->name, G.frd.node_id[G.lin_a],
+            G.frd.node_id[G.lin_b], G.lin_t, G.step + 1);
+    if (ok) {
+        double mb[6], mb2[6];
+        for (int c = 0; c < 6; c++) { mb[c] = m[c] + b[c]; mb2[c] = m[c] - b[c]; }
+        fprintf(o, "# membrane: von Mises %.9g, Tresca %.9g\n", cv_mises6(m), cv_tresca6(m, false));
+        fprintf(o, "# membrane + bending at start: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb), cv_tresca6(mb, false));
+        fprintf(o, "# membrane + bending at end: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb2), cv_tresca6(mb2, false));
+    } else {
+        fprintf(o, "# the line leaves the solid: no linearization\n");
+    }
+    fprintf(o, "x");
+    for (int c = 0; c < 6; c++) fprintf(o, ",%s", d->comp[c]);
+    for (int c = 0; c < 6; c++) fprintf(o, ",%s_lin", d->comp[c]);
+    fprintf(o, ",mises,mises_lin\n");
+    for (int i = 0; i < G.lin_n; i++) {
+        double x = G.lin_t * i / (G.lin_n - 1), s[6], l[6];
+        const float* v = G.lin_s + 6 * i;
+        fprintf(o, "%.9g", x);
+        for (int c = 0; c < 6; c++) { s[c] = v[c]; l[c] = ok ? m[c] + b[c] * (1 - 2 * x / G.lin_t) : NAN; fprintf(o, ",%.9g", v[c]); }
+        for (int c = 0; c < 6; c++) fprintf(o, ",%.9g", l[c]);
+        fprintf(o, ",%.9g,%.9g\n", cv_mises6(s), ok ? cv_mises6(l) : NAN);
     }
     return fclose(o) == 0;
 }
@@ -659,6 +836,7 @@ void refresh_field(void) {
     refresh_tri_values();
     refresh_gauss();
     refresh_vectors();
+    refresh_lin();
     refresh_path();
     refresh_hist();
 }

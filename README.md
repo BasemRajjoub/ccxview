@@ -57,6 +57,7 @@ ccxview model.frd --export mp4              # animation video
 ccxview model.frd --field DISP --vectors    # displacement arrows
 ccxview model.frd --gp                      # Gauss points
 ccxview model.frd --field DISP --history 17 # node 17 over all steps
+ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38 to 54
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --software                # CPU rendering
 ccxview --check model.frd                   # headless parse for CI

@@ -183,6 +183,15 @@ typedef struct {
     float*    hist_t;  float* hist_v;  int* hist_step;
     bool      hist_by_step;          /* x axis: step number instead of time */
     char      hist_key[200];         /* what the curve was built for */
+    /* stress linearization along the straight line between two nodes (ASME) */
+    bool      lin_open;
+    uint32_t  lin_a, lin_b;          /* the end nodes */
+    int       lin_fi;                /* the tensor field linearized, -1 none */
+    int       lin_n;                 /* sample points */
+    float*    lin_s;                 /* 6 per point, NaN where the line is outside the solid */
+    float     lin_t;                 /* line length */
+    int       lin_q;                 /* shown: 0 von Mises, 1 Tresca, 2.. a component */
+    char      lin_key[200];
     /* comparison: a second results file on the same mesh, shown as A - B */
     cv_map    cmp_map;
     cv_frd    cmp;
@@ -313,6 +322,9 @@ void app_open_dialog(void);          /* native dialog, else the built-in browser
 void app_start_dir(char* out, size_t n);
 void app_set_step(int step);
 void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
+void app_lin_open(uint32_t a, uint32_t b);  /* linearize the stress on the line between two nodes */
+void app_lin_close(void);
+bool app_lin_csv(const char* path);
 void app_hist_close(void);
 bool app_hist_csv(const char* path);
 void app_select(const char* field, int comp);

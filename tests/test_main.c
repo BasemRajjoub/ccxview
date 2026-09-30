@@ -382,6 +382,19 @@ static void test_field_math(void) {
         cv_cyl_comp_name(&dt, 5, nm); CHECK(!strcmp(nm, "Sar"));
         cv_cyl_comp_name(&dv, 1, nm); CHECK(!strcmp(nm, "Dt"));
     }
+    {   /* linearization: s = 3 + 5x is all membrane + bending; s = x^2 on t = 2 */
+        float ls[41 * 6];
+        for (int i = 0; i < 41; i++) {
+            float x = 2.f * i / 40;
+            for (int c = 0; c < 6; c++) ls[6 * i + c] = c == 0 ? 3 + 5 * x : c == 1 ? x * x : 0;
+        }
+        double m[6], b[6];
+        CHECK(cv_linearize(ls, 41, 2, m, b));
+        CHECK_NEAR(m[0], 8, 1e-5); CHECK_NEAR(b[0], -5, 1e-5);
+        CHECK_NEAR(m[1], 4.0 / 3, 1e-5); CHECK_NEAR(b[1], -2, 1e-5);
+        double sh[6] = { 0, 0, 0, 50, 0, 0 };
+        CHECK_NEAR(cv_tresca6(sh, false), 100, 1e-3); CHECK_NEAR(cv_mises6(sh), 86.6025, 1e-3);
+    }
     float v[6] = { 3, 4, 0, 1, NAN, 0 }, out[2];
     cv_field_scalar(v, 3, 2, CV_COMP_MAG, out);
     CHECK_NEAR(out[0], 5, 1e-6);

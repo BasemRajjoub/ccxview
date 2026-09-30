@@ -1530,11 +1530,19 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
         char txt[200];
         nk_layout_row_template_begin(ctx, row);
         nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_push_static(ctx, 90 * s);
         nk_layout_row_template_push_static(ctx, 60 * s);
         nk_layout_row_template_end(ctx);
         snprintf(txt, sizeof txt, "%s along %u nodes, length %.4g   (nodes %u .. %u)", G.has_field ? G.field_label : "no field",
                  G.path_n, G.path_dist[G.path_n - 1], G.frd.node_id[G.path_nodes[0]], G.frd.node_id[G.path_nodes[G.path_n - 1]]);
         nk_label(ctx, txt, NK_TEXT_LEFT);
+        tip(ctx, "Stress linearization (ASME VIII-2 5-A) on the straight line between the two end nodes:\n"
+                 "pick them facing each other across the wall");
+        if (nk_button_label(ctx, "Linearize")) {
+            app_lin_open(G.path_nodes[0], G.path_nodes[G.path_n - 1]);
+            nk_end(ctx);
+            return;
+        }
         if (nk_button_label(ctx, "CSV")) {
             char vp[1100];
             snprintf(vp, sizeof vp, "%.*s_path.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
@@ -1573,6 +1581,151 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
         }
     }
     if (nk_window_is_hidden(ctx, "Path")) app_path_clear();
+    nk_end(ctx);
+}
+
+/* ---- stress linearization: membrane, bending, peak along a line through the wall --- */
+static double lin_q(const double t[6]) {
+    return G.lin_q == 0 ? cv_mises6(t) : G.lin_q == 1 ? cv_tresca6(t, false) : t[CV_MIN(G.lin_q - 2, 5)];
+}
+
+static void window_lin(struct nk_context* ctx, float s, float row, int fw, int fh) {
+    static bool was_open;
+    if (!G.lin_open) { was_open = false; return; }
+    if (!was_open) nk_window_show(ctx, "Linearization", NK_SHOWN);
+    was_open = true;
+    if (nk_begin(ctx, "Linearization", nk_rect(fw * 0.3f, fh * 0.4f, fw * 0.45f, fh * 0.5f),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
+        char txt[200];
+        const cv_field_desc* d = G.lin_fi >= 0 ? &G.frd.steps[G.step].fields[G.lin_fi] : NULL;
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_push_static(ctx, 110 * s);
+        nk_layout_row_template_push_static(ctx, 60 * s);
+        nk_layout_row_template_end(ctx);
+        snprintf(txt, sizeof txt, "%s, node %u to %u, t = %.4g", d ? d->name : "no stress tensor in this step",
+                 G.frd.node_id[G.lin_a], G.frd.node_id[G.lin_b], G.lin_t);
+        nk_label(ctx, txt, NK_TEXT_LEFT);
+        char names[8][16] = { "von Mises", "Tresca" };
+        const char* items[8];
+        for (int c = 0; c < 6; c++) {
+            if (!d) { snprintf(names[2 + c], 16, "%d", c + 1); continue; }
+            if (G.csys > 0) cv_cyl_comp_name(d, c, names[2 + c]); else snprintf(names[2 + c], 16, "%s", d->comp[c]);
+        }
+        for (int k = 0; k < 8; k++) items[k] = names[k];
+        tip(ctx, "The quantity in the table and the plot (components in the coordinates chosen under Fields)");
+        G.lin_q = nk_combo(ctx, items, 8, G.lin_q, (int)row, nk_vec2(130 * s, 8 * row + 20 * s));
+        if (nk_button_label(ctx, "CSV")) {
+            char vp[1100];
+            snprintf(vp, sizeof vp, "%.*s_linearized.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
+            snprintf(G.note, sizeof G.note, app_lin_csv(vp) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
+        }
+        double m[6], b[6];
+        bool ok = G.lin_n && cv_linearize(G.lin_s, G.lin_n, G.lin_t, m, b);
+        if (!ok) {
+            int out = 0;
+            for (int i = 0; i < G.lin_n; i++) out += G.lin_s[6 * i] != G.lin_s[6 * i];
+            nk_layout_row_dynamic(ctx, row, 1);
+            if (G.lin_n) snprintf(txt, sizeof txt, "The line leaves the solid (%d of %d points): pick end nodes facing each other across the wall", out, G.lin_n);
+            else snprintf(txt, sizeof txt, "Nothing to linearize: this step has no stress tensor");
+            nk_label(ctx, txt, NK_TEXT_LEFT);
+        }
+        if (ok) {
+            const float* s0 = G.lin_s; const float* s1 = G.lin_s + 6 * (G.lin_n - 1);
+            double mb0[6], mb1[6], t0[6], t1[6], f0[6], f1[6];
+            for (int c = 0; c < 6; c++) {
+                mb0[c] = m[c] + b[c]; mb1[c] = m[c] - b[c]; t0[c] = s0[c]; t1[c] = s1[c];
+                f0[c] = t0[c] - mb0[c]; f1[c] = t1[c] - mb1[c];
+            }
+            const char* rows[4] = { "membrane", "membrane + bending", "peak", "total" };
+            const double* a[4] = { m, mb0, f0, t0 };
+            const double* z[4] = { m, mb1, f1, t1 };
+            static const char* tips[4] = {
+                "The mean over the line: (1/t) \xe2\x88\xab \xcf\x83 dx",
+                "The linear part at the two ends: membrane \xc2\xb1 bending, bending = (6/t\xc2\xb2) \xe2\x88\xab \xcf\x83 (t/2 - x) dx",
+                "What the line does not carry: total - (membrane + bending)",
+                "The stress itself at the two ends" };
+            for (int r = -1; r < 4; r++) {
+                nk_layout_row_template_begin(ctx, row);
+                nk_layout_row_template_push_static(ctx, 150 * s);
+                nk_layout_row_template_push_dynamic(ctx);
+                nk_layout_row_template_push_dynamic(ctx);
+                nk_layout_row_template_end(ctx);
+                if (r < 0) {
+                    nk_label(ctx, "", NK_TEXT_LEFT);
+                    snprintf(txt, sizeof txt, "start (node %u)", G.frd.node_id[G.lin_a]);
+                    nk_label_colored(ctx, txt, NK_TEXT_RIGHT, P.dim);
+                    snprintf(txt, sizeof txt, "end (node %u)", G.frd.node_id[G.lin_b]);
+                    nk_label_colored(ctx, txt, NK_TEXT_RIGHT, P.dim);
+                    continue;
+                }
+                tip(ctx, tips[r]);
+                nk_label(ctx, rows[r], NK_TEXT_LEFT);
+                legend_num(txt, sizeof txt, (float)lin_q(a[r])); nk_label(ctx, txt, NK_TEXT_RIGHT);
+                legend_num(txt, sizeof txt, (float)lin_q(z[r])); nk_label(ctx, txt, NK_TEXT_RIGHT);
+            }
+        }
+        struct nk_rect area;
+        float used = (ok ? 6 : 2) * (row + ctx->style.window.spacing.y);
+        nk_layout_row_dynamic(ctx, CV_MAX(nk_window_get_content_region(ctx).h - used - 4 * s, row), 1);
+        if (nk_widget(&area, ctx) != NK_WIDGET_INVALID && G.lin_n > 1) {
+            struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
+            const struct nk_user_font* font = ctx->style.font;
+            float lm = 76 * s, x0 = area.x + lm, y0 = area.y + 4 * s, w = area.w - lm - 6 * s, h = area.h - font->height - 8 * s;
+            nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, P.plot_bg);
+            enum { NP = 81, LIN_PLOT_MAX = 256 };
+            float tot[LIN_PLOT_MAX], lin[NP], mem = ok ? (float)lin_q(m) : NAN;
+            int n = CV_MIN(G.lin_n, LIN_PLOT_MAX);
+            for (int i = 0; i < n; i++) {
+                double t[6];
+                for (int c = 0; c < 6; c++) t[c] = G.lin_s[6 * i + c];
+                tot[i] = (float)lin_q(t);
+            }
+            for (int i = 0; i < NP; i++) {
+                double t[6], f = 1 - 2.0 * i / (NP - 1);
+                for (int c = 0; c < 6; c++) t[c] = ok ? m[c] + b[c] * f : NAN;
+                lin[i] = (float)lin_q(t);
+            }
+            float lo = 1e30f, hi = -1e30f;
+            for (int i = 0; i < n; i++) if (tot[i] == tot[i]) { lo = CV_MIN(lo, tot[i]); hi = CV_MAX(hi, tot[i]); }
+            for (int i = 0; i < NP; i++) if (lin[i] == lin[i]) { lo = CV_MIN(lo, lin[i]); hi = CV_MAX(hi, lin[i]); }
+            if (G.lin_q < 2) lo = CV_MIN(lo, 0.f);          /* equivalent stresses: from zero */
+            if (lo > hi) { lo = 0; hi = 1; }
+            if (hi <= lo) { hi = lo + fabsf(lo) * 0.01f + 1e-30f; lo -= hi - lo; }
+            for (int k = 0; k <= 4; k++) {
+                float v = lo + (hi - lo) * k / 4.f, y = y0 + h * (1 - k / 4.f);
+                nk_stroke_line(cv, x0, y, x0 + w, y, 1, P.grid);
+                legend_num(txt, sizeof txt, v);
+                nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
+            }
+            #define LY(v) (y0 + h * (1 - ((v) - lo) / (hi - lo)))
+            if (mem == mem) nk_stroke_line(cv, x0, LY(mem), x0 + w, LY(mem), 1.5f, nk_rgb(150, 150, 160));
+            for (int i = 1; i < NP; i++)
+                if (lin[i] == lin[i] && lin[i - 1] == lin[i - 1])
+                    nk_stroke_line(cv, x0 + w * (i - 1) / (NP - 1), LY(lin[i - 1]), x0 + w * i / (NP - 1), LY(lin[i]), 2.f, nk_rgb(70, 140, 230));
+            for (int i = 0; i < n; i++) {
+                if (tot[i] != tot[i]) continue;
+                float x = x0 + w * i / (n - 1), y = LY(tot[i]);
+                if (i && tot[i - 1] == tot[i - 1]) nk_stroke_line(cv, x0 + w * (i - 1) / (n - 1), LY(tot[i - 1]), x, y, 2.f, nk_rgb(255, 140, 30));
+                nk_fill_circle(cv, nk_rect(x - 2 * s, y - 2 * s, 4 * s, 4 * s), nk_rgb(255, 200, 120));
+            }
+            #undef LY
+            float tx = x0;
+            const char* keys[3] = { "total", "membrane + bending", "membrane" };
+            struct nk_color kc[3] = { nk_rgb(255, 140, 30), nk_rgb(70, 140, 230), nk_rgb(150, 150, 160) };
+            for (int k = 0; k < 3; k++) {
+                float ty = y0 + h + 2 * s + font->height * 0.5f;
+                nk_stroke_line(cv, tx, ty, tx + 16 * s, ty, 2.f, kc[k]);
+                float tw = font->width(font->userdata, font->height, keys[k], (int)strlen(keys[k]));
+                nk_draw_text(cv, nk_rect(tx + 20 * s, y0 + h + 2 * s, tw + 4, font->height), keys[k], (int)strlen(keys[k]), font, nk_rgba(0, 0, 0, 0), P.dim);
+                tx += tw + 36 * s;
+            }
+            snprintf(txt, sizeof txt, "0 .. %.4g", G.lin_t);
+            float tw = font->width(font->userdata, font->height, txt, (int)strlen(txt));
+            nk_draw_text(cv, nk_rect(x0 + w - tw - 2, y0 + h + 2 * s, tw + 2, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
+        }
+    }
+    if (nk_window_is_hidden(ctx, "Linearization")) app_lin_close();
     nk_end(ctx);
 }
 
@@ -2248,5 +2401,6 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_find(ctx, s, row);
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
+    window_lin(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);
 }

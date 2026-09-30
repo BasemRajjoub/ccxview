@@ -185,6 +185,37 @@ bool cv_principal_dirs(const float s[6], bool xz_order, float val[3], float vec[
     return true;
 }
 
+bool cv_linearize(const float* s, int n, double t, double m[6], double b[6]) {
+    if (n < 2 || !(t > 0)) return false;
+    for (int c = 0; c < 6; c++) m[c] = b[c] = 0;
+    double h = t / (n - 1);
+    bool simpson = n % 2 == 1;
+    for (int i = 0; i < n; i++) {
+        double w = simpson ? (i == 0 || i == n - 1 ? 1 : i % 2 ? 4 : 2) * h / 3 : (i == 0 || i == n - 1 ? 0.5 : 1) * h;
+        double x = i * h;
+        for (int c = 0; c < 6; c++) {
+            double v = s[6 * (size_t)i + c];
+            if (v != v) return false;
+            m[c] += w * v;
+            b[c] += w * v * (t / 2 - x);
+        }
+    }
+    for (int c = 0; c < 6; c++) { m[c] /= t; b[c] *= 6 / (t * t); }
+    return true;
+}
+
+double cv_mises6(const double s[6]) {
+    double a = s[0] - s[1], b = s[1] - s[2], c = s[2] - s[0];
+    return sqrt(0.5 * (a * a + b * b + c * c) + 3 * (s[3] * s[3] + s[4] * s[4] + s[5] * s[5]));
+}
+
+double cv_tresca6(const double s[6], bool xz_order) {
+    float f[6], val[3], vec[3][3];
+    for (int c = 0; c < 6; c++) f[c] = (float)s[c];
+    if (!cv_principal_dirs(f, xz_order, val, vec)) return NAN;
+    return (double)val[0] - val[2];
+}
+
 void cv_field_scalar(const float* v, int nc, uint32_t n, int comp, float* out) {
     for (uint32_t i = 0; i < n; i++) {
         const float* r = v + (size_t)i * nc;

@@ -46,6 +46,15 @@ void  cv_cyl_comp_name(const cv_field_desc* d, int c, char out[12]);
    symmetric tensor, by Jacobi rotations. false for NaN input. */
 bool  cv_principal_dirs(const float s[6], bool xz_order, float val[3], float vec[3][3]);
 
+/* Stress linearization (ASME VIII-2 Annex 5-A) of a tensor sampled at n equally
+   spaced points (6 values each) over a line of length t: membrane m = (1/t) int s dx,
+   bending b = (6/t^2) int s (t/2 - x) dx -- the bending at the start; the end sees -b.
+   Simpson's rule for odd n, trapezoids otherwise. false if n < 2 or a value is NaN. */
+bool   cv_linearize(const float* s, int n, double t, double m[6], double b[6]);
+/* von Mises and Tresca (largest principal difference) of a symmetric tensor */
+double cv_mises6(const double s[6]);
+double cv_tresca6(const double s[6], bool xz_order);
+
 /* min/max ignoring NaN. false if every value is NaN. */
 bool  cv_range(const float* v, size_t n, float* mn, float* mx);
 

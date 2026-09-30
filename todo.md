@@ -32,8 +32,11 @@ not done yet.
 - [x] **Cyclic symmetry expansion** beyond the NGRAPH sectors written by ccx. *(linth)* View >
   Cyclic symmetry: n sectors in 360°, how many drawn, axis and a point on it (static: the
   copies show the same values; saved in the view state).
-- [ ] **ASME stress linearization** along a path through the thickness: membrane,
-  bending, peak. Could build on the existing path plot. *(SergioP)*
+- [x] **ASME stress linearization** along a path through the thickness: membrane,
+  bending, peak. Could build on the existing path plot. *(SergioP)* Path > Linearize (or
+  `--linearize A,B`): the straight line between the end nodes, 41 points interpolated in the
+  solid elements; membrane, membrane + bending, peak and total at both ends as von Mises,
+  Tresca or a component, a plot and CSV.
 - [x] **Time / increment plots**: a value at a node or element against time or
   increment, over all steps. *(SergioP)* Probe > history (or `--history NODE`): the current
   field and component (element mean in per-element mode) against time or step number, click

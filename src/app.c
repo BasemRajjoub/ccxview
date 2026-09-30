@@ -854,6 +854,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--compare") && i + 1 < argc) O.compare = argv[++i];
         else if (!strcmp(argv[i], "--path") && i + 1 < argc) O.path_ids = argv[++i];
         else if (!strcmp(argv[i], "--history") && i + 1 < argc) O.hist_id = atol(argv[++i]);
+        else if (!strcmp(argv[i], "--linearize") && i + 1 < argc) O.lin_ids = argv[++i];
         else if (!strcmp(argv[i], "--look") && i + 1 < argc) {
             static const char* names[] = { "iso", "+x", "-x", "+y", "-y", "+z", "-z" };
             const char* v = argv[++i];
