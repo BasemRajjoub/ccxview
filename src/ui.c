@@ -1595,6 +1595,14 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
             const char* rows[4] = { "membrane", "membrane + bending", "peak", "total" };
             const double* a[4] = { m, mb0, f0, t0 };
             const double* z[4] = { m, mb1, f1, t1 };
+            /* the largest value anywhere on the line (what Mecway and Abaqus report) */
+            double mx[4] = { lin_q(m), -INFINITY, -INFINITY, -INFINITY };
+            for (int i = 0; i < G.lin_n; i++) {
+                double x = G.lin_t * i / (G.lin_n - 1), l[6], tt[6], p[6];
+                cv_lin_at(m, b, G.lin_t, x, l);
+                for (int c = 0; c < 6; c++) { tt[c] = G.lin_s[6 * i + c]; p[c] = tt[c] - l[c]; }
+                mx[1] = CV_MAX(mx[1], lin_q(l)); mx[2] = CV_MAX(mx[2], lin_q(p)); mx[3] = CV_MAX(mx[3], lin_q(tt));
+            }
             static const char* tips[4] = {
                 "The mean over the line: (1/t) \xe2\x88\xab \xcf\x83 dx",
                 "The linear part at the two ends: membrane \xc2\xb1 bending, bending = (6/t\xc2\xb2) \xe2\x88\xab \xcf\x83 (t/2 - x) dx",
@@ -1603,6 +1611,7 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
             for (int r = -1; r < 4; r++) {
                 nk_layout_row_template_begin(ctx, row);
                 nk_layout_row_template_push_static(ctx, 150 * s);
+                nk_layout_row_template_push_dynamic(ctx);
                 nk_layout_row_template_push_dynamic(ctx);
                 nk_layout_row_template_push_dynamic(ctx);
                 nk_layout_row_template_end(ctx);
@@ -1614,12 +1623,15 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
                     if (G.lin_b < G.frd.n_nodes) snprintf(txt, sizeof txt, "end (node %u)", G.frd.node_id[G.lin_b]);
                     else snprintf(txt, sizeof txt, "end (far face)");
                     nk_label_colored(ctx, txt, NK_TEXT_RIGHT, P.dim);
+                    tip(ctx, "The largest value anywhere along the line, over its sampled points");
+                    nk_label_colored(ctx, "max on line", NK_TEXT_RIGHT, P.dim);
                     continue;
                 }
                 tip(ctx, tips[r]);
                 nk_label(ctx, rows[r], NK_TEXT_LEFT);
                 legend_num(txt, sizeof txt, (float)lin_q(a[r])); nk_label(ctx, txt, NK_TEXT_RIGHT);
                 legend_num(txt, sizeof txt, (float)lin_q(z[r])); nk_label(ctx, txt, NK_TEXT_RIGHT);
+                legend_num(txt, sizeof txt, (float)mx[r]); nk_label(ctx, txt, NK_TEXT_RIGHT);
             }
         }
         struct nk_rect area;
@@ -1639,8 +1651,8 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
                 tot[i] = (float)lin_q(t);
             }
             for (int i = 0; i < NP; i++) {
-                double t[6], f = 1 - 2.0 * i / (NP - 1);
-                for (int c = 0; c < 6; c++) t[c] = ok ? m[c] + b[c] * f : NAN;
+                double t[6];
+                if (ok) cv_lin_at(m, b, 1, (double)i / (NP - 1), t); else for (int c = 0; c < 6; c++) t[c] = NAN;
                 lin[i] = (float)lin_q(t);
             }
             float lo = 1e30f, hi = -1e30f;

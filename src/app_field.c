@@ -812,6 +812,16 @@ bool app_lin_csv(const char* path) {
         fprintf(o, "# membrane: von Mises %.9g, Tresca %.9g\n", cv_mises6(m), cv_tresca6(m, false));
         fprintf(o, "# membrane + bending at start: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb), cv_tresca6(mb, false));
         fprintf(o, "# membrane + bending at end: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb2), cv_tresca6(mb2, false));
+        double pk[2] = { -INFINITY, -INFINITY }, tt[2] = { -INFINITY, -INFINITY };   /* the largest anywhere on the line */
+        for (int i = 0; i < G.lin_n; i++) {
+            double l[6], s[6], p[6];
+            cv_lin_at(m, b, G.lin_t, G.lin_t * i / (G.lin_n - 1), l);
+            for (int c = 0; c < 6; c++) { s[c] = G.lin_s[6 * i + c]; p[c] = s[c] - l[c]; }
+            pk[0] = CV_MAX(pk[0], cv_mises6(p)); pk[1] = CV_MAX(pk[1], cv_tresca6(p, false));
+            tt[0] = CV_MAX(tt[0], cv_mises6(s)); tt[1] = CV_MAX(tt[1], cv_tresca6(s, false));
+        }
+        fprintf(o, "# peak, max on the line: von Mises %.9g, Tresca %.9g\n", pk[0], pk[1]);
+        fprintf(o, "# total, max on the line: von Mises %.9g, Tresca %.9g\n", tt[0], tt[1]);
     } else {
         fprintf(o, "# the line leaves the solid: no linearization\n");
     }
@@ -823,7 +833,8 @@ bool app_lin_csv(const char* path) {
         double x = G.lin_t * i / (G.lin_n - 1), s[6], l[6];
         const float* v = G.lin_s + 6 * i;
         fprintf(o, "%.9g", x);
-        for (int c = 0; c < 6; c++) { s[c] = v[c]; l[c] = ok ? m[c] + b[c] * (1 - 2 * x / G.lin_t) : NAN; fprintf(o, ",%.9g", v[c]); }
+        if (ok) cv_lin_at(m, b, G.lin_t, x, l); else for (int c = 0; c < 6; c++) l[c] = NAN;
+        for (int c = 0; c < 6; c++) { s[c] = v[c]; fprintf(o, ",%.9g", v[c]); }
         for (int c = 0; c < 6; c++) fprintf(o, ",%.9g", l[c]);
         fprintf(o, ",%.9g,%.9g\n", cv_mises6(s), ok ? cv_mises6(l) : NAN);
     }

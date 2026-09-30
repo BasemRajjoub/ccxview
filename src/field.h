@@ -51,6 +51,8 @@ bool  cv_principal_dirs(const float s[6], bool xz_order, float val[3], float vec
    bending b = (6/t^2) int s (t/2 - x) dx -- the bending at the start; the end sees -b.
    Simpson's rule for odd n, trapezoids otherwise. false if n < 2 or a value is NaN. */
 bool   cv_linearize(const float* s, int n, double t, double m[6], double b[6]);
+/* The linear part at distance x along that line: m + b (1 - 2x/t). */
+void   cv_lin_at(const double m[6], const double b[6], double t, double x, double out[6]);
 /* von Mises and Tresca (largest principal difference) of a symmetric tensor */
 double cv_mises6(const double s[6]);
 double cv_tresca6(const double s[6], bool xz_order);

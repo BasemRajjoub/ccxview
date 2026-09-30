@@ -392,6 +392,11 @@ static void test_field_math(void) {
         CHECK(cv_linearize(ls, 41, 2, m, b));
         CHECK_NEAR(m[0], 8, 1e-5); CHECK_NEAR(b[0], -5, 1e-5);
         CHECK_NEAR(m[1], 4.0 / 3, 1e-5); CHECK_NEAR(b[1], -2, 1e-5);
+        double l[6];
+        cv_lin_at(m, b, 2, 0, l);   CHECK_NEAR(l[0], 3, 1e-5);           /* m + b at the start */
+        cv_lin_at(m, b, 2, 2, l);   CHECK_NEAR(l[0], 13, 1e-5);          /* m - b at the end */
+        cv_lin_at(m, b, 2, 1, l);   CHECK_NEAR(l[0], 8, 1e-5);           /* the membrane in the middle */
+        CHECK_NEAR(l[1], 4.0 / 3, 1e-5);
         double sh[6] = { 0, 0, 0, 50, 0, 0 };
         CHECK_NEAR(cv_tresca6(sh, false), 100, 1e-3); CHECK_NEAR(cv_mises6(sh), 86.6025, 1e-3);
     }

@@ -204,6 +204,11 @@ bool cv_linearize(const float* s, int n, double t, double m[6], double b[6]) {
     return true;
 }
 
+void cv_lin_at(const double m[6], const double b[6], double t, double x, double out[6]) {
+    double f = t > 0 ? 1 - 2 * x / t : 0;
+    for (int c = 0; c < 6; c++) out[c] = m[c] + b[c] * f;
+}
+
 double cv_mises6(const double s[6]) {
     double a = s[0] - s[1], b = s[1] - s[2], c = s[2] - s[0];
     return sqrt(0.5 * (a * a + b * b + c * c) + 3 * (s[3] * s[3] + s[4] * s[4] + s[5] * s[5]));
