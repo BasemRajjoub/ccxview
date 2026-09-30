@@ -7,9 +7,10 @@ void cv_gl_enable_point_size(void);   /* sokol_impl.c: glEnable(GL_PROGRAM_POINT
 
 /* ---- colormaps ---------------------------------------------------------------
    Fast and CoolWarm: Moreland's published tables (kennethmoreland.com/color-advice).
-   Viridis and Turbo: the usual polynomial fits. Rainbow last, on purpose. */
+   Viridis, Inferno and Turbo: the usual polynomial fits. Rainbow and Jet last, on
+   purpose; later maps are appended so saved indices keep their meaning. */
 
-const char* const cv_cmap_names[CV_CMAP_N] = { "Fast", "Cool-warm", "Viridis", "Turbo", "Heat", "Rainbow" };
+const char* const cv_cmap_names[CV_CMAP_N] = { "Fast", "Cool-warm", "Viridis", "Turbo", "Heat", "Rainbow", "Jet", "Inferno" };
 
 static const float kFast[32][3] = {
     {0.0549f,0.0549f,0.4706f},{0.1098f,0.1373f,0.5333f},{0.1490f,0.2118f,0.5961f},{0.1843f,0.2863f,0.6588f},
@@ -45,13 +46,20 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
             for (int k = 0; k < 3; k++) o[k] = tb[i][k] + (tb[i + 1][k] - tb[i][k]) * f;
             return;
         }
-        case CV_CMAP_VIRIDIS: {
-            static const float c[7][3] = {
+        case CV_CMAP_VIRIDIS: case CV_CMAP_INFERNO: {
+            static const float cv[7][3] = {
                 {0.2777273f, 0.0054073f, 0.3340998f}, {0.1050930f, 1.4046135f, 1.3845902f},
                 {-0.3308618f, 0.2148476f, 0.0950952f}, {-4.6342305f, -5.7991010f, -19.3324410f},
                 {6.2282699f, 14.1799334f, 56.6905526f}, {4.7763850f, -13.7451454f, -65.3530326f},
                 {-5.4354559f, 4.6458526f, 26.3124352f},
             };
+            static const float ci[7][3] = {
+                {0.0002189f, 0.0016510f, -0.0194809f}, {0.1065134f, 0.5639564f, 3.9327124f},
+                {11.6024931f, -3.9728540f, -15.9423941f}, {-41.7039961f, 17.4363989f, 44.3541452f},
+                {77.1629357f, -33.4023589f, -81.8073093f}, {-71.3194282f, 32.6260643f, 73.2095199f},
+                {25.1311262f, -12.2426690f, -23.0703250f},
+            };
+            const float (*c)[3] = cm == CV_CMAP_VIRIDIS ? cv : ci;
             for (int k = 0; k < 3; k++) {
                 float v = c[6][k];
                 for (int j = 5; j >= 0; j--) v = c[j][k] + t * v;
@@ -72,6 +80,13 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
             int i = (int)s; if (i > 3) i = 3;
             float f = s - (float)i;
             for (int k = 0; k < 3; k++) o[k] = r[i][k] + (r[i + 1][k] - r[i][k]) * f;
+            return;
+        }
+        case CV_CMAP_JET: {                     /* MATLAB jet: dark blue - blue - cyan - yellow - red - dark red */
+            float x = 4.f * t;
+            o[0] = clamp01(fminf(x - 1.5f, 4.5f - x));
+            o[1] = clamp01(fminf(x - 0.5f, 3.5f - x));
+            o[2] = clamp01(fminf(x + 0.5f, 2.5f - x));
             return;
         }
         default: {

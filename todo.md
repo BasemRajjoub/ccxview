@@ -9,7 +9,8 @@ not done yet.
 - [ ] **Out-of-range colours**: with the legend range locked, values above the max
   and below the min get their own colours (e.g. grey / magenta) instead of the end
   colours of the map. *(linth)*
-- [ ] **More colour maps**, rainbow / jet among them. *(Calc_em)*
+- [x] **More colour maps**, rainbow / jet among them. *(Calc_em)* Jet and Inferno added; Rainbow,
+  Turbo, Viridis, Cool-warm, Heat were there already (legend grey = greyscale).
 - [ ] **Filled clip caps**: fill the cut where the clip plane goes through solid
   elements, instead of showing the open inside. *(Calc_em)*
 - [ ] **Separate glyph sizes**: restraints smaller than loads. Today one `glyph_pct`

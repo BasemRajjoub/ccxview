@@ -6,7 +6,7 @@
 
 #include "base.h"
 
-enum { CV_CMAP_FAST, CV_CMAP_COOLWARM, CV_CMAP_VIRIDIS, CV_CMAP_TURBO, CV_CMAP_HEAT, CV_CMAP_RAINBOW, CV_CMAP_N };
+enum { CV_CMAP_FAST, CV_CMAP_COOLWARM, CV_CMAP_VIRIDIS, CV_CMAP_TURBO, CV_CMAP_HEAT, CV_CMAP_RAINBOW, CV_CMAP_JET, CV_CMAP_INFERNO, CV_CMAP_N };
 extern const char* const cv_cmap_names[CV_CMAP_N];
 void cv_colormap_rgb(int cmap, float t, float rgb[3]);
 
