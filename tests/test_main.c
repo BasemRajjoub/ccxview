@@ -397,6 +397,28 @@ static void test_field_math(void) {
         cv_lin_at(m, b, 2, 2, l);   CHECK_NEAR(l[0], 13, 1e-5);          /* m - b at the end */
         cv_lin_at(m, b, 2, 1, l);   CHECK_NEAR(l[0], 8, 1e-5);           /* the membrane in the middle */
         CHECK_NEAR(l[1], 4.0 / 3, 1e-5);
+        /* ASME bending mask: along x drops XX, XY, ZX; along y drops YY, XY, YZ */
+        double bm[6] = { 1, 2, 3, 4, 5, 6 };
+        float ex[3] = { 2, 0, 0 }, ey[3] = { 0, 1, 0 }, ed[3] = { 1, 2, -3 }, e0[3] = { 0, 0, 0 };
+        cv_bend_mask(bm, ex);
+        CHECK_NEAR(bm[0], 0, 1e-9); CHECK_NEAR(bm[1], 2, 1e-9); CHECK_NEAR(bm[2], 3, 1e-9);
+        CHECK_NEAR(bm[3], 0, 1e-9); CHECK_NEAR(bm[4], 5, 1e-9); CHECK_NEAR(bm[5], 0, 1e-9);
+        double bn[6] = { 1, 2, 3, 4, 5, 6 };
+        cv_bend_mask(bn, ey);
+        CHECK_NEAR(bn[0], 1, 1e-9); CHECK_NEAR(bn[1], 0, 1e-9); CHECK_NEAR(bn[2], 3, 1e-9);
+        CHECK_NEAR(bn[3], 0, 1e-9); CHECK_NEAR(bn[4], 0, 1e-9); CHECK_NEAR(bn[5], 6, 1e-9);
+        double bd[6] = { 1, 2, 3, 4, 5, 6 };
+        cv_bend_mask(bd, ed);                  /* an oblique line: the tensor times dir vanishes */
+        {
+            double S[3][3] = { { bd[0], bd[3], bd[5] }, { bd[3], bd[1], bd[4] }, { bd[5], bd[4], bd[2] } };
+            for (int a = 0; a < 3; a++) CHECK_NEAR(S[a][0] * ed[0] + S[a][1] * ed[1] + S[a][2] * ed[2], 0, 1e-9);
+            double tr = bd[0] + bd[1] + bd[2];  /* what is left is the tensor in the normal plane: trace = total - d.S.d/|d|^2 */
+            double dd = 14, Sd = 1 * 1 + 2 * 4 + 3 * 9 + 2 * (4 * 2 + 5 * -6 + 6 * -3);
+            CHECK_NEAR(tr, 6 - Sd / dd, 1e-9);
+        }
+        double bz[6] = { 1, 2, 3, 4, 5, 6 };
+        cv_bend_mask(bz, e0);
+        CHECK_NEAR(bz[0], 1, 0); CHECK_NEAR(bz[5], 6, 0);
         double sh[6] = { 0, 0, 0, 50, 0, 0 };
         CHECK_NEAR(cv_tresca6(sh, false), 100, 1e-3); CHECK_NEAR(cv_mises6(sh), 86.6025, 1e-3);
     }

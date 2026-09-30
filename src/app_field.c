@@ -797,11 +797,26 @@ void app_lin_close(void) {
     if (was) refresh_path();
 }
 
+bool app_lin_mb(double m[6], double b[6]) {
+    if (!G.lin_n || !cv_linearize(G.lin_s, G.lin_n, G.lin_t, m, b)) return false;
+    if (!G.lin_asme) return true;
+    float d[3] = { G.lin_p[1][0] - G.lin_p[0][0], G.lin_p[1][1] - G.lin_p[0][1], G.lin_p[1][2] - G.lin_p[0][2] };
+    if (G.csys > 0) {                        /* the samples are in cylindrical components: the line's direction too, at its middle */
+        float mid[3], Q[3][3], l[3];
+        for (int k = 0; k < 3; k++) mid[k] = 0.5f * (G.lin_p[0][k] + G.lin_p[1][k]);
+        cv_cyl_basis(mid, G.csys_o, G.csys - 1, Q);
+        for (int a = 0; a < 3; a++) l[a] = Q[a][0] * d[0] + Q[a][1] * d[1] + Q[a][2] * d[2];
+        memcpy(d, l, sizeof d);
+    }
+    cv_bend_mask(b, d);
+    return true;
+}
+
 bool app_lin_csv(const char* path) {
     if (!G.lin_n || G.lin_fi < 0) return false;
     const cv_field_desc* d = &G.frd.steps[G.step].fields[G.lin_fi];
     double m[6], b[6];
-    bool ok = cv_linearize(G.lin_s, G.lin_n, G.lin_t, m, b);
+    bool ok = app_lin_mb(m, b);
     FILE* o = fopen(path, "w");
     if (!o) return false;
     fprintf(o, "# %s linearized from (%.9g, %.9g, %.9g) to (%.9g, %.9g, %.9g), t = %.9g, step %d\n", d->name,
@@ -809,6 +824,7 @@ bool app_lin_csv(const char* path) {
     if (ok) {
         double mb[6], mb2[6];
         for (int c = 0; c < 6; c++) { mb[c] = m[c] + b[c]; mb2[c] = m[c] - b[c]; }
+        fprintf(o, "# bending from %s\n", G.lin_asme ? "the components normal to the line only (5-A.4.1.2)" : "all six components");
         fprintf(o, "# membrane: von Mises %.9g, Tresca %.9g\n", cv_mises6(m), cv_tresca6(m, false));
         fprintf(o, "# membrane + bending at start: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb), cv_tresca6(mb, false));
         fprintf(o, "# membrane + bending at end: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb2), cv_tresca6(mb2, false));

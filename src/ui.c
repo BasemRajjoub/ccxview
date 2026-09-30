@@ -1564,7 +1564,7 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
     {
         char txt[200];
         double m[6], b[6];
-        bool ok = G.lin_n && cv_linearize(G.lin_s, G.lin_n, G.lin_t, m, b);
+        bool ok = app_lin_mb(m, b);
         if (!ok) {
             int out = 0;
             for (int i = 0; i < G.lin_n; i++) out += G.lin_s[6 * i] != G.lin_s[6 * i];
@@ -1584,6 +1584,13 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
                 tip(ctx, b);
                 if (nk_button_label(ctx, "along the normal")) { G.path_dir = 1; app_path_rebuild(); return; }
             }
+        }
+        if (ok) {
+            nk_layout_row_dynamic(ctx, row, 1);
+            tip(ctx, "ASME VIII-2 5-A.4.1.2: the bending stress is taken only from the components normal to the\n"
+                     "line (hoop, meridional and their shear); the component along the line and the through-\n"
+                     "thickness shears carry membrane and peak only. Off: all six components bend (Mecway's default).");
+            if (nk_checkbox_label(ctx, "bending from the components normal to the line (ASME)", &G.lin_asme)) ok = app_lin_mb(m, b);
         }
         if (ok) {
             const float* s0 = G.lin_s; const float* s1 = G.lin_s + 6 * (G.lin_n - 1);
@@ -1635,7 +1642,7 @@ static void lin_body(struct nk_context* ctx, float s, float row) {
             }
         }
         struct nk_rect area;
-        float used = (ok ? 7 : 3) * (row + ctx->style.window.spacing.y);   /* two header rows, the table or the note */
+        float used = (ok ? 8 : 3) * (row + ctx->style.window.spacing.y);   /* two header rows, the option and the table, or the note */
         nk_layout_row_dynamic(ctx, CV_MAX(nk_window_get_content_region(ctx).h - used - 4 * s, row), 1);
         if (nk_widget(&area, ctx) != NK_WIDGET_INVALID && G.lin_n > 1) {
             struct nk_command_buffer* cv = nk_window_get_canvas(ctx);

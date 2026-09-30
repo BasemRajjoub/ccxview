@@ -209,6 +209,18 @@ void cv_lin_at(const double m[6], const double b[6], double t, double x, double 
     for (int c = 0; c < 6; c++) out[c] = m[c] + b[c] * f;
 }
 
+void cv_bend_mask(double b[6], const float dir[3]) {
+    double d[3] = { dir[0], dir[1], dir[2] }, n = sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    if (!(n > 0)) return;
+    for (int k = 0; k < 3; k++) d[k] /= n;
+    /* keep P S P with P = I - d d^T: the part of the tensor acting in the plane normal to d */
+    double S[3][3] = { { b[0], b[3], b[5] }, { b[3], b[1], b[4] }, { b[5], b[4], b[2] } }, P[3][3], PS[3][3], T[3][3];
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) P[i][j] = (i == j) - d[i] * d[j];
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) PS[i][j] = P[i][0] * S[0][j] + P[i][1] * S[1][j] + P[i][2] * S[2][j];
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) T[i][j] = PS[i][0] * P[0][j] + PS[i][1] * P[1][j] + PS[i][2] * P[2][j];
+    b[0] = T[0][0]; b[1] = T[1][1]; b[2] = T[2][2]; b[3] = T[0][1]; b[4] = T[1][2]; b[5] = T[2][0];
+}
+
 double cv_mises6(const double s[6]) {
     double a = s[0] - s[1], b = s[1] - s[2], c = s[2] - s[0];
     return sqrt(0.5 * (a * a + b * b + c * c) + 3 * (s[3] * s[3] + s[4] * s[4] + s[5] * s[5]));

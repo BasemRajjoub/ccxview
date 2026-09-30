@@ -64,6 +64,7 @@ static void init(void) {
     G.anim_factor = 1.f;
     G.fly_speed = 0.25f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
+    G.lin_asme = true;
     G.path_to = UINT32_MAX;
     G.show_gp = false;                   /* off by default, like nodes */
     G.gp_colored = true;

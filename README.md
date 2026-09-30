@@ -49,7 +49,8 @@ Ready-made builds are in [binaries/](binaries/):
   coordinate systems, unit systems, history of a node or element over all
   steps, ASME VIII-2 stress linearization along a line through the wall
   (membrane, membrane + bending, peak and total at both ends and their
-  largest value on the line).
+  largest value on the line; bending from the components normal to the line
+  as 5-A.4.1.2 asks, or from all six).
 - **Export.** PNG of the view, MP4 video or PNG sequence of a deformation
   cycle or of every step, CSV, VTK for ParaView, and a view file to reproduce
   a picture later. All available from the command line for scripting.

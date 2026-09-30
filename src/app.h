@@ -206,6 +206,7 @@ typedef struct {
     float*    lin_s;                 /* 6 per point, NaN where the line is outside the solid */
     float     lin_t;                 /* line length */
     int       lin_q;                 /* shown: 0 von Mises, 1 Tresca, 2.. a component */
+    bool      lin_asme;              /* bending from the components normal to the line only (5-A.4.1.2) */
     char      lin_key[200];
     /* comparison: a second results file on the same mesh, shown as A - B */
     cv_map    cmp_map;
@@ -338,6 +339,8 @@ void app_start_dir(char* out, size_t n);
 void app_set_step(int step);
 void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
 void app_lin_open(const float A[3], const float B[3], uint32_t na, uint32_t nb);  /* linearize the stress on the line A..B */
+/* membrane and bending of the sampled line, the bending masked as lin_asme asks; false if no line */
+bool app_lin_mb(double m[6], double b[6]);
 void app_lin_close(void);
 void app_pick_cancel(void);                 /* drop a pending second click */
 void app_marks_sync(void);                  /* the picked-node markers, redrawn when the picks change */
