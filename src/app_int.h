@@ -13,6 +13,7 @@ typedef struct {
     bool        gauss;          /* --gauss: start on the first .dat field */
     bool        cgx;            /* --cgx: evaluate a cgx script on open */
     bool        mirror[3];      /* --mirror xyz */
+    bool        rep[3];         /* --opt repK=1: replicate along axis K from the start */
     bool        eval_next;      /* the next open evaluates with cgx */
     bool        gp;             /* --gp: Gauss point layer on */
     bool        vectors;        /* --vectors: arrow layer on */
@@ -65,6 +66,7 @@ void         refresh_path(void);
 void view_bounds(void);
 int  sym_auto(int axis);
 void sym_matrix(int copy, float* M);     /* model matrix of mirror copy `copy` (bit k = axis k) */
+void copy_ray(int i, const float o[3], const float d[3], float mo[3], float md[3]);   /* world ray -> instance i's model frame */
 void cam_matrices(float* mvp, float* mv, float* proj_out);
 void do_pick(float px, float py);
 

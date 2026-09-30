@@ -19,6 +19,11 @@ enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis 
 /* symmetry plane position along its axis */
 enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
 
+/* the side panel's sections and sub-sections: open or closed, kept in the settings */
+enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
+       CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
+       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_N };
+
 enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
 
 typedef struct {
@@ -147,7 +152,7 @@ typedef struct {
     int       exp_cycles;            /* deformation cycles recorded */
     int       exp_fps;               /* frames per second of a video / cycle */
     bool      exp_lock_range;        /* keep the colour range fixed while recording */
-    int       exp_open;              /* the Export section expanded (nk_collapse_states) */
+    int       tree[CV_TREE_N];       /* CV_TREE_*: panel section expanded (nk_collapse_states) */
     int       seq_warm;              /* frames to let pass before recording: the arming frame is drawn with the old state */
     void*     video;                 /* an MP4 being written (cv_video*), frames of the sequence go there */
     /* clip plane: everything beyond it is cut away at draw time (no cap) */
@@ -202,6 +207,9 @@ typedef struct {
     cv_camera cam;
     bool      sym[3];                /* mirror copies across a plane normal to X, Y, Z */
     int       sym_at[3];             /* CV_SYM_*: where that plane sits */
+    bool      rep[3];                /* replicate: a row of copies along X, Y, Z (periodic models) */
+    int       rep_n[3];              /* copies along that axis, the model included */
+    float     rep_gap[3];            /* space between copies; 0: they touch (pitch = length of the model) */
     bool      up_z;                  /* turntable about world Z instead of Y */
     bool      orbit_free;            /* free orbit: dragging turns about the screen's axes, no fixed up */
     bool      orbit_cursor;          /* drag rotates about the model point under the cursor */
@@ -285,6 +293,9 @@ int  app_check(const char* path);    /* --check: headless parse, messages to std
 void app_sym_toggled(int axis);      /* picks the plane, reframes */
 void app_sym_changed(void);          /* plane moved: reframe */
 float app_sym_plane(int axis);
+float app_rep_pitch(int axis);       /* distance between replicated copies along the axis */
+int  app_copies(void);               /* instances drawn: the model, mirror and replicate copies */
+void app_copy_matrix(int i, float* M);   /* model matrix of instance i (0: identity) */
 void app_export_png(void);
 void app_export_animation(void);         /* per the Export section: deformation cycles or every step, PNGs or MP4 */
 int  app_export_progress(int* done, int* total);  /* a frame export running? fills done / total */

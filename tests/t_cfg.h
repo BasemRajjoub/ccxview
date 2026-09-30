@@ -187,6 +187,23 @@ static void test_cfg(void) {
     if (tk.n == 1) CHECK(strlen(tk.a[0].key) < sizeof tk.a[0].key);
     cv_cfg_free(&tk);
 
+    /* ---- unset and a new layout: sections in a fixed order, the rest at the end ---- */
+    write_file(path, "# old\nb = 2\nold = x\na = 1\nextra = e\n", 36);
+    cv_cfg tl;
+    CHECK(cv_cfg_load(&tl, path));
+    cv_cfg_unset(&tl, "old");
+    cv_cfg_unset(&tl, "missing");
+    CHECK_EQ(tl.n, 3);
+    cv_cfg_set_layout(&tl, "# head\na = _\n\nb = _\n");
+    CHECK(cv_cfg_save(&tl));
+    cv_cfg_free(&tl);
+    {
+        FILE* f = fopen(path, "rb");
+        char got[128] = { 0 };
+        if (f) { fread(got, 1, sizeof got - 1, f); fclose(f); }
+        CHECK(strcmp(got, "# head\na = 1\n\nb = 2\nextra = e\n") == 0);
+    }
+
     /* ---- garbage with binary bytes must never crash ---- */
     unsigned char garbage[300];
     uint32_t rng = 0xC0FFEE;

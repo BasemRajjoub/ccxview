@@ -346,7 +346,7 @@ static void panel_geo_sets(struct nk_context* ctx, float row) {
 /* ---- Layers: what is drawn and how it is coloured */
 static void section_layers(struct nk_context* ctx, float s, float row) {
     /* layers */
-    if (nk_tree_push(ctx, NK_TREE_TAB, "Layers", NK_MAXIMIZED)) {
+    if (nk_tree_state_push(ctx, NK_TREE_TAB, "Layers", (enum nk_collapse_states*)&G.tree[CV_TREE_LAYERS])) {
         if (geo_loaded()) {                      /* cgx geometry */
             nk_layout_row_dynamic(ctx, row, 3);
             nk_checkbox_label(ctx, "Points", &G.show_geo_pts);
@@ -446,7 +446,7 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
 /* ---- Groups: element type / material / group, deck and cgx sets */
 static void section_groups(struct nk_context* ctx, float s, float row) {
     /* groups */
-    if (nk_tree_push(ctx, NK_TREE_TAB, "Groups", NK_MAXIMIZED)) {
+    if (nk_tree_state_push(ctx, NK_TREE_TAB, "Groups", (enum nk_collapse_states*)&G.tree[CV_TREE_GROUPS])) {
         for (int a = 0; a < CV_AXIS_N; a++) {
             cv_axis* ax = &G.groups.axis[a];
             if (!nk_tree_push_id(ctx, NK_TREE_NODE, cv_axis_name(a), a == 0 ? NK_MAXIMIZED : NK_MINIMIZED, a))
@@ -519,7 +519,7 @@ static void section_groups(struct nk_context* ctx, float s, float row) {
 /* ---- Fields of the current step, and the .dat ones */
 static void section_fields(struct nk_context* ctx, float s, float row) {
     /* fields of the current step */
-    if (nk_tree_push(ctx, NK_TREE_TAB, "Fields", NK_MAXIMIZED)) {
+    if (nk_tree_state_push(ctx, NK_TREE_TAB, "Fields", (enum nk_collapse_states*)&G.tree[CV_TREE_FIELDS])) {
         nk_layout_row_dynamic(ctx, row, 1);
         if (G.frd.n_steps == 0) {
             nk_label(ctx, "No results in this file.", NK_TEXT_LEFT);
@@ -582,7 +582,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
 
 /* ---- Export: pictures, animations, data and the view state ------------------- */
 static void section_export(struct nk_context* ctx, float s, float row) {
-    if (!nk_tree_state_push(ctx, NK_TREE_TAB, "Export", (enum nk_collapse_states*)&G.exp_open)) return;
+    if (!nk_tree_state_push(ctx, NK_TREE_TAB, "Export", (enum nk_collapse_states*)&G.tree[CV_TREE_EXPORT])) return;
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "The 3D view with legend and axes as <model>_stepN.png beside the model, numbered, never overwritten");
     if (nk_button_label(ctx, "Image of the view (Ctrl+E)")) app_export_png();
@@ -639,28 +639,54 @@ static void section_export(struct nk_context* ctx, float s, float row) {
     nk_tree_state_pop(ctx);
 }
 
-/* ---- View: camera, background, symmetry, crop box */
+/* a sub-section of a panel section, open or closed as it was left (saved in the settings) */
+static bool sub_push(struct nk_context* ctx, const char* title, int t) {
+    return nk_tree_state_push(ctx, NK_TREE_NODE, title, (enum nk_collapse_states*)&G.tree[t]);
+}
+
+static void cmap_combo(struct nk_context* ctx, float s, float row);
+static void legend_controls(struct nk_context* ctx, float s, float row);
+
+/* replicate: rows of copies of a periodic model along X / Y / Z */
+static void view_replicate(struct nk_context* ctx, float s, float row) {
+    static const char* ax[3] = { "Along X", "Along Y", "Along Z" };
+    for (int k = 0; k < 3; k++) {
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_static(ctx, 80 * s);
+        if (G.rep[k]) { nk_layout_row_template_push_dynamic(ctx); nk_layout_row_template_push_dynamic(ctx); }
+        nk_layout_row_template_end(ctx);
+        tip(ctx, "Draw the model again in a row of copies along this axis\n(a periodic model: several cells side by side). Axes combine into a grid");
+        if (nk_checkbox_label(ctx, ax[k], &G.rep[k])) app_sym_changed();
+        if (!G.rep[k]) continue;
+        int n = G.rep_n[k];
+        tip(ctx, "Copies along this axis, the model included");
+        nk_property_int(ctx, "#n", 2, &n, 100, 1, 0.2f);
+        if (n != G.rep_n[k]) { G.rep_n[k] = n; app_sym_changed(); }
+        char pitch[32], tp[128];
+        fmt_num(pitch, sizeof pitch, app_rep_pitch(k));
+        snprintf(tp, sizeof tp, "Space between neighbouring copies (0: they touch).\nPitch now %s", pitch);
+        tip(ctx, tp);
+        float g = G.rep_gap[k], step = CV_MAX(G.diag * 0.01f, 1e-6f);
+        nk_property_float(ctx, "#gap", -1e9f, &g, 1e9f, step, step * 0.1f);
+        if (g != G.rep_gap[k]) { G.rep_gap[k] = g; app_sym_changed(); }
+    }
+}
+
+/* ---- View: camera, colours, display, symmetry, cuts, the file */
 static void section_view(struct nk_context* ctx, float s, float row) {
-    /* view: camera, lighting */
-    if (nk_tree_push(ctx, NK_TREE_TAB, "View", NK_MAXIMIZED)) {
-        static const char* views[] = { "Iso", "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
-        nk_layout_row_dynamic(ctx, row, 1);
-        nk_label(ctx, "Look from", NK_TEXT_LEFT);
-        nk_layout_row_dynamic(ctx, row, 7);
-        for (int v = 0; v < 7; v++)
-            if (nk_button_label(ctx, views[v])) app_view(v);
-        nk_layout_row_dynamic(ctx, row, 2);
-        {
-            nk_bool leg = !G.hide_legend, ax = !G.hide_axes;
-            tip(ctx, "The colour legend / group key in the view (also in exports)");
-            if (nk_checkbox_label(ctx, "Legend", &leg)) G.hide_legend = !leg;
-            tip(ctx, "The axes gizmo in the corner (click its tips to look from there)");
-            if (nk_checkbox_label(ctx, "Axes gizmo", &ax)) G.hide_axes = !ax;
-        }
-        tip(ctx, "Parallel projection: no perspective, distances compare directly");
-        nk_checkbox_label(ctx, "orthographic", &G.cam.ortho);
-        if (nk_button_label(ctx, "Fit (F)")) app_fit();
-        /* mouse navigation */
+    if (!nk_tree_state_push(ctx, NK_TREE_TAB, "View", (enum nk_collapse_states*)&G.tree[CV_TREE_VIEW])) return;
+    static const char* views[] = { "Iso", "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label(ctx, "Look from", NK_TEXT_LEFT);
+    nk_layout_row_dynamic(ctx, row, 7);
+    for (int v = 0; v < 7; v++)
+        if (nk_button_label(ctx, views[v])) app_view(v);
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "Parallel projection: no perspective, distances compare directly");
+    nk_checkbox_label(ctx, "orthographic", &G.cam.ortho);
+    if (nk_button_label(ctx, "Fit (F)")) app_fit();
+
+    if (sub_push(ctx, "Camera", CV_TREE_CAMERA)) {
         nk_layout_row_dynamic(ctx, row, 3);
         nk_label(ctx, "Up axis", NK_TEXT_LEFT);
         {
@@ -690,8 +716,30 @@ static void section_view(struct nk_context* ctx, float s, float row) {
             nk_label_colored(ctx, "Shift fast  drag look  wheel speed", NK_TEXT_LEFT, P.dim);
             nk_label_colored(ctx, "Esc or G: back to orbit", NK_TEXT_LEFT, P.dim);
         }
+        nk_tree_state_pop(ctx);
+    }
+
+    if (sub_push(ctx, "Colours & legend", CV_TREE_COLOURS)) {
+        nk_layout_row_dynamic(ctx, row, 2);
+        cmap_combo(ctx, s, row);
+        {
+            nk_bool leg = !G.hide_legend;
+            tip(ctx, "The colour legend / group key in the view (also in exports)");
+            if (nk_checkbox_label(ctx, "show legend", &leg)) G.hide_legend = !leg;
+        }
+        legend_controls(ctx, s, row);
+        nk_tree_state_pop(ctx);
+    }
+
+    if (sub_push(ctx, "Display", CV_TREE_DISPLAY)) {
+        nk_layout_row_dynamic(ctx, row, 2);
+        {
+            nk_bool ax = !G.hide_axes;
+            tip(ctx, "The axes gizmo in the corner (click its tips to look from there)");
+            if (nk_checkbox_label(ctx, "Axes gizmo", &ax)) G.hide_axes = !ax;
+        }
         tip(ctx, "Light the faces. Off: exact colours, as in the legend");
-        nk_checkbox_label(ctx, "Shading (light + shadow)", &G.shading);
+        nk_checkbox_label(ctx, "Shading", &G.shading);
 
         /* background: presets and a picker; exports use it too */
         nk_layout_row_template_begin(ctx, row);
@@ -739,22 +787,11 @@ static void section_view(struct nk_context* ctx, float s, float row) {
             int t = nk_combo(ctx, names, NTHEMES, U.theme, (int)row, nk_vec2(200 * s, 6 * row + 20 * s));
             if (t != U.theme) { U.theme = t; U.restyle = true; }
         }
-        nk_layout_row_dynamic(ctx, row, 1);
-        tip(ctx, "Save the 3D view (legend and axes included) as <model>_step<N>.png beside the model");
-        nk_layout_row_dynamic(ctx, row, 2);
-        tip(ctx, "Open a second .frd of the same mesh and show fields as the difference (Fields > minus ...)");
-        if (nk_button_label(ctx, G.cmp_on ? "Compare: off" : "Compare with...")) {
-            if (G.cmp_on) { app_compare_close(); app_select(G.field_name, G.comp); }
-            else { G.dlg_for_compare = true; app_open_dialog(); }
-        }
-        nk_spacing(ctx, 1);
-        nk_layout_row_dynamic(ctx, row, 2);
-        tip(ctx, "Reload when the file changes on disk (a running solver): camera, step and field stay");
-        nk_checkbox_label(ctx, "Watch file", &G.watch);
-        tip(ctx, "Reopen the file now, keeping camera, step and field");
-        if (nk_button_label(ctx, "Reload")) app_reload();
+        nk_tree_state_pop(ctx);
+    }
 
-        /* symmetry: the model mirrored across planes normal to X / Y / Z */
+    if (sub_push(ctx, "Mirror", CV_TREE_MIRROR)) {
+        /* the model mirrored across planes normal to X / Y / Z */
         {
             static const char* ax[3] = { "Mirror X", "Mirror Y", "Mirror Z" };
             const float lo[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, hi[3] = { G.bmax.x, G.bmax.y, G.bmax.z };
@@ -776,6 +813,15 @@ static void section_view(struct nk_context* ctx, float s, float row) {
             }
         }
 
+        nk_tree_state_pop(ctx);
+    }
+
+    if (sub_push(ctx, "Replicate", CV_TREE_REPLICATE)) {
+        view_replicate(ctx, s, row);
+        nk_tree_state_pop(ctx);
+    }
+
+    if (sub_push(ctx, "Clip & crop", CV_TREE_CLIP)) {
         /* clip plane: cut at draw time along an axis; hollow inside (no cap) */
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Cut the drawing at a plane (the inside shows hollow; the crop box below removes whole elements)");
@@ -826,9 +872,26 @@ static void section_view(struct nk_context* ctx, float s, float row) {
                 }
             }
         }
-        nk_tree_pop(ctx);
+        nk_tree_state_pop(ctx);
     }
 
+    if (sub_push(ctx, "File", CV_TREE_FILE)) {
+        nk_layout_row_dynamic(ctx, row, 2);
+        tip(ctx, "Open a second .frd of the same mesh and show fields as the difference (Fields > minus ...)");
+        if (nk_button_label(ctx, G.cmp_on ? "Compare: off" : "Compare with...")) {
+            if (G.cmp_on) { app_compare_close(); app_select(G.field_name, G.comp); }
+            else { G.dlg_for_compare = true; app_open_dialog(); }
+        }
+        nk_spacing(ctx, 1);
+        nk_layout_row_dynamic(ctx, row, 2);
+        tip(ctx, "Reload when the file changes on disk (a running solver): camera, step and field stay");
+        nk_checkbox_label(ctx, "Watch file", &G.watch);
+        tip(ctx, "Reopen the file now, keeping camera, step and field");
+        if (nk_button_label(ctx, "Reload")) app_reload();
+
+        nk_tree_state_pop(ctx);
+    }
+    nk_tree_state_pop(ctx);
 }
 
 /* The recent files as one left-aligned button each (full path in the tooltip),
@@ -999,9 +1062,6 @@ static void panel_toolbar(struct nk_context* ctx, float s, float row) {
     if (bj != bi && bj < 4) G.bands = band_vals[bj];
     nk_layout_row_push(ctx, 24 * s);
     nk_spacing(ctx, 1);
-    nk_layout_row_push(ctx, 90 * s);
-    tip(ctx, "Range, number format, reverse, greyscale (also: right-click the legend)");
-    if (nk_button_label(ctx, "legend...")) G.legend_edit = !G.legend_edit;
     if (G.range_lock) {
         nk_layout_row_push(ctx, 120 * s);
         char a[32], b[32], lab[80];
@@ -1455,17 +1515,11 @@ static void window_find(struct nk_context* ctx, float s, float row) {
     nk_end(ctx);
 }
 
-/* ---- legend settings: a small floating window, opened by right-clicking the
-   legend or the toolbar's "legend..." button. Range lock, number format, band
-   count, reverse and greyscale live here so the toolbar stays short. */
-static void window_legend_settings(struct nk_context* ctx, float s, float row) {
-    static bool was_open;
-    if (!G.legend_edit || !G.loaded) { was_open = false; return; }
-    if (!was_open) nk_window_show(ctx, "Legend settings", NK_SHOWN);
-    was_open = true;
-    float w = 300 * s, h = 13.5f * row;
-    if (nk_begin(ctx, "Legend settings", nk_rect(G.vp_x + G.vp_w - w - 180 * s, G.vp_y + 10 * s, w, h),
-                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
+/* ---- the legend's range, number format, band count, reverse and greyscale:
+   in View > Colours & legend, and in a small floating window opened by
+   right-clicking the legend. */
+static void legend_controls(struct nk_context* ctx, float s, float row) {
+    {
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, "Keep min/max fixed across steps and components; values above show light grey, below dark grey");
         if (nk_checkbox_label(ctx, "lock range", &G.range_lock) && !G.range_lock) app_refresh_range();
@@ -1494,6 +1548,18 @@ static void window_legend_settings(struct nk_context* ctx, float s, float row) {
         tip(ctx, "Centre the view on the field's minimum / maximum");
         if (nk_button_label(ctx, "go to min") && G.min_at != UINT32_MAX) { G.show_markers = true; app_find(G.elem_mode ? G.frd.elem_id[G.min_at] : G.frd.node_id[G.min_at], G.elem_mode); }
         if (nk_button_label(ctx, "go to max") && G.max_at != UINT32_MAX) { G.show_markers = true; app_find(G.elem_mode ? G.frd.elem_id[G.max_at] : G.frd.node_id[G.max_at], G.elem_mode); }
+    }
+}
+
+static void window_legend_settings(struct nk_context* ctx, float s, float row) {
+    static bool was_open;
+    if (!G.legend_edit || !G.loaded) { was_open = false; return; }
+    if (!was_open) nk_window_show(ctx, "Legend settings", NK_SHOWN);
+    was_open = true;
+    float w = 300 * s, h = 13.5f * row;
+    if (nk_begin(ctx, "Legend settings", nk_rect(G.vp_x + G.vp_w - w - 180 * s, G.vp_y + 10 * s, w, h),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
+        legend_controls(ctx, s, row);
         nk_layout_row_dynamic(ctx, row, 1);
         if (nk_button_label(ctx, "close")) G.legend_edit = false;
     }

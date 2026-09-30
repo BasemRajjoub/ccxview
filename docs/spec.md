@@ -48,7 +48,7 @@ src/
   app_field.c   decoded-field cache, colourings, displacement, vectors, markers, path, compare
   app_cam.c     camera, fit, symmetry copies, picking, find
   app_load.c    background loading, skin job, applying a load, reload, view state, --check
-  app_settings.c the ini: window, layers, legend, recent files (cfg.c)
+  app_settings.c the ini: one table of settings in sections (window, layers, colours, camera, display, animation, export, open panel sections), recent files (cfg.c)
   cfg.c/.h      flat INI reader / writer (headless)
   export.c/.h   CSV / legacy VTK writers (headless)
   path.c/.h     Dijkstra over the skin edges (headless)

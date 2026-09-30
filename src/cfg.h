@@ -32,6 +32,10 @@ void  cv_cfg_set(cv_cfg* c, const char* key, const char* val);       /* adds or 
 void  cv_cfg_set_int(cv_cfg* c, const char* key, int v);
 void  cv_cfg_set_float(cv_cfg* c, const char* key, float v);
 void  cv_cfg_set_bool(cv_cfg* c, const char* key, bool v);
+void  cv_cfg_unset(cv_cfg* c, const char* key);                        /* drops the key; absent: nothing */
+/* The file's layout for the next save: its lines replace the file as read
+   (comments, blank lines, key order); keys not in it follow at the end. */
+void  cv_cfg_set_layout(cv_cfg* c, const char* text);
 
 /* recent files: keys recent0..recent9, newest first; adding an existing path moves it to the front */
 void        cv_cfg_add_recent(cv_cfg* c, const char* path);

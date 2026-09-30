@@ -146,12 +146,80 @@ int sym_auto(int k) {
 }
 
 /* box of the model and all its mirror copies */
-static void sym_extend(v3* lo, v3* hi) {
-    float* l = &lo->x; float* h = &hi->x;
+static void mirror_extend(float* l, float* h) {
     for (int k = 0; k < 3; k++) {
         if (!G.sym[k]) continue;
         float c = app_sym_plane(k), a = 2 * c - h[k], b = 2 * c - l[k];
         l[k] = fminf(l[k], a); h[k] = fmaxf(h[k], b);
+    }
+}
+
+/* ---- replicate: rows of copies of a periodic model --------------------------------
+   The model (with its mirror copies: a symmetric cell made whole first) is
+   drawn again n times along an axis, one pitch apart; axes combine into a
+   grid. Like the mirror copies, the same buffers with a shifted model matrix. */
+
+enum { REP_MAX_DRAWN = 4096 };     /* instances drawn at most, all axes together */
+
+/* the pitch: the length of the (mirrored) undeformed model plus the gap */
+float app_rep_pitch(int k) {
+    float l[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, h[3] = { G.bmax.x, G.bmax.y, G.bmax.z };
+    mirror_extend(l, h);
+    return (h[k] - l[k]) + G.rep_gap[k];
+}
+
+static int rep_count(int k) { return G.rep[k] ? CV_MAX(1, CV_MIN(G.rep_n[k], 100)) : 1; }
+
+static int mirror_masks(int* out) {
+    int en = (G.sym[0] ? 1 : 0) | (G.sym[1] ? 2 : 0) | (G.sym[2] ? 4 : 0), n = 0;
+    for (int m = 0; m < 8; m++) if ((m & en) == m) out[n++] = m;
+    return n;
+}
+
+int app_copies(void) {
+    int ms[8], n = mirror_masks(ms) * rep_count(0) * rep_count(1) * rep_count(2);
+    return CV_MIN(n, REP_MAX_DRAWN);
+}
+
+/* instance i: mirror mask and shift */
+static void copy_of(int i, int* mask, float off[3]) {
+    int ms[8], nm = mirror_masks(ms);
+    *mask = ms[i % nm];
+    int r = i / nm;
+    for (int k = 0; k < 3; k++) {
+        int n = rep_count(k);
+        off[k] = (float)(r % n) * app_rep_pitch(k);
+        r /= n;
+    }
+}
+
+void app_copy_matrix(int i, float* M) {
+    int m; float off[3];
+    copy_of(i, &m, off);
+    sym_matrix(m, M);
+    for (int k = 0; k < 3; k++) M[12 + k] += off[k];    /* shift after the reflection */
+}
+
+/* A world ray in the frame of instance i: undo the shift, then the reflection
+   (its own inverse). Neither changes lengths, so hit distances compare directly. */
+void copy_ray(int i, const float o[3], const float d[3], float mo[3], float md[3]) {
+    int m; float off[3];
+    copy_of(i, &m, off);
+    for (int k = 0; k < 3; k++) {
+        bool r = m >> k & 1;
+        float p = o[k] - off[k];
+        mo[k] = r ? 2.f * app_sym_plane(k) - p : p;
+        md[k] = r ? -d[k] : d[k];
+    }
+}
+
+/* box of the model with all its copies */
+static void sym_extend(v3* lo, v3* hi) {
+    float* l = &lo->x; float* h = &hi->x;
+    mirror_extend(l, h);
+    for (int k = 0; k < 3; k++) {
+        float span = (float)(rep_count(k) - 1) * app_rep_pitch(k);
+        if (span > 0) h[k] += span; else l[k] += span;
     }
 }
 
@@ -329,16 +397,10 @@ bool app_cursor_point(float px, float py, v3* out, bool* on_model) {
     float o[3], d[3];
     cam_ray(px, py, o, d);
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
-    int en = (G.sym[0] ? 1 : 0) | (G.sym[1] ? 2 : 0) | (G.sym[2] ? 4 : 0);
     float best = INFINITY;
-    for (int m = 0; m < 8; m++) {
-        if ((m & en) != m) continue;
+    for (int i = 0, n = app_copies(); i < n; i++) {
         float mo[3], md[3];
-        for (int k = 0; k < 3; k++) {       /* a reflection keeps distances: t compares directly */
-            bool r = m >> k & 1;
-            mo[k] = r ? 2.f * app_sym_plane(k) - o[k] : o[k];
-            md[k] = r ? -d[k] : d[k];
-        }
+        copy_ray(i, o, d, mo, md);
         cv_pick p = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, mo, md);
         if (p.hit && p.t < best) best = p.t;
     }
@@ -358,17 +420,11 @@ void do_pick(float px, float py) {
     cam_ray(px, py, o, d);
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
     G.probe = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, o, d);
-    /* mirror copies: the reflected ray through the model itself (a reflection is
-       its own inverse and keeps distances, so t compares directly) */
-    int en = (G.sym[0] ? 1 : 0) | (G.sym[1] ? 2 : 0) | (G.sym[2] ? 4 : 0);
-    for (int m = 1; en && m < 8; m++) {
-        if ((m & en) != m) continue;
+    /* mirror and replicate copies: the ray taken into the model's own frame
+       (distances kept, so t compares directly) */
+    for (int i = 1, n = app_copies(); i < n; i++) {
         float mo[3], md[3];
-        for (int k = 0; k < 3; k++) {
-            bool r = m >> k & 1;
-            mo[k] = r ? 2.f * app_sym_plane(k) - o[k] : o[k];
-            md[k] = r ? -d[k] : d[k];
-        }
+        copy_ray(i, o, d, mo, md);
         cv_pick p = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, mo, md);
         if (p.hit && (!G.probe.hit || p.t < G.probe.t)) {
             G.probe = p;

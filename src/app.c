@@ -83,6 +83,9 @@ static void init(void) {
     G.cam.dist = 3;
     G.legend_decimals = 3;
     G.clip_pos = 0.5f;
+    G.rep_n[0] = G.rep_n[1] = G.rep_n[2] = 3;
+    G.tree[CV_TREE_LAYERS] = G.tree[CV_TREE_GROUPS] = G.tree[CV_TREE_FIELDS] = G.tree[CV_TREE_VIEW] = 1;
+    G.tree[CV_TREE_CAMERA] = G.tree[CV_TREE_COLOURS] = 1;
     G.exp_video = true; G.exp_cycles = 1; G.exp_fps = 30; G.exp_lock_range = true;
     G.watch = O.watch;
     settings_load();                     /* the user's last choices override the defaults above */
@@ -304,13 +307,12 @@ static void frame(void) {
     });
     if (G.loaded) {
         cv_render_draw(&d);
-        int en = (G.sym[0] ? 1 : 0) | (G.sym[1] ? 2 : 0) | (G.sym[2] ? 4 : 0);
-        if (en) {                              /* the mirror copies */
+        int nc = app_copies();
+        if (nc > 1) {                          /* the mirror and replicate copies */
             float mvp0[16], mv0[16], M[16];
             memcpy(mvp0, d.mvp, sizeof mvp0); memcpy(mv0, d.mv, sizeof mv0);
-            for (int m = 1; m < 8; m++) {
-                if ((m & en) != m) continue;
-                sym_matrix(m, M);
+            for (int m = 1; m < nc; m++) {
+                app_copy_matrix(m, M);
                 m4_mul(d.mvp, mvp0, M);
                 m4_mul(d.mv, mv0, M);
                 cv_render_draw(&d);

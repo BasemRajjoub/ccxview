@@ -39,11 +39,13 @@ Ready-made builds are in [binaries/](binaries/):
 - **Animation.** Mode shapes, steady-state phases, deformation cycles, step
   playback. Undeformed ghost, min/max markers, probe, find by id, path plots,
   compare two runs (A minus B), clip plane, crop box, mirror symmetry,
+  replicate (rows of copies of a periodic model),
   convergence plot from `.sta`/`.cvg`.
 - **Export.** PNG of the view, MP4 video or PNG sequence of a deformation
   cycle or of every step, CSV, VTK for ParaView, and a view file to reproduce
   a picture later. All available from the command line for scripting.
-- **Robust.** Damaged records are skipped and listed, never a crash. Settings,
+- **Robust.** Damaged records are skipped and listed, never a crash. Settings
+  (in sections in `ccxview.ini`, beside the executable), open panel sections,
   window size and recent files are remembered.
 
 ## Use

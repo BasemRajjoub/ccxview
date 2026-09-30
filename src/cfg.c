@@ -247,6 +247,27 @@ void cv_cfg_set_bool(cv_cfg* c, const char* key, bool v) {
     cv_cfg_set(c, key, v ? "true" : "false");
 }
 
+void cv_cfg_unset(cv_cfg* c, const char* key) {
+    if (!c || !key) return;
+    for (int i = 0; i < c->n; i++)
+        if (strcmp(c->a[i].key, key) == 0) {
+            memmove(&c->a[i], &c->a[i + 1], (size_t)(c->n - i - 1) * sizeof *c->a);
+            c->n--;
+            return;
+        }
+}
+
+void cv_cfg_set_layout(cv_cfg* c, const char* text) {
+    if (!c || !text) return;
+    size_t n = strlen(text);
+    char* r = malloc(n + 1);
+    if (!r) return;                                    /* the old layout stays */
+    memcpy(r, text, n + 1);
+    free(c->raw);
+    c->raw = r;
+    c->raw_n = n;
+}
+
 int cv_cfg_recent(const cv_cfg* c, const char** out, int max) {
     int n = 0;
     for (int i = 0; i < CV_CFG_RECENT && n < max; i++) {
