@@ -202,6 +202,12 @@ void ui_focus_open(void) { g_focus_open = true; }
 /* Whether a Nuklear window under the mouse should keep the event from the 3D
    view. The legend and an empty drop hint only display, so they let everything
    through; the axes gizmo takes clicks but not the wheel. */
+bool ui_text_focus(struct nk_context* ctx) {
+    for (struct nk_window* w = ctx->begin; w; w = w->next)
+        if (!(w->flags & NK_WINDOW_HIDDEN) && (w->edit.active || w->property.active)) return true;
+    return false;
+}
+
 bool ui_mouse_captured(struct nk_context* ctx, bool wheel) {
     float mx = ctx->input.mouse.pos.x, my = ctx->input.mouse.pos.y;
     for (struct nk_window* w = ctx->begin; w; w = w->next) {

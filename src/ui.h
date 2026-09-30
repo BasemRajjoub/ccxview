@@ -19,6 +19,8 @@ void  ui_focus_open(void);   /* Ctrl+L: cursor into the path box */
 /* a panel under the mouse keeps the event from the 3D view (legend and hint
    never do; the axes gizmo lets the wheel through) */
 bool  ui_mouse_captured(struct nk_context* ctx, bool wheel);
+/* a text or number field is being edited: keys are typing, not shortcuts */
+bool  ui_text_focus(struct nk_context* ctx);
 void  ui_wheel_focus(struct nk_context* ctx);   /* wheel scrolls the panel under it */
 
 #endif

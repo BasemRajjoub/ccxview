@@ -715,7 +715,10 @@ static void event(const sapp_event* ev) {
             memset(g_keys, 0, sizeof g_keys);
             break;
         case SAPP_EVENTTYPE_KEY_DOWN: {
-            if (nk_busy) break;                  /* typing in a text box */
+            /* typing in a text box. Not nk_busy: that is true whenever the cursor is over
+               any Nuklear window (legend, gizmo, the hint bar), and a look drag in flight
+               sweeps the cursor over them, which would drop the movement keys */
+            if (g_nk && ui_text_focus(g_nk)) break;
             if ((int)ev->key_code >= 0 && (int)ev->key_code < (int)SAPP_MAX_KEYCODES) g_keys[ev->key_code] = true;
             bool ctrl = (ev->modifiers & (SAPP_MODIFIER_CTRL | SAPP_MODIFIER_SUPER)) != 0;
             if (G.flight && !ev->key_repeat && !ctrl) {
