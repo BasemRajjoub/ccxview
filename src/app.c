@@ -111,6 +111,7 @@ static void fmt_bytes(char* out, size_t n, uint64_t b) {
 }
 
 /* Title bar: file (size) | FPS | CPU | RAM, twice a second. */
+#define CV_TITLE_MAX 120
 static void update_title(void) {
     double now = cv_now();
     G.title_frames++;
@@ -119,7 +120,7 @@ static void update_title(void) {
     float fps = (float)(G.title_frames / (now - G.title_t));
     G.title_t = now;
     G.title_frames = 0;
-    char ram[32], fsz[32], title[1400], gpu[160];
+    char ram[32], fsz[32], title[1400], gpu[160], gpu_short[48];
     fmt_bytes(ram, sizeof ram, cv_rss_bytes());
     float cpu = cv_cpu_percent();
     /* GPU: our frames' share of the GPU's time, the whole GPU's load where the
@@ -130,15 +131,30 @@ static void update_title(void) {
         if (busy >= 0) k += snprintf(gpu + k, sizeof gpu - (size_t)k, "%.0f%%", busy);
         else k += snprintf(gpu + k, sizeof gpu - (size_t)k, "-");
         if (load >= 0) k += snprintf(gpu + k, sizeof gpu - (size_t)k, " (sys %.0f%%)", load);
+        snprintf(gpu_short, sizeof gpu_short, "%s", gpu);
         if (cv_gpu_name()[0]) snprintf(gpu + k, sizeof gpu - (size_t)k, " %s%s", cv_gpu_name(), cv_gpu_is_software() ? " (software)" : "");
     }
-    if (G.loaded) {
-        const char* b = cv_basename(G.path);
-        fmt_bytes(fsz, sizeof fsz, G.file_bytes);
-        snprintf(title, sizeof title, "ccxview - %s (%s)  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s",
-                 b, fsz, fps, cpu, gpu, ram);
-    } else {
-        snprintf(title, sizeof title, "ccxview  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s", fps, cpu, gpu, ram);
+    /* sokol keeps at most 127 bytes of title, and on Windows shows nothing at
+       all when that is full: drop the GPU name, then cut the file name */
+    for (int pass = 0; pass < 2; pass++) {
+        const char* g = pass ? gpu_short : gpu;
+        if (G.loaded) {
+            const char* b = cv_basename(G.path);
+            fmt_bytes(fsz, sizeof fsz, G.file_bytes);
+            snprintf(title, sizeof title, "ccxview - %s (%s)  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s",
+                     b, fsz, fps, cpu, g, ram);
+        } else {
+            snprintf(title, sizeof title, "ccxview  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s", fps, cpu, g, ram);
+        }
+        if (strlen(title) <= CV_TITLE_MAX) break;
+    }
+    if (strlen(title) > CV_TITLE_MAX) {                     /* a very long file name: keep its start */
+        char tail[256];
+        const char* bar = strstr(title, ")  |  ");
+        snprintf(tail, sizeof tail, "%s", bar ? bar : "");
+        size_t keep = strlen(tail) + 3 < CV_TITLE_MAX ? CV_TITLE_MAX - strlen(tail) - 3 : 0;
+        if (bar && keep > 10) snprintf(title + keep, sizeof title - keep, "...%s", tail);
+        title[CV_TITLE_MAX] = 0;
     }
     sapp_set_window_title(title);
     snprintf(g_last_title, sizeof g_last_title, "%s", title);
