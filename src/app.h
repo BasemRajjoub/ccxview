@@ -322,6 +322,7 @@ typedef struct {
     int       csys;                  /* results in: 0 global, 1..3 cylindrical about X, Y, Z */
     float     csys_o[3];             /* ... through this point */
     bool      legend_edit;           /* the legend settings window is open */
+    float     legend_auto[2];        /* where the legend was last put by itself; moved away = the user's place */
 } cv_app;
 
 extern cv_app G;

@@ -112,7 +112,8 @@ tinyfiledialogs).
 `samples/showcase/` is the plate with a hole preloaded in the browser build,
 `samples/elements/` one small solved deck with every element type and feature,
 `samples/vessel/` a pressure vessel for the stress linearization. Design notes
-in [docs/spec.md](docs/spec.md).
+in [docs/spec.md](docs/spec.md); the `.inp` keywords the viewer reads in
+[docs/keywords.md](docs/keywords.md).
 
 License: GPL-2.0-or-later, the same as CalculiX. Vendored libraries keep
 their own licences (zlib, MIT, public domain), see [vendor/README.md](vendor/README.md).

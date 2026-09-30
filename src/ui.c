@@ -481,10 +481,11 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
         nk_checkbox_label(ctx, "Edges", &G.show_edges);
         tip(ctx, "Paint the field on the edges too (else dark lines)");
         nk_checkbox_label(ctx, "coloured", &G.edges_field);
-        if (G.show_edges && G.show_faces) {
-            tip(ctx, "Hide the edges while they are denser than ~3 px on screen,\nwhere they would paint the surface black; zoom in to see them");
+        bool dense = G.edges_auto && G.show_faces && G.edges_dense;
+        if ((G.show_edges || G.show_nodes || G.show_gp) && G.show_faces) {
+            tip(ctx, "Hide the edges, nodes and Gauss points while the mesh is denser than ~3 px on\nscreen, where they would paint the surface black; zoom in to see them");
             nk_checkbox_label(ctx, "hide when dense", &G.edges_auto);
-            if (G.edges_auto && G.edges_dense) nk_label_colored(ctx, "hidden: zoom in", NK_TEXT_LEFT, P.warn);
+            if (dense) nk_label_colored(ctx, "hidden: zoom in", NK_TEXT_LEFT, P.warn);
             else nk_spacing(ctx, 1);
         }
         tip(ctx, "Nodes of the visible elements, as small balls");
@@ -2506,11 +2507,17 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
                 lw = CV_MIN(CV_MAX(lw, tw + 24 * s), 380 * s);
             }
             r = nk_rect(W - lw - 10 * s, G.vp_y + 10 * s, lw, lh);
-            /* draggable (by its top line); once moved it keeps its place, clamped to the view */
+            /* draggable (by its top line); once moved it keeps its place, clamped to the
+               view. Until then it follows the top-right corner, so a resized or maximised
+               window does not leave it in the middle of the screen. */
             struct nk_window* lw_win = nk_window_find(ctx, "Legend");
-            if (lw_win) {
+            bool moved = lw_win && (fabsf(lw_win->bounds.x - G.legend_auto[0]) > 0.5f || fabsf(lw_win->bounds.y - G.legend_auto[1]) > 0.5f);
+            if (lw_win && moved) {
                 r.x = CV_MIN(CV_MAX(lw_win->bounds.x, (float)G.vp_x), W - lw);
                 r.y = CV_MIN(CV_MAX(lw_win->bounds.y, (float)G.vp_y), G.vp_y + G.vp_h - lh);
+            } else {
+                G.legend_auto[0] = r.x; G.legend_auto[1] = r.y;
+                if (lw_win) nk_window_set_position(ctx, "Legend", nk_vec2(r.x, r.y));
             }
             nk_flags lf = NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | (by_group ? 0 : NK_WINDOW_NO_SCROLLBAR);
             if (lh > 80 * s && nk_begin(ctx, "Legend", r, lf)) {

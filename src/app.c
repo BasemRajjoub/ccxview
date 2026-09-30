@@ -284,11 +284,12 @@ static void frame(void) {
         float px_per_unit = (float)G.vp_h / (2.f * G.cam.dist * tanf(G.cam.fovy * 0.5f));
         float edge_px = G.mean_edge * px_per_unit;
         if (G.edges_dense ? edge_px > 4.f : edge_px < 3.f) G.edges_dense = !G.edges_dense;
-        d.edges = G.show_edges && !(G.edges_auto && G.show_faces && G.edges_dense);   d.edges_color = G.edges_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
-        d.points = G.show_nodes;  d.points_color = G.nodes_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        bool dense = G.edges_auto && G.show_faces && G.edges_dense;      /* nodes and Gauss points step aside too */
+        d.edges = G.show_edges && !dense;   d.edges_color = G.edges_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        d.points = G.show_nodes && !dense;  d.points_color = G.nodes_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         d.point_size = G.point_size * ui_scale();
         d.shade = G.shading;
-        d.gauss_points = G.show_gp;
+        d.gauss_points = G.show_gp && !dense;
         d.highlights = G.show_hl;
         d.geo_points = G.show_geo_pts; d.geo_curves = G.show_geo_crv; d.geo_surfaces = G.show_geo_srf;
         d.geo_size = G.geo_size * ui_scale();
