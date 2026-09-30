@@ -417,13 +417,13 @@ static void path_vertex(cv_fvec* pos, cv_fvec* disp, uint32_t n) {
     for (int k = 0; k < 6; k++) cv_push(*disp, d[k]);
 }
 
-/* the path (straight: its two ends) or, without one, the linearization line */
+/* the surface path, and the straight line between the ends (linearized) */
 void refresh_path(void) {
     cv_fvec pos = {0}, disp = {0};
     if (G.loaded && G.path_n && G.path_surface && G.path_nodes)
         for (uint32_t i = 0; i + 1 < G.path_n; i++) { path_vertex(&pos, &disp, G.path_nodes[i]); path_vertex(&pos, &disp, G.path_nodes[i + 1]); }
-    else if (G.loaded && G.path_n) { path_vertex(&pos, &disp, G.path_end[0]); path_vertex(&pos, &disp, G.path_end[1]); }
-    else if (G.loaded && G.lin_open) { path_vertex(&pos, &disp, G.lin_a); path_vertex(&pos, &disp, G.lin_b); }
+    if (G.loaded && G.lin_open) { path_vertex(&pos, &disp, G.lin_a); path_vertex(&pos, &disp, G.lin_b); }
+    else if (G.loaded && G.path_n && !G.path_surface) { path_vertex(&pos, &disp, G.path_end[0]); path_vertex(&pos, &disp, G.path_end[1]); }
     app_aux_upload(CV_AUX_PATHLN, &pos, &disp, NULL);
     cv_free_vec(pos); cv_free_vec(disp);
 }
@@ -826,18 +826,22 @@ static uint32_t snap_to_edges(uint32_t n) {
 
 #define PATH_SN 121                                 /* samples on a straight path */
 
-/* the path between path_end[0] and [1]: straight, sampled in the elements and
-   linearized at once, or over the surface edges */
+/* the path between path_end[0] and [1]: straight, sampled in the elements, or
+   over the surface edges. The straight line between the ends is linearized
+   either way (the stress classification line is straight). */
 void app_path_rebuild(void) {
     path_free();
     uint32_t a = G.path_end[0], b = G.path_end[1];
     if (G.path_surface) {
-        app_lin_close();
         a = snap_to_edges(a); b = snap_to_edges(b);
         if (a == b || !cv_path_find(&G.frd, &G.skin, a, b, &G.path_nodes, &G.path_n, &G.path_dist)) {
             path_free();
-            cv_msg_add(&G.msgs, 0, false, "no surface path between the two nodes");
+            cv_msg_add(&G.msgs, 0, false, "no surface path between the two nodes: back to the straight line");
+            G.path_surface = false;
+            app_path_rebuild();
+            return;
         }
+        app_lin_open(G.path_end[0], G.path_end[1]);
     } else {
         G.path_dist = malloc(PATH_SN * sizeof(float));
         G.path_el = malloc(PATH_SN * sizeof(uint32_t));
