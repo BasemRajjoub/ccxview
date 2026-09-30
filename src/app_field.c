@@ -570,30 +570,44 @@ static bool elem_locate(uint32_t e, const double p[3], double N[20]) {
 }
 
 /* Where n points evenly on the straight line A..B sit in the solid: the element
-   (UINT32_MAX outside) and its 20 shape-function weights. Only the elements whose
-   box meets the line's box are tried, the last hit first. */
+   (UINT32_MAX outside) and its 20 shape-function weights. One pass keeps the
+   elements whose box the segment actually crosses (slab test), with their boxes;
+   each point then tries the last hit, and the Newton inversion only in the
+   candidates whose box holds it. */
+typedef struct { uint32_t e; float lo[3], hi[3]; } line_cand;
+
 static void line_locate(const float A[3], const float B[3], int n, uint32_t* el, float* w) {
-    float tol = 1e-4f * G.diag, lo[3], hi[3];
-    for (int k = 0; k < 3; k++) { lo[k] = fminf(A[k], B[k]) - tol; hi[k] = fmaxf(A[k], B[k]) + tol; }
-    CV_VEC(uint32_t) cand = {0};
+    float tol = 1e-4f * G.diag, D[3] = { B[0] - A[0], B[1] - A[1], B[2] - A[2] };
+    CV_VEC(line_cand) cand = {0};
     for (uint32_t e = 0; e < G.frd.n_elems; e++) {
         int t = G.frd.etype[e];
         if (t < 1 || t > 6) continue;
-        float bl[3] = { INFINITY, INFINITY, INFINITY }, bh[3] = { -INFINITY, -INFINITY, -INFINITY };
+        line_cand c = { e, { INFINITY, INFINITY, INFINITY }, { -INFINITY, -INFINITY, -INFINITY } };
         for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
             const float* q = G.frd.xyz + 3 * (size_t)G.frd.conn[j];
-            for (int k = 0; k < 3; k++) { bl[k] = fminf(bl[k], q[k]); bh[k] = fmaxf(bh[k], q[k]); }
+            for (int k = 0; k < 3; k++) { c.lo[k] = fminf(c.lo[k], q[k]); c.hi[k] = fmaxf(c.hi[k], q[k]); }
         }
-        if (bh[0] < lo[0] || bh[1] < lo[1] || bh[2] < lo[2] || bl[0] > hi[0] || bl[1] > hi[1] || bl[2] > hi[2]) continue;
-        cv_push(cand, e);
+        float t0 = 0.f, t1 = 1.f;
+        for (int k = 0; k < 3 && t0 <= t1; k++) {
+            c.lo[k] -= tol; c.hi[k] += tol;
+            if (fabsf(D[k]) < 1e-30f) { if (A[k] < c.lo[k] || A[k] > c.hi[k]) t0 = 2.f; continue; }
+            float a = (c.lo[k] - A[k]) / D[k], b = (c.hi[k] - A[k]) / D[k];
+            if (a > b) { float s = a; a = b; b = s; }
+            t0 = fmaxf(t0, a); t1 = fminf(t1, b);
+        }
+        if (t0 <= t1) cv_push(cand, c);
     }
     uint32_t hint = UINT32_MAX;
     for (int i = 0; i < n; i++) {
         double f = n > 1 ? (double)i / (n - 1) : 0, p[3], N[20];
-        for (int k = 0; k < 3; k++) p[k] = A[k] + f * (B[k] - A[k]);
+        for (int k = 0; k < 3; k++) p[k] = A[k] + f * D[k];
         el[i] = UINT32_MAX;
         bool ok = hint != UINT32_MAX && elem_locate(hint, p, N);
-        for (size_t c = 0; !ok && c < cand.n; c++) if ((ok = elem_locate(cand.a[c], p, N))) hint = cand.a[c];
+        for (size_t c = 0; !ok && c < cand.n; c++) {
+            const line_cand* q = &cand.a[c];
+            if (p[0] < q->lo[0] || p[1] < q->lo[1] || p[2] < q->lo[2] || p[0] > q->hi[0] || p[1] > q->hi[1] || p[2] > q->hi[2]) continue;
+            if ((ok = elem_locate(q->e, p, N))) hint = q->e;
+        }
         if (!ok) continue;
         el[i] = hint;
         for (int k = 0; k < 20; k++) w[20 * i + k] = (float)N[k];
@@ -634,9 +648,12 @@ static void refresh_lin(void) {
     const float* S = tv ? tv : v;
     static uint32_t el[LIN_N];
     static float w[LIN_N * 20];
+    static char where[80];
     G.lin_s = malloc(LIN_N * 6 * sizeof(float));
     if (!G.lin_s) { free(tv); return; }
-    line_locate(A, B, LIN_N, el, w);
+    char wk[80];
+    snprintf(wk, sizeof wk, "%p|%u|%u|%u", (void*)G.frd.xyz, G.frd.n_elems, G.lin_a, G.lin_b);
+    if (strcmp(wk, where)) { line_locate(A, B, LIN_N, el, w); snprintf(where, sizeof where, "%s", wk); }
     for (int i = 0; i < LIN_N; i++) {
         float* o = G.lin_s + 6 * i;
         if (!line_interp(el[i], w + 20 * i, S, 6, o)) for (int c = 0; c < 6; c++) o[c] = NAN;
