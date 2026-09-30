@@ -142,7 +142,7 @@ static const char* kFS =
     GLSL_HDR
     "uniform vec4 u_color;\n"                /* solid colour */
     "uniform vec4 u_rng;\n"                  /* min, max, bands, mode */
-    "uniform vec4 u_flags;\n"                /* x: grey out of range, y: shade, z: on top */
+    "uniform vec4 u_flags;\n"                /* x: grey out of range (light above, dark below), y: shade, z: on top */
     "uniform vec4 u_pz;\n"                   /* projection: z_clip = x*z + y, w_clip = z*z + w */
     "uniform vec4 u_clip;\n"                 /* clip plane normal, d; w = 1e30 when off */
     "uniform sampler2D u_cmap;\n"
@@ -181,12 +181,13 @@ static const char* kFS =
     "      c = vec3(0.62, 0.62, 0.60);\n"      /* no data */
     "    } else {\n"
     "      float t = (s - u_rng.x) / max(u_rng.y - u_rng.x, 1e-30);\n"
-    "      bool out_ = t < -1e-4 || t > 1.0001;\n"
+    "      float t0 = t;\n"
     "      t = clamp(t, 0.0, 1.0);\n"
     /* keep in step with cv_band_center() in field.h */
     "      if (u_rng.z > 0.5) { float b = u_rng.z; t = (min(floor(t * b), b - 1.0) + 0.5) / b; }\n"
     "      c = textureLod(u_cmap, vec2(t, 0.5), 0.0).rgb;\n"
-    "      if (out_ && u_flags.x > 0.5) c = vec3(0.45);\n"
+    "      if (u_flags.x > 0.5 && t0 > 1.0001) c = vec3(0.85);\n"      /* CV_OOR_ABOVE */
+    "      if (u_flags.x > 0.5 && t0 < -1e-4) c = vec3(0.48);\n"       /* CV_OOR_BELOW */
     "    }\n"
     "  }\n"
     "  if (u_flags.y > 0.5) {\n"

@@ -9,6 +9,11 @@
 enum { CV_CMAP_FAST, CV_CMAP_COOLWARM, CV_CMAP_VIRIDIS, CV_CMAP_TURBO, CV_CMAP_HEAT, CV_CMAP_RAINBOW, CV_CMAP_JET, CV_CMAP_INFERNO, CV_CMAP_N };
 extern const char* const cv_cmap_names[CV_CMAP_N];
 void cv_colormap_rgb(int cmap, float t, float rgb[3]);
+/* with the range locked: values above the max light grey, below the min darker grey
+   (as in Abaqus; the darker one still reads on the dark background).
+   Keep in step with the shader in render.c. */
+#define CV_OOR_ABOVE 0.85f
+#define CV_OOR_BELOW 0.48f
 
 enum { CV_COLOR_SOLID = 0, CV_COLOR_NODAL = 1, CV_COLOR_ELEM = 2, CV_COLOR_GROUP = 3 };
 

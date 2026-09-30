@@ -1100,6 +1100,22 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
     }
 
     float bar_w = 22 * s, top = area.y + row * 0.5f, h = area.h - row;
+    if (G.range_lock) {                           /* swatches for the out-of-range colours, above and below the bar */
+        float sw = row * 0.8f, gap = 4 * s;
+        h -= 2 * (sw + gap);
+        if (h < 20) return;
+        const float yy[2] = { top, top + h + 2 * gap + sw };
+        const float gv[2] = { CV_OOR_ABOVE, CV_OOR_BELOW };
+        const char* lab[2] = { "above", "below" };
+        for (int k = 0; k < 2; k++) {
+            int g = (int)(gv[k] * 255);
+            nk_fill_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, nk_rgb(g, g, g));
+            nk_stroke_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, 1, P.frame);
+            nk_draw_text(cv, nk_rect(area.x + bar_w + 7 * s, yy[k] + (sw - font->height) * 0.5f, area.w - bar_w - 7 * s, font->height),
+                         lab[k], (int)strlen(lab[k]), font, nk_rgba(0, 0, 0, 0), P.dim);
+        }
+        top += sw + gap;
+    }
     if (h < 20) return;
     int nb = G.bands > 0 ? G.bands : 64;
     for (int i = 0; i < nb; i++) {
@@ -1426,7 +1442,7 @@ static void window_legend_settings(struct nk_context* ctx, float s, float row) {
     if (nk_begin(ctx, "Legend settings", nk_rect(G.vp_x + G.vp_w - w - 180 * s, G.vp_y + 10 * s, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         nk_layout_row_dynamic(ctx, row, 1);
-        tip(ctx, "Keep min/max fixed across steps and components; values outside show grey");
+        tip(ctx, "Keep min/max fixed across steps and components; values above show light grey, below dark grey");
         if (nk_checkbox_label(ctx, "lock range", &G.range_lock) && !G.range_lock) app_refresh_range();
         if (G.range_lock) {
             float step = fabsf(G.rmax - G.rmin) * 0.01f + 1e-30f;

@@ -101,7 +101,7 @@ Headless modules (`frd`, `mesh`, `field`) never include sokol or Nuklear.
 - Uniforms: deformation scale, range, band count, colouring mode, lock flag.
   Colormap = 256×1 texture. Changing colour, range or deformation uploads nothing.
 - Defaults: colormap *Fast*, 12 bands,
-  signed fields centred on zero, out-of-range grey only while the range is locked,
+  signed fields centred on zero, out-of-range values only while the range is locked: light grey above, darker grey below,
   auto deformation scale = 10 % of the model diagonal, never scaled down below 1.
 
 ## Interaction
