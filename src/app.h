@@ -183,6 +183,7 @@ typedef struct {
     float*    path_dist;
     uint32_t* path_el;  float* path_w;        /* straight: element (UINT32_MAX outside) and 20 weights per sample */
     bool      path_open;             /* the plot window */
+    bool      path_lin;              /* the window shows the linearization of the straight line */
     /* history: the current field at one node (or element) over every step */
     bool      hist_open;
     uint32_t  hist_node, hist_elem;  /* the element's node mean in per-element mode */
@@ -190,10 +191,8 @@ typedef struct {
     float*    hist_t;  float* hist_v;  int* hist_step;
     bool      hist_by_step;          /* x axis: step number instead of time */
     char      hist_key[200];         /* what the curve was built for */
-    /* stress linearization along the straight line between two nodes (ASME) */
+    /* stress linearization along the straight line between the path's two nodes (ASME) */
     bool      lin_open;
-    bool      lin_arm;               /* waiting for the click on the second node */
-    uint32_t  lin_from;              /* the first node while armed */
     uint32_t  lin_a, lin_b;          /* the end nodes */
     int       lin_fi;                /* the tensor field linearized, -1 none */
     int       lin_n;                 /* sample points */
@@ -333,7 +332,6 @@ void app_set_step(int step);
 void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
 void app_lin_open(uint32_t a, uint32_t b);  /* linearize the stress on the line between two nodes */
 void app_lin_close(void);
-void app_lin_start(uint32_t node);          /* the next picked node ends the line */
 void app_pick_cancel(void);                 /* drop a pending second click */
 void app_marks_sync(void);                  /* the picked-node markers, redrawn when the picks change */
 /* the cap of the clip plane n . x = d through the solid elements, deformed by f1 DISP

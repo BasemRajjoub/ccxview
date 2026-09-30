@@ -653,11 +653,7 @@ static void event(const sapp_event* ev) {
             break;
         case SAPP_EVENTTYPE_MOUSE_UP:
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_LEFT && drag.mode != CV_NAV_BOX) {
-                static double last_click;
-                double now = cv_now();
                 do_pick(ev->mouse_x, ev->mouse_y);
-                if (now - last_click < 0.35 && G.probe_on) { app_view_push(); app_fit_element(G.probe.elem); }   /* double click */
-                last_click = now;
             }
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_MIDDLE && !G.flight) {
                 app_view_push();

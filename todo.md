@@ -35,7 +35,7 @@ not done yet.
   Cyclic symmetry: n sectors in 360°, how many drawn, axis and a point on it (static: the
   copies show the same values; saved in the view state).
 - [x] **ASME stress linearization** along a path through the thickness: membrane,
-  bending, peak. Could build on the existing path plot. *(SergioP)* Probe > linearize from, then click the node across the wall (or
+  bending, peak. Could build on the existing path plot. *(SergioP)* Probe > path from, click the node across the wall, then linearize in the Path window (or
   `--linearize A,B`): the straight line between the end nodes, 41 points interpolated in the
   solid elements; membrane, membrane + bending, peak and total at both ends as von Mises,
   Tresca or a component, a plot and CSV.

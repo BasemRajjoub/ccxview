@@ -427,12 +427,10 @@ void refresh_path(void) {
     app_aux_upload(CV_AUX_PATHLN, &pos, &disp, NULL);
     pos.n = disp.n = 0;
     if (G.loaded) {
-        uint32_t m[7];
+        uint32_t m[4];
         int k = 0;
         if (G.probe_on && G.probe.hit) m[k++] = G.probe.node;
-        if (G.lin_arm) m[k++] = G.lin_from;
         if (G.path_arm && G.path_a != UINT32_MAX) m[k++] = G.path_a;
-        if (G.lin_open) { m[k++] = G.lin_a; m[k++] = G.lin_b; }
         if (G.path_n) { m[k++] = G.path_end[0]; m[k++] = G.path_end[1]; }
         for (int i = 0; i < k; i++) if (m[i] < G.frd.n_nodes) path_vertex(&pos, &disp, m[i]);
     }
@@ -445,8 +443,7 @@ void refresh_path(void) {
 void app_marks_sync(void) {
     uint64_t k[] = { G.loaded, (uintptr_t)G.frd.xyz, (uintptr_t)G.disp, (uint64_t)G.step,
                      G.probe_on && G.probe.hit ? G.probe.node : UINT32_MAX,
-                     G.lin_arm ? G.lin_from : UINT32_MAX, G.path_arm ? G.path_a : UINT32_MAX,
-                     G.lin_open ? ((uint64_t)G.lin_a << 32 | G.lin_b) : UINT64_MAX,
+                     G.path_arm ? G.path_a : UINT32_MAX,
                      G.path_n ? ((uint64_t)G.path_end[0] << 32 | G.path_end[1]) : UINT64_MAX };
     static uint64_t last[sizeof k / sizeof k[0]];
     if (!memcmp(k, last, sizeof k)) return;
@@ -815,6 +812,7 @@ static void path_free(void) {
 
 void app_path_clear(void) {
     path_free();
+    app_lin_close();
     G.path_a = UINT32_MAX; G.path_arm = false; G.path_open = false;
     refresh_path();
 }
@@ -823,17 +821,9 @@ void app_path_start(uint32_t node) {
     app_path_clear();
     G.path_a = node;
     G.path_arm = true;
-    G.lin_arm = false;
-}
-
-void app_lin_start(uint32_t node) {
-    G.lin_from = node;
-    G.lin_arm = true;
-    G.path_arm = false;
 }
 
 void app_pick_cancel(void) {
-    G.lin_arm = false;
     if (G.path_arm) { G.path_arm = false; G.path_a = UINT32_MAX; }
 }
 
@@ -863,7 +853,8 @@ static uint32_t snap_to_edges(uint32_t n) {
 #define PATH_SN 121                                 /* samples on a straight path */
 
 /* the path between path_end[0] and [1]: straight, sampled in the elements, or
-   over the surface edges */
+   over the surface edges. The straight line between the two is linearized
+   either way (a stress classification line is straight). */
 void app_path_rebuild(void) {
     path_free();
     uint32_t a = G.path_end[0], b = G.path_end[1];
@@ -876,6 +867,7 @@ void app_path_rebuild(void) {
             app_path_rebuild();
             return;
         }
+        app_lin_open(G.path_end[0], G.path_end[1]);
     } else {
         G.path_dist = malloc(PATH_SN * sizeof(float));
         G.path_el = malloc(PATH_SN * sizeof(uint32_t));
@@ -886,6 +878,7 @@ void app_path_rebuild(void) {
             line_locate(A, B, PATH_SN, G.path_el, G.path_w);
             for (int i = 0; i < PATH_SN; i++) G.path_dist[i] = L * i / (PATH_SN - 1);
             G.path_n = PATH_SN;
+            app_lin_open(a, b);
         } else path_free();
     }
     refresh_path();

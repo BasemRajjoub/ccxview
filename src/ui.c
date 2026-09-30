@@ -1483,7 +1483,7 @@ static void window_messages(struct nk_context* ctx, float s, float row, int fw, 
 
 static void window_probe(struct nk_context* ctx, float s, float row) {
     if (!G.probe_on || !G.loaded) return;
-    float w = 260 * s, h = row * 10.f;
+    float w = 260 * s, h = row * 8.8f;
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -1504,18 +1504,14 @@ static void window_probe(struct nk_context* ctx, float s, float row) {
     if (G.probe_ip) snprintf(buf, sizeof buf, "point %d: %s = %s", G.probe_ip, G.field_label, num);
     else snprintf(buf, sizeof buf, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
     nk_label(ctx, G.has_field ? buf : "no field", NK_TEXT_LEFT);
-    nk_layout_row_dynamic(ctx, row, 2);
+    nk_layout_row_dynamic(ctx, row, 3);
     tip(ctx, "Node ids of this element, drawn in the view");
     nk_checkbox_label(ctx, "ids", &G.show_ids);
-    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.lin_arm = G.path_arm = false; }
-    nk_layout_row_dynamic(ctx, row, 2);
-    tip(ctx, G.lin_arm ? "Now click the node across the wall (Esc cancels)"
-                       : "ASME VIII-2 5-A: membrane, bending and peak stress on the straight line from this node\n"
-                         "to the next one you click (pick the two ends facing each other across the wall)");
-    if (nk_button_label(ctx, G.lin_arm ? "linearize: to?" : "linearize from")) app_lin_start(p->node);
     tip(ctx, G.path_arm ? "Now click the end node (Esc cancels)"
-                        : "Plot the field on the line (or over the surface) from this node to the next one you click");
-    if (nk_button_label(ctx, G.path_arm ? "plot: to?" : "plot from")) app_path_start(p->node);
+                        : "The field along the line from this node to the next one you click, and the\n"
+                          "stress linearized on it (ASME): for that, pick the ends facing each other across the wall");
+    if (nk_button_label(ctx, G.path_arm ? "path: to?" : "path from")) app_path_start(p->node);
+    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.path_arm = false; }
     nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "The field at this node (element in per-element mode) against time, over every step");
     if (nk_button_label(ctx, "history")) app_hist_open(p->node, p->elem);
@@ -1528,95 +1524,20 @@ static void window_probe(struct nk_context* ctx, float s, float row) {
     nk_end(ctx);
 }
 
-/* ---- path plot: the field along the picked surface path ------------------------- */
-static void window_path(struct nk_context* ctx, float s, float row, int fw, int fh) {
-    static bool was_open;
-    if (!G.path_open || !G.path_n) { was_open = false; return; }
-    if (!was_open) nk_window_show(ctx, "Path", NK_SHOWN);
-    was_open = true;
-    if (nk_begin(ctx, "Path", nk_rect(fw * 0.35f, fh * 0.55f, fw * 0.4f, fh * 0.35f),
-                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
-        char txt[200];
-        nk_layout_row_template_begin(ctx, row);
-        nk_layout_row_template_push_dynamic(ctx);
-        nk_layout_row_template_push_static(ctx, 120 * s);
-        nk_layout_row_template_push_static(ctx, 60 * s);
-        nk_layout_row_template_end(ctx);
-        if (G.path_surface)
-            snprintf(txt, sizeof txt, "%s, nodes %u .. %u over %u surface nodes, length %.4g", G.has_field ? G.field_label : "no field",
-                     G.frd.node_id[G.path_end[0]], G.frd.node_id[G.path_end[1]], G.path_n, G.path_dist[G.path_n - 1]);
-        else
-            snprintf(txt, sizeof txt, "%s, nodes %u .. %u, length %.4g", G.has_field ? G.field_label : "no field",
-                     G.frd.node_id[G.path_end[0]], G.frd.node_id[G.path_end[1]], G.path_dist[G.path_n - 1]);
-        tip(ctx, txt);
-        nk_label(ctx, txt, NK_TEXT_LEFT);
-        tip(ctx, "Follow the shortest path over the surface edges instead of the straight line");
-        bool surf = G.path_surface;
-        nk_checkbox_label(ctx, "along surface", &G.path_surface);
-        if (surf != G.path_surface) { app_path_rebuild(); if (!G.path_n) { nk_end(ctx); return; } }
-        if (nk_button_label(ctx, "CSV")) {
-            char vp[1100];
-            snprintf(vp, sizeof vp, "%.*s_path.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
-            snprintf(G.note, sizeof G.note, app_path_csv(vp) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
-        }
-        struct nk_rect area;
-        nk_layout_row_dynamic(ctx, nk_window_get_content_region(ctx).h - row - 4 * s, 1);
-        if (nk_widget(&area, ctx) != NK_WIDGET_INVALID && G.has_field && !G.elem_mode) {
-            struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
-            const struct nk_user_font* font = ctx->style.font;
-            float lm = 60 * s, x0 = area.x + lm, y0 = area.y + 4 * s, w = area.w - lm - 6 * s, h = area.h - font->height - 8 * s;
-            nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, P.plot_bg);
-            float lo = 1e30f, hi = -1e30f, L = CV_MAX(G.path_dist[G.path_n - 1], 1e-30f);
-            for (uint32_t i = 0; i < G.path_n; i++) { float v = app_path_value(i); if (v == v) { lo = CV_MIN(lo, v); hi = CV_MAX(hi, v); } }
-            if (lo > hi) { lo = 0; hi = 1; }
-            if (hi <= lo) hi = lo + 1;
-            for (int k = 0; k <= 4; k++) {                  /* four bands of the value axis */
-                float v = lo + (hi - lo) * k / 4.f, y = y0 + h * (1 - k / 4.f);
-                nk_stroke_line(cv, x0, y, x0 + w, y, 1, P.grid);
-                legend_num(txt, sizeof txt, v);
-                nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
-            }
-            float px = 0, py = 0;
-            bool prev = false;
-            for (uint32_t i = 0; i < G.path_n; i++) {
-                float v = app_path_value(i);
-                float x = x0 + w * G.path_dist[i] / L, y = y0 + h * (1 - (v - lo) / (hi - lo));
-                if (v != v) { prev = false; continue; }          /* outside the solid: a gap */
-                if (prev) nk_stroke_line(cv, px, py, x, y, 2.f, nk_rgb(255, 140, 30));
-                if (G.path_surface) nk_fill_circle(cv, nk_rect(x - 2 * s, y - 2 * s, 4 * s, 4 * s), nk_rgb(255, 200, 120));
-                px = x; py = y; prev = true;
-            }
-            snprintf(txt, sizeof txt, "distance along the %s: 0 .. %.4g", G.path_surface ? "surface" : "line", L);
-            nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
-        } else if (G.elem_mode) {
-            nk_label(ctx, "(per-element mode: switch to nodal values to plot)", NK_TEXT_LEFT);
-        }
-    }
-    if (nk_window_is_hidden(ctx, "Path")) app_path_clear();
-    nk_end(ctx);
-}
-
 /* ---- stress linearization: membrane, bending, peak along a line through the wall --- */
 static double lin_q(const double t[6]) {
     return G.lin_q == 0 ? cv_mises6(t) : G.lin_q == 1 ? cv_tresca6(t, false) : t[CV_MIN(G.lin_q - 2, 5)];
 }
 
-static void window_lin(struct nk_context* ctx, float s, float row, int fw, int fh) {
-    static bool was_open;
-    if (!G.lin_open) { was_open = false; return; }
-    if (!was_open) nk_window_show(ctx, "Linearization", NK_SHOWN);
-    was_open = true;
-    if (nk_begin(ctx, "Linearization", nk_rect(fw * 0.5f, fh * 0.06f, fw * 0.45f, fh * 0.46f),
-                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
+static void lin_body(struct nk_context* ctx, float s, float row) {
+    {
         char txt[200];
         const cv_field_desc* d = G.lin_fi >= 0 ? &G.frd.steps[G.step].fields[G.lin_fi] : NULL;
         nk_layout_row_template_begin(ctx, row);
         nk_layout_row_template_push_dynamic(ctx);
         nk_layout_row_template_push_static(ctx, 110 * s);
-        nk_layout_row_template_push_static(ctx, 60 * s);
         nk_layout_row_template_end(ctx);
-        snprintf(txt, sizeof txt, "%s, node %u to %u, t = %.4g", d ? d->name : "no stress tensor in this step",
-                 G.frd.node_id[G.lin_a], G.frd.node_id[G.lin_b], G.lin_t);
+        snprintf(txt, sizeof txt, "%s on the straight line, t = %.4g (ASME VIII-2 5-A)", d ? d->name : "no stress tensor in this step", G.lin_t);
         nk_label(ctx, txt, NK_TEXT_LEFT);
         char names[8][16] = { "von Mises", "Tresca" };
         const char* items[8];
@@ -1627,11 +1548,6 @@ static void window_lin(struct nk_context* ctx, float s, float row, int fw, int f
         for (int k = 0; k < 8; k++) items[k] = names[k];
         tip(ctx, "The quantity in the table and the plot (components in the coordinates chosen under Fields)");
         G.lin_q = nk_combo(ctx, items, 8, G.lin_q, (int)row, nk_vec2(130 * s, 8 * row + 20 * s));
-        if (nk_button_label(ctx, "CSV")) {
-            char vp[1100];
-            snprintf(vp, sizeof vp, "%.*s_linearized.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
-            snprintf(G.note, sizeof G.note, app_lin_csv(vp) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
-        }
         double m[6], b[6];
         bool ok = G.lin_n && cv_linearize(G.lin_s, G.lin_n, G.lin_t, m, b);
         if (!ok) {
@@ -1678,7 +1594,7 @@ static void window_lin(struct nk_context* ctx, float s, float row, int fw, int f
             }
         }
         struct nk_rect area;
-        float used = (ok ? 6 : 2) * (row + ctx->style.window.spacing.y);
+        float used = (ok ? 7 : 3) * (row + ctx->style.window.spacing.y);
         nk_layout_row_dynamic(ctx, CV_MAX(nk_window_get_content_region(ctx).h - used - 4 * s, row), 1);
         if (nk_widget(&area, ctx) != NK_WIDGET_INVALID && G.lin_n > 1) {
             struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
@@ -1737,7 +1653,128 @@ static void window_lin(struct nk_context* ctx, float s, float row, int fw, int f
             nk_draw_text(cv, nk_rect(x0 + w - tw - 2, y0 + h + 2 * s, tw + 2, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
         }
     }
-    if (nk_window_is_hidden(ctx, "Linearization")) app_lin_close();
+}
+
+/* ---- path: the field along the line (or the surface path) between two picked
+   nodes; the same line linearized (ASME) on demand -------------------------------- */
+static void path_plot(struct nk_context* ctx, float s, float row) {
+    char txt[200];
+    struct nk_rect area;
+    float sp = row + ctx->style.window.spacing.y;
+    nk_layout_row_dynamic(ctx, CV_MAX(nk_window_get_content_region(ctx).h - 2 * sp - 4 * s, row), 1);
+    if (G.elem_mode || !G.has_field) {
+        nk_label(ctx, G.elem_mode ? "(per-element mode: switch to nodal values to plot)" : "(no field)", NK_TEXT_LEFT);
+        return;
+    }
+    float L = CV_MAX(G.path_dist[G.path_n - 1], 1e-30f), lo = 1e30f, hi = -1e30f, sum = 0, dlo = 0, dhi = 0;
+    int nv = 0;
+    for (uint32_t i = 0; i < G.path_n; i++) {
+        float v = app_path_value(i);
+        if (v != v) continue;
+        if (v < lo) { lo = v; dlo = G.path_dist[i]; }
+        if (v > hi) { hi = v; dhi = G.path_dist[i]; }
+        sum += v; nv++;
+    }
+    if (nk_widget(&area, ctx) != NK_WIDGET_INVALID) {
+        struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
+        const struct nk_user_font* font = ctx->style.font;
+        float lm = 60 * s, x0 = area.x + lm, y0 = area.y + 4 * s, w = area.w - lm - 6 * s, h = area.h - font->height - 8 * s;
+        nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, P.plot_bg);
+        float a = nv ? lo : 0, b = nv ? hi : 1;
+        if (b <= a) { b = a + fabsf(a) * 0.01f + 1e-30f; a -= b - a; }
+        for (int k = 0; k <= 4; k++) {                  /* four bands of the value axis */
+            float v = a + (b - a) * k / 4.f, y = y0 + h * (1 - k / 4.f);
+            nk_stroke_line(cv, x0, y, x0 + w, y, 1, P.grid);
+            legend_num(txt, sizeof txt, v);
+            nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
+        }
+        #define PY(v) (y0 + h * (1 - ((v) - a) / (b - a)))
+        float px = 0, py = 0;
+        bool prev = false;
+        for (uint32_t i = 0; i < G.path_n; i++) {
+            float v = app_path_value(i);
+            float x = x0 + w * G.path_dist[i] / L, y = PY(v);
+            if (v != v) { prev = false; continue; }          /* outside the solid: a gap */
+            if (prev) nk_stroke_line(cv, px, py, x, y, 2.f, nk_rgb(255, 140, 30));
+            if (G.path_surface) nk_fill_circle(cv, nk_rect(x - 2 * s, y - 2 * s, 4 * s, 4 * s), nk_rgb(255, 200, 120));
+            px = x; py = y; prev = true;
+        }
+        /* the value under the mouse: the nearest sample */
+        struct nk_rect pr = nk_rect(x0, y0, w, h);
+        if (nk_input_is_mouse_hovering_rect(&ctx->input, pr)) {
+            float d = (ctx->input.mouse.pos.x - x0) / w * L;
+            uint32_t best = 0;
+            for (uint32_t i = 1; i < G.path_n; i++)
+                if (fabsf(G.path_dist[i] - d) < fabsf(G.path_dist[best] - d)) best = i;
+            float v = app_path_value(best), x = x0 + w * G.path_dist[best] / L;
+            nk_stroke_line(cv, x, y0, x, y0 + h, 1, P.dim);
+            if (v == v) {
+                nk_fill_circle(cv, nk_rect(x - 4 * s, PY(v) - 4 * s, 8 * s, 8 * s), nk_rgb(255, 140, 30));
+                char num[32];
+                legend_num(num, sizeof num, v);
+                snprintf(txt, sizeof txt, "%s at %.4g", num, G.path_dist[best]);
+                float tw = font->width(font->userdata, font->height, txt, (int)strlen(txt));
+                float tx = x + 6 * s + tw > x0 + w ? x - 6 * s - tw : x + 6 * s;
+                nk_fill_rect(cv, nk_rect(tx - 2, y0 + 2 * s, tw + 4, font->height + 2), 0, P.plot_bg);
+                nk_draw_text(cv, nk_rect(tx, y0 + 2 * s, tw + 2, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
+            }
+        }
+        #undef PY
+        snprintf(txt, sizeof txt, "distance along the %s: 0 .. %.4g", G.path_surface ? "surface" : "line", L);
+        nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
+    }
+    nk_layout_row_dynamic(ctx, row, 1);
+    if (nv) {
+        char l[32], m[32], hh[32], e0[32], e1[32];
+        float v0 = app_path_value(0), v1 = app_path_value(G.path_n - 1);
+        legend_num(l, sizeof l, lo); legend_num(hh, sizeof hh, hi); legend_num(m, sizeof m, sum / nv);
+        legend_num(e0, sizeof e0, v0); legend_num(e1, sizeof e1, v1);
+        snprintf(txt, sizeof txt, "min %s at %.4g   max %s at %.4g   mean %s   ends %s, %s", l, dlo, hh, dhi, m,
+                 v0 == v0 ? e0 : "-", v1 == v1 ? e1 : "-");
+    } else snprintf(txt, sizeof txt, "the line does not pass through the solid");
+    nk_label_colored(ctx, txt, NK_TEXT_LEFT, P.dim);
+}
+
+static void window_path(struct nk_context* ctx, float s, float row, int fw, int fh) {
+    static bool was_open;
+    if (!G.path_open || !G.path_n) { was_open = false; return; }
+    if (!was_open) nk_window_show(ctx, "Path", NK_SHOWN);
+    was_open = true;
+    if (nk_begin(ctx, "Path", nk_rect(fw * 0.5f, fh * 0.06f, fw * 0.45f, fh * 0.5f),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
+        char txt[200];
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_push_static(ctx, 120 * s);
+        nk_layout_row_template_push_static(ctx, 90 * s);
+        nk_layout_row_template_push_static(ctx, 50 * s);
+        nk_layout_row_template_end(ctx);
+        if (G.path_surface)
+            snprintf(txt, sizeof txt, "%s, nodes %u .. %u over %u surface nodes, length %.4g", G.has_field ? G.field_label : "no field",
+                     G.frd.node_id[G.path_end[0]], G.frd.node_id[G.path_end[1]], G.path_n, G.path_dist[G.path_n - 1]);
+        else
+            snprintf(txt, sizeof txt, "%s, nodes %u .. %u, length %.4g", G.has_field ? G.field_label : "no field",
+                     G.frd.node_id[G.path_end[0]], G.frd.node_id[G.path_end[1]], G.path_dist[G.path_n - 1]);
+        tip(ctx, txt);
+        nk_label(ctx, txt, NK_TEXT_LEFT);
+        tip(ctx, "Plot over the shortest path on the surface edges instead of the straight line\n"
+                 "(the linearization always uses the straight line)");
+        bool surf = G.path_surface;
+        nk_checkbox_label(ctx, "along surface", &G.path_surface);
+        if (surf != G.path_surface) { app_path_rebuild(); if (!G.path_n) { nk_end(ctx); return; } }
+        tip(ctx, "ASME VIII-2 5-A stress linearization on the straight line between the two nodes:\n"
+                 "membrane, bending and peak (pick the ends facing each other across the wall)");
+        nk_selectable_label(ctx, "linearize", NK_TEXT_CENTERED, &G.path_lin);
+        tip(ctx, G.path_lin ? "Save the linearization to a CSV next to the result file" : "Save the path values to a CSV next to the result file");
+        if (nk_button_label(ctx, "CSV")) {
+            char vp[1100];
+            snprintf(vp, sizeof vp, G.path_lin ? "%.*s_linearized.csv" : "%.*s_path.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
+            snprintf(G.note, sizeof G.note, (G.path_lin ? app_lin_csv(vp) : app_path_csv(vp)) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
+        }
+        if (G.path_lin) lin_body(ctx, s, row);
+        else path_plot(ctx, s, row);
+    }
+    if (nk_window_is_hidden(ctx, "Path")) app_path_clear();
     nk_end(ctx);
 }
 
@@ -2422,6 +2459,5 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_find(ctx, s, row);
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
-    window_lin(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);
 }
