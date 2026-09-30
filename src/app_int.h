@@ -31,6 +31,7 @@ typedef struct {
     bool        watch;          /* --watch: reload when the file changes */
     const char* compare;        /* --compare FILE */
     const char* path_ids;       /* --path A,B: node ids to plot between */
+    long        hist_id;        /* --history N: node id whose history to plot, 0 none */
     int         look;           /* --look iso|+x|-x|+y|-y|+z|-z, -1 = default */
     float       bg[3];          /* --bg white|black|r,g,b */
     bool        bg_set;

@@ -175,6 +175,7 @@ static bool job_done(void) {
 
 void unload(void) {
     app_path_clear();
+    app_hist_close();
     app_compare_close();
     cache_clear();
     gp_clear();
@@ -402,6 +403,11 @@ static void apply_load(cv_job* j) {
             if (na != UINT32_MAX && nb != UINT32_MAX) { app_path_start(na); app_path_end(nb); }
             else cv_msg_add(&G.msgs, 0, false, "--path: node not in this model");
         }
+    }
+    if (O.hist_id > 0) {
+        uint32_t n = cv_frd_node_index(&G.frd, (uint32_t)O.hist_id);
+        if (n != UINT32_MAX) app_hist_open(n, UINT32_MAX);
+        else cv_msg_add(&G.msgs, 0, false, "--history: node not in this model");
     }
     if (O.find) {
         bool el = O.find[0] == 'e' || O.find[0] == 'E';

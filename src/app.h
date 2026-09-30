@@ -176,6 +176,13 @@ typedef struct {
     uint32_t* path_nodes;  uint32_t path_n;
     float*    path_dist;
     bool      path_open;             /* the plot window */
+    /* history: the current field at one node (or element) over every step */
+    bool      hist_open;
+    uint32_t  hist_node, hist_elem;  /* the element's node mean in per-element mode */
+    int       hist_n;
+    float*    hist_t;  float* hist_v;  int* hist_step;
+    bool      hist_by_step;          /* x axis: step number instead of time */
+    char      hist_key[200];         /* what the curve was built for */
     /* comparison: a second results file on the same mesh, shown as A - B */
     cv_map    cmp_map;
     cv_frd    cmp;
@@ -300,6 +307,9 @@ void app_open(const char* path);
 void app_open_dialog(void);          /* native dialog, else the built-in browser */
 void app_start_dir(char* out, size_t n);
 void app_set_step(int step);
+void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
+void app_hist_close(void);
+bool app_hist_csv(const char* path);
 void app_select(const char* field, int comp);
 void app_select_src(const char* field, int comp, int src);
 void app_set_elem_mode(bool on);

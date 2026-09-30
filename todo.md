@@ -32,8 +32,10 @@ not done yet.
 - [ ] **Cyclic symmetry expansion** beyond the NGRAPH sectors written by ccx. *(linth)*
 - [ ] **ASME stress linearization** along a path through the thickness: membrane,
   bending, peak. Could build on the existing path plot. *(SergioP)*
-- [ ] **Time / increment plots**: a value at a node or element against time or
-  increment, over all steps. *(SergioP)*
+- [x] **Time / increment plots**: a value at a node or element against time or
+  increment, over all steps. *(SergioP)* Probe > history (or `--history NODE`): the current
+  field and component (element mean in per-element mode) against time or step number, click
+  a point to go to that step, CSV export.
 - [x] **Unit systems**: the user picks a unit set, results show units in the
   legend and probe. *(SergioP)* Legend settings > units (t-mm-s, kg-m-s, in-lbf-s);
   the unit follows the field (length, stress, force, temperature, energy density, ...)

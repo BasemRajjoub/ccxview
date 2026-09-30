@@ -425,6 +425,90 @@ void refresh_path(void) {
     cv_free_vec(pos); cv_free_vec(disp);
 }
 
+/* ---- history: the field at one node over every step ------------------------------
+   Each step's field is decoded into a scratch buffer (not the cache, which holds
+   what is on screen); rebuilt only when the field, component, node or system change. */
+
+static void refresh_hist(void) {
+    if (!G.hist_open || !G.loaded) return;
+    char key[200];
+    snprintf(key, sizeof key, "%s|%d|%d|%g|%g|%g|%u|%u|%d|%d|%d", G.field_name, G.comp, G.csys, G.csys_o[0], G.csys_o[1],
+             G.csys_o[2], G.hist_node, G.hist_elem, G.elem_mode, G.field_src, G.frd.n_steps);
+    if (!strcmp(key, G.hist_key)) return;
+    snprintf(G.hist_key, sizeof G.hist_key, "%s", key);
+    free(G.hist_t); free(G.hist_v); free(G.hist_step);
+    G.hist_t = G.hist_v = NULL; G.hist_step = NULL; G.hist_n = 0;
+    if (G.field_src != 0 || G.frd.n_steps == 0 || G.hist_node >= G.frd.n_nodes) return;
+    int ns = G.frd.n_steps;
+    G.hist_t = malloc((size_t)ns * sizeof(float)); G.hist_v = malloc((size_t)ns * sizeof(float));
+    G.hist_step = malloc((size_t)ns * sizeof(int));
+    if (!G.hist_t || !G.hist_v || !G.hist_step) return;
+    /* the nodes averaged: one, or the element's */
+    uint32_t one = G.hist_node, *nodes = &one, nn = 1;
+    if (G.elem_mode && G.hist_elem < G.frd.n_elems) {
+        nodes = G.frd.conn + G.frd.eoff[G.hist_elem];
+        nn = G.frd.eoff[G.hist_elem + 1] - G.frd.eoff[G.hist_elem];
+    }
+    float* buf = NULL; size_t cap = 0;
+    for (int s = 0; s < ns; s++) {
+        int fi = find_field(s, G.field_name);
+        if (fi < 0) continue;
+        const cv_field_desc* d = &G.frd.steps[s].fields[fi];
+        if (G.comp >= d->ncomp) continue;
+        const float* v = NULL;
+        for (int i = 0; i < CV_CACHE_N; i++)            /* already decoded? */
+            if (G.cache[i].vals && G.cache[i].step == s && G.cache[i].field == fi) v = G.cache[i].vals;
+        if (!v) {
+            size_t need = (size_t)CV_MAX(G.frd.n_nodes, 1) * (size_t)d->ncomp;
+            if (need > cap) { float* nb = realloc(buf, need * sizeof(float)); if (!nb) break; buf = nb; cap = need; }
+            cv_frd_read_field(&G.frd, d, buf, NULL);
+            v = buf;
+        }
+        double sum = 0; int cnt = 0;
+        for (uint32_t j = 0; j < nn; j++) {
+            uint32_t n = nodes[j];
+            float r[CV_MAX_COMP], x;
+            memcpy(r, v + (size_t)n * d->ncomp, (size_t)d->ncomp * sizeof(float));
+            if (G.csys > 0 && G.comp >= 0 && cv_cyl_applies(d)) cv_cyl_values(d, G.frd.xyz + 3 * (size_t)n, 1, G.csys - 1, G.csys_o, r);
+            cv_field_scalar(r, d->ncomp, 1, G.comp, &x);
+            if (x == x) { sum += x; cnt++; }
+        }
+        G.hist_t[G.hist_n] = G.frd.steps[s].time;
+        G.hist_v[G.hist_n] = cnt ? (float)(sum / cnt) : NAN;
+        G.hist_step[G.hist_n++] = s;
+    }
+    free(buf);
+}
+
+void app_hist_open(uint32_t node, uint32_t elem) {
+    G.hist_node = node; G.hist_elem = elem;
+    G.hist_open = true;
+    G.hist_by_step = false;                     /* time, unless it does not run forward (modal: frequencies) */
+    for (int s = 0; s < G.frd.n_steps; s++)
+        if (G.frd.steps[s].modal || (s && G.frd.steps[s].time < G.frd.steps[s - 1].time)) G.hist_by_step = true;
+    G.hist_key[0] = 0;
+    refresh_hist();
+}
+
+void app_hist_close(void) {
+    free(G.hist_t); free(G.hist_v); free(G.hist_step);
+    G.hist_t = G.hist_v = NULL; G.hist_step = NULL; G.hist_n = 0;
+    G.hist_open = false; G.hist_key[0] = 0;
+}
+
+bool app_hist_csv(const char* path) {
+    if (!G.hist_n) return false;
+    FILE* o = fopen(path, "w");
+    if (!o) return false;
+    fprintf(o, "step,time,%s %s %u\n", G.field_label, G.elem_mode ? "element" : "node",
+            G.elem_mode ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node]);
+    for (int i = 0; i < G.hist_n; i++) {
+        fprintf(o, "%d,%.9g,", G.hist_step[i] + 1, G.hist_t[i]);
+        if (G.hist_v[i] == G.hist_v[i]) fprintf(o, "%.9g\n", G.hist_v[i]); else fprintf(o, "nan\n");
+    }
+    return fclose(o) == 0;
+}
+
 void app_path_clear(void) {
     free(G.path_nodes); free(G.path_dist);
     G.path_nodes = NULL; G.path_dist = NULL; G.path_n = 0;
@@ -576,6 +660,7 @@ void refresh_field(void) {
     refresh_gauss();
     refresh_vectors();
     refresh_path();
+    refresh_hist();
 }
 
 /* The imaginary part of a steady-state response: G.disp2 = -DISPI, so the shape at

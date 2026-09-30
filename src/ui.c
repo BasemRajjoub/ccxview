@@ -1473,7 +1473,9 @@ static void window_probe(struct nk_context* ctx, float s, float row) {
     tip(ctx, G.path_arm ? "Now click the end node" : "Plot the field along the surface from this node to the next one you click");
     if (nk_button_label(ctx, G.path_arm ? "path: end?" : "path from")) app_path_start(p->node);
     if (nk_button_label(ctx, "close")) G.probe_on = false;
-    nk_layout_row_dynamic(ctx, row, 1);
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "The field at this node (element in per-element mode) against time, over every step");
+    if (nk_button_label(ctx, "history")) app_hist_open(p->node, p->elem);
     tip(ctx, "Element, node and value to the clipboard");
     if (nk_button_label(ctx, "copy")) {
         char txt[400];
@@ -1537,6 +1539,86 @@ static void window_path(struct nk_context* ctx, float s, float row, int fw, int 
         }
     }
     if (nk_window_is_hidden(ctx, "Path")) app_path_clear();
+    nk_end(ctx);
+}
+
+/* ---- history plot: the field at the probed node over every step ---------------- */
+static void window_history(struct nk_context* ctx, float s, float row, int fw, int fh) {
+    static bool was_open;
+    if (!G.hist_open) { was_open = false; return; }
+    if (!was_open) nk_window_show(ctx, "History", NK_SHOWN);
+    was_open = true;
+    if (nk_begin(ctx, "History", nk_rect(fw * 0.3f, fh * 0.5f, fw * 0.42f, fh * 0.36f),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
+        char txt[200];
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_push_static(ctx, 70 * s);
+        nk_layout_row_template_push_static(ctx, 60 * s);
+        nk_layout_row_template_end(ctx);
+        snprintf(txt, sizeof txt, "%s at %s %u, %d steps", G.field_label, G.elem_mode ? "element" : "node",
+                 G.elem_mode ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node], G.hist_n);
+        nk_label(ctx, txt, NK_TEXT_LEFT);
+        tip(ctx, "x axis: step number instead of time (modal steps store the frequency as time)");
+        nk_checkbox_label(ctx, "by step", &G.hist_by_step);
+        if (nk_button_label(ctx, "CSV")) {
+            char vp[1100];
+            snprintf(vp, sizeof vp, "%.*s_history.csv", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
+            snprintf(G.note, sizeof G.note, app_hist_csv(vp) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now();
+        }
+        struct nk_rect area;
+        nk_layout_row_dynamic(ctx, nk_window_get_content_region(ctx).h - row - 4 * s, 1);
+        if (nk_widget(&area, ctx) != NK_WIDGET_INVALID && G.hist_n > 0) {
+            struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
+            const struct nk_user_font* font = ctx->style.font;
+            float lm = 76 * s, x0 = area.x + lm, y0 = area.y + 4 * s, w = area.w - lm - 6 * s, h = area.h - font->height - 8 * s;
+            nk_fill_rect(cv, nk_rect(x0, y0, w, h), 0, P.plot_bg);
+            float lo = 1e30f, hi = -1e30f, xa = 1e30f, xb = -1e30f;
+            for (int i = 0; i < G.hist_n; i++) {
+                float v = G.hist_v[i], x = G.hist_by_step ? (float)(G.hist_step[i] + 1) : G.hist_t[i];
+                if (v == v) { lo = CV_MIN(lo, v); hi = CV_MAX(hi, v); }
+                xa = CV_MIN(xa, x); xb = CV_MAX(xb, x);
+            }
+            if (lo > hi) { lo = 0; hi = 1; }
+            if (hi <= lo) { hi = lo + fabsf(lo) * 0.01f + 1e-30f; lo -= hi - lo; }
+            if (xb <= xa) { xb = xa + 1; }
+            for (int k = 0; k <= 4; k++) {
+                float v = lo + (hi - lo) * k / 4.f, y = y0 + h * (1 - k / 4.f);
+                nk_stroke_line(cv, x0, y, x0 + w, y, 1, P.grid);
+                legend_num(txt, sizeof txt, v);
+                nk_draw_text(cv, nk_rect(area.x, y - font->height * 0.5f, lm - 4 * s, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
+            }
+            int near = -1; float nd = 1e30f;
+            struct nk_vec2 m = ctx->input.mouse.pos;
+            bool inside = nk_input_is_mouse_hovering_rect(&ctx->input, nk_rect(x0, y0, w, h));
+            float px = 0, py = 0;
+            bool have = false;
+            for (int i = 0; i < G.hist_n; i++) {
+                float xv = G.hist_by_step ? (float)(G.hist_step[i] + 1) : G.hist_t[i];
+                float x = x0 + w * (xv - xa) / (xb - xa);
+                if (G.hist_step[i] == G.step) nk_stroke_line(cv, x, y0, x, y0 + h, 1.5f, P.accent);
+                if (fabsf(x - m.x) < nd) { nd = fabsf(x - m.x); near = i; }
+                float v = G.hist_v[i];
+                if (v != v) { have = false; continue; }
+                float y = y0 + h * (1 - (v - lo) / (hi - lo));
+                if (have) nk_stroke_line(cv, px, py, x, y, 2.f, nk_rgb(255, 140, 30));
+                nk_fill_circle(cv, nk_rect(x - 2 * s, y - 2 * s, 4 * s, 4 * s), nk_rgb(255, 200, 120));
+                px = x; py = y; have = true;
+            }
+            if (inside && near >= 0) {                   /* hover: the point's values; click: go to that step */
+                char num[32];
+                fmt_num(num, sizeof num, G.hist_v[near]);
+                snprintf(txt, sizeof txt, "step %d  t=%.4g  %s", G.hist_step[near] + 1, G.hist_t[near], num);
+                nk_tooltip(ctx, txt);
+                if (nk_input_is_mouse_pressed(&ctx->input, NK_BUTTON_LEFT)) app_set_step(G.hist_step[near]);
+            }
+            snprintf(txt, sizeof txt, "%s %.4g .. %.4g   (click: go to that step)", G.hist_by_step ? "step" : "time", xa, xb);
+            nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
+        } else if (G.field_src != 0) {
+            nk_label(ctx, "(history of .frd fields only)", NK_TEXT_LEFT);
+        }
+    }
+    if (nk_window_is_hidden(ctx, "History")) app_hist_close();
     nk_end(ctx);
 }
 
@@ -2131,5 +2213,6 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_nav(ctx, s);
     window_find(ctx, s, row);
     window_path(ctx, s, row, fw, fh);
+    window_history(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);
 }

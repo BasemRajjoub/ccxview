@@ -56,6 +56,7 @@ ccxview model.frd --shot out.png            # render, save, quit
 ccxview model.frd --export mp4              # animation video
 ccxview model.frd --field DISP --vectors    # displacement arrows
 ccxview model.frd --gp                      # Gauss points
+ccxview model.frd --field DISP --history 17 # node 17 over all steps
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --software                # CPU rendering
 ccxview --check model.frd                   # headless parse for CI
