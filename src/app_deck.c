@@ -229,34 +229,42 @@ void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir
     }
 }
 
-/* support at node p for DOF k (1..6, 11), as in most FE pre-processors: a
-   cone (two crossed triangles) with its tip on the node, standing on the
-   fixed axis; a rotation is a shorter cone with a double base; a temperature
-   a small cross. A node held in x, y, z shows three cones. */
-static void support(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d[3], int dof, float L) {
-    if (dof == 11) {
+/* supports at node p, from the mask of its fixed dofs (bit k-1 for dof k,
+   bit 6 for temperature), as in most FE pre-processors: per axis one cone (two
+   crossed triangles) with its tip on the node, standing on that axis; a fixed
+   rotation about the axis doubles the base (a rotation alone: a shorter cone).
+   Temperature: a small cross. */
+static void support(cv_fvec* pos, cv_fvec* disp, const float p[3], const float d[3], unsigned mask, float L) {
+    if (mask & 64) {
         for (int a = 0; a < 3; a++) {
             float u[3], e0[3], e1[3];
             axis_vec(a, 1, 0.25f * L, u);
             for (int i = 0; i < 3; i++) { e0[i] = p[i] - u[i]; e1[i] = p[i] + u[i]; }
             seg(pos, disp, e0, e1, d);
         }
-        return;
     }
-    bool rot = dof > 3;
-    int k = (dof - 1) % 3;
-    float h = rot ? 0.7f * L : L, r = 0.35f * L;
-    for (int m = 1; m <= 2; m++) {                 /* the two triangles, across the other axes */
-        int j = (k + m) % 3;
-        float b0[3], b1[3];
-        memcpy(b0, p, sizeof b0); memcpy(b1, p, sizeof b1);
-        b0[k] -= h; b1[k] -= h; b0[j] -= r; b1[j] += r;
-        seg(pos, disp, p, b0, d); seg(pos, disp, p, b1, d); seg(pos, disp, b0, b1, d);
-        if (rot) {                                  /* the second base, a little further out */
-            b0[k] -= 0.25f * h; b1[k] -= 0.25f * h;
-            seg(pos, disp, b0, b1, d);
+    for (int k = 0; k < 3; k++) {
+        bool tr = mask & (1u << k), rot = mask & (8u << k);
+        if (!tr && !rot) continue;
+        float h = tr ? L : 0.7f * L, r = 0.35f * L;
+        for (int m = 1; m <= 2; m++) {             /* the two triangles, across the other axes */
+            int j = (k + m) % 3;
+            float b0[3], b1[3];
+            memcpy(b0, p, sizeof b0); memcpy(b1, p, sizeof b1);
+            b0[k] -= h; b1[k] -= h; b0[j] -= r; b1[j] += r;
+            seg(pos, disp, p, b0, d); seg(pos, disp, p, b1, d); seg(pos, disp, b0, b1, d);
+            if (rot) {                              /* the second base, a little further out */
+                b0[k] -= 0.2f * h; b1[k] -= 0.2f * h;
+                seg(pos, disp, b0, b1, d);
+            }
         }
     }
+}
+
+typedef struct { uint32_t node, mask; } bc_mask;
+static int bc_mask_cmp(const void* a, const void* b) {
+    uint32_t x = ((const bc_mask*)a)->node, y = ((const bc_mask*)b)->node;
+    return x < y ? -1 : x > y;
 }
 
 static void node_pd(uint32_t i, float p[3], float d[3]) {
@@ -472,12 +480,24 @@ static void refresh_glyphs(void) {
     const cv_frd* f = &G.frd;
     float L = CV_MAX(G.bc_scale, 0.01f) * G.sym_len, LL = 1.5f * CV_MAX(G.load_scale, 0.01f) * G.sym_len;
     if (D.on && G.loaded) {
-        for (uint32_t i = 0; i < D.d.nbcs; i++) {
+        /* one symbol per node: a node is often listed several times (dof ranges, steps) */
+        bc_mask* m = D.d.nbcs ? malloc(D.d.nbcs * sizeof *m) : NULL;
+        uint32_t nm = 0;
+        for (uint32_t i = 0; m && i < D.d.nbcs; i++) {
             const cv_bc* b = &D.d.bcs[i];
-            float p[3], d[3];
-            if (!deck_node_pd(b->node, p, d)) continue;
-            for (int dof = b->dof_lo; dof <= b->dof_hi; dof++) if (dof <= 6 || dof == 11) support(&bp, &bd, p, d, dof, L);
+            uint32_t bits = 0;
+            for (int dof = b->dof_lo; dof <= b->dof_hi; dof++)
+                if (dof >= 1 && dof <= 6) bits |= 1u << (dof - 1); else if (dof == 11) bits |= 64;
+            if (bits) m[nm++] = (bc_mask){ b->node, bits };
         }
+        if (nm) qsort(m, nm, sizeof *m, bc_mask_cmp);
+        for (uint32_t i = 0; i < nm;) {
+            uint32_t node = m[i].node, bits = 0;
+            for (; i < nm && m[i].node == node; i++) bits |= m[i].mask;
+            float p[3], d[3];
+            if (deck_node_pd(node, p, d)) support(&bp, &bd, p, d, bits, L);
+        }
+        free(m);
         float vmax = 0, pmax = 0;
         for (uint32_t i = 0; i < D.d.ncloads; i++) vmax = fmaxf(vmax, fabsf(D.d.cloads[i].value));
         for (uint32_t i = 0; i < D.d.ndloads; i++) pmax = fmaxf(pmax, fabsf(D.d.dloads[i].value));
