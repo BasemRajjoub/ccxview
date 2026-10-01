@@ -2422,9 +2422,11 @@ static void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, c
 static ov_drag legend_drag, gizmo_drag;
 
 /* the gizmo's box this frame; by default bottom-left, as in ParaView, out of the legend's way */
+#define GIZMO_PX 90                      /* the gizmo's square, before UI scale */
+
 static cv_box gizmo_box(float s) {
     cv_anchor a = G.gizmo_pos.set ? G.gizmo_pos : (cv_anchor){ true, CV_BL, 12, 12 };
-    return cv_anchor_place(a, view_box(), 120 * s, 120 * s, s);
+    return cv_anchor_place(a, view_box(), GIZMO_PX * s, GIZMO_PX * s, s);
 }
 
 /* ---- axes gizmo (bottom-left of the view, or where it was dragged) ---------------
@@ -2433,7 +2435,7 @@ static cv_box gizmo_box(float s) {
    clicking the centre returns to the iso view. */
 static void window_axes(struct nk_context* ctx, float s) {
     if (!G.loaded || G.hide_axes) return;
-    float size = 120 * s, r = size * 0.36f;
+    float size = GIZMO_PX * s, r = size * 0.36f;
     overlay_drag(ctx, &gizmo_drag, "axes", gizmo_box(s), 0, &G.gizmo_pos, s);
     cv_box gb = gizmo_box(s);
     struct nk_rect wr = nk_rect(gb.x, gb.y, gb.w, gb.h);
