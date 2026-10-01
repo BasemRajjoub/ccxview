@@ -4,7 +4,7 @@
 #   scripts/pack-binaries.sh   copy the Linux and Windows builds into binaries/
 #   make bundle-mesa   + Mesa llvmpipe in build/lib/mesa (software renderer, large)
 #   scripts/build-portable.sh   the same inside a glibc-2.17 container (podman/docker)
-#   make win        Windows cross build with mingw-w64 -> build/win/ccxview.exe (static runtime,
+#   make win        Windows cross build, zig cc if zig is on PATH else mingw-w64 -> build/win/ccxview.exe (static runtime,
 #                   no console window; WIN_CONSOLE=1 for one)
 #   make test       headless unit tests
 #   make bench      headless timing tool
@@ -15,7 +15,12 @@
 #   scripts/solve_showcase.sh [showcase|elements]   regenerate + solve a sample deck with ccx
 
 CC      ?= cc
-CFLAGS  ?= -O2 -g
+# OPT is the optimisation for every build; RELEASE=1 (the shipped binaries, implied by
+# PORTABLE=1, win and wasm) adds link-time optimisation. No -march: the binaries travel.
+OPT     ?= -O3 -fno-math-errno
+RELEASE ?= $(PORTABLE)
+LTO      = $(if $(filter 1,$(RELEASE)),-flto -Wno-maybe-uninitialized,)   # LTO sees across files and guesses wrong about init
+CFLAGS  ?= $(OPT) -g $(LTO)
 CFLAGS  += -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-format-truncation
 CPPFLAGS += -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -DSOKOL_GLCORE -Ivendor
 # PORTABLE=1: ask for old glibc symbol versions, so the binary runs on glibc >= 2.34
@@ -49,7 +54,7 @@ endif
 
 build/sokol_impl.o: src/sokol_impl.c
 	@mkdir -p build
-	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) -O2 -std=c99 -w $(IMPL_FLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) $(OPT) $(LTO) -std=c99 -w $(IMPL_FLAGS) -c $< -o $@
 
 build/ccxview build/bin/ccxview: $(CORE) $(APP) build/sokol_impl.o src/*.h
 	@mkdir -p $(dir $@)
@@ -60,7 +65,7 @@ build/ccxview build/bin/ccxview: $(CORE) $(APP) build/sokol_impl.o src/*.h
 # without the sanitizers, everything of ours with them
 build/video_mp4_nosan.o: src/video_mp4.c src/video_impl.h
 	@mkdir -p build
-	$(CC) $(CPPFLAGS) -O2 -std=c99 -w -c $< -o $@
+	$(CC) $(CPPFLAGS) $(OPT) -std=c99 -w -c $< -o $@
 build/test_main: tests/test_main.c $(filter-out src/video_mp4.c,$(CORE)) build/video_mp4_nosan.o src/*.h tests/*.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DCV_DEBUG -fsanitize=address,undefined tests/test_main.c $(filter-out src/video_mp4.c,$(CORE)) \
@@ -104,25 +109,43 @@ samples: build/gen_frd
 	[ -e build/samples/synthetic_1M_ascii.frd ] || ./build/gen_frd 1000000 build/samples/synthetic_1M_ascii.frd
 	[ -e build/samples/synthetic_5M_binary.frd ] || ./build/gen_frd 5000000 build/samples/synthetic_5M_binary.frd --binary
 
-# ---- Windows cross build (mingw-w64). MINGW names the compiler; MINGW_LDFLAGS adds
-# e.g. -L<dir of libmcfgthread.a> on toolchains that need it (nixpkgs).
+# ---- Windows cross build. Either mingw-w64 (MINGW names the compiler; MINGW_LDFLAGS
+# adds e.g. -L<dir of libmcfgthread.a> on toolchains that need it) or, with ZIG=zig
+# (or a path to it), zig cc + zig rc: one self-contained toolchain, nothing to install
+# on NixOS beyond the zig package.
 MINGW ?= x86_64-w64-mingw32-gcc
 WINDRES ?= $(MINGW:gcc=windres)
 MINGW_LDFLAGS ?=
+ZIG ?= $(shell command -v zig 2>/dev/null)
 # GUI subsystem: no cmd window behind the viewer. WIN_CONSOLE=1 keeps one (debugging).
 WIN_SUBSYS = $(if $(filter 1,$(WIN_CONSOLE)),-mconsole,-mwindows)
 WIN_SRC = $(CORE) $(APP) vendor/tinyfiledialogs.c
+ifneq ($(ZIG),)
+WIN_CC = $(ZIG) cc --target=x86_64-windows-gnu
+WIN_LTO =                                   # zig's lld cannot LTO against the mingw C runtime
+WIN_ICON = build/win/icon.res
+WIN_LINK = $(if $(filter 1,$(WIN_CONSOLE)),-Wl$(,)--subsystem$(,)console,-Wl$(,)--subsystem$(,)windows)
+else
+WIN_CC = $(MINGW)
+WIN_LTO = -flto
+WIN_ICON = build/win/icon.o
+WIN_LINK = $(WIN_SUBSYS) $(MINGW_LDFLAGS) -static -static-libgcc
+endif
+, := ,
 win: build/win/ccxview.exe
 build/win/sokol_impl.o: src/sokol_impl.c
 	@mkdir -p build/win
-	$(MINGW) -O2 -std=c99 -w -DSOKOL_GLCORE -Ivendor -c $< -o $@
+	$(WIN_CC) $(OPT) $(WIN_LTO) -std=c99 -w -DSOKOL_GLCORE -Ivendor -c $< -o $@
 build/win/icon.o: res/ccxview.rc res/ccxview.ico
 	@mkdir -p build/win
 	$(WINDRES) $< -O coff -o $@
-build/win/ccxview.exe: $(WIN_SRC) build/win/sokol_impl.o build/win/icon.o src/*.h
-	$(MINGW) -O2 -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
-	    -Wno-format-truncation -Wno-cast-function-type -DSOKOL_GLCORE -Ivendor \
-	    $(WIN_SRC) build/win/sokol_impl.o build/win/icon.o -o $@ $(WIN_SUBSYS) $(MINGW_LDFLAGS) -static -static-libgcc \
+build/win/icon.res: res/ccxview.rc res/ccxview.ico
+	@mkdir -p build/win
+	$(ZIG) rc /fo $@ $<
+build/win/ccxview.exe: $(WIN_SRC) build/win/sokol_impl.o $(WIN_ICON) src/*.h
+	$(WIN_CC) $(OPT) $(WIN_LTO) -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
+	    -Wno-format-truncation -Wno-cast-function-type -Wno-typedef-redefinition -DSOKOL_GLCORE -Ivendor \
+	    $(WIN_SRC) build/win/sokol_impl.o $(WIN_ICON) -o $@ $(WIN_LINK) \
 	    -lkernel32 -luser32 -lgdi32 -lshell32 -lopengl32 -lcomdlg32 -lole32
 	@echo "built $@ (test with: wine $@ model.frd)"
 
@@ -139,7 +162,7 @@ WASM_SRC = $(CORE) $(APP) src/web.c src/sokol_impl.c
 WASM_EMBED = $(foreach f,frd dat inp sta cvg,--embed-file samples/showcase/showcase.$(f)@/showcase.$(f))
 wasm: docs/index.html
 docs/index.html: $(WASM_SRC) src/*.h web/shell.html samples/showcase/showcase.frd
-	$(EMCC) -O2 -std=gnu99 -Wall -Wno-unused-parameter -Wno-missing-field-initializers -Wno-macro-redefined -Wno-typedef-redefinition -DSOKOL_GLES3 -Ivendor \
+	$(EMCC) -O3 -flto -std=gnu99 -Wall -Wno-unused-parameter -Wno-missing-field-initializers -Wno-macro-redefined -Wno-typedef-redefinition -DSOKOL_GLES3 -Ivendor \
 	    $(WASM_SRC) -o $@ --shell-file web/shell.html $(WASM_EMBED) \
 	    -sSINGLE_FILE=1 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFORCE_FILESYSTEM=1 \
 	    -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=64MB -sMAXIMUM_MEMORY=4GB -sSTACK_SIZE=8MB \
