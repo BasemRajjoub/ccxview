@@ -42,6 +42,8 @@ src/
   fbd.c/.h      cgx geometry reader: points, lines, surfaces, sets (headless)
   inp.c/.h      .inp reader: mesh, sets, surfaces, supports, loads, discrete
                 elements, couplings (headless)
+  inp_localsys.c results in local systems: *TRANSFORM / *ORIENTATION back to global (headless)
+  inp_int.h     what the inp*.c files share
   dat.c/.h      .dat reader: integration-point blocks (headless)
   sta.c/.h      .sta / .cvg readers: increments and iterations (headless)
   gauss.c/.h    integration points and shape functions (headless)
