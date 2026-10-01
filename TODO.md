@@ -28,3 +28,16 @@ Still to do: *STEP tracking of loads and supports (today every step's are
 collected, last wins), *DSLOAD, *TEMPERATURE as a drawable load, and a
 documented list of the result fields ccxview understands (docs/keywords.md
 has the deck side).
+
+## Tensor glyphs (stress and strain as ellipsoids)
+One glyph per element centroid (per Gauss point when a .dat field is selected):
+an ellipsoid with semi-axes |s1|, |s2|, |s3| along the principal directions,
+coloured by the selected scalar, and a second style, the principal cross
+(three segments, red tension, blue compression). Drawn as ray-traced
+impostors like the node balls, so a million glyphs cost nothing; auto scale
+to about 1.5 element sizes with a slider; hidden by "hide when dense";
+follow the deformed shape through the displacement attribute. Needs a
+Jacobi eigen-decomposition with eigenvectors in field.c (+ test), an
+ellipsoid impostor shader in render.c, the glyph build next to the arrows in
+app_overlay.c, a Layers row, `--tensor ellipsoid|cross`, settings. About a
+day. Shells and beams give a disc (one zero axis), which is right.
