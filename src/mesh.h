@@ -33,16 +33,27 @@ void cv_crop_mask(const cv_frd* f, const float lo[3], const float hi[3], uint8_t
 /* ---- skin ------------------------------------------------------------------
    Exterior faces of the visible solids (+ every visible shell face) as
    triangles over corner nodes, the unique edges of those faces (+ beams), and
-   the nodes of visible elements. Indices are dense node indices. */
+   the nodes of visible elements. Indices are dense node indices.
+   Feature edges are the part's outline, which stays readable on a mesh too
+   fine for its element edges: skin edges used by one face only (shell borders,
+   open meshes), by three or more, or by two faces that differ in material or
+   element type or meet at more than the crease angle; and every beam. The
+   angle is taken on the undeformed quads and triangles (not the split
+   triangles, so a flat quad has no crease along its diagonal); a shell has no
+   inside, so its faces count as parallel whichever way their normals point. */
 typedef struct {
     uint32_t* tri;       size_t n_tri;    /* 3 per triangle */
     uint32_t* tri_elem;                   /* element of each triangle */
     uint32_t* edge;      size_t n_edge;   /* 2 per edge */
     uint32_t* pt;        size_t n_pt;
     uint32_t* face;      size_t n_face;   /* exterior faces as element << 3 | local face */
+    uint32_t* fedge;     size_t n_fedge;  /* feature edges, 2 per edge */
 } cv_skin;
 
-bool cv_skin_build(cv_skin* s, const cv_frd* f, const uint8_t* vis);   /* vis may be NULL */
+#define CV_CREASE_DEG 30.f
+
+bool cv_skin_build(cv_skin* s, const cv_frd* f, const uint8_t* vis);   /* vis may be NULL; CV_CREASE_DEG */
+bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg);
 
 /* Corner nodes (dense indices) of face `face` (0-based, CalculiX order: S1 -> 0)
    of element e. Returns 3 or 4, 0 if the element has no such face. Shells have

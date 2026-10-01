@@ -22,7 +22,7 @@ cv_app G;
 static struct nk_context* g_nk;
 static void app_log(const char* tag, uint32_t level, uint32_t item, const char* msg, uint32_t line,
                     const char* file, void* user);
-cv_opts O = { .faces = -1, .look = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30 };
+cv_opts O = { .faces = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30 };
 static struct nk_context* g_nk;
 
 /* ---- sokol callbacks --------------------------------------------------------------- */
@@ -55,6 +55,8 @@ static void init(void) {
     cv_mutex_init(&G.job.lock);
 
     G.show_faces = G.show_edges = true;
+    G.show_outline = true;
+    G.outline_angle = CV_CREASE_DEG;
     G.edges_auto = true;
     G.orbit_cursor = G.zoom_cursor = true;
     G.show_pivot = true;
@@ -113,6 +115,9 @@ static void init(void) {
     if (O.gp_under) G.gp_on_top = false;
     if (O.xray) G.gp_on_top = true;
     if (O.no_faces) G.show_faces = G.show_edges = false;   /* points only */
+    if (O.no_edges) G.show_edges = false;
+    if (O.outline == 0) G.show_outline = false;
+    else if (O.outline > 0) { G.show_outline = true; G.outline_angle = O.outline; }
     if (O.argv_path) app_open(O.argv_path);
     if (O.browse) { G.native_dlg_missing = true; app_open_dialog(); }
 }
@@ -286,6 +291,7 @@ static void frame(void) {
         if (G.edges_dense ? edge_px > 4.f : edge_px < 3.f) G.edges_dense = !G.edges_dense;
         bool dense = G.edges_auto && G.show_faces && G.edges_dense;      /* nodes and Gauss points step aside too */
         d.edges = G.show_edges && !dense;   d.edges_color = G.edges_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        d.outline = G.show_outline;          /* the outline is what is left to read when the edges step aside */
         d.points = G.show_nodes && !dense;  d.points_color = G.nodes_field && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         d.point_size = G.point_size * ui_scale();
         d.shade = G.shading;
@@ -887,6 +893,11 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--gp-under")) O.gp_under = true;
         else if (!strcmp(argv[i], "--xray")) O.xray = true;
         else if (!strcmp(argv[i], "--no-faces")) O.no_faces = true;
+        else if (!strcmp(argv[i], "--no-edges")) O.no_edges = true;
+        else if (!strcmp(argv[i], "--outline") && i + 1 < argc) {
+            const char* v = argv[++i];
+            O.outline = !strcmp(v, "off") ? 0.f : !strcmp(v, "on") ? CV_CREASE_DEG : fminf(fmaxf((float)atof(v), 0.1f), 180.f);
+        }
         else if (!strcmp(argv[i], "--gp-size") && i + 1 < argc) O.gp_size = (float)atof(argv[++i]);
         else if (!strcmp(argv[i], "--crop") && i + 1 < argc)
             O.crop_set = sscanf(argv[++i], "%f,%f,%f,%f,%f,%f", &O.crop[0], &O.crop[1], &O.crop[2],

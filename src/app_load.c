@@ -140,7 +140,7 @@ static void worker_load(void* p) {
     } else if (j->has_fbd) {                   /* geometry only, no mesh */
         j->ok = true;
     }
-    if (j->ok && (!cv_groups_build(&j->groups, &j->frd_out) || !cv_skin_build(&j->skin, &j->frd_out, NULL))) {
+    if (j->ok && (!cv_groups_build(&j->groups, &j->frd_out) || !cv_skin_build_crease(&j->skin, &j->frd_out, NULL, j->crease))) {
         snprintf(j->err, sizeof j->err, "out of memory building the surface");
         j->ok = false;
     }
@@ -161,7 +161,7 @@ static void worker_skin(void* p) {
     cv_job* j = p;
     double t0 = cv_now();
     if (j->crop) cv_crop_mask(j->frd, j->crop_lo, j->crop_hi, j->vis);
-    j->ok = cv_skin_build(&j->skin, j->frd, j->vis);
+    j->ok = cv_skin_build_crease(&j->skin, j->frd, j->vis, j->crease);
     if (!j->ok) snprintf(j->err, sizeof j->err, "out of memory building the surface");
     job_finish(j, t0);
 }
@@ -318,6 +318,7 @@ static void apply_load(cv_job* j) {
 
     cv_render_positions(G.frd.xyz, N);
     cv_render_indices(G.skin.tri, G.skin.n_tri, G.skin.edge, G.skin.n_edge, G.skin.pt, G.skin.n_pt);
+    cv_render_outline(G.skin.fedge, G.skin.n_fedge);
     G.loaded = true;
     G.file_bytes = G.map.size;
     G.field_src = 0;
@@ -502,6 +503,7 @@ static void start_skin_job(void) {
         G.job.crop_hi[k] = G.crop_hi[k] >= 1.f ? hi[k] + pad : lo[k] + ext * G.crop_hi[k];
     }
     G.job.frd = &G.frd;
+    G.job.crease = G.outline_angle;
     G.skin_dirty = false;
     job_start(JOB_SKIN, worker_skin);
 }
@@ -526,6 +528,7 @@ void poll_job(void) {
             G.skin = j->skin;
             memset(&j->skin, 0, sizeof j->skin);
             cv_render_indices(G.skin.tri, G.skin.n_tri, G.skin.edge, G.skin.n_edge, G.skin.pt, G.skin.n_pt);
+            cv_render_outline(G.skin.fedge, G.skin.n_fedge);
             free(G.vis);
             G.vis = j->vis;                       /* the mask this skin was built from */
             j->vis = NULL;
@@ -595,6 +598,7 @@ void app_open(const char* path) {
     cv_sta_free(&G.job.sta);
     memset(&G.job.deck, 0, sizeof G.job.deck);
     G.job.has_deck = false;
+    G.job.crease = G.outline_angle;
     G.job.eval_cgx = O.cgx || O.eval_next;
     O.eval_next = false;
     job_start(JOB_LOAD, worker_load);

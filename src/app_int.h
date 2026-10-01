@@ -43,6 +43,8 @@ typedef struct {
     bool        xray;           /* --xray: Gauss points through the faces */
     bool        no_faces;       /* --no-faces */
     float       gp_size;        /* --gp-size N */
+    bool        no_edges;       /* --no-edges */
+    float       outline;        /* --outline off|on|DEG: 0 off, > 0 the crease angle, < 0 unset */
     const char* argv_path;      /* the file to open */
     const char* shot_path;      /* --shot out.png: render, save the window, quit */
     int         shot_frames;    /* --frames N */

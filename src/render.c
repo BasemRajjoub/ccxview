@@ -231,8 +231,8 @@ static struct {
     int         ngroups;
     sg_sampler  smp_lin, smp_near;
     sg_buffer   pos, disp, disp2, scal;
-    sg_buffer   ib_tri, ib_edge, ib_pt;
-    size_t      n_tri, n_edge, n_pt;
+    sg_buffer   ib_tri, ib_edge, ib_pt, ib_fedge;
+    size_t      n_tri, n_edge, n_pt, n_fedge;
     uint32_t    n_nodes;
 } R;
 
@@ -413,8 +413,8 @@ static void clear_aux(void);
 void cv_render_clear_model(void) {
     clear_aux();
     kill_buf(&R.pos); kill_buf(&R.disp); kill_buf(&R.disp2); kill_buf(&R.scal);
-    kill_buf(&R.ib_tri); kill_buf(&R.ib_edge); kill_buf(&R.ib_pt);
-    R.n_tri = R.n_edge = R.n_pt = 0;
+    kill_buf(&R.ib_tri); kill_buf(&R.ib_edge); kill_buf(&R.ib_pt); kill_buf(&R.ib_fedge);
+    R.n_tri = R.n_edge = R.n_pt = R.n_fedge = 0;
     R.n_nodes = 0;
 }
 
@@ -463,6 +463,11 @@ void cv_render_indices(const uint32_t* tri, size_t n_tri, const uint32_t* edge, 
     R.ib_tri = make_buf(tri, n_tri * 12, true);   R.n_tri = R.ib_tri.id ? n_tri : 0;
     R.ib_edge = make_buf(edge, n_edge * 8, true); R.n_edge = R.ib_edge.id ? n_edge : 0;
     R.ib_pt = make_buf(pt, n_pt * 4, true);       R.n_pt = R.ib_pt.id ? n_pt : 0;
+}
+
+void cv_render_outline(const uint32_t* fedge, size_t n_fedge) {
+    kill_buf(&R.ib_fedge);
+    R.ib_fedge = make_buf(fedge, n_fedge * 8, true); R.n_fedge = R.ib_fedge.id ? n_fedge : 0;
 }
 
 typedef struct { sg_buffer pos, disp, scal, disp2; } vset;
@@ -570,6 +575,10 @@ void cv_render_draw(const cv_draw* d) {
     if (d->edges) {
         int m = d->edges_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : d->edges_color;
         draw_layer(R.pip_line, mesh, R.ib_edge, (int)(R.n_edge * 2), m, d->edge_rgb, false, d, 1, false, PULL, 0);
+    }
+    if (d->outline) {   /* after the edges and darker, so it reads over coloured ones; GL core lines have no width */
+        const float rgb[3] = { d->edge_rgb[0] * 0.4f, d->edge_rgb[1] * 0.4f, d->edge_rgb[2] * 0.4f };
+        draw_layer(R.pip_line, mesh, R.ib_fedge, (int)(R.n_fedge * 2), CV_COLOR_SOLID, rgb, false, d, 1, false, PULL, 0);
     }
     if (d->points) {
         int m = d->points_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : d->points_color;
