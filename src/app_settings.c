@@ -20,7 +20,7 @@ static bool   loaded;
 
 typedef struct {
     const char* key;       /* the section title for kind '#' */
-    char        kind;      /* 'b' bool, 'i' int, 'f' float, '#' section header */
+    char        kind;      /* 'b' bool, 'i' int, 'f' float, 'a' corner anchor (anchor.h), '#' section header */
     void*       p;
     float       lo, hi;    /* accepted range (lo < hi); outside it the default stays */
 } setting;
@@ -41,6 +41,8 @@ static const setting S[] = {
     SEC("Colours and legend"),
     I(cmap, 0, CV_CMAP_N - 1), I(bands, 0, 64), B(center_zero), B(legend_reverse), B(legend_grey),
     I(legend_fmt, 0, 2), I(legend_decimals, 0, 9), B(hide_legend), I(units, 0, CV_UNITS_N - 1),
+    SEC("Legend and axes gizmo: view corner (tl tr bl br), gap x, gap y; auto = default place"),
+    { "legend_pos", 'a', &G.legend_pos, 0, 0 }, { "gizmo_pos", 'a', &G.gizmo_pos, 0, 0 },
     SEC("Camera"),
     B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor), B(wheel_invert), B(show_pivot),
     { "cam_ortho", 'b', &G.cam.ortho, 0, 0 }, F(fly_speed, 0.005f, 10),
@@ -81,6 +83,7 @@ static bool set_from_text(const setting* e, const char* v) {
     case 'b': *(bool*)e->p = parse_bool(v); return true;
     case 'i': { int x = atoi(v); if (!in_range(e, (float)x)) return false; *(int*)e->p = x; return true; }
     case 'f': { float x = (float)atof(v); if (x != x || !in_range(e, x)) return false; *(float*)e->p = x; return true; }
+    case 'a': return cv_anchor_parse(v, (cv_anchor*)e->p, 10);
     }
     return false;
 }
@@ -95,6 +98,12 @@ static void put_one(const setting* e) {
     case 'b': cv_cfg_set_bool(&C, e->key, *(bool*)e->p); break;
     case 'i': cv_cfg_set_int(&C, e->key, *(int*)e->p); break;
     case 'f': cv_cfg_set_float(&C, e->key, *(float*)e->p); break;
+    case 'a': {
+        char t[64];
+        cv_anchor_format((const cv_anchor*)e->p, t, sizeof t);
+        cv_cfg_set(&C, e->key, t);
+        break;
+    }
     }
 }
 

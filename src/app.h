@@ -12,6 +12,7 @@
 #include "inp.h"
 #include "fbd.h"
 #include "sta.h"
+#include "anchor.h"
 
 /* what the faces are coloured by */
 enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
@@ -322,7 +323,7 @@ typedef struct {
     int       csys;                  /* results in: 0 global, 1..3 cylindrical about X, Y, Z */
     float     csys_o[3];             /* ... through this point */
     bool      legend_edit;           /* the legend settings window is open */
-    float     legend_auto[2];        /* where the legend was last put by itself; moved away = the user's place */
+    cv_anchor legend_pos, gizmo_pos;  /* dragged to: view corner + gap (unset: top-right, bottom-left) */
 } cv_app;
 
 extern cv_app G;

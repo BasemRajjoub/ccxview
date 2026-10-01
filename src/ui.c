@@ -200,8 +200,9 @@ static bool g_focus_open;          /* Ctrl+L: put the cursor in the path box */
 void ui_focus_open(void) { g_focus_open = true; }
 
 /* Whether a Nuklear window under the mouse should keep the event from the 3D
-   view. The legend and an empty drop hint only display, so they let everything
-   through; the axes gizmo takes clicks but not the wheel. */
+   view. An empty drop hint and the overlays only display, so they let everything
+   through; the legend and the axes gizmo take the buttons (they are dragged by
+   any point, see overlay_drag) but not the wheel. */
 bool ui_text_focus(struct nk_context* ctx) {
     for (struct nk_window* w = ctx->begin; w; w = w->next)
         if (!(w->flags & NK_WINDOW_HIDDEN) && (w->edit.active || w->property.active)) return true;
@@ -1319,7 +1320,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
     {
         char a[32], b[32], tt[200];
         legend_num(a, sizeof a, G.data_min); legend_num(b, sizeof b, G.data_max);
-        snprintf(tt, sizeof tt, "data %s .. %s%s%zu without data.  Right-click: legend settings",
+        snprintf(tt, sizeof tt, "data %s .. %s%s%zu without data.  Drag: move it.  Right-click: legend settings",
                  a, b, G.nan_count ? ",  " : ",  ", G.nan_count);
         tip(ctx, tt);
     }
@@ -2120,11 +2121,13 @@ static void window_legend_settings(struct nk_context* ctx, float s, float row) {
     if (!G.legend_edit || !G.loaded) { was_open = false; return; }
     if (!was_open) nk_window_show(ctx, "Legend settings", NK_SHOWN);
     was_open = true;
-    float w = 300 * s, h = 14.7f * row;
+    float w = 300 * s, h = 15.9f * row;
     if (nk_begin(ctx, "Legend settings", nk_rect(G.vp_x + G.vp_w - w - 180 * s, G.vp_y + 10 * s, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         legend_controls(ctx, s, row);
         nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "Back to the defaults: legend top-right, gizmo bottom-left. Both are moved by dragging them");
+        if (nk_button_label(ctx, "Reset legend and gizmo positions")) G.legend_pos.set = G.gizmo_pos.set = false;
         if (nk_button_label(ctx, "close")) G.legend_edit = false;
     }
     if (nk_window_is_hidden(ctx, "Legend settings")) G.legend_edit = false;
@@ -2363,15 +2366,70 @@ static void drop_hint(struct nk_context* ctx, float s, float row) {
     nk_end(ctx);
 }
 
-/* ---- axes gizmo (bottom-right of the view) -------------------------------------
+/* ---- legend and gizmo: dragged by any point, kept as a view corner -------------
+   Nuklear moves a window only by its title bar, which the legend does not
+   have and nobody finds; so a press anywhere on the overlay and a drag moves it.
+   Up to 4 px it stays a click (a gizmo tip, the gizmo centre). While moving, the
+   anchor follows: the corner nearest the box and the gap from it (anchor.h). */
+typedef struct { bool down, moving, dropped; float px, py, ox, oy; } ov_drag;
+
+static cv_box view_box(void) { return (cv_box){ (float)G.vp_x, (float)G.vp_y, (float)G.vp_w, (float)G.vp_h }; }
+
+/* the window on top at (x, y); NULL over a popup (a combo, a menu) */
+static struct nk_window* window_at(struct nk_context* ctx, float x, float y) {
+    struct nk_window* top = NULL;
+    for (struct nk_window* w = ctx->begin; w; w = w->next) {
+        if (w->flags & NK_WINDOW_HIDDEN) continue;
+        const struct nk_window* p = w->popup.active ? w->popup.win : NULL;
+        if (p && x >= p->bounds.x && y >= p->bounds.y && x < p->bounds.x + p->bounds.w && y < p->bounds.y + p->bounds.h)
+            top = NULL;
+        else if (x >= w->bounds.x && y >= w->bounds.y && x < w->bounds.x + w->bounds.w && y < w->bounds.y + w->bounds.h)
+            top = w;
+    }
+    return top;
+}
+
+/* at: where the overlay is this frame; keep_right: a strip on its right that
+   is not a handle (the group legend's scrollbar) */
+static void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box at, float keep_right,
+                         cv_anchor* pos, float s) {
+    const struct nk_input* in = &ctx->input;
+    const struct nk_mouse_button* lb = &in->mouse.buttons[NK_BUTTON_LEFT];
+    float mx = in->mouse.pos.x, my = in->mouse.pos.y;
+    d->dropped = false;
+    if (!d->down && lb->down && lb->clicked) {
+        float cx = lb->clicked_pos.x, cy = lb->clicked_pos.y;
+        struct nk_window* w = window_at(ctx, cx, cy);
+        if (w && !strcmp(w->name_string, name) && cx >= at.x && cy >= at.y && cx < at.x + at.w - keep_right && cy < at.y + at.h) {
+            d->down = true; d->moving = false;
+            d->px = cx; d->py = cy; d->ox = cx - at.x; d->oy = cy - at.y;
+        }
+    }
+    if (!d->down) return;
+    if (!lb->down) { d->dropped = d->moving; d->down = d->moving = false; return; }
+    if (!d->moving && fabsf(mx - d->px) + fabsf(my - d->py) > 4) d->moving = true;
+    if (d->moving) *pos = cv_anchor_from_box((cv_box){ mx - d->ox, my - d->oy, at.w, at.h }, view_box(), s);
+}
+
+static ov_drag legend_drag, gizmo_drag;
+
+/* the gizmo's box this frame; by default bottom-left, as in ParaView, out of the legend's way */
+static cv_box gizmo_box(float s) {
+    cv_anchor a = G.gizmo_pos.set ? G.gizmo_pos : (cv_anchor){ true, CV_BL, 12, 12 };
+    return cv_anchor_place(a, view_box(), 120 * s, 120 * s, s);
+}
+
+/* ---- axes gizmo (bottom-left of the view, or where it was dragged) ---------------
    World X/Y/Z projected with the camera's rotation only, so it turns with the
    view. Far axes are drawn first. Clicking a tip looks from that direction;
    clicking the centre returns to the iso view. */
 static void window_axes(struct nk_context* ctx, float s) {
     if (!G.loaded || G.hide_axes) return;
     float size = 120 * s, r = size * 0.36f;
-    struct nk_rect wr = nk_rect(G.vp_x + G.vp_w - size - 12 * s,
-                                G.vp_y + G.vp_h - size - 12 * s, size, size);
+    overlay_drag(ctx, &gizmo_drag, "axes", gizmo_box(s), 0, &G.gizmo_pos, s);
+    cv_box gb = gizmo_box(s);
+    struct nk_rect wr = nk_rect(gb.x, gb.y, gb.w, gb.h);
+    bool dragging = gizmo_drag.moving || gizmo_drag.dropped;    /* a drag that ends on a tip is no click */
     nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(nk_rgba(0, 0, 0, 0)));
     nk_style_push_float(ctx, &ctx->style.window.border, 0);
     if (nk_begin(ctx, "axes", wr, NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
@@ -2418,12 +2476,12 @@ static void window_axes(struct nk_context* ctx, float s) {
                 nk_draw_text(cv, nk_rect(t->x - tw * 0.5f, t->y - font->height * 0.5f, tw + 1, font->height),
                              names[t->axis], 1, font, nk_rgba(0, 0, 0, 0), nk_rgb(20, 20, 20));
             }
-            if (nk_input_is_mouse_click_in_rect(in, NK_BUTTON_LEFT, hit))
+            if (!dragging && nk_input_is_mouse_click_in_rect(in, NK_BUTTON_LEFT, hit))
                 clicked_view = t->neg ? view_neg[t->axis] : view_pos[t->axis];
         }
         struct nk_rect centre = nk_rect(cx - 5 * s, cy - 5 * s, 10 * s, 10 * s);
         nk_fill_circle(cv, centre, nk_rgb(200, 200, 200));
-        if (clicked_view < 0 && nk_input_is_mouse_click_in_rect(in, NK_BUTTON_LEFT, centre)) clicked_view = CV_VIEW_ISO;
+        if (!dragging && clicked_view < 0 && nk_input_is_mouse_click_in_rect(in, NK_BUTTON_LEFT, centre)) clicked_view = CV_VIEW_ISO;
         const char* proj = G.cam.ortho ? "ortho" : "persp";
         float pw = font->width(font->userdata, font->height, proj, (int)strlen(proj));
         nk_draw_text(cv, nk_rect(cx - pw * 0.5f, wr.y + size - font->height - 2 * s, pw + 1, font->height),
@@ -2506,28 +2564,35 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
                 float tw = f->width(f->userdata, f->height, G.field_label, (int)strlen(G.field_label));
                 lw = CV_MIN(CV_MAX(lw, tw + 24 * s), 380 * s);
             }
-            r = nk_rect(W - lw - 10 * s, G.vp_y + 10 * s, lw, lh);
-            /* draggable (by its top line); once moved it keeps its place, clamped to the
-               view. Until then it follows the top-right corner, so a resized or maximised
-               window does not leave it in the middle of the screen. */
-            struct nk_window* lw_win = nk_window_find(ctx, "Legend");
-            bool moved = lw_win && (fabsf(lw_win->bounds.x - G.legend_auto[0]) > 0.5f || fabsf(lw_win->bounds.y - G.legend_auto[1]) > 0.5f);
-            if (lw_win && moved) {
-                r.x = CV_MIN(CV_MAX(lw_win->bounds.x, (float)G.vp_x), W - lw);
-                r.y = CV_MIN(CV_MAX(lw_win->bounds.y, (float)G.vp_y), G.vp_y + G.vp_h - lh);
-            } else {
-                G.legend_auto[0] = r.x; G.legend_auto[1] = r.y;
-                if (lw_win) nk_window_set_position(ctx, "Legend", nk_vec2(r.x, r.y));
-            }
-            nk_flags lf = NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | (by_group ? 0 : NK_WINDOW_NO_SCROLLBAR);
+            /* top-right until dragged; then the corner it was dropped nearest (anchor.h) */
+            cv_anchor la = G.legend_pos.set ? G.legend_pos : (cv_anchor){ true, CV_TR, 10, 10 };
+            float keep = by_group ? ctx->style.window.scrollbar_size.x + ctx->style.window.padding.x : 0;
+            overlay_drag(ctx, &legend_drag, "Legend", cv_anchor_place(la, view_box(), lw, lh, s), keep, &G.legend_pos, s);
+            if (G.legend_pos.set) la = G.legend_pos;
+            cv_box lb = cv_anchor_place(la, view_box(), lw, lh, s);
+            /* a small screen: shorter, rather than over the gizmo; the gizmo never moves */
+            if (!G.hide_axes) lb = cv_legend_fit(lb, gizmo_box(s), 10 * s, 160 * s);
+            lh = lb.h;
+            r = nk_rect(lb.x, lb.y, lb.w, lb.h);
+            if (nk_window_find(ctx, "Legend")) nk_window_set_bounds(ctx, "Legend", r);
+            /* see-through over the model, no frame; the colour bar itself stays opaque */
+            struct nk_color bg = ctx->style.window.fixed_background.type == NK_STYLE_ITEM_COLOR
+                               ? ctx->style.window.fixed_background.data.color : ctx->style.window.background;
+            bg.a = 170;
+            nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(bg));
+            nk_style_push_float(ctx, &ctx->style.window.border, 0);
+            nk_style_push_float(ctx, &ctx->style.window.rounding, 6 * s);
+            nk_flags lf = by_group ? 0 : NK_WINDOW_NO_SCROLLBAR;
             if (lh > 80 * s && nk_begin(ctx, "Legend", r, lf)) {
                 struct nk_rect b = nk_window_get_bounds(ctx);
-                if (b.w != lw || b.h != lh) nk_window_set_bounds(ctx, "Legend", nk_rect(b.x, b.y, lw, lh));
                 if (nk_input_is_mouse_click_in_rect(&ctx->input, NK_BUTTON_RIGHT, b)) G.legend_edit = true;
                 if (by_group) panel_group_legend(ctx, s, row);
                 else panel_legend(ctx, s, row);
             }
             if (lh > 80 * s) nk_end(ctx);
+            nk_style_pop_float(ctx);
+            nk_style_pop_float(ctx);
+            nk_style_pop_style_item(ctx);
         }
     }
 

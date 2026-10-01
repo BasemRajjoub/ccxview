@@ -27,6 +27,7 @@ static int g_fail = 0, g_checks = 0;
 #include "t_export.h"
 #include "t_path.h"
 #include "t_video.h"
+#include "t_anchor.h"
 
 /* ---- helpers ---- */
 
@@ -949,6 +950,7 @@ int main(void) {
     test_cfg();
     test_export();
     test_path();
+    test_anchor();
     test_sta();
     test_fbd();
     test_inp();
