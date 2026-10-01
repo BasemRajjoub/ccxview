@@ -549,6 +549,7 @@ bool cv_dbus_hello(char* unique, size_t n) {
 #include "tinyfiledialogs.h"
 
 static int native_open(const char* parent, const char* start_dir, char* out, size_t n) {
+    (void)parent;
     char def[1100] = "";
     if (start_dir && start_dir[0]) {
 #ifdef _WIN32
@@ -579,6 +580,7 @@ static struct {
 } D;
 
 static void worker(void* p) {
+    (void)p;
     char out[1024] = "";
     int r = native_open(D.parent, D.start[0] ? D.start : NULL, out, sizeof out);
     cv_mutex_lock(&D.lock);

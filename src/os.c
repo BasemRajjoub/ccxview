@@ -155,7 +155,9 @@ float cv_cpu_percent(void) {
 typedef struct { DWORD cb, PageFaultCount; SIZE_T PeakWorkingSetSize, WorkingSetSize, a, b, c, d, e, f; } cv_pmc;
 BOOL WINAPI K32GetProcessMemoryInfo(HANDLE, void*, DWORD);
 uint64_t cv_rss_bytes(void) {
-    cv_pmc m = { sizeof m };
+    cv_pmc m;
+    memset(&m, 0, sizeof m);
+    m.cb = sizeof m;
     return K32GetProcessMemoryInfo(GetCurrentProcess(), &m, sizeof m) ? (uint64_t)m.WorkingSetSize : 0;
 }
 

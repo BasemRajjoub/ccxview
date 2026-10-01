@@ -32,6 +32,17 @@ static int g_fail = 0, g_checks = 0;
 
 typedef struct { char* p; size_t n; } buf_t;
 
+/* A scratch file the writer fills and slurp reads back. tmpfile() fails on
+   Windows without rights to the drive root, so it is a named file under build/. */
+static char g_tmp[64];
+static FILE* tmp_open(void) {
+    static int n;
+    snprintf(g_tmp, sizeof g_tmp, "build/t_tmp%d.bin", n++);
+    FILE* o = fopen(g_tmp, "w+b");
+    if (!o) { fprintf(stderr, "cannot create %s\n", g_tmp); exit(1); }
+    return o;
+}
+
 static buf_t slurp(FILE* o) {
     buf_t b;
     fflush(o);
@@ -40,6 +51,7 @@ static buf_t slurp(FILE* o) {
     b.p = malloc((size_t)n + 1);
     b.n = fread(b.p, 1, (size_t)n, o);
     fclose(o);
+    remove(g_tmp);
     return b;
 }
 
@@ -67,7 +79,7 @@ static buf_t two_hex(int binary) {
         disp[3 * i] = -1.5f * i; disp[3 * i + 1] = -2.25f; disp[3 * i + 2] = 0.001f * i;
         for (int c = 0; c < 6; c++) stress[6 * i + c] = (float)(i * 10 + c) * (c % 2 ? -1.f : 1.f);
     }
-    FILE* o = tmpfile();
+    FILE* o = tmp_open();
     fprintf(o, "    1C\n");
     fw_nodes(o, 12, id, xyz, binary);
     fw_elems(o, 2, eid, 1, 8, conn, mat, binary);
@@ -108,6 +120,7 @@ static void check_two_hex(int binary) {
     dump_msgs(&f);
     CHECK_EQ(f.n_nodes, 12);
     CHECK_EQ(f.n_elems, 2);
+    if (f.n_nodes != 12 || f.n_elems != 2) { cv_frd_free(&f); free(f.msgs.a); free(b.p); return; }
     CHECK_EQ(f.elem_id[1], 8);
     CHECK_EQ(f.emat[1], 2);
     CHECK_EQ(f.n_steps, 2);
@@ -285,7 +298,7 @@ static void test_absurd_header(void) {
 
 /* Element pointing at a node that does not exist is dropped and reported. */
 static void test_missing_node(void) {
-    FILE* o = tmpfile();
+    FILE* o = tmp_open();
     uint32_t id[4] = { 1, 2, 3, 4 };
     double xyz[12] = { 0,0,0, 1,0,0, 0,1,0, 0,0,1 };
     uint32_t conn[8] = { 1, 2, 3, 4, 1, 2, 3, 99 };
@@ -311,7 +324,7 @@ static void test_missing_node(void) {
 /* >6 components use -2 continuation lines in ASCII; a value for an unknown node
    is ignored and nodes without values read as NaN. */
 static void test_continuation_and_nan(void) {
-    FILE* o = tmpfile();
+    FILE* o = tmp_open();
     uint32_t id[3] = { 1, 2, 3 };
     double xyz[9] = { 0,0,0, 1,0,0, 0,1,0 };
     fw_nodes(o, 3, id, xyz, 0);
@@ -943,6 +956,396 @@ static void test_localsys(void) {
     cv_inp_free(&d); free(d.msgs.a);
 }
 
+/* .frd of hex8 elements eid[k], each on 8 nodes of its own (ids 10k+1..), the unit
+   cube moved by at[k] */
+static buf_t own_hexes(uint32_t ne, const uint32_t* eid, const double (*at)[3]) {
+    static const double c[8][3] = { {0,0,0}, {1,0,0}, {1,1,0}, {0,1,0}, {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1} };
+    uint32_t id[80], conn[80];
+    double xyz[240];
+    for (uint32_t k = 0; k < ne; k++)
+        for (int j = 0; j < 8; j++) {
+            uint32_t i = 8 * k + (uint32_t)j;
+            id[i] = conn[i] = 10 * k + (uint32_t)j + 1;
+            for (int a = 0; a < 3; a++) xyz[3 * i + a] = c[j][a] + at[k][a];
+        }
+    FILE* o = tmp_open();
+    fw_nodes(o, 8 * ne, id, xyz, 0);
+    fw_elems(o, ne, eid, 1, 8, conn, NULL, 0);
+    fprintf(o, "9999\n");
+    return slurp(o);
+}
+
+static void fill6(float* v, uint32_t n, const float l[6]) {
+    for (uint32_t i = 0; i < n; i++) memcpy(v + 6 * i, l, 6 * sizeof(float));
+}
+
+/* the turns themselves, against the matrix product written out */
+static void test_csys_math(void) {
+    double a = 0.3, b = -1.1, g = 2.0, T[3][3], Q[3][3];
+    double cz = cos(a), sz = sin(a), cy = cos(b), sy = sin(b), cx = cos(g), sx = sin(g);
+    const double Rz[3][3] = { { cz, -sz, 0 }, { sz, cz, 0 }, { 0, 0, 1 } };
+    const double Ry[3][3] = { { cy, 0, sy }, { 0, 1, 0 }, { -sy, 0, cy } };
+    const double Rx[3][3] = { { 1, 0, 0 }, { 0, cx, -sx }, { 0, sx, cx } };
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {
+        T[i][j] = 0; for (int k = 0; k < 3; k++) T[i][j] += Rz[i][k] * Ry[k][j];
+    }
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {
+        Q[i][j] = 0; for (int k = 0; k < 3; k++) Q[i][j] += T[i][k] * Rx[k][j];
+    }
+    /* local tensor, shears XY YZ ZX; global G = Q^T S Q (rows of Q: local axes) */
+    float s[6] = { 3, -1, 2, 0.5f, -0.7f, 1.3f };
+    const double S[3][3] = { { 3, 0.5, 1.3 }, { 0.5, -1, -0.7 }, { 1.3, -0.7, 2 } };
+    double G[3][3];
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {
+        G[i][j] = 0;
+        for (int k = 0; k < 3; k++) for (int l = 0; l < 3; l++) G[i][j] += Q[k][i] * S[k][l] * Q[l][j];
+    }
+    cv_ten_to_global(Q, s);
+    CHECK_NEAR(s[0], G[0][0], 1e-5); CHECK_NEAR(s[1], G[1][1], 1e-5); CHECK_NEAR(s[2], G[2][2], 1e-5);
+    CHECK_NEAR(s[3], G[0][1], 1e-5); CHECK_NEAR(s[4], G[1][2], 1e-5); CHECK_NEAR(s[5], G[2][0], 1e-5);
+    float v[3] = { 1, 2, -3 };
+    double w[3];
+    for (int i = 0; i < 3; i++) w[i] = Q[0][i] * 1 + Q[1][i] * 2 + Q[2][i] * -3;
+    cv_vec_to_global(Q, v);
+    for (int i = 0; i < 3; i++) CHECK_NEAR(v[i], w[i], 1e-5);
+
+    /* rectangular: a along e1, b made normal to it in the a-b plane */
+    cv_csys r = { { 2, 0, 0, 1, 3, 0 }, false };
+    float p0[3] = { 5, 5, 5 };
+    cv_csys_axes(&r, p0, Q);
+    for (int i = 0; i < 9; i++) CHECK_NEAR(Q[i / 3][i % 3], i % 4 == 0, 1e-12);
+    /* cylindrical (a, b on the axis): e1 radial, e3 along a->b, e2 = e3 x e1 */
+    cv_csys cy2 = { { 0, 0, 0, 0, 0, 2 }, true };
+    float p1[3] = { 0, 3, 7 };
+    cv_csys_axes(&cy2, p1, Q);
+    CHECK_NEAR(Q[0][1], 1, 1e-12); CHECK_NEAR(Q[1][0], -1, 1e-12); CHECK_NEAR(Q[2][2], 1, 1e-12);
+    float p2[3] = { 0, 0, 4 };                    /* on the axis: some unit e1 normal to it */
+    cv_csys_axes(&cy2, p2, Q);
+    double l = 0, dt = 0;
+    for (int k = 0; k < 3; k++) { l += Q[0][k] * Q[0][k]; dt += Q[0][k] * Q[2][k]; }
+    CHECK_NEAR(l, 1, 1e-12); CHECK_NEAR(dt, 0, 1e-12);
+}
+
+#define CUBE_NODES "1,0,0,0\n2,1,0,0\n3,1,1,0\n4,0,1,0\n5,0,0,1\n6,1,0,1\n7,1,1,1\n8,0,1,1\n"
+#define S_LINE(el, ip, name) "         " el "   " ip "  1.000000E+00  0.000000E+00  0.000000E+00" \
+    "  0.000000E+00  0.000000E+00  0.000000E+00 " name "\n"
+#define S_HEAD(set) " stresses (elem, integ.pnt.,sxx,syy,szz,sxy,sxz,syz) for set " set \
+    " and time  0.1000000E+01\n\n"
+
+/* composite shells: the .frd adds one element per layer, numbered on from the
+   largest element (frd.c), each on nodes of its own, each in its layer's system */
+static void test_localsys_layers(void) {
+    cv_field_desc st = { .name = "STRESS", .ncomp = 6, .comp = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" } };
+    const float sx[6] = { 1, 0, 0, 0, 0, 0 };     /* local: sxx = 1 */
+    float s[64 * 6];
+    cv_inp d;
+    cv_localsys L;
+    cv_frd f;
+    buf_t b;
+    const char* comp =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,1,1,0\n4,0,1,0\n"
+        "*ELEMENT, TYPE=S4, ELSET=E\n1,1,2,3,4\n"
+        "*ORIENTATION, NAME=ORA\n1.,1.,0.,-1.,1.,0.\n"
+        "*ORIENTATION, NAME=ORB\n0.,1.,0.,-1.,0.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n"
+        "*SHELL SECTION, ELSET=E, COMPOSITE\n0.05,,M,ORA\n0.05,,M,ORB\n"
+        "*STEP\n*STATIC\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, comp, strlen(comp), NULL, NULL));
+    CHECK_EQ(d.ncomps, 1);
+    if (d.ncomps == 1) {
+        CHECK_EQ(d.comps[0].nlay, 2);
+        CHECK_EQ(d.layer_ori[d.comps[0].lay0], 0); CHECK_EQ(d.layer_ori[d.comps[0].lay0 + 1], 1);
+    }
+    {
+        const uint32_t eid[3] = { 1, 3, 2 };      /* out of order on purpose */
+        const double at[3][3] = { { 0, 0, 0 }, { 0, 0, 4 }, { 0, 0, 2 } };
+        b = own_hexes(3, eid, at);
+        CHECK(cv_frd_parse(&f, b.p, b.n));
+        CHECK(cv_localsys_init(&L, &d, &f));
+        fill6(s, f.n_nodes, sx);
+        CHECK_EQ(cv_localsys_apply(&L, &d, &f, 1, &st, s), CV_LOC_TURNED | CV_LOC_NAN);
+        uint32_t n1 = cv_frd_node_index(&f, 1), n2 = cv_frd_node_index(&f, 21), n3 = cv_frd_node_index(&f, 11);
+        CHECK(s[6 * n1] != s[6 * n1]);           /* the shell itself: its layers differ */
+        /* element 2 = layer 1 (ORA): e1 = (1,1,0)/sqrt2 */
+        CHECK_NEAR(s[6 * n2], 0.5, 1e-6); CHECK_NEAR(s[6 * n2 + 1], 0.5, 1e-6); CHECK_NEAR(s[6 * n2 + 3], 0.5, 1e-6);
+        /* element 3 = layer 2 (ORB): e1 = y */
+        CHECK_NEAR(s[6 * n3], 0, 1e-6); CHECK_NEAR(s[6 * n3 + 1], 1, 1e-6); CHECK_NEAR(s[6 * n3 + 3], 0, 1e-6);
+        cv_localsys_free(&L); cv_frd_free(&f); free(f.msgs.a); free(b.p);
+    }
+    {   /* one element too many: the layers cannot be matched, all NaN */
+        const uint32_t eid[4] = { 1, 2, 3, 4 };
+        const double at[4][3] = { { 0, 0, 0 }, { 0, 0, 2 }, { 0, 0, 4 }, { 0, 0, 6 } };
+        b = own_hexes(4, eid, at);
+        CHECK(cv_frd_parse(&f, b.p, b.n));
+        CHECK(cv_localsys_init(&L, &d, &f));
+        fill6(s, f.n_nodes, sx);
+        CHECK_EQ(cv_localsys_apply(&L, &d, &f, 1, &st, s), CV_LOC_NAN);
+        int nan = 0;
+        for (uint32_t i = 0; i < f.n_nodes; i++) nan += s[6 * i] != s[6 * i];
+        CHECK_EQ(nan, 32);
+        cv_localsys_free(&L); cv_frd_free(&f); free(f.msgs.a); free(b.p);
+    }
+    cv_inp_free(&d); free(d.msgs.a);
+
+    /* layers in one orientation: the shell too; a layer naming an orientation that
+       does not exist cannot be rebuilt */
+    const char* comp2 =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,1,1,0\n4,0,1,0\n"
+        "*ELEMENT, TYPE=S4, ELSET=E\n1,1,2,3,4\n"
+        "*ELEMENT, TYPE=S4, ELSET=F\n2,1,2,3,4\n"
+        "*ORIENTATION, NAME=ORB\n0.,1.,0.,-1.,0.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n"
+        "*SHELL SECTION, ELSET=E, COMPOSITE\n0.05,,M,ORB\n0.05,,M,ORB\n"
+        "*SHELL SECTION, ELSET=F, COMPOSITE\n0.05,,M,ORB\n0.05,,M,NOSUCH\n"
+        "*STEP\n*STATIC\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, comp2, strlen(comp2), NULL, NULL));
+    CHECK_EQ(d.ncomps, 2);
+    {   /* layers: 3, 4 of element 1; 5, 6 of element 2 */
+        const uint32_t eid[6] = { 1, 2, 3, 4, 5, 6 };
+        const double at[6][3] = { { 0, 0, 0 }, { 0, 0, 2 }, { 0, 0, 4 }, { 0, 0, 6 }, { 0, 0, 8 }, { 0, 0, 10 } };
+        b = own_hexes(6, eid, at);
+        CHECK(cv_frd_parse(&f, b.p, b.n));
+        CHECK(cv_localsys_init(&L, &d, &f));
+        fill6(s, f.n_nodes, sx);
+        CHECK_EQ(cv_localsys_apply(&L, &d, &f, 1, &st, s), CV_LOC_TURNED | CV_LOC_NAN);
+        const uint32_t probe[6] = { 1, 11, 21, 31, 41, 51 };
+        const int turned[6] = { 1, 0, 1, 1, 1, 0 };     /* element 2: mixed; layer 6: NOSUCH */
+        for (int k = 0; k < 6; k++) {
+            uint32_t n = cv_frd_node_index(&f, probe[k]);
+            if (turned[k]) { CHECK_NEAR(s[6 * n], 0, 1e-6); CHECK_NEAR(s[6 * n + 1], 1, 1e-6); }
+            else CHECK(s[6 * n] != s[6 * n]);
+        }
+        cv_localsys_free(&L); cv_frd_free(&f); free(f.msgs.a); free(b.p);
+    }
+    cv_inp_free(&d); free(d.msgs.a);
+}
+
+/* systems that turn inside an element or differ between neighbours */
+static void test_localsys_spread(void) {
+    cv_field_desc st = { .name = "STRESS", .ncomp = 6, .comp = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" } };
+    const float sx[6] = { 1, 0, 0, 0, 0, 0 };
+    float s[16 * 6];
+    cv_inp d;
+    cv_localsys L;
+    const char* tail = "*SOLID SECTION, ELSET=E1, MATERIAL=M, ORIENTATION=OC\n"
+                       "*STEP\n*STATIC\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n";
+    char deck[2048];
+
+    /* cylindrical, axis z through (0,-10): CalculiX turns at each integration point
+       and averages at the nodes, here undone with the node's own system: approximate */
+    snprintf(deck, sizeof deck, "*NODE\n" CUBE_NODES "*ELEMENT, TYPE=C3D8, ELSET=E1\n1,1,2,3,4,5,6,7,8\n"
+             "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n*ORIENTATION, NAME=OC, SYSTEM=C\n0.,-10.,0.,0.,-10.,1.\n%s", tail);
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), NULL, NULL));
+    CHECK(cv_localsys_init(&L, &d, &d.mesh));
+    fill6(s, 8, sx);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &st, s), CV_LOC_TURNED | CV_LOC_APPROX);
+    {
+        uint32_t n = cv_frd_node_index(&d.mesh, 3);         /* (1,1,0): e1 = (1,11,0)/sqrt(122) */
+        CHECK_NEAR(s[6 * n], 1.0 / 122, 1e-6); CHECK_NEAR(s[6 * n + 1], 121.0 / 122, 1e-6);
+        CHECK_NEAR(s[6 * n + 3], 11.0 / 122, 1e-6); CHECK_NEAR(s[6 * n + 2], 0, 1e-6);
+    }
+    cv_localsys_free(&L);
+
+    /* the .dat names the system at each integration point: exact there. C3D8 points
+       run x fastest at 0.5 -+ 0.5/sqrt3: point 2 is (+,-,-), point 7 (-,+,+) */
+    {
+        const char* dat = S_HEAD("E1")
+            S_LINE("1", "1", "OC") S_LINE("1", "2", "OC") S_LINE("1", "3", "OC") S_LINE("1", "4", "OC")
+            S_LINE("1", "5", "OC") S_LINE("1", "6", "OC") S_LINE("1", "7", "OC") S_LINE("1", "8", "OC") "\n";
+        cv_dat dt;
+        CHECK(cv_dat_parse(&dt, dat, strlen(dat)));
+        CHECK(dt.n == 1 && dt.b[0].n == 8);
+        if (dt.n == 1 && dt.b[0].n == 8) {
+            CHECK_EQ(cv_localsys_dat(&d, &d.mesh, &dt.b[0]), CV_LOC_TURNED);
+            double lo = 0.5 - 0.5 / sqrt(3.0), hi = 0.5 + 0.5 / sqrt(3.0);
+            const double xy[2][2] = { { hi, lo + 10 }, { lo, hi + 10 } };
+            const int ips[2] = { 2, 7 };
+            for (int j = 0; j < 2; j++) {
+                double r = sqrt(xy[j][0] * xy[j][0] + xy[j][1] * xy[j][1]), ex = xy[j][0] / r, ey = xy[j][1] / r;
+                const float* v = dt.b[0].vals + 6 * (ips[j] - 1);
+                CHECK_NEAR(v[0], ex * ex, 1e-6); CHECK_NEAR(v[1], ey * ey, 1e-6); CHECK_NEAR(v[3], ex * ey, 1e-6);
+            }
+        }
+        cv_dat_free(&dt); free(dt.msgs.a);
+    }
+    cv_inp_free(&d); free(d.msgs.a);
+
+    /* the axis through the element: its system turns too far inside it, NaN */
+    snprintf(deck, sizeof deck, "*NODE\n" CUBE_NODES "*ELEMENT, TYPE=C3D8, ELSET=E1\n1,1,2,3,4,5,6,7,8\n"
+             "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n*ORIENTATION, NAME=OC, SYSTEM=C\n0.,0.,0.,0.,0.,1.\n%s", tail);
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), NULL, NULL));
+    CHECK(cv_localsys_init(&L, &d, &d.mesh));
+    fill6(s, 8, sx);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &st, s), CV_LOC_NAN);
+    cv_localsys_free(&L);
+    cv_inp_free(&d); free(d.msgs.a);
+
+    /* two orientations meeting at x = 1, 45 degrees apart: NaN on the shared face only */
+    const char* two =
+        "*NODE\n" CUBE_NODES "9,2,0,0\n10,2,1,0\n11,2,0,1\n12,2,1,1\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=EA\n1,1,2,3,4,5,6,7,8\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=EB\n2,2,9,10,3,6,11,12,7\n"
+        "*ORIENTATION, NAME=OA\n1.,1.,0.,-1.,1.,0.\n*ORIENTATION, NAME=OB\n0.,1.,0.,-1.,0.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n"
+        "*SOLID SECTION, ELSET=EA, MATERIAL=M, ORIENTATION=OA\n*SOLID SECTION, ELSET=EB, MATERIAL=M, ORIENTATION=OB\n"
+        "*STEP\n*STATIC\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, two, strlen(two), NULL, NULL));
+    CHECK(cv_localsys_init(&L, &d, &d.mesh));
+    fill6(s, 12, sx);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &st, s), CV_LOC_TURNED | CV_LOC_NAN);
+    for (uint32_t id = 1; id <= 12; id++) {
+        uint32_t n = cv_frd_node_index(&d.mesh, id);
+        bool shared = id == 2 || id == 3 || id == 6 || id == 7;
+        if (shared) CHECK(s[6 * n] != s[6 * n]);
+        else if (id <= 8) { CHECK_NEAR(s[6 * n], 0.5, 1e-6); CHECK_NEAR(s[6 * n + 3], 0.5, 1e-6); }
+        else { CHECK_NEAR(s[6 * n], 0, 1e-6); CHECK_NEAR(s[6 * n + 1], 1, 1e-6); }
+    }
+    cv_localsys_free(&L);
+    cv_inp_free(&d); free(d.msgs.a);
+}
+
+/* .dat record names: at most 20 characters; a name alike in 20 or unknown falls back
+   to the element's section; an element without one is NaN */
+static void test_localsys_datnames(void) {
+    cv_inp d;
+    cv_dat dt;
+    const char* names =
+        "*NODE\n" CUBE_NODES "9,2,0,0\n10,2,1,0\n11,2,0,1\n12,2,1,1\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=EA\n1,1,2,3,4,5,6,7,8\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=EB\n2,2,9,10,3,6,11,12,7\n"
+        "*ORIENTATION, NAME=Abcdefghijklmnopqrstuv\n0.,1.,0.,-1.,0.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n"
+        "*SOLID SECTION, ELSET=EA, MATERIAL=M, ORIENTATION=ABCDEFGHIJKLMNOPQRSTUV\n*SOLID SECTION, ELSET=EB, MATERIAL=M\n"
+        "*STEP\n*STATIC\n*EL PRINT, ELSET=EA\nS\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, names, strlen(names), NULL, NULL));
+    {
+        const char* dat = S_HEAD("EA")
+            S_LINE("1", "1", "ABCDEFGHIJKLMNOPQRST") S_LINE("1", "2", "NOPE") S_LINE("2", "1", "NOPE") "\n"
+            " heat flux (elem, integ.pnt.,qx,qy,qz) for set EA and time  0.1000000E+01\n\n"
+            "         1   1  1.000000E+00  0.000000E+00  0.000000E+00 ABCDEFGHIJKLMNOPQRST\n\n";
+        CHECK(cv_dat_parse(&dt, dat, strlen(dat)));
+        CHECK_EQ(dt.n, 2);
+        if (dt.n == 2) {
+            CHECK_EQ(dt.b[0].nsys, 2);
+            CHECK_EQ(cv_localsys_dat(&d, &d.mesh, &dt.b[0]), CV_LOC_TURNED | CV_LOC_NAN);
+            const float* v = dt.b[0].vals;
+            CHECK_NEAR(v[0], 0, 1e-6); CHECK_NEAR(v[1], 1, 1e-6);         /* 20 characters of the name */
+            CHECK_NEAR(v[6], 0, 1e-6); CHECK_NEAR(v[7], 1, 1e-6);         /* unknown: element 1's */
+            CHECK(v[12] != v[12]);                                        /* element 2 has none */
+            CHECK_EQ(cv_localsys_dat(&d, &d.mesh, &dt.b[1]), CV_LOC_TURNED);  /* a vector */
+            CHECK_NEAR(dt.b[1].vals[0], 0, 1e-6); CHECK_NEAR(dt.b[1].vals[1], 1, 1e-6);
+        }
+        cv_dat_free(&dt); free(dt.msgs.a);
+    }
+    cv_inp_free(&d); free(d.msgs.a);
+
+    /* two names alike in their first 20 characters: the element's section decides */
+    const char* alike =
+        "*NODE\n" CUBE_NODES "*ELEMENT, TYPE=C3D8, ELSET=EA\n1,1,2,3,4,5,6,7,8\n"
+        "*ORIENTATION, NAME=ABCDEFGHIJKLMNOPQRSTUV\n0.,1.,0.,-1.,0.,0.\n"
+        "*ORIENTATION, NAME=ABCDEFGHIJKLMNOPQRSTXX\n1.,1.,0.,-1.,1.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n"
+        "*SOLID SECTION, ELSET=EA, MATERIAL=M, ORIENTATION=ABCDEFGHIJKLMNOPQRSTUV\n"
+        "*STEP\n*STATIC\n*EL PRINT, ELSET=EA\nS\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, alike, strlen(alike), NULL, NULL));
+    {
+        const char* dat = S_HEAD("EA") S_LINE("1", "1", "ABCDEFGHIJKLMNOPQRST") "\n";
+        CHECK(cv_dat_parse(&dt, dat, strlen(dat)));
+        if (dt.n == 1) {
+            CHECK_EQ(cv_localsys_dat(&d, &d.mesh, &dt.b[0]), CV_LOC_TURNED);
+            CHECK_NEAR(dt.b[0].vals[0], 0, 1e-6); CHECK_NEAR(dt.b[0].vals[1], 1, 1e-6);
+        }
+        cv_dat_free(&dt); free(dt.msgs.a);
+    }
+    cv_inp_free(&d); free(d.msgs.a);
+
+    /* a shell with an orientation: "<orientation>_shell_<element>", cut at 20 */
+    const char* sh =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,1,1,0\n4,0,1,0\n"
+        "*ELEMENT, TYPE=S4, ELSET=E\n1,1,2,3,4\n"
+        "*ORIENTATION, NAME=ORB\n0.,1.,0.,-1.,0.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n*SHELL SECTION, ELSET=E, MATERIAL=M, ORIENTATION=ORB\n0.1\n"
+        "*STEP\n*STATIC\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, sh, strlen(sh), NULL, NULL));
+    {
+        const char* dat = S_HEAD("E") S_LINE("1", "1", "ORB_shell_0000000001") "\n";
+        CHECK(cv_dat_parse(&dt, dat, strlen(dat)));
+        if (dt.n == 1) {
+            CHECK(dt.b[0].nsys == 1 && strcmp(dt.b[0].sysname[0], "ORB_shell_") == 0);
+            CHECK_EQ(cv_localsys_dat(&d, &d.mesh, &dt.b[0]), CV_LOC_TURNED);
+            CHECK_NEAR(dt.b[0].vals[0], 0, 1e-6); CHECK_NEAR(dt.b[0].vals[1], 1, 1e-6);
+        }
+        cv_dat_free(&dt); free(dt.msgs.a);
+    }
+    {   /* and in the .frd */
+        cv_field_desc st = { .name = "STRESS", .ncomp = 6, .comp = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" } };
+        const float sx[6] = { 1, 0, 0, 0, 0, 0 };
+        float s[4 * 6];
+        cv_localsys L;
+        CHECK(cv_localsys_init(&L, &d, &d.mesh));
+        fill6(s, 4, sx);
+        CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &st, s), CV_LOC_TURNED);
+        CHECK_NEAR(s[0], 0, 1e-6); CHECK_NEAR(s[1], 1, 1e-6);
+        cv_localsys_free(&L);
+    }
+    cv_inp_free(&d); free(d.msgs.a);
+}
+
+/* which request decides which block: the first card of a step clears its kind,
+   *NODE OUTPUT / *ELEMENT OUTPUT count as *NODE FILE / *EL FILE; FORCI goes with U,
+   MESTRAIN with E; PSTRESS cannot be undone */
+static void test_localsys_requests(void) {
+    const char* req =
+        "*NODE, NSET=NALL\n" CUBE_NODES "*ELEMENT, TYPE=C3D8, ELSET=E1\n1,1,2,3,4,5,6,7,8\n"
+        "*NSET, NSET=NT\n2\n*TRANSFORM, NSET=NT\n0.,1.,0.,-1.,0.,0.\n"
+        "*ORIENTATION, NAME=OR1\n0.,1.,0.,-1.,0.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n*SOLID SECTION, ELSET=E1, MATERIAL=M, ORIENTATION=OR1\n"
+        "*STEP\n*STATIC\n*NODE FILE, GLOBAL=NO\nU\n*NODE FILE\nRF\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n"
+        "*STEP\n*STATIC\n*NODE OUTPUT\nRF\n*ELEMENT OUTPUT, GLOBAL=NO\nE\n*END STEP\n"
+        "*STEP\n*STATIC\n*EL FILE\nS\n*EL FILE, GLOBAL=NO\nE\n*END STEP\n";
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, req, strlen(req), NULL, NULL));
+    CHECK_EQ(d.nsteps, 3);
+    if (d.nsteps == 3) {
+        CHECK_EQ(d.outsys[0][CV_OUT_U], 'L'); CHECK_EQ(d.outsys[0][CV_OUT_RF], 'G');
+        CHECK_EQ(d.outsys[0][CV_OUT_S], 'L'); CHECK_EQ(d.outsys[0][CV_OUT_E], ' ');
+        CHECK_EQ(d.outsys[1][CV_OUT_U], ' '); CHECK_EQ(d.outsys[1][CV_OUT_RF], 'G');
+        CHECK_EQ(d.outsys[1][CV_OUT_S], ' '); CHECK_EQ(d.outsys[1][CV_OUT_E], 'L');
+        CHECK_EQ(d.outsys[2][CV_OUT_U], ' '); CHECK_EQ(d.outsys[2][CV_OUT_RF], 'G');
+        CHECK_EQ(d.outsys[2][CV_OUT_S], 'G'); CHECK_EQ(d.outsys[2][CV_OUT_E], 'L');
+    }
+    cv_localsys L;
+    CHECK(cv_localsys_init(&L, &d, &d.mesh));
+    cv_field_desc st = { .name = "STRESS", .ncomp = 6, .comp = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" } };
+    cv_field_desc fi = { .name = "FORCI", .ncomp = 3, .comp = { "F1", "F2", "F3" } };
+    cv_field_desc fo = { .name = "FORC", .ncomp = 3, .comp = { "F1", "F2", "F3" } };
+    cv_field_desc me = { .name = "MESTRAIN", .ncomp = 6, .comp = { "MEXX", "MEYY", "MEZZ", "MEXY", "MEYZ", "MEZX" } };
+    cv_field_desc te = { .name = "TOSTRAIN", .ncomp = 6, .comp = { "EXX", "EYY", "EZZ", "EXY", "EYZ", "EZX" } };
+    cv_field_desc ps = { .name = "PSTRESS", .ncomp = 3, .comp = { "PS1", "PS2", "PS3" } };
+    cv_field_desc nt = { .name = "NDTEMP", .ncomp = 1, .comp = { "T" } };
+    const float sx[6] = { 1, 0, 0, 0, 0, 0 };
+    float u[24], s[48], p[24];
+    uint32_t n2 = cv_frd_node_index(&d.mesh, 2);
+    for (int i = 0; i < 24; i++) u[i] = i % 3 == 0;
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &fo, u), 0);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &fi, u), CV_LOC_TURNED);
+    CHECK_NEAR(u[3 * n2], 0, 1e-6); CHECK_NEAR(u[3 * n2 + 1], 1, 1e-6);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &nt, u), 0);
+    fill6(s, 8, sx);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &me, s), 0);             /* E not requested */
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 2, &me, s), CV_LOC_TURNED);
+    CHECK_NEAR(s[1], 1, 1e-6);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 2, &st, s), 0);             /* S cleared in step 2 */
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 3, &st, s), 0);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 9, &te, s), CV_LOC_TURNED); /* past the last: the last */
+    for (int i = 0; i < 24; i++) p[i] = 1;
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 3, &ps, p), 0);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &ps, p), CV_LOC_NAN);
+    CHECK(p[0] != p[0] && p[23] != p[23]);
+    cv_localsys_free(&L);
+    cv_inp_free(&d); free(d.msgs.a);
+}
+
 int main(void) {
     test_gpu_env();
     test_video();
@@ -953,6 +1356,11 @@ int main(void) {
     test_fbd();
     test_inp();
     test_localsys();
+    test_csys_math();
+    test_localsys_layers();
+    test_localsys_spread();
+    test_localsys_datnames();
+    test_localsys_requests();
     test_gauss();
     test_dat();
     test_portal_wire();

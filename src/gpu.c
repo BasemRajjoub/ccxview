@@ -95,8 +95,14 @@ static void* gl_proc(const char* name) {
 void cv_gpu_remember_args(int argc, char** argv) { S.argc = argc; S.argv = argv; }
 
 bool cv_gpu_is_software_run(void) {
+#ifdef _WIN32       /* set_env changes the process block; getenv reads the CRT's copy */
+    char e[8];
+    DWORD n = GetEnvironmentVariableA("CCXVIEW_SOFTWARE", e, sizeof e);
+    return n > 0 && n < sizeof e && e[0] != '0';
+#else
     const char* e = getenv("CCXVIEW_SOFTWARE");
     return e && *e && *e != '0';
+#endif
 }
 
 #ifdef _WIN32

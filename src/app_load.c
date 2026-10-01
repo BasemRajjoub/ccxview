@@ -19,23 +19,6 @@ static void job_finish(cv_job* j, double t0) {
     cv_mutex_unlock(&j->lock);
 }
 
-/* Parse a deck; includes resolve against its folder. */
-static bool read_deck(const char* path, cv_inp* d) {
-    cv_map m;
-    if (!cv_map_open(&m, path)) return false;
-    char dir[1024];
-    snprintf(dir, sizeof dir, "%s", path);
-    char* sl = strrchr(dir, cv_path_sep());
-#ifdef _WIN32
-    char* sl2 = strrchr(dir, '/');
-    if (sl2 > sl) sl = sl2;
-#endif
-    if (sl) *sl = 0; else snprintf(dir, sizeof dir, ".");
-    bool ok = cv_inp_parse(d, m.data, m.size, deck_file_reader, dir);
-    cv_map_close(&m);
-    return ok;
-}
-
 /* A .fbd: its geometry directly, or -- a script, when asked -- evaluated by cgx
    in a temporary copy of its folder, with the mesh if the script makes one.
    Without a mesh from cgx, the geometry's own ELTY assignments are meshed here. */
@@ -111,7 +94,7 @@ static void worker_load(void* p) {
         if (!j->has_fbd) { job_finish(j, t0); return; }
     } else if (cv_ends_with_ci(j->path, ".inp")) {
         snprintf(j->deck_path, sizeof j->deck_path, "%s", j->path);
-        if (!read_deck(j->path, &j->deck)) {
+        if (!deck_read(j->path, &j->deck)) {
             snprintf(j->err, sizeof j->err, "cannot read %s", j->path);
             job_finish(j, t0);
             return;
@@ -121,7 +104,7 @@ static void worker_load(void* p) {
     } else {
         snprintf(frd_path, sizeof frd_path, "%s", j->path);
         if (deck_sibling(j->path, ".inp", j->deck_path, sizeof j->deck_path))
-            j->has_deck = read_deck(j->deck_path, &j->deck);
+            j->has_deck = deck_read(j->deck_path, &j->deck);
     }
 
     if (frd_path[0]) {

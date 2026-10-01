@@ -438,6 +438,10 @@ bool deck_has_discrete(void);
 /* values CalculiX wrote in local systems turned to global in place (inp.h) */
 void deck_localize(int step, const cv_field_desc* d, float* vals);   /* step: index into G.frd */
 void deck_localize_dat(cv_dat* dat, const cv_frd* f);
+bool deck_read(const char* path, cv_inp* d);                         /* includes from its folder */
+void deck_compare_open(const char* frd_path);                         /* the comparison run's own deck */
+void deck_compare_localize(const cv_frd* f, int step, const cv_field_desc* d, float* vals);
+void deck_compare_close(void);
 bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted (tie, contact surfaces) */
 /* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */
 /* d: 6 wide, DISP then -DISPI (app_node_disp6); disp gets 6 per vertex, uploaded with app_aux_upload */

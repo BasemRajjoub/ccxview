@@ -28,7 +28,7 @@ static void put_f(FILE* o, float v) {
 
 bool cv_export_csv(const char* path, const cv_frd* f, const float* disp, const float* scalar,
                    const char* label, const uint8_t* vis) {
-    FILE* o = fopen(path, "w");
+    FILE* o = fopen(path, "wb");
     if (!o) return false;
 
     /* Which nodes to write: everything, or only those used by a visible element. */
@@ -70,7 +70,7 @@ bool cv_export_csv(const char* path, const cv_frd* f, const float* disp, const f
 
 bool cv_export_vtk(const char* path, const cv_frd* f, const float* disp, const float* scalar,
                    const char* label, const uint8_t* vis) {
-    FILE* o = fopen(path, "w");
+    FILE* o = fopen(path, "wb");
     if (!o) return false;
 
     fprintf(o, "# vtk DataFile Version 3.0\nccxview\nASCII\nDATASET UNSTRUCTURED_GRID\n");

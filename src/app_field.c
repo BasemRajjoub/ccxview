@@ -619,7 +619,7 @@ void app_hist_close(void) {
 
 bool app_hist_csv(const char* path) {
     if (!G.hist_n) return false;
-    FILE* o = fopen(path, "w");
+    FILE* o = fopen(path, "wb");
     if (!o) return false;
     fprintf(o, "step,time,%s %s %u\n", G.field_label, G.elem_mode ? "element" : "node",
             G.elem_mode ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node]);
@@ -819,7 +819,7 @@ bool app_lin_csv(const char* path) {
     const cv_field_desc* d = &G.frd.steps[G.step].fields[G.lin_fi];
     double m[6], b[6];
     bool ok = app_lin_mb(m, b);
-    FILE* o = fopen(path, "w");
+    FILE* o = fopen(path, "wb");
     if (!o) return false;
     fprintf(o, "# %s linearized from (%.9g, %.9g, %.9g) to (%.9g, %.9g, %.9g), t = %.9g, step %d\n", d->name,
             G.lin_p[0][0], G.lin_p[0][1], G.lin_p[0][2], G.lin_p[1][0], G.lin_p[1][1], G.lin_p[1][2], G.lin_t, G.step + 1);
@@ -1186,7 +1186,7 @@ float app_path_value(uint32_t i) {
 
 bool app_path_csv(const char* path) {
     if (!G.path_n) return false;
-    FILE* o = fopen(path, "w");
+    FILE* o = fopen(path, "wb");
     if (!o) return false;
     fprintf(o, "distance,id,x,y,z,%s\n", G.has_field ? G.field_label : "value");
     const float *A = G.path_p[0], *B = G.path_p[1];
@@ -1207,6 +1207,7 @@ bool app_path_csv(const char* path) {
 
 void app_compare_close(void) {
     if (G.cmp_on) { cv_frd_free(&G.cmp); free(G.cmp.msgs.a); memset(&G.cmp.msgs, 0, sizeof G.cmp.msgs); cv_map_close(&G.cmp_map); }
+    deck_compare_close();
     G.cmp_on = false; G.diff_mode = false; G.cmp_path[0] = 0;
 }
 
@@ -1223,6 +1224,7 @@ bool app_compare_open(const char* path) {
         return false;
     }
     snprintf(G.cmp_path, sizeof G.cmp_path, "%s", path);
+    deck_compare_open(path);
     G.cmp_on = true;
     G.diff_mode = true;
     refresh_field();
@@ -1250,6 +1252,7 @@ static bool subtract_compare(const cv_field_desc* d) {
     float* sb = malloc((size_t)CV_MAX(G.cmp.n_nodes, 1) * sizeof(float));
     if (!vb || !sb) { free(vb); free(sb); return false; }
     cv_frd_read_field(&G.cmp, db, vb, NULL);
+    deck_compare_localize(&G.cmp, st, db, vb);
     if (G.csys > 0 && G.comp >= 0 && cv_cyl_applies(db)) cv_cyl_values(db, G.cmp.xyz, G.cmp.n_nodes, G.csys - 1, G.csys_o, vb);
     cv_field_scalar(vb, db->ncomp, G.cmp.n_nodes, G.comp, sb);
     for (uint32_t i = 0; i < G.frd.n_nodes; i++) G.scalar[i] -= sb[i];

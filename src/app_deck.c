@@ -116,6 +116,50 @@ void deck_localize_dat(cv_dat* dat, const cv_frd* f) {
     if (r) loc_say(r, "the .dat output");
 }
 
+/* The comparison run's own deck, for its results in local systems: B of A - B is
+   turned like A, never with A's deck (the runs may differ in exactly that). */
+static struct { cv_inp d; cv_localsys L; bool on, tried; } C;
+
+void deck_compare_close(void) {
+    if (C.on) { cv_localsys_free(&C.L); cv_inp_free(&C.d); free(C.d.msgs.a); }
+    memset(&C, 0, sizeof C);
+}
+
+void deck_compare_open(const char* frd_path) {
+    deck_compare_close();
+    char p[1024];
+    if (!deck_sibling(frd_path, ".inp", p, sizeof p)) return;
+    if (deck_read(p, &C.d)) C.on = true;
+    else { cv_inp_free(&C.d); free(C.d.msgs.a); memset(&C.d, 0, sizeof C.d); }
+}
+
+void deck_compare_localize(const cv_frd* f, int step, const cv_field_desc* d, float* vals) {
+    if (!C.on || step < 0 || step >= f->n_steps) return;
+    if (!C.tried) {
+        C.tried = true;
+        if (!cv_localsys_init(&C.L, &C.d, f)) cv_msg_add(&G.msgs, 0, false, "out of memory: results in local systems stay local");
+    }
+    int r = cv_localsys_apply(&C.L, &C.d, f, f->steps[step].step, d, vals);
+    if (r) loc_say(r, d->name);
+}
+
+/* Parse a deck; includes resolve against its folder. */
+bool deck_read(const char* path, cv_inp* d) {
+    cv_map m;
+    if (!cv_map_open(&m, path)) return false;
+    char dir[1024];
+    snprintf(dir, sizeof dir, "%s", path);
+    char* sl = strrchr(dir, cv_path_sep());
+#ifdef _WIN32
+    char* sl2 = strrchr(dir, '/');
+    if (sl2 > sl) sl = sl2;
+#endif
+    if (sl) *sl = 0; else snprintf(dir, sizeof dir, ".");
+    bool ok = cv_inp_parse(d, m.data, m.size, deck_file_reader, dir);
+    cv_map_close(&m);
+    return ok;
+}
+
 /* *INCLUDE reader: paths relative to the deck's folder */
 bool deck_file_reader(void* user, const char* path, char** data, size_t* size) {
     char full[2048];
