@@ -12,6 +12,8 @@
 #define CV_INP_H
 
 #include "frd.h"
+#include "field.h"      /* cv_csys */
+#include "dat.h"
 
 typedef struct {
     char      name[64];
@@ -57,6 +59,17 @@ typedef struct {
     int       surf[2];      /* surface indices, -1 = none */
 } cv_link;
 
+/* id -> index pairs, sorted by id */
+typedef struct { uint32_t id; int32_t ix; } cv_idix;
+/* a composite shell: its layers are layer_ori[lay0 .. lay0 + nlay) */
+typedef struct { uint32_t id, lay0, nlay; } cv_layered;
+
+/* Output variables whose GLOBAL= decides whether the .frd holds local values:
+   U (DISP, also FORCI), RF (FORC), V (VELO), VF (V3DF) in the *TRANSFORM system of
+   their node; S (STRESS), E (TOSTRAIN, MESTRAIN), HFL (FLUX) in the *ORIENTATION
+   of their element. */
+enum { CV_OUT_U, CV_OUT_RF, CV_OUT_V, CV_OUT_VF, CV_OUT_S, CV_OUT_E, CV_OUT_HFL, CV_OUT_N };
+
 typedef struct {
     cv_frd      mesh;       /* nodes + elements; emat = material index + 1, 0 = none */
     cv_set*     sets;       int nsets;
@@ -67,6 +80,20 @@ typedef struct {
     cv_discrete* disc;      uint32_t ndisc;
     cv_link*    links;      int nlinks;
     char      (*mats)[64];  int nmats;
+    cv_csys*    transforms; int ntransforms;
+    cv_idix*    node_tr;    uint32_t nnode_tr;  /* node -> transform; a later *TRANSFORM wins */
+    cv_csys*    orients;    int norients;
+    char      (*orient_names)[64];              /* per orientation, upper case */
+    cv_idix*    elem_ori;   uint32_t nelem_ori; /* element -> orientation; -1: one that cannot be
+                                                   rebuilt (*DISTRIBUTION, composite shell) */
+    /* per *STEP, per CV_OUT_: the system of the .frd output as CalculiX sets it
+       from *NODE FILE / *EL FILE / *NODE OUTPUT / *ELEMENT OUTPUT: 'G' global,
+       'L' local, ' ' not requested (the first card of a step clears the previous
+       requests of its kind; a step without one keeps them) */
+    char      (*outsys)[CV_OUT_N]; int nsteps;
+    uint32_t*   shells;     uint32_t nshells;   /* ids of the shell elements (S3..S8R), sorted */
+    cv_layered* comps;      uint32_t ncomps;    /* composite shells, by id */
+    int32_t*    layer_ori;                      /* per layer: orientation, -2 none, -1 cannot be rebuilt */
     char        heading[128];
     cv_msgs     msgs;
 } cv_inp;
@@ -78,6 +105,48 @@ typedef bool (*cv_inp_reader)(void* user, const char* path, char** data, size_t*
 bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, void* user);
 void cv_inp_free(cv_inp* d);
 const cv_set* cv_inp_set(const cv_inp* d, const char* name, bool is_elem);   /* case-insensitive */
+
+/* Results CalculiX wrote in local systems (GLOBAL=NO with *TRANSFORM, *ORIENTATION
+   or shell elements) turned back to global. The .frd does not say which system its
+   values are in; the deck does. Built once per (deck, .frd) pair.
+
+   Nodal values (DISP, FORC, ...) are in the *TRANSFORM of their node: exact.
+   Element values (STRESS, TOSTRAIN, FLUX) are turned at each integration point into
+   the element's system, then extrapolated and averaged at the nodes. That is exact
+   to undo where all elements around a node share one system. Every expanded shell
+   element has its own system (gen3dfrom2d.f: the orientation's, or the global, x
+   projected on the shell), so on a curved shell, as in a cylindrical orientation,
+   the systems around a node differ: turned with their mean, approximately, while
+   they differ little, else NaN. */
+enum { CV_LOC_GLOBAL, CV_LOC_EXACT, CV_LOC_NEAR, CV_LOC_NONE };   /* cv_localsys.est */
+typedef struct {
+    int32_t* tr;            /* per .frd node: transform, -1 none */
+    uint8_t* est;           /* per .frd node: CV_LOC_ state of its element values */
+    float*   q;             /* per .frd node: 3x3, rows e1 e2 e3, when est is EXACT / NEAR */
+    bool     any_tr, any_ori;
+} cv_localsys;
+
+enum { CV_LOC_TURNED = 1,   /* values were local and are now global */
+       CV_LOC_NAN = 2,      /* some nodes could not be turned: set to NaN */
+       CV_LOC_APPROX = 4 }; /* some were turned with the mean of differing systems */
+/* largest turn (degrees) between the systems an averaged nodal value mixes before it
+   is NaN. Measured at 10 degrees per element: about 0.3% of the peak for solids, 1% for
+   shells; the error grows with the square of the angle. */
+#define CV_LOC_SPAN 12.0
+
+bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f);
+/* Field `desc` of CalculiX step `step` (cv_step.step), decoded into vals: turned
+   in place. Returns CV_LOC_ bits, 0 when the values were global already. */
+int  cv_localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
+                       const cv_field_desc* desc, float* vals);
+void cv_localsys_free(cv_localsys* L);
+
+/* The records of a .dat block CalculiX printed in a local system (*EL PRINT,
+   GLOBAL=NO, the default) turned to global, exactly: each names its system. f is
+   the mesh the element ids refer to (the .frd, or the deck's), for the integration
+   point positions a cylindrical orientation needs. Returns CV_LOC_ bits; records
+   whose system cannot be rebuilt become NaN. */
+int  cv_localsys_dat(const cv_inp* d, const cv_frd* f, cv_dat_block* b);
 
 /* CalculiX element type name -> FRD type code (0 = not drawable), node count. */
 int cv_inp_elem_type(const char* name, int* nn);

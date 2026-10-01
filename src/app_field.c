@@ -46,6 +46,7 @@ const float* cache_get(int step, int field) {
     float* v = malloc(bytes);
     if (!v) { cv_msg_add(&G.msgs, 0, false, "out of memory decoding a field"); return NULL; }
     cv_frd_read_field(&G.frd, d, v, &G.msgs);
+    deck_localize(step, d, v);
     G.cache[slot] = (cv_cache_entry){ step, field, v, bytes, ++G.cache_clock };
     return v;
 }
@@ -581,6 +582,7 @@ static void refresh_hist(void) {
             size_t need = (size_t)CV_MAX(G.frd.n_nodes, 1) * (size_t)d->ncomp;
             if (need > cap) { float* nb = realloc(buf, need * sizeof(float)); if (!nb) break; buf = nb; cap = need; }
             cv_frd_read_field(&G.frd, d, buf, NULL);
+            deck_localize(s, d, buf);
             v = buf;
         }
         double sum = 0; int cnt = 0;

@@ -3,6 +3,7 @@
 #include "gauss.h"      /* cv_frd_node_pos */
 #include <ctype.h>
 #include <stdint.h>
+#include <math.h>
 
 /* ---- element types ------------------------------------------------------------- */
 
@@ -108,15 +109,35 @@ static const char* pget(const param* p, int n, const char* key) {
     return NULL;
 }
 
+static int cmp_idix(const void* a, const void* b) {        /* by id, then index */
+    const cv_idix *x = a, *y = b;
+    if (x->id != y->id) return x->id < y->id ? -1 : 1;
+    return (x->ix > y->ix) - (x->ix < y->ix);
+}
+
+static int32_t find_idix(const cv_idix* v, uint32_t n, uint32_t id) {
+    uint32_t lo = 0, hi = n;
+    while (lo < hi) {
+        uint32_t m = lo + (hi - lo) / 2;
+        if (v[m].id < id) lo = m + 1; else hi = m;
+    }
+    return lo < n && v[lo].id == id ? v[lo].ix : -2;
+}
+
 /* ---- parser state ---------------------------------------------------------------------- */
 
 typedef struct { char name[64]; bool is_elem; CV_VEC(uint32_t) ids; } vset;
 typedef struct { char name[64]; CV_VEC(uint32_t) elem; CV_VEC(uint8_t) face; CV_VEC(uint32_t) nodes; } vsurf;
 typedef struct { char elset[64]; char mat[64]; } section;
 typedef struct { cv_link l; CV_VEC(uint32_t) nodes; CV_VEC(uint32_t) elems; } vlink;   /* elems: a rigid ELSET, expanded at the end */
+typedef struct { char name[64]; cv_csys cs; bool bad; } vorient;
+/* a section's orientation, by name; the layers of a composite shell may each name one */
+typedef struct { char elset[64]; char ori[64]; bool mixed; uint32_t lay0, nlay; } osect;
+typedef struct { char ori[64]; } vlayer;
+typedef struct { char f[CV_OUT_N]; } outsys;
 
 enum { S_SKIP, S_NODE, S_ELEM, S_NSET, S_ELSET, S_SURF, S_HEADING, S_BOUNDARY, S_CLOAD, S_DLOAD, S_SPRINGDOF,
-       S_EQUATION, S_DCOUP, S_TIE, S_CONTACT };
+       S_EQUATION, S_DCOUP, S_TIE, S_CONTACT, S_TRANSFORM, S_ORIENT, S_OUTREQ, S_COMPOSITE };
 
 typedef struct {
     cv_inp* d;
@@ -141,6 +162,18 @@ typedef struct {
     CV_VEC(cv_discrete) disc;
     CV_VEC(section) sdofs;              /* elset -> "dof" of *SPRING / *DASHPOT (mat holds the digit) */
     CV_VEC(vlink) links;
+    CV_VEC(cv_csys) trs;
+    CV_VEC(cv_idix) node_tr;            /* in deck order: a later transform overrides */
+    CV_VEC(vorient) oris;
+    CV_VEC(osect) osects;
+    CV_VEC(vlayer) layers;              /* of the composite sections, in order */
+    CV_VEC(outsys) steps;
+    CV_VEC(uint32_t) shells;            /* ids of S3..S8R elements */
+    bool cshell;                        /* the open *ELEMENT block is shells */
+    bool nodefile, elfile;              /* this step already had a *NODE FILE / *EL FILE */
+    char outsys_c;                      /* 'G' / 'L' of the open output request */
+    int  blk_line;                      /* data lines read of the open *ORIENTATION / composite */
+    bool tr_cyl;
     int  eq_left;                       /* *EQUATION: terms still to read */
     int  cdisc;                         /* discrete kind of the open *ELEMENT block, -1 none */
     bool oom;
@@ -249,6 +282,7 @@ static void finish_element(P* p) {
     uint32_t frd_order[27];
     for (int i = 0; i < p->cnn; i++) frd_order[cv_frd_node_pos(p->ctype, p->cnn, i)] = p->cur_nodes[i];
     for (int i = 0; i < p->cnn; i++) if (!cv_push(p->conn, frd_order[i])) { p->oom = true; return; }
+    if (p->cshell && !cv_push(p->shells, p->cur_id)) { p->oom = true; return; }
     set_add(p, p->cset, p->cur_id);
 }
 
@@ -291,6 +325,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         p->ctype = cv_inp_elem_type(tn, &p->cnn);
         int dn;
         p->cdisc = discrete_kind(tn, &dn);
+        p->cshell = tn[0] == 'S' && p->ctype && p->cdisc < 0;
         if (p->cdisc >= 0 && !p->ctype) p->cnn = dn;       /* one-node spring / mass */
         if (!p->ctype && p->cdisc < 0) {
             p->unknown_types++;
@@ -327,11 +362,22 @@ static void do_keyword(P* p, const char* s, const char* e) {
     if (strstr(kw, "SECTION") && strcmp(kw, "SECTION PRINT") != 0) {
         const char* es = pget(prm, np, "ELSET");
         const char* ma = pget(prm, np, "MATERIAL");
+        const char* oi = pget(prm, np, "ORIENTATION");
         if (es && ma) {
             section sc;
             snprintf(sc.elset, sizeof sc.elset, "%s", es); upcase(sc.elset);
             snprintf(sc.mat, sizeof sc.mat, "%s", ma); upcase(sc.mat);
             if (!cv_push(p->sects, sc)) p->oom = true;
+        }
+        bool comp = pget(prm, np, "COMPOSITE") != NULL;
+        if (es && ((oi && oi[0]) || comp)) {
+            osect o;
+            memset(&o, 0, sizeof o);
+            snprintf(o.elset, sizeof o.elset, "%s", es); upcase(o.elset);
+            if (oi) { snprintf(o.ori, sizeof o.ori, "%s", oi); upcase(o.ori); }
+            o.lay0 = (uint32_t)p->layers.n;
+            if (!cv_push(p->osects, o)) p->oom = true;
+            if (comp) { p->st = S_COMPOSITE; p->blk_line = 0; }   /* thickness, , material, orientation per layer */
         }
         return;
     }
@@ -346,6 +392,63 @@ static void do_keyword(P* p, const char* s, const char* e) {
         return;
     }
     if (strcmp(kw, "HEADING") == 0) { p->st = S_HEADING; return; }
+    if (strcmp(kw, "TRANSFORM") == 0) {
+        const char* ns = pget(prm, np, "NSET");
+        const char* ty = pget(prm, np, "TYPE");
+        char nm[64] = "";
+        if (ns) { snprintf(nm, sizeof nm, "%s", ns); upcase(nm); }
+        p->cset = ns ? find_set(p, nm, false) : -1;
+        if (p->cset < 0) { note(p, "*TRANSFORM without a known NSET=%s", ns ? ns : ""); return; }
+        p->tr_cyl = ty && toupper((unsigned char)ty[0]) == 'C';
+        p->st = S_TRANSFORM;
+        return;
+    }
+    if (strcmp(kw, "ORIENTATION") == 0) {
+        const char* nm = pget(prm, np, "NAME");
+        const char* sy = pget(prm, np, "SYSTEM");
+        vorient o;
+        memset(&o, 0, sizeof o);
+        snprintf(o.name, sizeof o.name, "%s", nm ? nm : ""); upcase(o.name);
+        o.cs.cyl = sy && toupper((unsigned char)sy[0]) == 'C';
+        o.bad = true;                              /* until its data line is read */
+        if (!cv_push(p->oris, o)) { p->oom = true; return; }
+        p->blk_line = 0;
+        p->st = S_ORIENT;
+        return;
+    }
+    if (strcmp(kw, "STEP") == 0) {
+        outsys o;
+        if (p->steps.n) o = p->steps.a[p->steps.n - 1];    /* requests carry over */
+        else memset(o.f, ' ', sizeof o.f);
+        if (!cv_push(p->steps, o)) p->oom = true;
+        p->nodefile = p->elfile = false;
+        p->skipped_keywords++;
+        return;
+    }
+    {   /* output requests; CalculiX ignores the blanks in keywords */
+        char k2[64]; int j = 0;
+        for (const char* c = kw; *c && j < 63; c++) if (*c != ' ') k2[j++] = *c;
+        k2[j] = 0;
+        int kind = !strcmp(k2, "NODEFILE") || !strcmp(k2, "NODEOUTPUT") ? 1 :
+                   !strcmp(k2, "ELFILE") || !strcmp(k2, "ELEMENTOUTPUT") ? 2 :
+                   !strcmp(k2, "CONTACTFILE") || !strcmp(k2, "CONTACTOUTPUT") ? 3 : 0;
+        if (kind && p->steps.n) {
+            char* f = p->steps.a[p->steps.n - 1].f;
+            if (kind == 1 && !p->nodefile) {       /* the first card of a step starts a fresh list */
+                f[CV_OUT_U] = f[CV_OUT_RF] = f[CV_OUT_V] = f[CV_OUT_VF] = ' ';
+                p->nodefile = true;
+            }
+            if (kind == 2 && !p->elfile) {
+                f[CV_OUT_S] = f[CV_OUT_E] = f[CV_OUT_HFL] = ' ';
+                p->elfile = true;
+            }
+            p->outsys_c = 'G';                     /* each card: GLOBAL=YES unless it says NO */
+            const char* gl = pget(prm, np, "GLOBAL");
+            if (gl && toupper((unsigned char)gl[0]) == 'N') p->outsys_c = 'L';
+            p->st = S_OUTREQ;
+            return;
+        }
+    }
     if (strcmp(kw, "RIGID BODY") == 0) {
         const char *rn = pget(prm, np, "REF NODE"), *ns = pget(prm, np, "NSET"), *es = pget(prm, np, "ELSET");
         vlink* v = new_link(p, CV_LINK_RIGID, ns ? ns : es);
@@ -590,6 +693,71 @@ static void do_data(P* p, const char* s, const char* e) {
             }
             return;
         }
+        case S_TRANSFORM: {                   /* a1, a2, a3, b1, b2, b3 */
+            int n = fields(s, e, f, 6);
+            cv_csys cs;
+            memset(&cs, 0, sizeof cs);
+            cs.cyl = p->tr_cyl;
+            p->st = S_SKIP;
+            for (int k = 0; k < n; k++) if (f[k][0] && !to_f(f[k], &cs.a[k])) { p->bad_lines++; return; }
+            if (!cv_push(p->trs, cs)) { p->oom = true; return; }
+            const vset* ns = &p->sets.a[p->cset];
+            for (size_t j = 0; j < ns->ids.n; j++) {
+                cv_idix t = { ns->ids.a[j], (int32_t)p->trs.n - 1 };
+                if (!cv_push(p->node_tr, t)) { p->oom = true; return; }
+            }
+            return;
+        }
+        case S_ORIENT: {                      /* a1..b3 (or a distribution's name), then [axis, angle] */
+            vorient* o = &p->oris.a[p->oris.n - 1];
+            int n = fields(s, e, f, 6);
+            if (p->blk_line++ == 0) {
+                for (int k = 0; k < n; k++) if (f[k][0] && !to_f(f[k], &o->cs.a[k])) return;   /* *DISTRIBUTION: stays bad */
+                o->bad = false;
+                return;
+            }
+            p->st = S_SKIP;
+            uint32_t ax; double ang;
+            if (o->bad || o->cs.cyl || n < 2 || !to_u32(f[0], &ax) || ax < 1 || ax > 3 || !to_f(f[1], &ang)) return;
+            double Q[3][3], c[3][3];                  /* e1, e2 rotated about axis ax (orientations.f) */
+            const float origin[3] = { 0, 0, 0 };
+            cv_csys_axes(&o->cs, origin, Q);
+            const double* q = Q[ax - 1];
+            double t = ang * 3.14159265358979323846 / 180, dc = cos(t), ds = sin(t);
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++) c[i][j] = (1 - dc) * q[i] * q[j] + (i == j ? dc : 0);
+            c[0][1] -= ds * q[2]; c[0][2] += ds * q[1];
+            c[1][0] += ds * q[2]; c[1][2] -= ds * q[0];
+            c[2][0] -= ds * q[1]; c[2][1] += ds * q[0];
+            for (int i = 0; i < 3; i++) {
+                o->cs.a[i] = c[i][0] * Q[0][0] + c[i][1] * Q[0][1] + c[i][2] * Q[0][2];
+                o->cs.a[3 + i] = c[i][0] * Q[1][0] + c[i][1] * Q[1][1] + c[i][2] * Q[1][2];
+            }
+            return;
+        }
+        case S_COMPOSITE: {                   /* thickness, , material, orientation */
+            osect* o = &p->osects.a[p->osects.n - 1];
+            int n = fields(s, e, f, 4);
+            char nm[64] = "";
+            if (n >= 4) { snprintf(nm, sizeof nm, "%s", f[3]); upcase(nm); }
+            if (p->blk_line++ == 0) snprintf(o->ori, sizeof o->ori, "%s", nm);
+            else if (strcmp(nm, o->ori) != 0) o->mixed = true;
+            vlayer l;
+            memcpy(l.ori, nm, sizeof l.ori);
+            if (!cv_push(p->layers, l)) p->oom = true;
+            else o->nlay++;
+            return;
+        }
+        case S_OUTREQ: {                      /* the variables, any number per line */
+            static const char* key[CV_OUT_N] = { "U", "RF", "V", "VF", "S", "E", "HFL" };
+            int n = fields(s, e, f, 32);
+            char* sys = p->steps.a[p->steps.n - 1].f;
+            for (int k = 0; k < n; k++) {
+                upcase(f[k]);
+                for (int j = 0; j < CV_OUT_N; j++) if (!strcmp(f[k], key[j])) sys[j] = p->outsys_c;
+            }
+            return;
+        }
         default:
             return;
     }
@@ -761,6 +929,89 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
             if (e != UINT32_MAX) f->emat[e] = (uint32_t)mi;
         }
     }
+    /* transforms: per node the last one that names it */
+    d->transforms = p.trs.a; d->ntransforms = (int)p.trs.n; p.trs.a = NULL;
+    if (p.node_tr.n) qsort(p.node_tr.a, p.node_tr.n, sizeof(cv_idix), cmp_idix);
+    {
+        size_t u = 0;
+        for (size_t j = 0; j < p.node_tr.n; j++) {
+            if (u && p.node_tr.a[u - 1].id == p.node_tr.a[j].id) u--;
+            p.node_tr.a[u++] = p.node_tr.a[j];
+        }
+        d->node_tr = p.node_tr.a; d->nnode_tr = (uint32_t)u; p.node_tr.a = NULL;
+    }
+    /* orientations of the elements, through their sections */
+    d->orients = malloc(CV_MAX(p.oris.n, 1) * sizeof *d->orients);
+    if (!d->orients) goto oom;
+    d->norients = (int)p.oris.n;
+    d->orient_names = malloc(CV_MAX(p.oris.n, 1) * sizeof *d->orient_names);
+    if (!d->orient_names) goto oom;
+    for (size_t i = 0; i < p.oris.n; i++) {
+        d->orients[i] = p.oris.a[i].cs;
+        memcpy(d->orient_names[i], p.oris.a[i].name, sizeof d->orient_names[0]);
+    }
+    {
+        CV_VEC(cv_idix) eo = { 0 };
+        for (size_t i = 0; i < p.osects.n; i++) {
+            const osect* o = &p.osects.a[i];
+            int32_t ix = -2;                               /* -2: no orientation */
+            if (!o->ori[0] && !o->mixed) continue;
+            for (size_t k = 0; k < p.oris.n; k++) if (strcmp(p.oris.a[k].name, o->ori) == 0) ix = p.oris.a[k].bad ? -1 : (int32_t)k;
+            if (o->mixed) ix = -1;
+            const cv_set* es = cv_inp_set(d, o->elset, true);
+            for (uint32_t j = 0; es && ix != -2 && j < es->n; j++) {
+                cv_idix t = { es->ids[j], ix };
+                if (!cv_push(eo, t)) { cv_free_vec(eo); goto oom; }
+            }
+        }
+        if (eo.n) qsort(eo.a, eo.n, sizeof(cv_idix), cmp_idix);
+        size_t u = 0;                                      /* a later section wins */
+        for (size_t j = 0; j < eo.n; j++) {
+            if (u && eo.a[u - 1].id == eo.a[j].id) u--;
+            eo.a[u++] = eo.a[j];
+        }
+        d->elem_ori = eo.a; d->nelem_ori = (uint32_t)u;
+    }
+    {   /* composite shells: element -> its last composite section */
+        CV_VEC(cv_idix) ce = { 0 };
+        for (size_t i = 0; i < p.osects.n; i++) {
+            const cv_set* es = p.osects.a[i].nlay ? cv_inp_set(d, p.osects.a[i].elset, true) : NULL;
+            for (uint32_t j = 0; es && j < es->n; j++) {
+                cv_idix t = { es->ids[j], (int32_t)i };
+                if (!cv_push(ce, t)) { cv_free_vec(ce); goto oom; }
+            }
+        }
+        if (ce.n) qsort(ce.a, ce.n, sizeof(cv_idix), cmp_idix);
+        size_t u = 0;
+        for (size_t j = 0; j < ce.n; j++) {
+            if (u && ce.a[u - 1].id == ce.a[j].id) u--;
+            ce.a[u++] = ce.a[j];
+        }
+        d->comps = malloc(CV_MAX(u, 1) * sizeof *d->comps);
+        d->layer_ori = malloc(CV_MAX(p.layers.n, 1) * sizeof *d->layer_ori);
+        if (!d->comps || !d->layer_ori) { cv_free_vec(ce); goto oom; }
+        for (size_t j = 0; j < u; j++) {
+            const osect* o = &p.osects.a[ce.a[j].ix];
+            d->comps[j] = (cv_layered){ ce.a[j].id, o->lay0, o->nlay };
+        }
+        d->ncomps = (uint32_t)u;
+        for (size_t i = 0; i < p.layers.n; i++) {
+            int32_t ix = -2;
+            for (size_t k = 0; p.layers.a[i].ori[0] && k < p.oris.n; k++)
+                if (strcmp(p.oris.a[k].name, p.layers.a[i].ori) == 0) ix = p.oris.a[k].bad ? -1 : (int32_t)k;
+            if (p.layers.a[i].ori[0] && ix == -2) ix = -1;     /* names one not defined */
+            d->layer_ori[i] = ix;
+        }
+        cv_free_vec(ce);
+    }
+    d->outsys = malloc(CV_MAX(p.steps.n, 1) * sizeof *d->outsys);
+    if (!d->outsys) goto oom;
+    d->nsteps = (int)p.steps.n;
+    for (size_t i = 0; i < p.steps.n; i++) memcpy(d->outsys[i], p.steps.a[i].f, CV_OUT_N);
+    cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
+    if (p.shells.n) qsort(p.shells.a, p.shells.n, sizeof(uint32_t), cv_cmp_u32);
+    d->shells = p.shells.a; d->nshells = (uint32_t)p.shells.n; p.shells.a = NULL;
+
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
     cv_free_vec(p.mats); cv_free_vec(p.sects); cv_free_vec(p.sdofs);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
@@ -774,6 +1025,8 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
 oom:
     cv_free_vec(p.node_id); cv_free_vec(p.xyz); cv_free_vec(p.eid); cv_free_vec(p.eoff);
     cv_free_vec(p.conn); cv_free_vec(p.etype); cv_free_vec(p.sects);
+    cv_free_vec(p.trs); cv_free_vec(p.node_tr); cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
+    cv_free_vec(p.shells);
     cv_free_vec(p.bcs); cv_free_vec(p.cloads); cv_free_vec(p.dloads); cv_free_vec(p.disc); cv_free_vec(p.sdofs);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
     cv_free_vec(p.links);
@@ -799,6 +1052,8 @@ void cv_inp_free(cv_inp* d) {
     for (int i = 0; i < d->nlinks; i++) free(d->links[i].nodes);
     free(d->links);
     free(d->mats);
+    free(d->transforms); free(d->node_tr); free(d->orients); free(d->orient_names); free(d->elem_ori); free(d->outsys);
+    free(d->shells); free(d->comps); free(d->layer_ori);
     cv_msgs keep = d->msgs;
     memset(d, 0, sizeof *d);
     d->msgs = keep;
@@ -811,4 +1066,378 @@ const cv_set* cv_inp_set(const cv_inp* d, const char* name, bool is_elem) {
     for (int i = 0; i < d->nsets; i++)
         if (d->sets[i].is_elem == is_elem && strcmp(d->sets[i].name, up) == 0) return &d->sets[i];
     return NULL;
+}
+
+/* ---- results in local systems ------------------------------------------------------------- */
+
+/* the system CalculiX gives an expanded shell element (gen3dfrom2d.f): at the point
+   (xi, eta) = (0, 0), e3 the normal, e1 the orientation's (or the global) x on the
+   shell plane -- its z when x is normal to the shell -- and e2 = e3 x e1 */
+static bool shell_axes(const cv_inp* d, uint32_t de, const cv_csys* cs, double Q[3][3]) {
+    static const double w3[] = { 1, 0, 0 }, a3[] = { -1, 1, 0 }, b3[] = { -1, 0, 1 };
+    static const double w6[] = { 1, 0, 0, 0, 0, 0 }, a6[] = { -3, -1, 0, 4, 0, 0 }, b6[] = { -3, 0, -1, 0, 0, 4 };
+    static const double w4[] = { .25, .25, .25, .25 }, a4[] = { -.25, .25, .25, -.25 }, b4[] = { -.25, -.25, .25, .25 };
+    static const double w8[] = { -.25, -.25, -.25, -.25, .5, .5, .5, .5 }, a8[] = { 0, 0, 0, 0, 0, .5, 0, -.5 },
+                        b8[] = { 0, 0, 0, 0, -.5, 0, .5, 0 };
+    const cv_frd* m = &d->mesh;
+    uint32_t o = m->eoff[de], nn = m->eoff[de + 1] - o;
+    const double *w, *a, *b;
+    if (nn == 3) { w = w3; a = a3; b = b3; }
+    else if (nn == 6) { w = w6; a = a6; b = b6; }
+    else if (nn == 4) { w = w4; a = a4; b = b4; }
+    else if (nn == 8) { w = w8; a = a8; b = b8; }
+    else return false;
+    double p[3] = { 0, 0, 0 }, t1[3] = { 0, 0, 0 }, t2[3] = { 0, 0, 0 }, n[3], A[3][3];
+    for (uint32_t k = 0; k < nn; k++) {
+        const float* x = m->xyz + 3 * (size_t)m->conn[o + k];
+        for (int c = 0; c < 3; c++) { p[c] += w[k] * x[c]; t1[c] += a[k] * x[c]; t2[c] += b[k] * x[c]; }
+    }
+    n[0] = t1[1] * t2[2] - t1[2] * t2[1];
+    n[1] = t1[2] * t2[0] - t1[0] * t2[2];
+    n[2] = t1[0] * t2[1] - t1[1] * t2[0];
+    double l = sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+    if (!(l > 0)) return false;
+    for (int c = 0; c < 3; c++) n[c] /= l;
+    if (cs) {
+        const float pf[3] = { (float)p[0], (float)p[1], (float)p[2] };
+        cv_csys_axes(cs, pf, A);
+    } else {
+        memset(A, 0, sizeof A);
+        A[0][0] = A[1][1] = A[2][2] = 1;
+    }
+    double dd = A[0][0] * n[0] + A[0][1] * n[1] + A[0][2] * n[2], e1[3];
+    const double* v = A[0];
+    if (fabs(dd) > 0.999999999536) { v = A[2]; dd = A[2][0] * n[0] + A[2][1] * n[1] + A[2][2] * n[2]; }
+    for (int c = 0; c < 3; c++) e1[c] = v[c] - dd * n[c];
+    l = sqrt(e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]);
+    if (!(l > 0)) return false;
+    for (int c = 0; c < 3; c++) { Q[0][c] = e1[c] / l; Q[2][c] = n[c]; }
+    Q[1][0] = n[1] * Q[0][2] - n[2] * Q[0][1];
+    Q[1][1] = n[2] * Q[0][0] - n[0] * Q[0][2];
+    Q[1][2] = n[0] * Q[0][1] - n[1] * Q[0][0];
+    return true;
+}
+
+typedef struct {
+    const cv_inp* d;
+    const uint32_t* disc;
+    uint32_t* lde;          /* per .frd element: the composite shell (deck index) a layer is of,
+                               UINT32_MAX not a layer, LAYER_LOST one that cannot be matched */
+    int32_t* lori;          /* per .frd element: the layer's orientation */
+} esys_ctx;
+#define LAYER_LOST (UINT32_MAX - 1)
+
+/* CalculiX writes each layer of a composite shell as an element of its own, numbered
+   on from the largest element number (frd.c): after the deck's elements, in the order
+   of the shells, their layers in order */
+static bool layer_map(esys_ctx* c, const cv_frd* f) {
+    const cv_inp* d = c->d;
+    c->lde = malloc(CV_MAX(f->n_elems, 1) * sizeof(uint32_t));
+    c->lori = malloc(CV_MAX(f->n_elems, 1) * sizeof(int32_t));
+    cv_idix* x = malloc(CV_MAX(f->n_elems, 1) * sizeof(cv_idix));
+    if (!c->lde || !c->lori || !x) { free(x); return false; }
+    uint32_t nx = 0, nl = 0;
+    for (uint32_t e = 0; e < f->n_elems; e++) {
+        c->lde[e] = UINT32_MAX;
+        if (cv_frd_elem_index(&d->mesh, f->elem_id[e]) == UINT32_MAX) x[nx++] = (cv_idix){ f->elem_id[e], (int32_t)e };
+    }
+    for (uint32_t i = 0; i < d->ncomps; i++)
+        if (cv_frd_elem_index(&d->mesh, d->comps[i].id) != UINT32_MAX) nl += d->comps[i].nlay;
+    if (nx && nx != nl) {                                  /* not this deck's layers */
+        for (uint32_t k = 0; k < nx; k++) c->lde[x[k].ix] = LAYER_LOST;
+    } else if (nx) {
+        qsort(x, nx, sizeof(cv_idix), cmp_idix);
+        uint32_t k = 0;
+        for (uint32_t i = 0; i < d->ncomps; i++) {
+            uint32_t de = cv_frd_elem_index(&d->mesh, d->comps[i].id);
+            if (de == UINT32_MAX) continue;
+            for (uint32_t l = 0; l < d->comps[i].nlay; l++, k++) {
+                c->lde[x[k].ix] = de;
+                c->lori[x[k].ix] = d->layer_ori[d->comps[i].lay0 + l];
+            }
+        }
+    }
+    free(x);
+    return true;
+}
+
+/* the system element e (.frd index) writes local values in, at its node x:
+   0 none (global), 1 Q, 2 Q but it changes inside the element (cylindrical),
+   -1 cannot be rebuilt, -2 no element values (discrete) */
+static int elem_sys(const esys_ctx* c, const cv_frd* f, uint32_t e, const float* x, double Q[3][3]) {
+    const cv_inp* d = c->d;
+    uint32_t id = f->elem_id[e];
+    if (d->ndisc && bsearch(&id, c->disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32)) return -2;
+    if (c->lde && c->lde[e] != UINT32_MAX) {               /* a layer: the shell's system, its orientation */
+        int32_t o = c->lori[e];
+        if (c->lde[e] == LAYER_LOST || o == -1) return -1;
+        return shell_axes(d, c->lde[e], o >= 0 ? &d->orients[o] : NULL, Q) ? 1 : -1;
+    }
+    int32_t o = d->nelem_ori ? find_idix(d->elem_ori, d->nelem_ori, id) : -2;
+    if (o == -1) return -1;
+    const cv_csys* cs = o >= 0 ? &d->orients[o] : NULL;
+    if (d->nshells && bsearch(&id, d->shells, d->nshells, sizeof(uint32_t), cv_cmp_u32)) {
+        uint32_t de = cv_frd_elem_index(&d->mesh, id);
+        return de != UINT32_MAX && shell_axes(d, de, cs, Q) ? 1 : -1;
+    }
+    if (!cs) return 0;
+    cv_csys_axes(cs, x, Q);
+    return cs->cyl ? 2 : 1;
+}
+
+static double turn_cos(const double A[3][3], const float* B) {   /* cos of the turn from A to B */
+    double t = 0;
+    for (int i = 0; i < 9; i++) t += A[i / 3][i % 3] * B[i];
+    return (t - 1) / 2;
+}
+
+bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
+    memset(L, 0, sizeof *L);
+    uint32_t nn = CV_MAX(f->n_nodes, 1);
+    L->tr = malloc(nn * sizeof(int32_t));
+    L->est = calloc(nn, 1);
+    uint32_t* disc = malloc(CV_MAX(d->ndisc, 1) * sizeof(uint32_t));
+    if (!L->tr || !L->est || !disc) { free(disc); cv_localsys_free(L); return false; }
+    for (uint32_t i = 0; i < f->n_nodes; i++) L->tr[i] = -1;
+    for (uint32_t i = 0; i < d->ndisc; i++) disc[i] = d->disc[i].id;
+    if (d->ndisc) qsort(disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32);
+
+    /* transforms by node id; nodes CalculiX made (expanded shells and beams) take the
+       transform of the nearest node of the deck element they came from */
+    if (d->nnode_tr) {
+        for (uint32_t i = 0; i < f->n_nodes; i++) {
+            int32_t t = find_idix(d->node_tr, d->nnode_tr, f->node_id[i]);
+            if (t >= 0) { L->tr[i] = t; L->any_tr = true; }
+        }
+        for (uint32_t e = 0; e < f->n_elems; e++) {
+            uint32_t de = cv_frd_elem_index(&d->mesh, f->elem_id[e]);
+            if (de == UINT32_MAX) continue;
+            for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
+                uint32_t n = f->conn[j];
+                if (cv_frd_node_index(&d->mesh, f->node_id[n]) != UINT32_MAX) continue;
+                const float* x = f->xyz + 3 * (size_t)n;
+                double best = INFINITY; uint32_t bn = UINT32_MAX;
+                for (uint32_t k = d->mesh.eoff[de]; k < d->mesh.eoff[de + 1]; k++) {
+                    const float* y = d->mesh.xyz + 3 * (size_t)d->mesh.conn[k];
+                    double dd = 0;
+                    for (int c = 0; c < 3; c++) dd += ((double)x[c] - y[c]) * ((double)x[c] - y[c]);
+                    if (dd < best) { best = dd; bn = d->mesh.conn[k]; }
+                }
+                int32_t t = bn == UINT32_MAX ? -2 : find_idix(d->node_tr, d->nnode_tr, d->mesh.node_id[bn]);
+                if (t >= 0) { L->tr[n] = t; L->any_tr = true; }
+            }
+        }
+    }
+    /* element values: the systems of the elements around each node. Pass 1 takes the
+       first one, pass 2 how far the others turn from it and their sum. */
+    enum { SEEN = 1, BAD = 2, VARY = 4 };
+    if (!d->nelem_ori && !d->nshells) { free(disc); return true; }
+    L->q = malloc((size_t)nn * 9 * sizeof(float));
+    float* sum = calloc((size_t)nn * 9, sizeof(float));
+    float* mincos = malloc(nn * sizeof(float));
+    if (!L->q || !sum || !mincos) { free(sum); free(mincos); free(disc); cv_localsys_free(L); return false; }
+    esys_ctx c = { d, disc, NULL, NULL };
+    if (d->ncomps && !layer_map(&c, f)) { free(c.lde); free(c.lori); free(sum); free(mincos); free(disc); cv_localsys_free(L); return false; }
+    const double cos_lim = cos(CV_LOC_SPAN * 3.14159265358979323846 / 180);
+    for (int pass = 0; pass < 2; pass++)
+        for (uint32_t e = 0; e < f->n_elems; e++) {
+            double Q[3][3], Q0[3][3];
+            bool wide = false;
+            for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
+                uint32_t n = f->conn[j];
+                uint8_t* st = &L->est[n];
+                int k = elem_sys(&c, f, e, f->xyz + 3 * (size_t)n, Q);
+                if (k == -2) break;
+                if (k == -1) { *st |= BAD; continue; }
+                if (k == 0) { memset(Q, 0, sizeof Q); Q[0][0] = Q[1][1] = Q[2][2] = 1; }
+                if (k == 2) {                       /* CalculiX turns at each integration point */
+                    *st |= VARY;
+                    if (j == f->eoff[e]) memcpy(Q0, Q, sizeof Q);
+                    else if (pass == 0 && !wide) {
+                        float q0[9];
+                        for (int i = 0; i < 9; i++) q0[i] = (float)Q0[i / 3][i % 3];
+                        wide = turn_cos(Q, q0) < cos_lim;
+                    }
+                }
+                float* q = L->q + 9 * (size_t)n;
+                if (pass == 0) {
+                    if (!(*st & SEEN)) {
+                        for (int i = 0; i < 9; i++) q[i] = (float)Q[i / 3][i % 3];
+                        mincos[n] = 1;
+                        *st |= SEEN;
+                    }
+                    continue;
+                }
+                double cs = turn_cos(Q, q);
+                if (cs < mincos[n]) mincos[n] = (float)cs;
+                for (int i = 0; i < 9; i++) sum[9 * (size_t)n + i] += (float)Q[i / 3][i % 3];
+            }
+            if (wide)
+                for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) L->est[f->conn[j]] |= BAD;
+        }
+    for (uint32_t i = 0; i < f->n_nodes; i++) {
+        uint8_t st = L->est[i];
+        float* q = L->q + 9 * (size_t)i;
+        if (st & BAD || ((st & SEEN) && mincos[i] < cos_lim)) L->est[i] = CV_LOC_NONE;
+        else if (!(st & SEEN)) L->est[i] = CV_LOC_GLOBAL;
+        else if (mincos[i] > 1 - 1e-8 && !(st & VARY)) {     /* one system */
+            bool id = true;
+            for (int k = 0; k < 9; k++) id = id && fabsf(q[k] - (k % 4 == 0)) < 1e-6f;
+            L->est[i] = id ? CV_LOC_GLOBAL : CV_LOC_EXACT;
+        } else {                                    /* their mean, made orthonormal again */
+            const float* s = sum + 9 * (size_t)i;
+            double r[3][3], l;
+            for (int k = 0; k < 9; k++) r[k / 3][k % 3] = s[k];
+            l = sqrt(r[0][0] * r[0][0] + r[0][1] * r[0][1] + r[0][2] * r[0][2]);
+            for (int k = 0; k < 3; k++) r[0][k] /= l;
+            l = r[1][0] * r[0][0] + r[1][1] * r[0][1] + r[1][2] * r[0][2];
+            for (int k = 0; k < 3; k++) r[1][k] -= l * r[0][k];
+            l = sqrt(r[1][0] * r[1][0] + r[1][1] * r[1][1] + r[1][2] * r[1][2]);
+            for (int k = 0; k < 3; k++) r[1][k] /= l;
+            r[2][0] = r[0][1] * r[1][2] - r[0][2] * r[1][1];
+            r[2][1] = r[0][2] * r[1][0] - r[0][0] * r[1][2];
+            r[2][2] = r[0][0] * r[1][1] - r[0][1] * r[1][0];
+            for (int k = 0; k < 9; k++) q[k] = (float)r[k / 3][k % 3];
+            L->est[i] = CV_LOC_NEAR;
+        }
+        if (L->est[i] != CV_LOC_GLOBAL) L->any_ori = true;
+    }
+    free(sum); free(mincos); free(disc); free(c.lde); free(c.lori);
+    return true;
+}
+
+/* which output variable decides the system of a .frd block, and how:
+   nodal blocks are local unless 'G' (frdvector), element blocks only when 'L' */
+static int block_var(const char* name, bool* nodal, bool* turnable) {
+    static const struct { const char* name; int var; bool nodal, turnable; } k[] = {
+        { "DISP", CV_OUT_U, true, true }, { "DISPI", CV_OUT_U, true, true },
+        { "FORC", CV_OUT_RF, true, true }, { "FORCI", CV_OUT_U, true, true },   /* sic: U's flag */
+        { "VELO", CV_OUT_V, true, true }, { "V3DF", CV_OUT_VF, true, true },
+        { "STRESS", CV_OUT_S, false, true }, { "STRESSI", CV_OUT_S, false, true },
+        { "STRNEG", CV_OUT_S, false, true }, { "STRMID", CV_OUT_S, false, true },
+        { "STRPOS", CV_OUT_S, false, true }, { "PSTRESS", CV_OUT_S, false, false },
+        { "TOSTRAIN", CV_OUT_E, false, true }, { "TOSTRAII", CV_OUT_E, false, true },
+        { "MESTRAIN", CV_OUT_E, false, true }, { "MESTRAII", CV_OUT_E, false, true },   /* sic: E's flag */
+        { "FLUX", CV_OUT_HFL, false, true },
+    };
+    for (size_t i = 0; i < CV_COUNT(k); i++)
+        if (strcmp(k[i].name, name) == 0) { *nodal = k[i].nodal; *turnable = k[i].turnable; return k[i].var; }
+    return -1;
+}
+
+int cv_localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
+                      const cv_field_desc* desc, float* vals) {
+    if (!L->tr || !d->nsteps || !vals) return 0;
+    bool nodal, turnable;
+    int var = block_var(desc->name, &nodal, &turnable);
+    if (var < 0) return 0;
+    const char* sys = d->outsys[CV_MAX(1, CV_MIN(step, d->nsteps)) - 1];
+    if (nodal ? sys[var] == 'G' || !L->any_tr : sys[var] != 'L' || !L->any_ori) return 0;
+    int nc = desc->ncomp, tens = cv_tensor_order(desc) == 1;
+    if (turnable && nc != 3 && !tens) return 0;         /* generalized DOFs: CalculiX writes nothing local */
+    int r = 0;
+    for (uint32_t i = 0; i < f->n_nodes; i++) {
+        float* v = vals + (size_t)i * nc;
+        double Q[3][3];
+        if (nodal) {
+            if (L->tr[i] < 0) continue;
+            cv_csys_axes(&d->transforms[L->tr[i]], f->xyz + 3 * (size_t)i, Q);
+        } else {
+            uint8_t st = L->est[i];
+            if (st == CV_LOC_GLOBAL) continue;
+            if (st == CV_LOC_NONE || !turnable) {       /* systems too far apart, or unknown */
+                for (int c = 0; c < nc; c++) v[c] = NAN;
+                r |= CV_LOC_NAN;
+                continue;
+            }
+            for (int k = 0; k < 9; k++) Q[k / 3][k % 3] = L->q[9 * (size_t)i + k];
+            if (st == CV_LOC_NEAR) r |= CV_LOC_APPROX;
+        }
+        if (nc == 3) cv_vec_to_global(Q, v); else cv_ten_to_global(Q, v);
+        r |= CV_LOC_TURNED;
+    }
+    return r;
+}
+
+void cv_localsys_free(cv_localsys* L) {
+    free(L->tr); free(L->est); free(L->q);
+    memset(L, 0, sizeof *L);
+}
+
+/* .dat records: CalculiX appends the name of the system it printed in, at most 20
+   characters of it; a shell's is "<orientation>_shell_<element>" (gen3dfrom2d.f) */
+static int dat_orient(const cv_inp* d, const char* key, bool* shell) {
+    char k[24];
+    snprintf(k, sizeof k, "%s", key); upcase(k);
+    size_t l = strlen(k);
+    *shell = l >= 7 && strcmp(k + l - 7, "_SHELL_") == 0;
+    if (*shell) { k[l - 7] = 0; if (!k[0]) return -1; }      /* a shell without orientation */
+    int found = -2;
+    for (int i = 0; i < d->norients; i++) {
+        bool eq = *shell ? strcmp(d->orient_names[i], k) == 0 : strncmp(d->orient_names[i], k, 20) == 0;
+        if (!eq) continue;
+        if (found >= 0) return -3;                  /* two names alike in 20 characters */
+        found = i;
+    }
+    return found;
+}
+
+int cv_localsys_dat(const cv_inp* d, const cv_frd* f, cv_dat_block* b) {
+    if (!b->sys || (b->ncomp != 6 && b->ncomp != 3)) return 0;
+    int32_t* ko = malloc(CV_MAX(b->nsys, 1) * sizeof(int32_t));
+    bool* ks = malloc(CV_MAX(b->nsys, 1));
+    if (!ko || !ks) { free(ko); free(ks); return 0; }
+    for (int k = 0; k < b->nsys; k++) ko[k] = dat_orient(d, b->sysname[k], &ks[k]);
+    int r = 0;
+    uint32_t run0 = 0;                              /* first record of this element */
+    for (uint32_t i = 0; i < b->n; i++) {
+        if (i == 0 || b->elem[i] != b->elem[i - 1]) run0 = i;
+        if (!b->sys[i]) continue;
+        float* v = b->vals + (size_t)i * b->ncomp;
+        uint32_t id = b->elem[i];
+        int k = b->sys[i] - 1, o = ko[k];
+        bool shell = d->nshells && bsearch(&id, d->shells, d->nshells, sizeof(uint32_t), cv_cmp_u32);
+        if (o < -1 || (o == -1 && !ks[k])) {        /* name cut short: the element's section */
+            o = d->nelem_ori ? find_idix(d->elem_ori, d->nelem_ori, id) : -2;
+            if (o == -2) o = -1;
+            else if (o == -1) o = -3;
+        }
+        double Q[3][3];
+        bool ok = o >= -1;
+        if (ok && shell) {
+            uint32_t de = cv_frd_elem_index(&d->mesh, id);
+            ok = de != UINT32_MAX && shell_axes(d, de, o >= 0 ? &d->orients[o] : NULL, Q);
+        } else if (ok && o >= 0) {
+            float x[3] = { 0, 0, 0 };
+            if (d->orients[o].cyl) {                /* at the integration point */
+                uint32_t e = cv_frd_elem_index(f, id), nip = 1;
+                while (run0 + nip < b->n && b->elem[run0 + nip] == id) nip++;
+                double xi[3], N[20], s[3] = { 0, 0, 0 };
+                int t = e != UINT32_MAX ? f->etype[e] : 0;
+                uint32_t nn = e != UINT32_MAX ? f->eoff[e + 1] - f->eoff[e] : 0;
+                ok = nn && nn <= 20 && cv_ip_param(t, (int)nip, b->ip[i] - 1, xi) && cv_shape(t, (int)nn, xi, N);
+                for (uint32_t j = 0; ok && j < nn; j++) {
+                    const float* y = f->xyz + 3 * (size_t)f->conn[f->eoff[e] + (uint32_t)cv_frd_node_pos(t, (int)nn, (int)j)];
+                    for (int c = 0; c < 3; c++) s[c] += N[j] * y[c];
+                }
+                for (int c = 0; c < 3; c++) x[c] = (float)s[c];
+            }
+            if (ok) cv_csys_axes(&d->orients[o], x, Q);
+        } else ok = false;                          /* local, but in a system not in the deck */
+        if (!ok) {
+            for (int c = 0; c < b->ncomp; c++) v[c] = NAN;
+            r |= CV_LOC_NAN;
+            continue;
+        }
+        if (b->ncomp == 3) cv_vec_to_global(Q, v);
+        else {                                      /* .dat: xy xz yz */
+            float t[6] = { v[0], v[1], v[2], v[3], v[5], v[4] };
+            cv_ten_to_global(Q, t);
+            v[0] = t[0]; v[1] = t[1]; v[2] = t[2]; v[3] = t[3]; v[4] = t[5]; v[5] = t[4];
+        }
+        b->sys[i] = 0;
+        r |= CV_LOC_TURNED;
+    }
+    free(ko); free(ks);
+    return r;
 }

@@ -45,7 +45,8 @@ static bool step_line(const char* s, const char* e, int* step) {
 
 /* Integers and numbers of one data line. Returns count, or -1 if the line does
    not start with two integers (then it is not a data line). */
-static int data_line(const char* s, const char* e, long long* el, long long* ip, double* v, int max) {
+static int data_line(const char* s, const char* e, long long* el, long long* ip, double* v, int max,
+                     const char** name, const char** name_e) {
     const char* t[CV_DAT_MAX_COMP + 2][2];
     int n = 0;
     while (n < CV_DAT_MAX_COMP + 2) {
@@ -64,6 +65,11 @@ static int data_line(const char* s, const char* e, long long* el, long long* ip,
     for (int k = 2; k < n && m < max; k++) {
         double x;
         v[m++] = cv_parse_num(t[k][0], t[k][1], &x) ? x : NAN;
+    }
+    *name = *name_e = NULL;                 /* the local system a record is in */
+    double x;
+    if (m == max && n > 2 + max && !cv_parse_num(t[2 + max][0], t[2 + max][1], &x)) {
+        *name = t[2 + max][0]; *name_e = t[2 + max][1];
     }
     return m;
 }
@@ -121,6 +127,8 @@ bool cv_dat_parse(cv_dat* d, const char* data, size_t size) {
         CV_VEC(uint32_t) el = {0};
         CV_VEC(uint16_t) ips = {0};
         CV_VEC(float) vals = {0};
+        CV_VEC(uint16_t) sys = {0};
+        CV_VEC(char*) names = {0};
         size_t bad = 0;
         bool seen_data = false;
         while (dnext(&c, &ls, &le)) {
@@ -132,7 +140,8 @@ bool cv_dat_parse(cv_dat* d, const char* data, size_t size) {
             }
             long long e_id, ipn;
             double v[CV_DAT_MAX_COMP];
-            int m = data_line(ls, le, &e_id, &ipn, v, b.ncomp);
+            const char *nm, *nme;
+            int m = data_line(ls, le, &e_id, &ipn, v, b.ncomp, &nm, &nme);
             if (m < 0) { c.p = ls; c.line--; break; }         /* next header */
             seen_data = true;
             if (e_id <= 0 || e_id > 0xFFFFFFFELL || ipn <= 0 || ipn > 65535) { bad++; continue; }
@@ -140,17 +149,49 @@ bool cv_dat_parse(cv_dat* d, const char* data, size_t size) {
             for (int k = 0; k < b.ncomp; k++)
                 if (!cv_push(vals, k < m ? (float)v[k] : NAN)) goto oom_block;
             if (m < b.ncomp) bad++;
+            uint16_t sk = 0;
+            if (nm) {
+                char key[24];
+                trim_copy(key, sizeof key, nm, nme);
+                char* sh = strstr(key, "_shell_");
+                if (sh) sh[7] = 0;
+                for (size_t k = 0; k < names.n && !sk; k++) if (strcmp(names.a[k], key) == 0) sk = (uint16_t)(k + 1);
+                if (!sk && names.n < 65535) {
+                    char* cp = malloc(sizeof b.sysname[0]);
+                    if (!cp) goto oom_block;
+                    snprintf(cp, sizeof b.sysname[0], "%s", key);
+                    if (!cv_push(names, cp)) { free(cp); goto oom_block; }
+                    sk = (uint16_t)names.n;
+                }
+            }
+            if (sk && !sys.a) {                             /* the records before were global */
+                if (!cv_reserve(sys, el.n)) goto oom_block;
+                memset(sys.a, 0, (el.n - 1) * sizeof(uint16_t));
+                sys.n = el.n - 1;
+            }
+            if (sys.a && !cv_push(sys, sk)) goto oom_block;
         }
         if (bad) {
             snprintf(msg, sizeof msg, "%s: %zu unreadable records skipped", b.name, bad);
             cv_msg_add(&d->msgs, c.line, false, msg);
         }
         b.n = (uint32_t)el.n;
-        b.elem = el.a; b.ip = ips.a; b.vals = vals.a;
-        if (!cv_push(blocks, b)) { free(el.a); free(ips.a); free(vals.a); goto oom; }
+        b.elem = el.a; b.ip = ips.a; b.vals = vals.a; b.sys = sys.a;
+        if (names.n) {
+            b.sysname = malloc(names.n * sizeof b.sysname[0]);
+            if (!b.sysname) { free(el.a); free(ips.a); free(vals.a); free(sys.a); goto oom_names; }
+            for (size_t k = 0; k < names.n; k++) memcpy(b.sysname[k], names.a[k], sizeof b.sysname[0]);
+            b.nsys = (int)names.n;
+        }
+        for (size_t k = 0; k < names.n; k++) free(names.a[k]);
+        cv_free_vec(names);
+        if (!cv_push(blocks, b)) { free(el.a); free(ips.a); free(vals.a); free(b.sys); free(b.sysname); goto oom; }
         continue;
     oom_block:
-        cv_free_vec(el); cv_free_vec(ips); cv_free_vec(vals);
+        cv_free_vec(el); cv_free_vec(ips); cv_free_vec(vals); cv_free_vec(sys);
+    oom_names:
+        for (size_t k = 0; k < names.n; k++) free(names.a[k]);
+        cv_free_vec(names);
         goto oom;
     }
     d->n = (int)blocks.n;
@@ -165,7 +206,9 @@ oom:
 }
 
 void cv_dat_free(cv_dat* d) {
-    for (int i = 0; i < d->n; i++) { free(d->b[i].elem); free(d->b[i].ip); free(d->b[i].vals); }
+    for (int i = 0; i < d->n; i++) {
+        free(d->b[i].elem); free(d->b[i].ip); free(d->b[i].vals); free(d->b[i].sys); free(d->b[i].sysname);
+    }
     free(d->b);
     cv_msgs keep = d->msgs;
     memset(d, 0, sizeof *d);

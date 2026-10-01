@@ -290,6 +290,7 @@ static void apply_load(cv_job* j) {
     G.frd = j->frd_out;     memset(&j->frd_out, 0, sizeof j->frd_out);
     G.groups = j->groups;   memset(&j->groups, 0, sizeof j->groups);
     G.skin = j->skin;       memset(&j->skin, 0, sizeof j->skin);
+    gp_localize();                             /* needs the deck and G.frd */
     snprintf(G.path, sizeof G.path, "%s", j->path);
     G.load_seconds = j->seconds;
     settings_add_recent(j->path);
@@ -563,6 +564,7 @@ static void open_dat(const char* path) {
         return;
     }
     gp_set(&d, path);
+    gp_localize();
     if (G.field_src == 1) refresh_field();
 }
 

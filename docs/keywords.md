@@ -27,11 +27,45 @@ step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
 | `*DISTRIBUTING COUPLING` | the `DCOUP3D` element's node linked to the listed nodes |
 | `*TIE` | the slave and master surfaces, drawn as a surface pair |
 | `*CONTACT PAIR` | the slave and master surfaces, drawn as a surface pair |
+| `*TRANSFORM` | the node system of its `NSET=` (rectangular or cylindrical), to turn local nodal results back (below) |
+| `*ORIENTATION` | the element system (rectangular or cylindrical, with the extra rotation line), by `NAME=`; the sections that name it give it to their elements |
+| `*SHELL SECTION, COMPOSITE` | the orientation of each layer |
+| `*NODE FILE`, `*EL FILE`, `*NODE OUTPUT`, `*ELEMENT OUTPUT` | per `*STEP`: `GLOBAL=` of `U`, `RF`, `V`, `VF`, `S`, `E`, `HFL` -- whether the `.frd` holds them in local systems |
 | `*INCLUDE` | followed, up to 8 levels; the included file may continue the block that was open |
 | `*HEADING` | skipped, its lines do not start a block |
 
-`*STEP` boundaries are not tracked: supports and loads from every step are
-collected, the last `*CLOAD` on a node and DOF wins.
+For supports and loads `*STEP` boundaries are not tracked: they are collected
+from every step, the last `*CLOAD` on a node and DOF wins. Output requests are
+tracked per step.
+
+## Results in local systems
+
+CalculiX writes some results in local systems and the `.frd` does not say so;
+the deck does. With the deck beside the results ccxview turns them back to
+global when it decodes them (`cv_localsys` in `inp.h`), following ccx 2.22:
+
+- Nodal values (`DISP`, `FORC`, `VELO`, ...) are in the `*TRANSFORM` of their
+  node unless the request says `GLOBAL=YES`. Exact.
+- Element values (`STRESS`, `TOSTRAIN`, `MESTRAIN`, `FLUX`) only with
+  `GLOBAL=NO`, in the system of the element: its `*ORIENTATION`, and for every
+  shell (`S3`..`S8R`) a system of its own even without one (gen3dfrom2d.f:
+  normal = e3, the orientation's or the global x projected on the shell = e1).
+  CalculiX turns them at each integration point and then averages at the nodes,
+  so they come back exactly where every element around a node has the same
+  system: rectangular orientations, flat shells, composite layers (each layer
+  is an element with nodes of its own). Where the systems differ -- a
+  cylindrical orientation, a curved shell, the border of two orientations --
+  the values are turned with the mean system while the systems differ by less
+  than 12 degrees (error about 0.3% of the peak at 10 degrees per element for
+  solids, 1% for shells, growing with the square of the angle), and shown as no
+  value beyond. `PSTRESS` written locally cannot be undone and shows no value.
+  The message bar says which.
+- `.dat` records from `*EL PRINT` (whose default is `GLOBAL=NO`) name their
+  system after the values, so they are turned back exactly, every one.
+
+Without the deck the values are shown as written. A comparison `.frd` is not
+turned. For exact values everywhere, request `GLOBAL=YES` (the default of
+`*NODE FILE` and `*EL FILE`).
 
 ## Element types
 
@@ -46,6 +80,6 @@ dropped and reported in the message bar.
 ## Not read
 
 Materials beyond the name, steps and their controls, amplitudes,
-temperatures and fluxes, orientations and transformations, output requests,
-contact properties. The results of all of these come back through the `.frd`
+temperatures and fluxes, output requests beyond `GLOBAL=`, contact
+properties. The results of all of these come back through the `.frd`
 and `.dat` files, which ccxview reads in full.

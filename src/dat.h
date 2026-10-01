@@ -6,7 +6,11 @@
    Only "(elem, integ.pnt., ...)" blocks are kept; nodal prints, energies and
    totals are skipped. A block named "...coordinates..." holds the integration
    point positions (*EL PRINT ... COORD). Like the .frd reader it never fails on
-   bad input: unreadable lines are skipped and reported. */
+   bad input: unreadable lines are skipped and reported.
+
+   *EL PRINT writes in the element's local system unless GLOBAL=YES (the default
+   is NO); such a record ends with the system's name (printoutint.f), kept in sys.
+   cv_localsys_dat (inp.h) turns them to global. */
 #ifndef CV_DAT_H
 #define CV_DAT_H
 
@@ -26,6 +30,12 @@ typedef struct {
     uint32_t* elem;                       /* element id per record */
     uint16_t* ip;                         /* 1-based integration point per record */
     float*    vals;                       /* n * ncomp */
+    uint16_t* sys;                        /* per record: 0 global, k: local in system
+                                             sysname[k-1]; NULL when all are global */
+    char    (*sysname)[24];               /* as printed (20 characters at most), a shell's
+                                             "<orientation>_shell_<element>" cut to
+                                             "<orientation>_shell_" */
+    int       nsys;
 } cv_dat_block;
 
 typedef struct {

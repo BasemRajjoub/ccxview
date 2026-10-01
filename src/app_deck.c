@@ -23,6 +23,10 @@ static struct {
     v3        g0;
     float     gh;
     const cv_frd* gfor;         /* geometry the grid was built for */
+    /* the local systems of the results (GLOBAL=NO), built on first need */
+    cv_localsys L;
+    bool      L_tried;
+    int       L_said;           /* CV_LOC_ bits already reported */
 } D;
 
 static void grid_free(void) {
@@ -39,6 +43,7 @@ bool* deck_link_flags(void) { return D.link_on; }
 
 void deck_clear(void) {
     grid_free();
+    cv_localsys_free(&D.L);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
     free(D.set_on); free(D.surf_on); free(D.link_on); free(D.nvis);
@@ -70,6 +75,45 @@ void deck_set(cv_inp* d, const char* path) {
     for (int i = 0; D.link_on && i < D.d.nlinks; i++)           /* spiders on, surface pairs off */
         D.link_on[i] = D.d.links[i].kind != CV_LINK_TIE && D.d.links[i].kind != CV_LINK_CONTACT;
     for (size_t i = 0; i < D.d.msgs.n; i++) cv_msg_add(&G.msgs, D.d.msgs.a[i].where, false, D.d.msgs.a[i].text);
+}
+
+/* ---- results in local systems ----------------------------------------------------
+   With GLOBAL=NO (or shells, *ORIENTATION, *TRANSFORM) CalculiX writes values in
+   local systems the .frd does not record; the deck does. Turned back on decode. */
+
+static void loc_say(int bits, const char* field) {
+    char msg[200];
+    int fresh = bits & ~D.L_said;
+    D.L_said |= bits;
+    if (fresh & CV_LOC_TURNED) {
+        snprintf(msg, sizeof msg, "%s and others written in local systems (GLOBAL=NO) are turned to global with the deck", field);
+        cv_msg_add(&G.msgs, 0, false, msg);
+    }
+    if (fresh & CV_LOC_APPROX) {
+        snprintf(msg, sizeof msg, "%s: approximate where the element systems around a node differ (cylindrical orientation, curved shell); request GLOBAL=YES for exact values", field);
+        cv_msg_add(&G.msgs, 0, false, msg);
+    }
+    if (fresh & CV_LOC_NAN) {
+        snprintf(msg, sizeof msg, "%s: no value where the element systems around a node differ by more than %.0f degrees or cannot be rebuilt; request GLOBAL=YES", field, CV_LOC_SPAN);
+        cv_msg_add(&G.msgs, 0, false, msg);
+    }
+}
+
+void deck_localize(int step, const cv_field_desc* d, float* vals) {
+    if (!D.on || !G.frd.n_steps || step < 0 || step >= G.frd.n_steps) return;
+    if (!D.L_tried) {
+        D.L_tried = true;
+        if (!cv_localsys_init(&D.L, &D.d, &G.frd)) cv_msg_add(&G.msgs, 0, false, "out of memory: results in local systems stay local");
+    }
+    int r = cv_localsys_apply(&D.L, &D.d, &G.frd, G.frd.steps[step].step, d, vals);
+    if (r) loc_say(r, d->name);
+}
+
+void deck_localize_dat(cv_dat* dat, const cv_frd* f) {
+    if (!D.on) return;
+    int r = 0;
+    for (int i = 0; i < dat->n; i++) r |= cv_localsys_dat(&D.d, f, &dat->b[i]);
+    if (r) loc_say(r, "the .dat output");
 }
 
 /* *INCLUDE reader: paths relative to the deck's folder */

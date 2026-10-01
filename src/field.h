@@ -35,6 +35,18 @@ int   cv_tensor_order(const cv_field_desc* d);
 /* Cylindrical coordinates about an axis (0 X, 1 Y, 2 Z) through o: r, t (hoop), a (axial).
    Q holds the unit vectors e_r, e_t, e_a as rows; on the axis e_r is any normal. */
 void  cv_cyl_basis(const float p[3], const float o[3], int axis, float Q[3][3]);
+/* A CalculiX *TRANSFORM or *ORIENTATION system: the two points of its data line,
+   a[0..2] and a[3..5]; cyl for TYPE=C / SYSTEM=C. */
+typedef struct { double a[6]; bool cyl; } cv_csys;
+/* Its unit axes e1 e2 e3 at point p as the rows of Q, as CalculiX's transformatrix:
+   rectangular e1 along a, e2 in the a-b plane; cylindrical e1 radial, e2 hoop,
+   e3 along a->b, and on the axis CalculiX's own choice of e1. */
+void  cv_csys_axes(const cv_csys* c, const float p[3], double Q[3][3]);
+/* Values in the local axes Q (rows) turned to global in place: a vector of 3, or a
+   tensor of 6 with shears XY YZ ZX. */
+void  cv_vec_to_global(const double Q[3][3], float v[3]);
+void  cv_ten_to_global(const double Q[3][3], float s[6]);
+
 /* Vectors (3 components) and tensors (6) can be turned; the rest stays global. */
 bool  cv_cyl_applies(const cv_field_desc* d);
 /* Values vals[node*ncomp + c] turned in place into the local system at each node. */

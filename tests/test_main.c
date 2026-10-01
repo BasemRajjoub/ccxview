@@ -853,6 +853,96 @@ static void test_gpu_env(void) {
     CHECK(cv_gpu_busy_percent() < 0 && cv_gpu_load_percent() < 0);   /* nothing initialised: unknown */
 }
 
+/* results in local systems: what the deck says CalculiX wrote, turned back */
+static void test_localsys(void) {
+    const char* deck =
+        "*NODE, NSET=NALL\n1,0,0,0\n2,1,0,0\n3,1,1,0\n4,0,1,0\n5,0,0,1\n6,1,0,1\n7,1,1,1\n8,0,1,1\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=E1\n1,1,2,3,4,5,6,7,8\n"
+        "*NSET, NSET=NT\n2\n"
+        "*TRANSFORM, NSET=NT\n0.,1.,0.,-1.,0.,0.\n"
+        "*ORIENTATION, NAME=Or1\n0.,1.,0.,-1.,0.,0.\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n"
+        "*SOLID SECTION, ELSET=E1, MATERIAL=M, ORIENTATION=OR1\n"
+        "*STEP\n*STATIC\n*NODE FILE, GLOBAL=NO\nU\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n"
+        "*STEP\n*STATIC\n*EL FILE\nS\n*END STEP\n"          /* S global again, U kept */
+        "*STEP\n*STATIC\n*END STEP\n";                       /* no cards: step 2's requests */
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), NULL, NULL));
+    CHECK_EQ(d.nsteps, 3);
+    if (d.nsteps == 3) {
+        CHECK_EQ(d.outsys[0][CV_OUT_U], 'L'); CHECK_EQ(d.outsys[0][CV_OUT_S], 'L'); CHECK_EQ(d.outsys[0][CV_OUT_E], ' ');
+        CHECK_EQ(d.outsys[1][CV_OUT_U], 'L'); CHECK_EQ(d.outsys[1][CV_OUT_S], 'G');
+        CHECK_EQ(d.outsys[2][CV_OUT_S], 'G');
+    }
+    CHECK_EQ(d.norients, 1); CHECK_EQ(d.nelem_ori, 1); CHECK_EQ(d.nnode_tr, 1);
+    cv_localsys L;
+    CHECK(cv_localsys_init(&L, &d, &d.mesh));
+    cv_field_desc st = { .name = "STRESS", .ncomp = 6, .comp = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" } };
+    cv_field_desc ds = { .name = "DISP", .ncomp = 3, .comp = { "D1", "D2", "D3" } };
+    float s[8 * 6], u[8 * 3];
+    for (int i = 0; i < 8; i++) {
+        float l[6] = { 1, 0, 0, 0.5f, 0, 0 };              /* e1 = global y, e2 = -x */
+        memcpy(s + 6 * i, l, sizeof l);
+        u[3 * i] = 1; u[3 * i + 1] = u[3 * i + 2] = 0;
+    }
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &st, s), CV_LOC_TURNED);
+    CHECK_NEAR(s[0], 0, 1e-6); CHECK_NEAR(s[1], 1, 1e-6); CHECK_NEAR(s[3], -0.5, 1e-6);
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 2, &st, s), 0);   /* GLOBAL=YES in step 2 */
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &ds, u), CV_LOC_TURNED);
+    uint32_t n2 = cv_frd_node_index(&d.mesh, 2), n1 = cv_frd_node_index(&d.mesh, 1);
+    CHECK_NEAR(u[3 * n2], 0, 1e-6); CHECK_NEAR(u[3 * n2 + 1], 1, 1e-6);   /* the transformed node */
+    CHECK_NEAR(u[3 * n1], 1, 1e-6);                                       /* the others are global */
+    cv_localsys_free(&L);
+
+    /* .dat: *EL PRINT names the system after the values; a global record first */
+    const char* dat =
+        " stresses (elem, integ.pnt.,sxx,syy,szz,sxy,sxz,syz) for set E1 and time  0.1000000E+01\n\n"
+        "         1   1  2.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00\n"
+        "         1   2  1.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00 OR1\n\n";
+    cv_dat dt;
+    CHECK(cv_dat_parse(&dt, dat, strlen(dat)));
+    CHECK_EQ(dt.n, 1);
+    if (dt.n == 1) {
+        cv_dat_block* b = &dt.b[0];
+        CHECK_EQ(b->n, 2); CHECK_EQ(b->nsys, 1);
+        CHECK(b->sys && b->sys[0] == 0 && b->sys[1] == 1);
+        CHECK(b->sysname && strcmp(b->sysname[0], "OR1") == 0);
+        CHECK_EQ(cv_localsys_dat(&d, &d.mesh, b), CV_LOC_TURNED);
+        CHECK_NEAR(b->vals[0], 2, 1e-6);                                  /* untouched */
+        CHECK_NEAR(b->vals[6], 0, 1e-6); CHECK_NEAR(b->vals[7], 1, 1e-6);
+        CHECK(b->sys[1] == 0);
+        CHECK_EQ(cv_localsys_dat(&d, &d.mesh, b), 0);                     /* once only */
+    }
+    cv_dat_free(&dt); free(dt.msgs.a);
+    cv_inp_free(&d); free(d.msgs.a);
+
+    /* a shell has a system of its own even without *ORIENTATION (gen3dfrom2d.f):
+       e3 its normal, e1 the global x on it. In the XZ plane: e3 = -y, e2 = z. */
+    const char* sh =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,1,0,1\n4,0,0,1\n"
+        "*ELEMENT, TYPE=S4, ELSET=E\n1,1,2,3,4\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n*SHELL SECTION, ELSET=E, MATERIAL=M\n0.1\n"
+        "*STEP\n*STATIC\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, sh, strlen(sh), NULL, NULL));
+    CHECK_EQ(d.nshells, 1);
+    CHECK(cv_localsys_init(&L, &d, &d.mesh));
+    for (int i = 0; i < 4; i++) { float l[6] = { 0, 1, 3, 0, 0, 0 }; memcpy(s + 6 * i, l, sizeof l); }
+    CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &st, s), CV_LOC_TURNED);
+    CHECK_NEAR(s[0], 0, 1e-6); CHECK_NEAR(s[1], 3, 1e-6); CHECK_NEAR(s[2], 1, 1e-6);
+    cv_localsys_free(&L);
+    const char* sdat =
+        " stresses (elem, integ.pnt.,sxx,syy,szz,sxy,sxz,syz) for set E and time  0.1000000E+01\n\n"
+        "         1   1  0.000000E+00  1.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00 _shell_0000000001\n\n";
+    CHECK(cv_dat_parse(&dt, sdat, strlen(sdat)));
+    if (dt.n == 1) {
+        CHECK(dt.b[0].nsys == 1 && strcmp(dt.b[0].sysname[0], "_shell_") == 0);
+        CHECK_EQ(cv_localsys_dat(&d, &d.mesh, &dt.b[0]), CV_LOC_TURNED);
+        CHECK_NEAR(dt.b[0].vals[1], 0, 1e-6); CHECK_NEAR(dt.b[0].vals[2], 1, 1e-6);
+    }
+    cv_dat_free(&dt); free(dt.msgs.a);
+    cv_inp_free(&d); free(d.msgs.a);
+}
+
 int main(void) {
     test_gpu_env();
     test_video();
@@ -862,6 +952,7 @@ int main(void) {
     test_sta();
     test_fbd();
     test_inp();
+    test_localsys();
     test_gauss();
     test_dat();
     test_portal_wire();

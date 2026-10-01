@@ -43,6 +43,59 @@ void cv_cyl_basis(const float p[3], const float o[3], int axis, float Q[3][3]) {
     for (int k = 0; k < 3; k++) { Q[0][k] = (float)r[k]; Q[1][k] = (float)t[k]; Q[2][k] = (float)A[k]; }
 }
 
+void cv_csys_axes(const cv_csys* c, const float p[3], double Q[3][3]) {
+    const double* a = c->a;
+    double e1[3], e2[3], e3[3], d;
+    if (!c->cyl) {
+        d = sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+        for (int k = 0; k < 3; k++) e1[k] = a[k] / d;
+        d = e1[0] * a[3] + e1[1] * a[4] + e1[2] * a[5];
+        for (int k = 0; k < 3; k++) e2[k] = a[3 + k] - d * e1[k];
+        d = sqrt(e2[0] * e2[0] + e2[1] * e2[1] + e2[2] * e2[2]);
+        for (int k = 0; k < 3; k++) e2[k] /= d;
+        e3[0] = e1[1] * e2[2] - e2[1] * e1[2];
+        e3[1] = e1[2] * e2[0] - e1[0] * e2[2];
+        e3[2] = e1[0] * e2[1] - e2[0] * e1[1];
+    } else {
+        for (int k = 0; k < 3; k++) { e1[k] = (double)p[k] - a[k]; e3[k] = a[3 + k] - a[k]; }
+        d = sqrt(e3[0] * e3[0] + e3[1] * e3[1] + e3[2] * e3[2]);
+        for (int k = 0; k < 3; k++) e3[k] /= d;
+        d = e1[0] * e3[0] + e1[1] * e3[1] + e1[2] * e3[2];
+        for (int k = 0; k < 3; k++) e1[k] -= d * e3[k];
+        d = sqrt(e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]);
+        if (d < 1e-10) {                          /* on the axis: transformatrix's pick */
+            if (fabs(e3[0]) > 1e-10)      { e1[0] = -e3[1] / e3[0]; e1[1] = 1; e1[2] = 0; }
+            else if (fabs(e3[1]) > 1e-10) { e1[0] = 0; e1[1] = -e3[2] / e3[1]; e1[2] = 1; }
+            else                          { e1[0] = 1; e1[1] = 0; e1[2] = -e3[0] / e3[2]; }
+            d = sqrt(e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]);
+        }
+        for (int k = 0; k < 3; k++) e1[k] /= d;
+        e2[0] = e3[1] * e1[2] - e1[1] * e3[2];
+        e2[1] = e3[2] * e1[0] - e1[2] * e3[0];
+        e2[2] = e3[0] * e1[1] - e1[0] * e3[1];
+    }
+    for (int k = 0; k < 3; k++) { Q[0][k] = e1[k]; Q[1][k] = e2[k]; Q[2][k] = e3[k]; }
+}
+
+void cv_vec_to_global(const double Q[3][3], float v[3]) {
+    double g[3];
+    for (int k = 0; k < 3; k++) g[k] = Q[0][k] * v[0] + Q[1][k] * v[1] + Q[2][k] * v[2];
+    for (int k = 0; k < 3; k++) v[k] = (float)g[k];
+}
+
+void cv_ten_to_global(const double Q[3][3], float s[6]) {
+    static const int si[3][2] = { { 0, 1 }, { 1, 2 }, { 2, 0 } };
+    double S[3][3], T[3][3], G[3][3];
+    for (int a = 0; a < 3; a++) S[a][a] = s[a];
+    for (int k = 0; k < 3; k++) S[si[k][0]][si[k][1]] = S[si[k][1]][si[k][0]] = s[3 + k];
+    for (int a = 0; a < 3; a++)                   /* G = Q^T S Q */
+        for (int b = 0; b < 3; b++) T[a][b] = S[a][0] * Q[0][b] + S[a][1] * Q[1][b] + S[a][2] * Q[2][b];
+    for (int a = 0; a < 3; a++)
+        for (int b = 0; b < 3; b++) G[a][b] = Q[0][a] * T[0][b] + Q[1][a] * T[1][b] + Q[2][a] * T[2][b];
+    for (int a = 0; a < 3; a++) s[a] = (float)G[a][a];
+    for (int k = 0; k < 3; k++) s[3 + k] = (float)G[si[k][0]][si[k][1]];
+}
+
 bool cv_cyl_applies(const cv_field_desc* d) { return d->ncomp == 3 || tensor_order(d) != 0; }
 
 void cv_cyl_values(const cv_field_desc* d, const float* xyz, uint32_t n, int axis, const float o[3], float* v) {

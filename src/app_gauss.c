@@ -49,6 +49,8 @@ void gp_set(cv_dat* d, const char* path) {
     for (size_t i = 0; i < P.dat.msgs.n; i++) cv_msg_add(&G.msgs, P.dat.msgs.a[i].where, false, P.dat.msgs.a[i].text);
 }
 
+void gp_localize(void) { if (P.on) deck_localize_dat(&P.dat, &G.frd); }
+
 bool gp_loaded(void) { return P.on; }
 const char* gp_path(void) { return P.path; }
 

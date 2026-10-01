@@ -405,6 +405,7 @@ size_t app_total_msgs(void);
 
 /* app_gauss.c: integration-point fields from a .dat */
 void gp_set(cv_dat* d, const char* path);
+void gp_localize(void);                /* records in local systems to global, with the deck */
 void gp_clear(void);
 bool gp_loaded(void);
 const char* gp_path(void);
@@ -434,6 +435,9 @@ void deck_refresh_highlight(void);   /* highlights and the support / load glyphs
 bool deck_has_bc(void);
 bool deck_has_loads(void);
 bool deck_has_discrete(void);
+/* values CalculiX wrote in local systems turned to global in place (inp.h) */
+void deck_localize(int step, const cv_field_desc* d, float* vals);   /* step: index into G.frd */
+void deck_localize_dat(cv_dat* dat, const cv_frd* f);
 bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted (tie, contact surfaces) */
 /* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */
 /* d: 6 wide, DISP then -DISPI (app_node_disp6); disp gets 6 per vertex, uploaded with app_aux_upload */
