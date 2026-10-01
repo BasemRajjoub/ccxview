@@ -643,7 +643,7 @@ void cam_matrices(float* mvp, float* mv, float* proj_out) {
         m4_ortho(proj, hh * aspect, hh, dc - 2 * diag, dc + 2 * diag);
     } else {
         float farp = dc + diag;
-        float nearp = CV_MAX(dc - diag, diag * 1e-4f);
+        float nearp = CV_MAX(dc - diag, diag * 1e-3f);
         m4_perspective(proj, G.cam.fovy, aspect, nearp, farp);
     }
     memcpy(mv, view, sizeof view);

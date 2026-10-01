@@ -269,6 +269,7 @@ static void frame(void) {
     cv_draw d = {0};
     if (G.loaded) {
         cam_matrices(d.mvp, d.mv, d.proj);
+        d.diag = G.diag;
         d.def_scale = G.deform ? G.deform_scale * G.anim_factor : 0.f;
         d.def_scale2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
         d.rmin = G.rmin; d.rmax = G.rmax;

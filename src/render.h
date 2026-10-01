@@ -21,6 +21,7 @@ enum { CV_COLOR_SOLID = 0, CV_COLOR_NODAL = 1, CV_COLOR_ELEM = 2, CV_COLOR_GROUP
 typedef struct {
     float mvp[16], mv[16];
     float proj[16];            /* projection alone: points need it to place ball depths */
+    float diag;                /* model size: the depth pull of edges is a fraction of it */
     float def_scale;           /* 0 = undeformed */
     float def_scale2;          /* on the second displacement (imaginary part of a harmonic response) */
     float rmin, rmax;

@@ -126,7 +126,8 @@ static const char* kVS =
     "uniform mat4 u_mvp;\n"
     "uniform mat4 u_mv;\n"
     "uniform vec4 u_p;\n"                    /* x: deform scale, y: point size, z: on top, w: pull */
-    "uniform vec4 u_q;\n"                    /* x: P[1][1] * viewport height (px -> view units), y: scale of a_disp2 */
+    "uniform vec4 u_q;\n"                    /* x: P[1][1] * viewport height (px -> view units), y: scale of a_disp2,
+                                                z: proj[10], w: proj[11] (-1 perspective, 0 ortho) */
     "in vec3 a_pos;\n"
     "in vec3 a_disp;\n"
     "in float a_scal;\n"
@@ -141,8 +142,16 @@ static const char* kVS =
     /* "on top": squeeze depth into the front 2% of the range, so these points
        pass in front of the faces yet still hide one another near-to-far */
     "  if (u_p.z > 0.5) gl_Position.z = -gl_Position.w + (gl_Position.z + gl_Position.w) * 0.02;\n"
-    /* edges lie ON faces: pulled a hair toward the eye so they win against them */
-    "  gl_Position.z -= u_p.w * gl_Position.w;\n"
+    /* edges lie ON faces: pulled toward the eye by u_p.w view units so they win
+       against them. In view space, not in clip depth: a clip-depth pull is a
+       different distance at every depth and, with the eye close (near plane far
+       in front of the model), reaches from the back wall through the front one. */
+    "  if (u_q.w != 0.0) {\n"                /* perspective: w = -z_view */
+    "    float w2 = gl_Position.w - u_p.w;\n"
+    "    gl_Position.xy *= w2 / gl_Position.w;\n"    /* same screen point */
+    "    gl_Position.z += u_q.z * u_p.w;\n"
+    "    gl_Position.w = w2;\n"
+    "  } else gl_Position.z += u_q.z * u_p.w;\n"
     "  v_r = u_p.y * gl_Position.w / max(u_q.x, 1e-6);\n"
     "  v_vpos = (u_mv * vec4(p, 1.0)).xyz;\n"
     "  v_s = a_scal;\n"
@@ -472,8 +481,9 @@ void cv_render_outline(const uint32_t* fedge, size_t n_fedge) {
 
 typedef struct { sg_buffer pos, disp, scal, disp2; } vset;
 
-/* depth pull (NDC) for edges, which lie on faces; far too small to reach through a wall */
-#define PULL 2e-5f
+/* depth pull for edges, which lie on faces, as a fraction of the model size: above the
+   depth buffer's step with the eye close to the model, far below any wall thickness */
+#define PULL 3e-4f
 
 static void draw_layer(sg_pipeline pip, vset v, sg_buffer ib, int count, int mode, const float rgb[3],
                        bool shade, const cv_draw* d, float point_size, bool on_top, float pull, int first) {
@@ -499,10 +509,10 @@ static void draw_layer(sg_pipeline pip, vset v, sg_buffer ib, int count, int mod
     vs.p[0] = v.disp.id ? d->def_scale : 0.f;
     vs.p[1] = point_size;
     vs.p[2] = on_top ? 1.f : 0.f;
-    vs.p[3] = pull;
+    vs.p[3] = pull * d->diag;
     vs.q[0] = d->proj[5] * (float)d->vp_h;      /* pixels -> view units for the ball radius */
     vs.q[1] = v.disp2.id ? d->def_scale2 : 0.f;
-    vs.q[2] = vs.q[3] = 0;
+    vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
     sg_apply_uniforms(0, &SG_RANGE(vs));
     fs_params fs = {
         .color = { rgb[0], rgb[1], rgb[2], 1 },
