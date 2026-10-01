@@ -27,6 +27,7 @@ static int g_fail = 0, g_checks = 0;
 #include "t_export.h"
 #include "t_path.h"
 #include "t_video.h"
+#include "t_match.h"
 
 /* ---- helpers ---- */
 
@@ -953,6 +954,7 @@ int main(void) {
     test_fbd();
     test_inp();
     test_localsys();
+    test_match();
     test_gauss();
     test_dat();
     test_portal_wire();

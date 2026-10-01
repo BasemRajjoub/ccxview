@@ -253,6 +253,90 @@ bool cv_frd_build_maps(cv_frd* f, size_t* nd, size_t* ed) {
     return ok;
 }
 
+/* ---- element matching across two meshes ---------------------------------------- */
+
+static uint64_t mix64(uint64_t x) {
+    x += 0x9E3779B97F4A7C15ull;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+    return x ^ (x >> 31);
+}
+
+/* order-independent signature of an element's node ids and count */
+static uint64_t elem_sig(const cv_frd* f, uint32_t e) {
+    uint64_t s = mix64(f->eoff[e + 1] - f->eoff[e]), x = 0;
+    for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
+        uint64_t h = mix64(f->node_id[f->conn[j]]);
+        s += h; x ^= h * 0x2545F4914F6CDD1Dull;
+    }
+    return s ^ mix64(x);
+}
+
+static bool same_nodes(const cv_frd* a, uint32_t ea, const cv_frd* b, uint32_t eb) {
+    uint32_t n = a->eoff[ea + 1] - a->eoff[ea];
+    if (n != b->eoff[eb + 1] - b->eoff[eb] || elem_sig(a, ea) != elem_sig(b, eb)) return false;
+    for (uint32_t i = a->eoff[ea]; i < a->eoff[ea + 1]; i++) {   /* n <= 20: quadratic is fine */
+        uint32_t id = a->node_id[a->conn[i]];
+        bool hit = false;
+        for (uint32_t j = b->eoff[eb]; j < b->eoff[eb + 1] && !hit; j++) hit = b->node_id[b->conn[j]] == id;
+        if (!hit) return false;
+    }
+    return true;
+}
+
+static int cmp_u64pair(const void* a, const void* b) {
+    const uint64_t* x = a; const uint64_t* y = b;
+    return x[0] != y[0] ? (x[0] > y[0]) - (x[0] < y[0]) : (x[1] > y[1]) - (x[1] < y[1]);
+}
+
+uint32_t* cv_frd_match_elems(const cv_frd* from, const cv_frd* to, cv_elem_match* info) {
+    cv_elem_match m = {0};
+    uint32_t* map = malloc(CV_MAX(from->n_elems, 1) * sizeof(uint32_t));
+    uint8_t* used = calloc(CV_MAX(to->n_elems, 1), 1);
+    uint64_t* sig = NULL;
+    if (!map || !used) goto oom;
+    uint32_t left = 0;
+    for (uint32_t e = 0; e < from->n_elems; e++) {
+        uint32_t t = cv_frd_elem_index(to, from->elem_id[e]);
+        map[e] = t != UINT32_MAX && same_nodes(from, e, to, t) ? t : UINT32_MAX;
+        if (map[e] != UINT32_MAX) { used[t] = 1; m.by_id++; } else left++;
+    }
+    if (left) {                                     /* by node list: (signature, index), sorted */
+        sig = malloc(CV_MAX(to->n_elems, 1) * 2 * sizeof(uint64_t));
+        if (!sig) goto oom;
+        for (uint32_t t = 0; t < to->n_elems; t++) { sig[2 * t] = elem_sig(to, t); sig[2 * t + 1] = t; }
+        qsort(sig, to->n_elems, 2 * sizeof(uint64_t), cmp_u64pair);
+        for (uint32_t e = 0; e < from->n_elems; e++) {
+            if (map[e] != UINT32_MAX) continue;
+            uint64_t s = elem_sig(from, e);
+            uint32_t lo = 0, hi = to->n_elems;
+            while (lo < hi) { uint32_t k = (lo + hi) / 2; if (sig[2 * k] < s) lo = k + 1; else hi = k; }
+            for (; lo < to->n_elems && sig[2 * lo] == s; lo++) {
+                uint32_t t = (uint32_t)sig[2 * lo + 1];
+                if (used[t] || !same_nodes(from, e, to, t)) continue;   /* duplicates pair off in order */
+                int64_t off = (int64_t)to->elem_id[t] - from->elem_id[e];
+                m.shifted = m.by_nodes ? m.shifted && off == m.offset : true;
+                m.offset = off;
+                map[e] = t; used[t] = 1; m.by_nodes++;
+                break;
+            }
+        }
+        bool trust = m.by_id >= m.by_nodes;
+        for (uint32_t e = 0; e < from->n_elems; e++) {
+            if (map[e] != UINT32_MAX) continue;
+            uint32_t t = trust ? cv_frd_elem_index(to, from->elem_id[e]) : UINT32_MAX;
+            if (t != UINT32_MAX && !used[t]) { map[e] = t; m.by_id++; } else m.none++;
+        }
+    }
+    if (!m.shifted) m.offset = 0;
+    free(used); free(sig);
+    if (info) *info = m;
+    return map;
+oom:
+    free(map); free(used); free(sig);
+    return NULL;
+}
+
 /* ---- index pass ------------------------------------------------------------ */
 
 typedef struct { int step; cv_field_desc d; } field_rec;

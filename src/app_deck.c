@@ -23,6 +23,10 @@ static struct {
     v3        g0;
     float     gh;
     const cv_frd* gfor;         /* geometry the grid was built for */
+    /* deck element (index in D.d.mesh) -> shown element, built on first need */
+    uint32_t* emap;
+    const cv_frd* efor;         /* geometry emap was built for */
+    bool      etried;
     /* the local systems of the results (GLOBAL=NO), built on first need */
     cv_localsys L;
     bool      L_tried;
@@ -43,6 +47,7 @@ bool* deck_link_flags(void) { return D.link_on; }
 
 void deck_clear(void) {
     grid_free();
+    free(D.emap);
     cv_localsys_free(&D.L);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
@@ -137,6 +142,30 @@ const char* deck_material_name(uint32_t k) {
     return D.d.mats[k - 1];
 }
 
+/* ---- deck element -> shown element ------------------------------------------------
+   Matched once per geometry by node lists where the ids disagree. */
+
+static uint32_t deck_elem(const cv_frd* f, uint32_t id) {
+    if (f == &D.d.mesh || !D.d.mesh.n_elems) return cv_frd_elem_index(f, id);
+    if (D.efor != f) {
+        free(D.emap);
+        cv_elem_match m;
+        D.emap = cv_frd_match_elems(&D.d.mesh, f, &m);
+        D.efor = f;
+        if (D.emap && m.by_nodes && !D.etried) {
+            char msg[200], off[40] = "";
+            if (m.shifted) snprintf(off, sizeof off, " (offset %lld)", (long long)m.offset);
+            snprintf(msg, sizeof msg, "deck element ids differ from the .frd%s: matched by node lists", off);
+            if (m.none) snprintf(msg + strlen(msg), sizeof msg - strlen(msg), ", %u not found", m.none);
+            cv_msg_add(&G.msgs, 0, false, msg);
+        }
+        D.etried = true;
+    }
+    if (!D.emap) return cv_frd_elem_index(f, id);               /* out of memory: trust the ids */
+    uint32_t de = cv_frd_elem_index(&D.d.mesh, id);
+    return de == UINT32_MAX ? UINT32_MAX : D.emap[de];
+}
+
 /* ---- display group: ticked element sets --------------------------------------- */
 
 bool deck_any_elset_on(void) {
@@ -153,7 +182,7 @@ void deck_apply_mask(const cv_frd* f, uint8_t* vis) {
         const cv_set* s = &D.d.sets[i];
         if (!s->is_elem || !D.set_on[i]) continue;
         for (uint32_t j = 0; j < s->n; j++) {
-            uint32_t e = cv_frd_elem_index(f, s->ids[j]);
+            uint32_t e = deck_elem(f, s->ids[j]);
             if (e != UINT32_MAX) in[e] = 1;
         }
     }
@@ -498,7 +527,7 @@ static void surface_nodes(const cv_frd* f, const cv_surface* s, u32vec* out) {
         if (n != UINT32_MAX) cv_push(*out, n);
     }
     for (uint32_t j = 0; j < s->n; j++) {
-        uint32_t e = cv_frd_elem_index(f, s->elem[j]);
+        uint32_t e = deck_elem(f, s->elem[j]);
         uint32_t c[4];
         int k = e == UINT32_MAX ? 0 : cv_elem_face_corners(f, e, s->face[j], c);
         for (int i = 0; i < k; i++) cv_push(*out, c[i]);
@@ -583,7 +612,7 @@ static void refresh_glyphs(void) {
         }
         for (uint32_t i = 0; i < D.d.ndloads; i++) {
             const cv_dload* q = &D.d.dloads[i];
-            uint32_t e = cv_frd_elem_index(f, q->elem);
+            uint32_t e = deck_elem(f, q->elem);
             if (e != UINT32_MAX && G.vis && !G.vis[e]) continue;
             uint32_t c[4];
             int k = e == UINT32_MAX ? 0 : cv_elem_face_corners(f, e, q->face, c);
@@ -640,7 +669,7 @@ void deck_refresh_highlight(void) {
                 if (n != UINT32_MAX) push_node(&pp, &pd, n);
             }
             for (uint32_t j = 0; j < s->n; j++) {            /* element faces: as triangles */
-                uint32_t e = cv_frd_elem_index(f, s->elem[j]);
+                uint32_t e = deck_elem(f, s->elem[j]);
                 uint32_t c[4];
                 int k = e == UINT32_MAX ? 0 : cv_elem_face_corners(f, e, s->face[j], c);
                 if (k < 3) continue;
