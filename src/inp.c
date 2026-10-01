@@ -1121,6 +1121,7 @@ static bool shell_axes(const cv_inp* d, uint32_t de, const cv_csys* cs, double Q
 typedef struct {
     const cv_inp* d;
     const uint32_t* disc;
+    const uint32_t* f2d;    /* per .frd element: the deck element (index), UINT32_MAX none */
     uint32_t* lde;          /* per .frd element: the composite shell (deck index) a layer is of,
                                UINT32_MAX not a layer, LAYER_LOST one that cannot be matched */
     int32_t* lori;          /* per .frd element: the layer's orientation */
@@ -1139,7 +1140,7 @@ static bool layer_map(esys_ctx* c, const cv_frd* f) {
     uint32_t nx = 0, nl = 0;
     for (uint32_t e = 0; e < f->n_elems; e++) {
         c->lde[e] = UINT32_MAX;
-        if (cv_frd_elem_index(&d->mesh, f->elem_id[e]) == UINT32_MAX) x[nx++] = (cv_idix){ f->elem_id[e], (int32_t)e };
+        if (c->f2d[e] == UINT32_MAX) x[nx++] = (cv_idix){ f->elem_id[e], (int32_t)e };
     }
     for (uint32_t i = 0; i < d->ncomps; i++)
         if (cv_frd_elem_index(&d->mesh, d->comps[i].id) != UINT32_MAX) nl += d->comps[i].nlay;
@@ -1166,7 +1167,7 @@ static bool layer_map(esys_ctx* c, const cv_frd* f) {
    -1 cannot be rebuilt, -2 no element values (discrete) */
 static int elem_sys(const esys_ctx* c, const cv_frd* f, uint32_t e, const float* x, double Q[3][3]) {
     const cv_inp* d = c->d;
-    uint32_t id = f->elem_id[e];
+    uint32_t de = c->f2d[e], id = de != UINT32_MAX ? d->mesh.elem_id[de] : f->elem_id[e];
     if (d->ndisc && bsearch(&id, c->disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32)) return -2;
     if (c->lde && c->lde[e] != UINT32_MAX) {               /* a layer: the shell's system, its orientation */
         int32_t o = c->lori[e];
@@ -1177,7 +1178,6 @@ static int elem_sys(const esys_ctx* c, const cv_frd* f, uint32_t e, const float*
     if (o == -1) return -1;
     const cv_csys* cs = o >= 0 ? &d->orients[o] : NULL;
     if (d->nshells && bsearch(&id, d->shells, d->nshells, sizeof(uint32_t), cv_cmp_u32)) {
-        uint32_t de = cv_frd_elem_index(&d->mesh, id);
         return de != UINT32_MAX && shell_axes(d, de, cs, Q) ? 1 : -1;
     }
     if (!cs) return 0;
@@ -1197,7 +1197,10 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
     L->tr = malloc(nn * sizeof(int32_t));
     L->est = calloc(nn, 1);
     uint32_t* disc = malloc(CV_MAX(d->ndisc, 1) * sizeof(uint32_t));
-    if (!L->tr || !L->est || !disc) { free(disc); cv_localsys_free(L); return false; }
+    /* deck elements by node list where the solver renumbered them */
+    bool need = d->nnode_tr || d->nelem_ori || d->nshells;
+    uint32_t* f2d = need ? cv_frd_match_elems(f, &d->mesh, NULL) : NULL;
+    if (!L->tr || !L->est || !disc || (need && !f2d)) { free(disc); free(f2d); cv_localsys_free(L); return false; }
     for (uint32_t i = 0; i < f->n_nodes; i++) L->tr[i] = -1;
     for (uint32_t i = 0; i < d->ndisc; i++) disc[i] = d->disc[i].id;
     if (d->ndisc) qsort(disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32);
@@ -1210,7 +1213,7 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
             if (t >= 0) { L->tr[i] = t; L->any_tr = true; }
         }
         for (uint32_t e = 0; e < f->n_elems; e++) {
-            uint32_t de = cv_frd_elem_index(&d->mesh, f->elem_id[e]);
+            uint32_t de = f2d[e];
             if (de == UINT32_MAX) continue;
             for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
                 uint32_t n = f->conn[j];
@@ -1231,13 +1234,13 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
     /* element values: the systems of the elements around each node. Pass 1 takes the
        first one, pass 2 how far the others turn from it and their sum. */
     enum { SEEN = 1, BAD = 2, VARY = 4 };
-    if (!d->nelem_ori && !d->nshells) { free(disc); return true; }
+    if (!d->nelem_ori && !d->nshells) { free(disc); free(f2d); return true; }
     L->q = malloc((size_t)nn * 9 * sizeof(float));
     float* sum = calloc((size_t)nn * 9, sizeof(float));
     float* mincos = malloc(nn * sizeof(float));
-    if (!L->q || !sum || !mincos) { free(sum); free(mincos); free(disc); cv_localsys_free(L); return false; }
-    esys_ctx c = { d, disc, NULL, NULL };
-    if (d->ncomps && !layer_map(&c, f)) { free(c.lde); free(c.lori); free(sum); free(mincos); free(disc); cv_localsys_free(L); return false; }
+    if (!L->q || !sum || !mincos) { free(sum); free(mincos); free(disc); free(f2d); cv_localsys_free(L); return false; }
+    esys_ctx c = { d, disc, f2d, NULL, NULL };
+    if (d->ncomps && !layer_map(&c, f)) { free(c.lde); free(c.lori); free(sum); free(mincos); free(disc); free(f2d); cv_localsys_free(L); return false; }
     const double cos_lim = cos(CV_LOC_SPAN * 3.14159265358979323846 / 180);
     for (int pass = 0; pass < 2; pass++)
         for (uint32_t e = 0; e < f->n_elems; e++) {
@@ -1302,7 +1305,7 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
         }
         if (L->est[i] != CV_LOC_GLOBAL) L->any_ori = true;
     }
-    free(sum); free(mincos); free(disc); free(c.lde); free(c.lori);
+    free(sum); free(mincos); free(disc); free(f2d); free(c.lde); free(c.lori);
     return true;
 }
 

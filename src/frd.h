@@ -65,6 +65,19 @@ bool     cv_frd_parse(cv_frd* f, const char* data, size_t size);
 void     cv_frd_free(cv_frd* f);
 uint32_t cv_frd_node_index(const cv_frd* f, uint32_t id);   /* UINT32_MAX if absent */
 uint32_t cv_frd_elem_index(const cv_frd* f, uint32_t id);   /* UINT32_MAX if absent */
+/* How cv_frd_match_elems resolved the elements of `from`. */
+typedef struct {
+    uint32_t by_id, by_nodes, none;
+    bool     shifted;                    /* every by_nodes match at one id offset: */
+    int64_t  offset;                     /* to id - from id */
+} cv_elem_match;
+/* Per element of `from`, the index of the same element in `to` (UINT32_MAX none);
+   malloc'd, NULL on OOM. Ids are not trusted blindly: some solvers renumber
+   elements (FEMaster writes them from 0, its deck from 1). The same id counts when
+   it has the same nodes (by node id, any order), else the element of `to` with
+   those nodes; failing both, the same id while most ids agreed (CalculiX expands
+   shells into solids with new nodes but keeps element numbers). info may be NULL. */
+uint32_t* cv_frd_match_elems(const cv_frd* from, const cv_frd* to, cv_elem_match* info);
 /* (Re)build the node and element id maps from node_id / elem_id; false on OOM. */
 bool     cv_frd_build_maps(cv_frd* f, size_t* node_dups, size_t* elem_dups);
 
