@@ -96,6 +96,15 @@ struct nk_color mix(struct nk_color a, struct nk_color b, float t) {
     return nk_rgb((int)(a.r + (b.r - a.r) * t), (int)(a.g + (b.g - a.g) * t), (int)(a.b + (b.b - a.b) * t));
 }
 
+struct nk_color uii_bg(int alpha) {
+    return nk_rgba((int)(G.bg[0] * 255), (int)(G.bg[1] * 255), (int)(G.bg[2] * 255), alpha);
+}
+struct nk_color uii_on_bg(void) {
+    float l = 0.299f * G.bg[0] + 0.587f * G.bg[1] + 0.114f * G.bg[2];
+    return l > 0.5f ? nk_rgb(20, 20, 20) : nk_rgb(235, 235, 235);
+}
+struct nk_color uii_on_bg_dim(void) { return mix(uii_on_bg(), uii_bg(255), 0.4f); }
+
 static void restyle(struct nk_context* ctx, float s) {
     if (themes[U.theme].nk < 0) nk_style_default(ctx);
     else set_style(ctx, (enum theme)themes[U.theme].nk);

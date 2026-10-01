@@ -63,6 +63,11 @@ extern const struct uii_theme themes[NTHEMES];
 
 struct nk_color mix(struct nk_color a, struct nk_color b, float t);
 void apply_scale(struct nk_context* ctx);
+/* ink for what is drawn straight over the 3D view (legend, gizmo): the theme
+   does not know G.bg, so dark ink on a light background, light ink on a dark one */
+struct nk_color uii_on_bg(void);
+struct nk_color uii_on_bg_dim(void);      /* secondary text and ticks: the ink 40% toward G.bg */
+struct nk_color uii_bg(int alpha);        /* G.bg itself, for halos behind that ink */
 
 /* ---- ui.c: small helpers */
 void tip(struct nk_context* ctx, const char* text);    /* tooltip for the widget laid out next */

@@ -177,11 +177,31 @@ void panel_timebar(struct nk_context* ctx, float s, float row, float width) {
     nk_layout_row_end(ctx);
 }
 
+/* legend text sits on the 3D view: a faint G.bg plate behind it keeps it
+   readable where the model passes behind */
+static void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w,
+                     const char* txt, struct nk_color c) {
+    int n = (int)strlen(txt);
+    float tw = CV_MIN(f->width(f->userdata, f->height, txt, n), w);
+    nk_fill_rect(cv, nk_rect(x - 2, y, tw + 4, f->height), 3, uii_bg(110));
+    nk_draw_text(cv, nk_rect(x, y, w, f->height), txt, n, f, nk_rgba(0, 0, 0, 0), c);
+}
+
+/* nk_label in the ink colour, with the same plate */
+static void ink_label(struct nk_context* ctx, const char* txt) {
+    struct nk_rect b = nk_widget_bounds(ctx);
+    const struct nk_user_font* f = ctx->style.font;
+    float px = ctx->style.text.padding.x, tw = f->width(f->userdata, f->height, txt, (int)strlen(txt));
+    nk_fill_rect(nk_window_get_canvas(ctx), nk_rect(b.x + px - 2, b.y + (b.h - f->height) * 0.5f, CV_MIN(tw + 4, b.w), f->height),
+                 3, uii_bg(110));
+    nk_label_colored(ctx, txt, NK_TEXT_LEFT, uii_on_bg());
+}
+
 static void panel_group_legend(struct nk_context* ctx, float s, float row) {
     int a = G.faces_mode - FM_TYPE;
     const cv_axis* ax = &G.groups.axis[a];
     nk_layout_row_dynamic(ctx, row, 1);
-    nk_label(ctx, cv_axis_name(a), NK_TEXT_LEFT);
+    ink_label(ctx, cv_axis_name(a));
     for (int i = 0; i < ax->n && i < 60; i++) {
         if (!ax->on[i]) continue;
         const float* c = G.axis_rgb[a] + 3 * i;
@@ -190,13 +210,15 @@ static void panel_group_legend(struct nk_context* ctx, float s, float row) {
         nk_layout_row_template_push_static(ctx, row);
         nk_layout_row_template_push_dynamic(ctx);
         nk_layout_row_template_end(ctx);
-        if (nk_widget(&r, ctx) != NK_WIDGET_INVALID)
-            nk_fill_rect(nk_window_get_canvas(ctx), nk_rect(r.x + 2, r.y + 2, r.w - 4, r.h - 4), 0,
-                         nk_rgb_f(c[0], c[1], c[2]));
+        if (nk_widget(&r, ctx) != NK_WIDGET_INVALID) {
+            struct nk_rect sw = nk_rect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
+            nk_fill_rect(nk_window_get_canvas(ctx), sw, 0, nk_rgb_f(c[0], c[1], c[2]));
+            nk_stroke_rect(nk_window_get_canvas(ctx), sw, 0, 1, uii_on_bg());   /* a swatch of the background's colour */
+        }
         char lab[64];
         if (a == CV_AXIS_TYPE) snprintf(lab, sizeof lab, "%s", cv_frd_type_name((int)ax->value[i]));
         else snprintf(lab, sizeof lab, "%s %u", a == CV_AXIS_MAT ? "Material" : "Group", ax->value[i]);
-        nk_label(ctx, lab, NK_TEXT_LEFT);
+        ink_label(ctx, lab);
     }
 }
 
@@ -209,19 +231,19 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
                  a, b, G.nan_count ? ",  " : ",  ", G.nan_count);
         tip(ctx, tt);
     }
-    nk_label(ctx, G.field_label, NK_TEXT_LEFT);
+    ink_label(ctx, G.field_label);
     struct nk_rect area;
     nk_layout_row_dynamic(ctx, nk_window_get_content_region(ctx).h - row - 8 * s, 1);
     if (nk_widget(&area, ctx) == NK_WIDGET_INVALID) return;
     struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
     const struct nk_user_font* font = ctx->style.font;
+    const struct nk_color ink = uii_on_bg(), dim = uii_on_bg_dim();
 
     if (!(G.rmax > G.rmin)) {                     /* constant field: one value, not 13 equal labels */
         char txt[48], num[32];
         legend_num(num, sizeof num, G.rmin);
         snprintf(txt, sizeof txt, "uniform  %s", num);
-        nk_draw_text(cv, nk_rect(area.x, area.y, area.w, font->height), txt, (int)strlen(txt), font,
-                     nk_rgba(0, 0, 0, 0), P.text);
+        ink_text(cv, font, area.x, area.y, area.w, txt, ink);
         return;
     }
 
@@ -236,9 +258,8 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         for (int k = 0; k < 2; k++) {
             int g = (int)(gv[k] * 255);
             nk_fill_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, nk_rgb(g, g, g));
-            nk_stroke_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, 1, P.frame);
-            nk_draw_text(cv, nk_rect(area.x + bar_w + 7 * s, yy[k] + (sw - font->height) * 0.5f, area.w - bar_w - 7 * s, font->height),
-                         lab[k], (int)strlen(lab[k]), font, nk_rgba(0, 0, 0, 0), P.dim);
+            nk_stroke_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, 1, ink);
+            ink_text(cv, font, area.x + bar_w + 7 * s, yy[k] + (sw - font->height) * 0.5f, area.w - bar_w - 7 * s, lab[k], dim);
         }
         top += sw + gap;
     }
@@ -253,7 +274,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         nk_fill_rect(cv, nk_rect(area.x, y1, bar_w, y0 - y1 + 1), 0,
                      nk_rgb((int)(c[0] * 255), (int)(c[1] * 255), (int)(c[2] * 255)));
     }
-    nk_stroke_rect(cv, nk_rect(area.x, top, bar_w, h), 0, 1, P.frame);
+    nk_stroke_rect(cv, nk_rect(area.x, top, bar_w, h), 0, 1, ink);   /* a bar end the colour of the background still shows */
 
     /* labels on band boundaries, every k-th so they never overlap */
     int nlab = G.bands > 0 ? G.bands : 8;
@@ -266,9 +287,8 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         legend_num(txt, sizeof txt, v);
         float y = top + h * (1.f - t) - font->height * 0.5f;
         nk_stroke_line(cv, area.x + bar_w, y + font->height * 0.5f, area.x + bar_w + 4 * s,
-                       y + font->height * 0.5f, 1, P.tick);
-        nk_draw_text(cv, nk_rect(area.x + bar_w + 7 * s, y, area.w - bar_w - 7 * s, font->height),
-                     txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.text);
+                       y + font->height * 0.5f, 1, dim);
+        ink_text(cv, font, area.x + bar_w + 7 * s, y, area.w - bar_w - 7 * s, txt, ink);
     }
 }
 
@@ -471,13 +491,9 @@ void window_legend(struct nk_context* ctx, float s, float row) {
             lh = lb.h;
             r = nk_rect(lb.x, lb.y, lb.w, lb.h);
             if (nk_window_find(ctx, "Legend")) nk_window_set_bounds(ctx, "Legend", r);
-            /* see-through over the model, no frame; the colour bar itself stays opaque */
-            struct nk_color bg = ctx->style.window.fixed_background.type == NK_STYLE_ITEM_COLOR
-                               ? ctx->style.window.fixed_background.data.color : ctx->style.window.background;
-            bg.a = 170;
-            nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(bg));
+            /* no box, no frame: the text takes its colour from G.bg (uii_on_bg); the colour bar stays opaque */
+            nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(nk_rgba(0, 0, 0, 0)));
             nk_style_push_float(ctx, &ctx->style.window.border, 0);
-            nk_style_push_float(ctx, &ctx->style.window.rounding, 6 * s);
             nk_flags lf = by_group ? 0 : NK_WINDOW_NO_SCROLLBAR;
             if (lh > 80 * s && nk_begin(ctx, "Legend", r, lf)) {
                 struct nk_rect b = nk_window_get_bounds(ctx);
@@ -486,7 +502,6 @@ void window_legend(struct nk_context* ctx, float s, float row) {
                 else panel_legend(ctx, s, row);
             }
             if (lh > 80 * s) nk_end(ctx);
-            nk_style_pop_float(ctx);
             nk_style_pop_float(ctx);
             nk_style_pop_style_item(ctx);
         }
@@ -532,7 +547,6 @@ void window_axes(struct nk_context* ctx, float s) {
             for (int j = i; j > 0 && tips[j].depth > tips[j - 1].depth; j--) {
                 tip_t t = tips[j]; tips[j] = tips[j - 1]; tips[j - 1] = t;
             }
-        nk_fill_circle(cv, nk_rect(cx - r * 1.25f, cy - r * 1.25f, r * 2.5f, r * 2.5f), nk_rgba(30, 30, 32, 110));
         float tip_r = 9 * s;
         int clicked_view = -1;
         for (int i = 0; i < 6; i++) {
@@ -554,12 +568,11 @@ void window_axes(struct nk_context* ctx, float s) {
                 clicked_view = t->neg ? view_neg[t->axis] : view_pos[t->axis];
         }
         struct nk_rect centre = nk_rect(cx - 5 * s, cy - 5 * s, 10 * s, 10 * s);
-        nk_fill_circle(cv, centre, nk_rgb(200, 200, 200));
+        nk_fill_circle(cv, centre, uii_on_bg());
         if (!dragging && clicked_view < 0 && nk_input_is_mouse_click_in_rect(in, NK_BUTTON_LEFT, centre)) clicked_view = CV_VIEW_ISO;
         const char* proj = G.cam.ortho ? "ortho" : "persp";
         float pw = font->width(font->userdata, font->height, proj, (int)strlen(proj));
-        nk_draw_text(cv, nk_rect(cx - pw * 0.5f, wr.y + size - font->height - 2 * s, pw + 1, font->height),
-                     proj, (int)strlen(proj), font, nk_rgba(0, 0, 0, 0), nk_rgb(200, 200, 200));
+        ink_text(cv, font, cx - pw * 0.5f, wr.y + size - font->height - 2 * s, pw + 1, proj, uii_on_bg());
         if (clicked_view >= 0) {
             float d = G.cam.dist;                      /* snap the direction, keep the zoom */
             v3 t = G.cam.target;
