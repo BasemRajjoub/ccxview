@@ -247,7 +247,117 @@ static void sort_u64(uint64_t* a, size_t n) {
     free(tmp); free(cnt);
 }
 
+/* ---- feature edges ------------------------------------------------------------ */
+
+/* Unit normal of a face polygon by Newell's sum, which a slightly warped quad
+   does not upset; zero for a collapsed face. */
+static void face_normal(const cv_frd* f, const uint32_t* v, int n, float out[3]) {
+    double nx = 0, ny = 0, nz = 0;
+    for (int i = 0; i < n; i++) {
+        const float* a = f->xyz + 3 * v[i];
+        const float* b = f->xyz + 3 * v[(i + 1) % n];
+        nx += ((double)a[1] - b[1]) * ((double)a[2] + b[2]);
+        ny += ((double)a[2] - b[2]) * ((double)a[0] + b[0]);
+        nz += ((double)a[0] - b[0]) * ((double)a[1] + b[1]);
+    }
+    double l = sqrt(nx * nx + ny * ny + nz * nz);
+    if (!(l > 0)) { out[0] = out[1] = out[2] = 0; return; }
+    out[0] = (float)(nx / l); out[1] = (float)(ny / l); out[2] = (float)(nz / l);
+}
+
+/* corners of skin face `code` and whether it is a shell face */
+static int skin_face(const cv_frd* f, uint32_t code, uint32_t v[4], bool* shell) {
+    const face_t* ft; bool solid;
+    faces_of(f->etype[code >> 3], &ft, &solid);
+    *shell = !solid;
+    const face_t* fc = &ft[code & 7];
+    const uint32_t* cn = f->conn + f->eoff[code >> 3];
+    for (int i = 0; i < fc->n; i++) v[i] = cn[fc->v[i]];
+    return fc->n;
+}
+
+typedef struct {
+    uint64_t key;        /* a << 32 | b with a < b; 0 = empty (a == b is never stored) */
+    uint32_t face;       /* index into the skin's face list of its first face; UINT32_MAX: a beam */
+    uint8_t  count;      /* faces on it, saturating at 3 */
+    uint8_t  feat;
+} fe_slot;
+
+/* The two faces' normals are compared only when the second one arrives, so a
+   slot keeps the first face's index, not its normal: 16 bytes per edge. */
+static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg) {
+    size_t cap = 16;
+    while (cap < 2 * s->n_edge + 2) cap *= 2;
+    fe_slot* h = calloc(cap, sizeof *h);
+    if (!h) return false;
+    const float cos_t = cosf(crease_deg * 3.14159265f / 180.f);
+    size_t nfeat = 0;
+
+    for (size_t fi = 0; fi < s->n_face; fi++) {
+        uint32_t code = s->face[fi], e = code >> 3, v[4];
+        bool shell;
+        int n = skin_face(f, code, v, &shell);
+        float nm[3];
+        bool have_nm = false;
+        for (int i = 0; i < n; i++) {
+            uint32_t a = v[i], b = v[(i + 1) % n];
+            if (a == b) continue;
+            if (a > b) { uint32_t t = a; a = b; b = t; }
+            uint64_t key = ((uint64_t)a << 32) | b;
+            size_t j = (size_t)((key * 0x9E3779B97F4A7C15ull) >> 20) & (cap - 1);
+            while (h[j].key && h[j].key != key) j = (j + 1) & (cap - 1);
+            fe_slot* sl = &h[j];
+            if (!sl->key) { sl->key = key; sl->face = (uint32_t)fi; sl->count = 1; continue; }
+            if (sl->count >= 2 || sl->face == UINT32_MAX) { sl->count = 3; sl->feat = 1; continue; }
+            sl->count = 2;
+            uint32_t code0 = s->face[sl->face], e0 = code0 >> 3, v0[4];
+            bool shell0;
+            int n0 = skin_face(f, code0, v0, &shell0);
+            if (f->etype[e0] != f->etype[e] || (f->emat && f->emat[e0] != f->emat[e])) { sl->feat = 1; continue; }
+            if (!have_nm) { face_normal(f, v, n, nm); have_nm = true; }
+            float n0m[3];
+            face_normal(f, v0, n0, n0m);
+            float d = nm[0] * n0m[0] + nm[1] * n0m[1] + nm[2] * n0m[2];
+            if (shell || shell0) d = fabsf(d);
+            bool degenerate = (nm[0] == 0 && nm[1] == 0 && nm[2] == 0) || (n0m[0] == 0 && n0m[1] == 0 && n0m[2] == 0);
+            if (!degenerate && d < cos_t) sl->feat = 1;
+        }
+    }
+    for (uint32_t e = 0; e < f->n_elems; e++) {        /* a beam is its own outline */
+        if (vis && !vis[e]) continue;
+        int t = f->etype[e];
+        if (t != 11 && t != 12) continue;
+        const uint32_t* cn = f->conn + f->eoff[e];
+        for (int i = 0; i < (t == 11 ? 1 : 2); i++) {
+            uint32_t a = cn[i], b = cn[i + 1];
+            if (a == b) continue;
+            if (a > b) { uint32_t tt = a; a = b; b = tt; }
+            uint64_t key = ((uint64_t)a << 32) | b;
+            size_t j = (size_t)((key * 0x9E3779B97F4A7C15ull) >> 20) & (cap - 1);
+            while (h[j].key && h[j].key != key) j = (j + 1) & (cap - 1);
+            if (!h[j].key) { h[j].key = key; h[j].face = UINT32_MAX; h[j].count = 1; }
+            h[j].feat = 1;
+        }
+    }
+    for (size_t j = 0; j < cap; j++) nfeat += h[j].key && (h[j].feat || h[j].count == 1);
+    s->fedge = malloc(CV_MAX(nfeat, 1) * 2 * sizeof *s->fedge);
+    if (!s->fedge) { free(h); return false; }
+    size_t k = 0;
+    for (size_t j = 0; j < cap; j++)
+        if (h[j].key && (h[j].feat || h[j].count == 1)) {
+            s->fedge[k++] = (uint32_t)(h[j].key >> 32);
+            s->fedge[k++] = (uint32_t)h[j].key;
+        }
+    s->n_fedge = nfeat;
+    free(h);
+    return true;
+}
+
 bool cv_skin_build(cv_skin* s, const cv_frd* f, const uint8_t* vis) {
+    return cv_skin_build_crease(s, f, vis, CV_CREASE_DEG);
+}
+
+bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg) {
     memset(s, 0, sizeof *s);
     const uint32_t N = f->n_nodes, E = f->n_elems;
     emit_t o = {0};
@@ -364,6 +474,7 @@ bool cv_skin_build(cv_skin* s, const cv_frd* f, const uint8_t* vis) {
     s->face = o.faces.a;        s->n_face = o.faces.n;
     cv_free_vec(o.edges);
     free(off); free(faces); free(used);
+    if (!skin_features(s, f, vis, crease_deg)) { cv_skin_free(s); return false; }
     return true;
 
 oom:
@@ -374,7 +485,7 @@ oom:
 }
 
 void cv_skin_free(cv_skin* s) {
-    free(s->tri); free(s->tri_elem); free(s->edge); free(s->pt); free(s->face);
+    free(s->tri); free(s->tri_elem); free(s->edge); free(s->pt); free(s->face); free(s->fedge);
     memset(s, 0, sizeof *s);
 }
 

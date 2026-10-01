@@ -33,7 +33,7 @@ typedef struct {
 
 static const setting S[] = {
     SEC("Layers"),
-    B(show_faces), I(faces_mode, 0, FM_N - 1), B(show_edges), B(edges_field), B(edges_auto),
+    B(show_faces), I(faces_mode, 0, FM_N - 1), B(show_edges), B(edges_field), B(edges_auto), B(show_outline), F(outline_angle, 0.1f, 180),
     B(show_nodes), B(nodes_field), F(point_size, 0.5f, 64), B(gp_colored), F(gp_size, 0.5f, 256),
     B(show_bc), B(show_loads), F(bc_scale, 0.01f, 100), F(load_scale, 0.01f, 100),
     B(show_disc), B(show_links), B(show_hl), F(hl_size, 0.5f, 64),

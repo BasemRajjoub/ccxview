@@ -481,6 +481,14 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
         nk_checkbox_label(ctx, "Edges", &G.show_edges);
         tip(ctx, "Paint the field on the edges too (else dark lines)");
         nk_checkbox_label(ctx, "coloured", &G.edges_field);
+        tip(ctx, "Part outline: borders, creases sharper than the angle, material and type changes.\nStays when the mesh edges hide.");
+        nk_checkbox_label(ctx, "Outline", &G.show_outline);
+        if (G.show_outline) {
+            float a = G.outline_angle;
+            tip(ctx, "Faces meeting at more than this many degrees make a crease");
+            nk_property_float(ctx, "#crease", 1.f, &a, 180.f, 5.f, 0.5f);
+            if (a != G.outline_angle) { G.outline_angle = a; app_groups_changed(); }
+        } else nk_spacing(ctx, 1);
         bool dense = G.edges_auto && G.show_faces && G.edges_dense;
         if ((G.show_edges || G.show_nodes || G.show_gp) && G.show_faces) {
             tip(ctx, "Hide the edges, nodes and Gauss points while the mesh is denser than ~3 px on\nscreen, where they would paint the surface black; zoom in to see them");
