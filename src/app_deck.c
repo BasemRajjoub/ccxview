@@ -27,6 +27,11 @@ static struct {
     uint32_t* emap;
     const cv_frd* efor;         /* geometry emap was built for */
     bool      etried;
+    /* nodes the deck has but the results do not (ccx drops nodes that only sit in a
+       constraint: coupling and rigid body reference nodes), with the displacement
+       estimated from the nodes they are tied to, so their glyphs and spiders ride
+       along with the shape. Sorted by id. */
+    uint32_t* est_id; float* est_d; uint32_t n_est;
     /* the local systems of the results (GLOBAL=NO), built on first need */
     cv_localsys L;
     bool      L_tried;
@@ -48,6 +53,7 @@ bool* deck_link_flags(void) { return D.link_on; }
 void deck_clear(void) {
     grid_free();
     free(D.emap);
+    free(D.est_id); free(D.est_d);
     cv_localsys_free(&D.L);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
@@ -386,6 +392,10 @@ static bool deck_node_pd(uint32_t id, float p[3], float d[6]) {
     if (dn == UINT32_MAX) return false;
     memcpy(p, D.d.mesh.xyz + 3 * dn, 3 * sizeof(float));
     for (int k = 0; k < 6; k++) d[k] = 0;
+    if (D.n_est) {
+        uint32_t* e = bsearch(&id, D.est_id, D.n_est, sizeof(uint32_t), cv_cmp_u32);
+        if (e) memcpy(d, D.est_d + 6 * (e - D.est_id), 6 * sizeof(float));
+    }
     if (G.crop_on)                                  /* the crop box applies to these too */
         for (int k = 0; k < 3; k++) if (p[k] < G.job.crop_lo[k] || p[k] > G.job.crop_hi[k]) return false;
     return true;
@@ -534,6 +544,45 @@ static void surface_nodes(const cv_frd* f, const cv_surface* s, u32vec* out) {
     }
 }
 
+/* Displacement of the deck-only nodes: the mean over the nodes each one is tied to
+   through its links (a rigid body's or coupling's driven set, an equation's other
+   terms). An estimate, no rotation; enough for the glyphs to follow the shape. */
+static void estimate_absent(void) {
+    free(D.est_id); free(D.est_d);
+    D.est_id = NULL; D.est_d = NULL; D.n_est = 0;
+    if (!D.on || !G.loaded || !D.d.mesh.n_nodes || !G.disp) return;
+    for (int i = 0; i < D.d.nlinks; i++) {
+        const cv_link* l = &D.d.links[i];
+        if (!l->ref || cv_frd_node_index(&G.frd, l->ref) != UINT32_MAX) continue;
+        u32vec tgt = {0};
+        for (uint32_t j = 0; j < l->n; j++) {
+            uint32_t n = shown_node(&G.frd, l->nodes[j]);
+            if (n != UINT32_MAX) cv_push(tgt, n);
+        }
+        if (l->surf[0] >= 0 && l->surf[0] < D.d.nsurfs) surface_nodes(&G.frd, &D.d.surfs[l->surf[0]], &tgt);
+        if (tgt.n) {
+            float m[6] = {0}, d[6];
+            for (size_t j = 0; j < tgt.n; j++) {
+                app_node_disp6(tgt.a[j], d);
+                for (int k = 0; k < 6; k++) m[k] += d[k] / (float)tgt.n;
+            }
+            uint32_t* id = realloc(D.est_id, (D.n_est + 1) * sizeof(uint32_t));
+            float* dd = realloc(D.est_d, (D.n_est + 1) * 6 * sizeof(float));
+            if (id) D.est_id = id;
+            if (dd) D.est_d = dd;
+            if (id && dd) { D.est_id[D.n_est] = l->ref; memcpy(D.est_d + 6 * D.n_est, m, sizeof m); D.n_est++; }
+        }
+        cv_free_vec(tgt);
+    }
+    /* sort by id for the lookup; a node driven by two links keeps the first */
+    for (uint32_t i = 1; i < D.n_est; i++)
+        for (uint32_t j = i; j > 0 && D.est_id[j] < D.est_id[j - 1]; j--) {
+            uint32_t t = D.est_id[j]; D.est_id[j] = D.est_id[j - 1]; D.est_id[j - 1] = t;
+            float td[6]; memcpy(td, D.est_d + 6 * j, sizeof td);
+            memcpy(D.est_d + 6 * j, D.est_d + 6 * (j - 1), sizeof td); memcpy(D.est_d + 6 * (j - 1), td, sizeof td);
+        }
+}
+
 /* spiders: reference node to every driven node (equation: first term to the others) */
 static void refresh_links(void) {
     cv_fvec lp = {0}, ld = {0};
@@ -647,6 +696,7 @@ void deck_refresh_highlight(void) {
         D.nvis = calloc(G.frd.n_nodes, 1);
         for (size_t i = 0; D.nvis && i < G.skin.n_pt; i++) D.nvis[G.skin.pt[i]] = 1;
     }
+    estimate_absent();
     refresh_glyphs();
     refresh_discrete();
     refresh_links();
