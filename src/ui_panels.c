@@ -1,0 +1,505 @@
+/* ui_panels.c -- the scene sidebar on the left: the file box and recent files,
+   Layers, Groups (with the deck's and cgx's sets), Fields and Export. Its View
+   section is in ui_view.c. */
+#include "app.h"
+#include "ui.h"
+#include "cfg.h"
+#include "sokol_app.h"
+#include "sokol_gfx.h"
+#include "nk.h"
+#include "sokol_nuklear.h"
+#include <math.h>
+#include "ui_int.h"
+
+/* ---- panels --------------------------------------------------------------------- */
+
+static void axis_label(char* out, size_t n, int axis, uint32_t v, uint32_t count) {
+    if (axis == CV_AXIS_TYPE) snprintf(out, n, "%s  (%u)", cv_frd_type_name((int)v), count);
+    else if (axis == CV_AXIS_MAT) {
+        const char* nm = deck_material_name(v);          /* the deck names its materials */
+        if (nm) snprintf(out, n, "%s  (%u)", nm, count);
+        else if (v) snprintf(out, n, "Material %u  (%u)", v, count);
+        else snprintf(out, n, "no material  (%u)", count);
+    }
+    else snprintf(out, n, "Group %u  (%u)", v, count);
+}
+
+static int g_pick_axis = -1, g_pick_idx = -1;   /* open colour picker (group swatch) */
+
+/* The deck's named sets: element sets are a display group (tick to show only
+   them; none ticked = everything), node sets and surfaces are highlights. */
+static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
+    const cv_inp* d = deck_get();
+    if (!d) return;
+    bool* on = deck_set_flags();
+    bool* son = deck_surf_flags();
+    int ne = 0, nn = 0;
+    for (int i = 0; i < d->nsets; i++) { if (d->sets[i].is_elem) ne++; else nn++; }
+    char lab[96];
+    if (ne && nk_tree_push_id(ctx, NK_TREE_NODE, "Element sets", NK_MAXIMIZED, 40)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        if (deck_any_elset_on() && nk_button_label(ctx, "show everything")) {
+            for (int i = 0; i < d->nsets; i++) if (d->sets[i].is_elem) on[i] = false;
+            app_groups_changed();
+        }
+        int k = 0;
+        for (int i = 0; i < d->nsets && k < 500; i++) {
+            if (!d->sets[i].is_elem) continue;
+            k++;
+            snprintf(lab, sizeof lab, "%s  (%u)", d->sets[i].name, d->sets[i].n);
+            if (nk_checkbox_label(ctx, lab, &on[i])) app_groups_changed();
+        }
+        nk_tree_pop(ctx);
+    }
+    if (nn && nk_tree_push_id(ctx, NK_TREE_NODE, "Node sets", NK_MINIMIZED, 41)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        int k = 0;
+        for (int i = 0; i < d->nsets && k < 500; i++) {
+            if (d->sets[i].is_elem) continue;
+            k++;
+            snprintf(lab, sizeof lab, "%s  (%u)", d->sets[i].name, d->sets[i].n);
+            if (nk_checkbox_label(ctx, lab, &on[i])) { G.show_hl = true; deck_refresh_highlight(); }
+        }
+        nk_tree_pop(ctx);
+    }
+    if (d->nlinks && nk_tree_push_id(ctx, NK_TREE_NODE, "Couplings", NK_MINIMIZED, 44)) {
+        static const char* kinds[] = { "rigid", "kinematic", "distributing", "equation", "tie", "contact" };
+        bool* lon = deck_link_flags();
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (int i = 0; i < d->nlinks && i < 500; i++) {
+            const cv_link* l = &d->links[i];
+            if (l->kind == CV_LINK_TIE || l->kind == CV_LINK_CONTACT) {
+                const char* a = l->surf[0] >= 0 ? d->surfs[l->surf[0]].name : "?";
+                const char* b = l->surf[1] >= 0 ? d->surfs[l->surf[1]].name : "?";
+                snprintf(lab, sizeof lab, "%s %s: %s / %s", kinds[l->kind], l->name, a, b);
+            } else if (l->surf[0] >= 0) {
+                snprintf(lab, sizeof lab, "%s %s  (node %u, %s)", kinds[l->kind], l->name, l->ref, d->surfs[l->surf[0]].name);
+            } else {
+                snprintf(lab, sizeof lab, "%s %s  (node %u, %u)", kinds[l->kind], l->name, l->ref, l->n);
+            }
+            if (nk_checkbox_label(ctx, lab, &lon[i])) { G.show_links = true; G.show_hl = true; deck_refresh_highlight(); }
+        }
+        nk_tree_pop(ctx);
+    }
+    if (d->nsurfs && nk_tree_push_id(ctx, NK_TREE_NODE, "Surfaces", NK_MINIMIZED, 42)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (int i = 0; i < d->nsurfs && i < 500; i++) {
+            snprintf(lab, sizeof lab, "%s  (%u)", d->surfs[i].name, d->surfs[i].n ? d->surfs[i].n : d->surfs[i].nn);
+            if (nk_checkbox_label(ctx, lab, &son[i])) { G.show_hl = true; deck_refresh_highlight(); }
+        }
+        nk_tree_pop(ctx);
+    }
+}
+
+/* cgx sets: tick to show only what they hold (their geometry, and their
+   elements when cgx meshed the script). */
+static void panel_geo_sets(struct nk_context* ctx, float row) {
+    const cv_fbd* g = geo_get();
+    if (!g || !g->nsets) return;
+    bool* on = geo_set_flags();
+    if (!nk_tree_push_id(ctx, NK_TREE_NODE, "cgx sets", NK_MAXIMIZED, 43)) return;
+    nk_layout_row_dynamic(ctx, row, 1);
+    if (geo_any_on() && nk_button_label(ctx, "show everything")) geo_show_all();
+    char lab[96];
+    for (int i = 0, k = 0; i < g->nsets && k < 500; i++) {
+        const cv_gset* st = &g->sets[i];
+        if (geo_set_hidden(st->name)) continue;
+        k++;
+        uint32_t ng = st->npts + st->ncrv + st->nsrf;
+        if (st->nel) snprintf(lab, sizeof lab, "%s  (%u el)", st->name, st->nel);
+        else if (ng) snprintf(lab, sizeof lab, "%s  (%u)", st->name, ng);
+        else snprintf(lab, sizeof lab, "%s  (%u nodes)", st->name, st->nnod);
+        if (nk_checkbox_label(ctx, lab, &on[i])) geo_set_toggled(i);
+    }
+    nk_tree_pop(ctx);
+}
+
+/* ---- Layers: what is drawn and how it is coloured */
+static void section_layers(struct nk_context* ctx, float s, float row) {
+    /* layers */
+    if (nk_tree_state_push(ctx, NK_TREE_TAB, "Layers", (enum nk_collapse_states*)&G.tree[CV_TREE_LAYERS])) {
+        if (geo_loaded()) {                      /* cgx geometry */
+            nk_layout_row_dynamic(ctx, row, 3);
+            nk_checkbox_label(ctx, "Points", &G.show_geo_pts);
+            nk_checkbox_label(ctx, "Lines", &G.show_geo_crv);
+            nk_checkbox_label(ctx, "Surfs", &G.show_geo_srf);
+            if (G.show_geo_pts) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                nk_property_float(ctx, "#geometry point size", 1.f, &G.geo_size, 20.f, 1.f, 0.1f);
+            }
+        }
+        if (deck_has_bc() || deck_has_loads() || deck_has_discrete()) {   /* the deck's supports, loads, springs */
+            nk_layout_row_dynamic(ctx, row, 2);
+            if (deck_has_bc() || deck_has_loads()) {
+                tip(ctx, "*BOUNDARY: a cone per fixed dof, tip on the node (double base for a rotation),\ncross for a temperature");
+                nk_checkbox_label(ctx, "Supports", &G.show_bc);
+                tip(ctx, "*CLOAD as arrows at the nodes, *DLOAD pressures at the faces;\nlength follows the magnitude");
+                nk_checkbox_label(ctx, "Loads", &G.show_loads);
+            }
+            if (deck_has_discrete()) {
+                tip(ctx, "Springs as zigzags, dashpots as pistons, gaps as facing bars, masses as cubes.\nA one-node spring points along its dof to a ground bar.");
+                nk_checkbox_label(ctx, "Springs, masses", &G.show_disc);
+            }
+            if (deck_get() && deck_get()->nlinks) {
+                tip(ctx, "Rigid bodies, couplings and equations as spiders from the reference node;\ntick single ones under Groups > Couplings");
+                nk_checkbox_label(ctx, "Couplings", &G.show_links);
+            }
+        }
+        nk_layout_row_dynamic(ctx, row, 2);
+        tip(ctx, "Balls at the field's minimum and maximum (legend settings: go there)");
+        nk_checkbox_label(ctx, "Min / max", &G.show_markers);
+        tip(ctx, "The undeformed edges in grey behind the deformed shape");
+        nk_checkbox_label(ctx, "Undeformed", &G.show_ghost);
+        nk_checkbox_label(ctx, "Faces", &G.show_faces);
+        {
+            static const char* fm_names[FM_N] = { "field", "by type", "by material", "by group", "plain" };
+            int fm = nk_combo(ctx, fm_names, FM_N, G.faces_mode, (int)row, nk_vec2(150 * s, 5 * row + 20 * s));
+            if (fm != G.faces_mode) app_set_faces_mode(fm);
+        }
+        tip(ctx, "Edges of the exterior faces");
+        nk_checkbox_label(ctx, "Edges", &G.show_edges);
+        tip(ctx, "Paint the field on the edges too (else dark lines)");
+        nk_checkbox_label(ctx, "coloured", &G.edges_field);
+        tip(ctx, "Part outline: borders, creases sharper than the angle, material and type changes.\nStays when the mesh edges hide.");
+        nk_checkbox_label(ctx, "Outline", &G.show_outline);
+        if (G.show_outline) {
+            float a = G.outline_angle;
+            tip(ctx, "Faces meeting at more than this many degrees make a crease");
+            nk_property_float(ctx, "#crease", 1.f, &a, 180.f, 5.f, 0.5f);
+            if (a != G.outline_angle) { G.outline_angle = a; app_groups_changed(); }
+        } else nk_spacing(ctx, 1);
+        bool dense = G.edges_auto && G.show_faces && G.edges_dense;
+        if ((G.show_edges || G.show_nodes || G.show_gp) && G.show_faces) {
+            tip(ctx, "Hide the edges, nodes and Gauss points while the mesh is denser than ~3 px on\nscreen, where they would paint the surface black; zoom in to see them");
+            nk_checkbox_label(ctx, "hide when dense", &G.edges_auto);
+            if (dense) nk_label_colored(ctx, "hidden: zoom in", NK_TEXT_LEFT, P.warn);
+            else nk_spacing(ctx, 1);
+        }
+        tip(ctx, "Nodes of the visible elements, as small balls");
+        nk_checkbox_label(ctx, "Nodes", &G.show_nodes);
+        tip(ctx, "Paint the field on the nodes too");
+        nk_checkbox_label(ctx, "coloured", &G.nodes_field);
+        if (G.show_nodes) {
+            nk_layout_row_dynamic(ctx, row, 1);
+            nk_property_float(ctx, "#point size", 1.f, &G.point_size, 12.f, 1.f, 0.1f);
+        }
+        {                                        /* integration points, next to the nodes */
+            nk_layout_row_dynamic(ctx, row, 2);
+            tip(ctx, "Integration points: real .dat values when a .dat field is selected,\nelse the nodal field interpolated there");
+            if (nk_checkbox_label(ctx, "Gauss pts", &G.show_gp)) app_gauss_changed();
+            tip(ctx, "Colour the points by the field");
+            nk_checkbox_label(ctx, "coloured", &G.gp_colored);
+            if (G.show_gp) {
+                nk_layout_row_dynamic(ctx, row, 2);
+                nk_property_float(ctx, "#size", 1.f, &G.gp_size, 30.f, 1.f, 0.1f);
+                tip(ctx, "Draw the points through the faces (they sit inside the elements)");
+                nk_checkbox_label(ctx, "x-ray", &G.gp_on_top);
+            }
+            if (app_field_is_vector()) {             /* arrows of DISP, FORC, FLUX, ... */
+                nk_layout_row_dynamic(ctx, row, 2);
+                tip(ctx, G.comp < CV_COMP_MISES ? "The principal direction at the nodes: arrow pairs out for tension, in for compression"
+                                                : "The field as arrows at the nodes, the longest one 'vec %' of the model");
+                if (nk_checkbox_label(ctx, G.comp < CV_COMP_MISES ? "Directions" : "Vectors", &G.show_vec)) app_vectors_changed();
+                tip(ctx, "Colour the arrows by the selected scalar (else white)");
+                nk_checkbox_label(ctx, "coloured", &G.vec_colored);
+            }
+        }
+        nk_tree_pop(ctx);
+    }
+
+}
+
+/* ---- Groups: element type / material / group, deck and cgx sets */
+static void section_groups(struct nk_context* ctx, float s, float row) {
+    /* groups */
+    if (nk_tree_state_push(ctx, NK_TREE_TAB, "Groups", (enum nk_collapse_states*)&G.tree[CV_TREE_GROUPS])) {
+        for (int a = 0; a < CV_AXIS_N; a++) {
+            cv_axis* ax = &G.groups.axis[a];
+            if (!nk_tree_push_id(ctx, NK_TREE_NODE, cv_axis_name(a), a == 0 ? NK_MAXIMIZED : NK_MINIMIZED, a))
+                continue;
+            if (ax->n > 1) {
+                nk_layout_row_dynamic(ctx, row, 2);
+                if (nk_button_label(ctx, "all"))  { for (int i = 0; i < ax->n; i++) ax->on[i] = true;  app_groups_changed(); }
+                if (nk_button_label(ctx, "none")) { for (int i = 0; i < ax->n; i++) ax->on[i] = false; app_groups_changed(); }
+            }
+            int shown = CV_MIN(ax->n, 500);            /* keep the list usable */
+            for (int i = 0; i < shown; i++) {
+                char lab[64];
+                axis_label(lab, sizeof lab, a, ax->value[i], ax->count[i]);
+                nk_layout_row_template_begin(ctx, row);
+                nk_layout_row_template_push_static(ctx, row * 1.4f);
+                nk_layout_row_template_push_dynamic(ctx);
+                nk_layout_row_template_end(ctx);
+                /* colour swatch: a plain colour button; clicking it opens Nuklear's
+                   picker in a popup. Picking also colours the faces by this axis. */
+                float* rgb = G.axis_rgb[a] ? G.axis_rgb[a] + 3 * i : NULL;
+                struct nk_rect sb = nk_widget_bounds(ctx);
+                struct nk_color sw = rgb ? nk_rgb_f(rgb[0], rgb[1], rgb[2]) : nk_rgb(128, 128, 128);
+                if (nk_button_color(ctx, sw) && rgb) {
+                    bool same = g_pick_axis == a && g_pick_idx == i;
+                    g_pick_axis = same ? -1 : a;
+                    g_pick_idx = same ? -1 : i;
+                }
+                if (rgb && g_pick_axis == a && g_pick_idx == i) {
+                    struct nk_rect clip = ctx->current->layout->clip;
+                    float pw = 230 * s, ph = 170 * s + 3 * row + 6 * ctx->style.window.spacing.y;
+                    struct nk_rect pr = nk_rect(sb.x + sb.w + 4 * s - clip.x, sb.y + sb.h - clip.y, pw, ph);
+                    if (nk_popup_begin(ctx, NK_POPUP_STATIC, "pick", NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR, pr)) {
+                        nk_layout_row_dynamic(ctx, 170 * s, 1);
+                        struct nk_colorf cf = { rgb[0], rgb[1], rgb[2], 1 };
+                        struct nk_colorf nf = nk_color_picker(ctx, cf, NK_RGB);
+                        nk_layout_row_dynamic(ctx, row, 3);
+                        nf.r = nk_propertyf(ctx, "#R", 0, nf.r, 1, 0.01f, 0.005f);
+                        nf.g = nk_propertyf(ctx, "#G", 0, nf.g, 1, 0.01f, 0.005f);
+                        nf.b = nk_propertyf(ctx, "#B", 0, nf.b, 1, 0.01f, 0.005f);
+                        if (nf.r != rgb[0] || nf.g != rgb[1] || nf.b != rgb[2]) {
+                            rgb[0] = nf.r; rgb[1] = nf.g; rgb[2] = nf.b;
+                            if (G.faces_mode != FM_TYPE + a) app_set_faces_mode(FM_TYPE + a);
+                            else app_group_colors_changed();
+                        }
+                        nk_layout_row_dynamic(ctx, row, 1);
+                        if (nk_button_label(ctx, "done")) {
+                            g_pick_axis = g_pick_idx = -1;
+                            nk_popup_close(ctx);
+                        }
+                        nk_popup_end(ctx);
+                    } else {
+                        g_pick_axis = g_pick_idx = -1;
+                    }
+                }
+                if (nk_checkbox_label(ctx, lab, &ax->on[i])) app_groups_changed();
+            }
+            if (ax->n > shown) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                nk_label(ctx, "(list truncated)", NK_TEXT_LEFT);
+            }
+            nk_tree_pop(ctx);
+        }
+        if (geo_loaded()) panel_geo_sets(ctx, row);   /* cgx sets drive the mesh's too */
+        else panel_deck_sets(ctx, s, row);
+        nk_tree_pop(ctx);
+    }
+
+}
+
+/* ---- Fields of the current step, and the .dat ones */
+static void section_fields(struct nk_context* ctx, float s, float row) {
+    /* fields of the current step */
+    if (nk_tree_state_push(ctx, NK_TREE_TAB, "Fields", (enum nk_collapse_states*)&G.tree[CV_TREE_FIELDS])) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        if (G.frd.n_steps == 0) {
+            nk_label(ctx, "No results in this file.", NK_TEXT_LEFT);
+        } else {
+            const cv_step* st = &G.frd.steps[G.step];
+            nk_bool em = G.elem_mode;
+            tip(ctx, "One value per element (mean of its nodes) instead of a smooth nodal field");
+            if (nk_checkbox_label(ctx, "Per element (flat)", &em)) app_set_elem_mode(em);
+            {   /* components of vectors and tensors in a cylindrical system */
+                static const char* cs[] = { "coordinates: global x y z", "cylindrical about X", "cylindrical about Y", "cylindrical about Z" };
+                tip(ctx, "Vector and tensor components in a cylindrical system: r radial, t hoop, a axial (.frd fields; invariants stay)");
+                int c = nk_combo(ctx, cs, 4, G.csys, (int)row, nk_vec2(240 * s, 4 * row + 20 * s));
+                bool ch = c != G.csys;
+                G.csys = c;
+                if (G.csys) {
+                    float st = G.diag * 0.01f + 1e-30f;
+                    static const char* nm[3] = { "#x0", "#y0", "#z0" };
+                    nk_layout_row_dynamic(ctx, row, 3);
+                    for (int k = 0; k < 3; k++) {
+                        tip(ctx, "A point on the axis");
+                        float v = nk_propertyf(ctx, nm[k], -1e30f, G.csys_o[k], 1e30f, st, st * 0.1f);
+                        if (v != G.csys_o[k]) { G.csys_o[k] = v; ch = true; }
+                    }
+                }
+                if (ch) app_select(G.field_name, G.comp);
+            }
+            if (G.cmp_on) {
+                char lab[96];
+                snprintf(lab, sizeof lab, "minus %s", cv_basename(G.cmp_path));
+                tip(ctx, "Show this field minus the same field of the comparison run (same step index)");
+                if (nk_checkbox_label(ctx, lab, &G.diff_mode)) app_select(G.field_name, G.comp);
+            }
+            for (int f = 0; f < st->nfields; f++) {
+                const cv_field_desc* d = &st->fields[f];
+                bool active = G.field_src == 0 && strcmp(d->name, G.field_name) == 0;
+                if (!nk_tree_push_id(ctx, NK_TREE_NODE, d->name, active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
+                    continue;
+                cv_scalar_opt opts[CV_MAX_OPTS];
+                int n = app_field_options(d, opts, CV_MAX_OPTS);
+                nk_layout_row_dynamic(ctx, row, 1);
+                for (int i = 0; i < n; i++) {
+                    bool sel = active && G.comp == opts[i].comp;
+                    if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(d->name, opts[i].comp, 0);
+                }
+                nk_tree_pop(ctx);
+            }
+        }
+        /* integration-point fields from the .dat, at this increment */
+        if (gp_loaded()) {
+            const char* names[32];
+            int nf = gp_fields(names, 32);
+            if (nf == 0) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                nk_label_colored(ctx, "(.dat: nothing at this increment)", NK_TEXT_LEFT, P.dim);
+            }
+            for (int f = 0; f < nf; f++) {
+                cv_field_desc d;
+                if (!gp_desc(names[f], &d)) continue;
+                bool active = G.field_src == 1 && strcmp(names[f], G.field_name) == 0;
+                char title[64];
+                snprintf(title, sizeof title, "%s (.dat)", names[f]);
+                if (!nk_tree_push_id(ctx, NK_TREE_NODE, title, active ? NK_MAXIMIZED : NK_MINIMIZED, 300 + f))
+                    continue;
+                cv_scalar_opt opts[CV_MAX_OPTS];
+                int n = cv_field_options(&d, opts, CV_MAX_OPTS);
+                nk_layout_row_dynamic(ctx, row, 1);
+                for (int i = 0; i < n; i++) {
+                    bool sel = active && G.comp == opts[i].comp;
+                    if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(names[f], opts[i].comp, 1);
+                }
+                nk_tree_pop(ctx);
+            }
+        }
+        nk_tree_pop(ctx);
+    }
+
+}
+
+/* ---- Export: pictures, animations, data and the view state ------------------- */
+static void section_export(struct nk_context* ctx, float s, float row) {
+    if (!nk_tree_state_push(ctx, NK_TREE_TAB, "Export", (enum nk_collapse_states*)&G.tree[CV_TREE_EXPORT])) return;
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "The 3D view with legend and axes as <model>_stepN.png beside the model, numbered, never overwritten");
+    if (nk_button_label(ctx, "Image of the view (Ctrl+E)")) app_export_png();
+
+    /* animation: what loops, in which form, how long */
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "One full swing of the deformation of this step (Animate)");
+    if (nk_option_label(ctx, "deformation cycle", G.exp_kind == 0)) G.exp_kind = 0;
+    tip(ctx, "Every increment once, each held as long as the play speed (fps in the time bar) shows it");
+    if (nk_option_label(ctx, "every step", G.exp_kind == 1)) G.exp_kind = 1;
+    if (nk_option_label(ctx, "MP4 video", G.exp_video)) G.exp_video = true;
+    tip(ctx, "One PNG per frame; for 'every step' one per increment");
+    if (nk_option_label(ctx, "PNG sequence", !G.exp_video)) G.exp_video = false;
+    if (G.exp_kind == 0) {
+        tip(ctx, "How often the swing repeats in the clip");
+        nk_property_int(ctx, "#cycles", 1, &G.exp_cycles, 20, 1, 0.1f);
+    } else {
+        nk_spacing(ctx, 1);
+    }
+    tip(ctx, "Frames per second of the video (and per cycle of a PNG sequence)");
+    nk_property_int(ctx, "#fps", 1, &G.exp_fps, 60, 1, 0.2f);
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "Keep the legend's range fixed while recording, so colours mean the same in every frame");
+    nk_checkbox_label(ctx, "lock the colour range while recording", &G.exp_lock_range);
+    {
+        char lab[96];
+        int fps = CV_MAX(G.exp_fps, 1);
+        if (G.exp_kind == 0) {
+            int per = CV_MAX(2, (int)(fps * CV_MAX(G.anim_period, 0.5f))) * CV_MAX(G.exp_cycles, 1);
+            snprintf(lab, sizeof lab, "Export animation  (%d frames, %.1f s)", per, (float)per / fps);
+        } else {
+            int hold = G.exp_video ? CV_MAX(1, (int)((float)fps / CV_MAX(G.fps, 0.5f) + 0.5f)) : 1;
+            snprintf(lab, sizeof lab, "Export animation  (%d steps%s)", G.frd.n_steps,
+                     G.exp_video ? "" : ", one PNG each");
+            if (G.exp_video) snprintf(lab, sizeof lab, "Export animation  (%d steps, %.1f s)", G.frd.n_steps, (float)G.frd.n_steps * hold / fps);
+        }
+        if (G.seq_left > 0) nk_label_colored(ctx, "exporting... (stop: status bar)", NK_TEXT_CENTERED, P.warn);
+        else if (nk_button_label(ctx, lab)) app_export_animation();
+    }
+
+    /* data and the view state */
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "id, x, y, z, displacement and the field per node, visible elements only");
+    if (nk_button_label(ctx, "CSV nodes")) app_export_data(false);
+    tip(ctx, "Legacy VTK unstructured grid with the field, for ParaView");
+    if (nk_button_label(ctx, "VTK mesh")) app_export_data(true);
+    {
+        char vp[1100];
+        snprintf(vp, sizeof vp, "%.*s_view.ini", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);
+        tip(ctx, "Camera, step, field, layers, clip and crop to <model>_view.ini, to reproduce this picture later");
+        if (nk_button_label(ctx, "save view state")) { snprintf(G.note, sizeof G.note, app_view_save(vp) ? "saved %s" : "could not write %s", vp); G.note_t = cv_now(); }
+        if (nk_button_label(ctx, "load view state")) { snprintf(G.note, sizeof G.note, app_view_load(vp) ? "loaded %s" : "no %s", vp); G.note_t = cv_now(); }
+    }
+    nk_tree_state_pop(ctx);
+}
+
+/* The recent files as one left-aligned button each (full path in the tooltip),
+   in the empty view: no file open yet, so they are what you most likely want. */
+void recent_buttons(struct nk_context* ctx, float row) {
+    const char* recent[CV_CFG_RECENT];
+    int nr = settings_recent(recent, CV_CFG_RECENT);
+    if (!nr || app_busy()) return;
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label_colored(ctx, "Recent files", NK_TEXT_LEFT, P.dim);
+    nk_style_push_flags(ctx, &ctx->style.button.text_alignment, NK_TEXT_LEFT);
+    for (int i = 0; i < nr; i++) {
+        tip(ctx, recent[i]);
+        if (nk_button_label(ctx, cv_basename(recent[i]))) app_open(recent[i]);
+    }
+    nk_style_pop_flags(ctx);
+}
+
+void panel_scene(struct nk_context* ctx, float s, float row) {
+    /* open */
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 76 * s);
+    nk_layout_row_template_end(ctx);
+    if (g_focus_open) { nk_edit_focus(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER); g_focus_open = false; }
+    tip(ctx, "Path of a .frd / .inp / .fbd / .dat, then Enter  (Ctrl+L)");
+    nk_flags ev = nk_edit_string(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, G.open_buf, &G.open_len,
+                                 (int)sizeof G.open_buf - 1, nk_filter_default);
+    G.open_buf[G.open_len] = 0;
+    if (ev & NK_EDIT_COMMITED) app_open(G.open_buf);          /* typed path + Enter */
+    if (nk_button_label(ctx, G.dlg_running ? "..." : "Open...")) app_open_dialog();
+    if (G.loaded) {                          /* recent files: a drop-down under the path box (the empty view lists them) */
+        const char* recent[CV_CFG_RECENT];
+        int nr = settings_recent(recent, CV_CFG_RECENT);
+        if (nr) {
+            nk_layout_row_dynamic(ctx, row, 1);
+            tip(ctx, "Files opened before");
+            if (nk_combo_begin_label(ctx, "recent files", nk_vec2(300 * s, (nr + 1) * (row + ctx->style.window.spacing.y) + 8 * s))) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                for (int i = 0; i < nr; i++)
+                    if (nk_combo_item_label(ctx, cv_basename(recent[i]), NK_TEXT_LEFT)) app_open(recent[i]);
+                nk_combo_end(ctx);
+            }
+        }
+    }
+
+    if (!G.loaded) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label(ctx, app_busy() ? "Loading..." : "Open... (Ctrl+O), drop a .frd/.inp/.fbd", NK_TEXT_LEFT);
+        if (!app_busy()) nk_label(ctx, "on the window, or type a path + Enter.", NK_TEXT_LEFT);
+        return;
+    }
+
+    /* a cgx script that was not evaluated: say what it is, offer to run it */
+    if (geo_loaded() && geo_get()->needs_cgx && !geo_evaluated()) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label(ctx, "This .fbd is a cgx script.", NK_TEXT_LEFT);
+        if (nk_button_label(ctx, "Evaluate with cgx")) app_eval_cgx();
+        nk_label_colored(ctx, "Runs its commands in a temporary copy", NK_TEXT_LEFT, P.warn);
+        nk_label_colored(ctx, "of its folder. Only for scripts you trust.", NK_TEXT_LEFT, P.warn);
+    }
+
+    section_layers(ctx, s, row);
+    section_groups(ctx, s, row);
+    section_fields(ctx, s, row);
+    section_view(ctx, s, row);
+    section_export(ctx, s, row);
+
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label(ctx, "", NK_TEXT_LEFT);
+    nk_label_colored(ctx, "drag: orbit   shift/right/middle: pan", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "hold X/Y/Z + drag: about that axis", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "ctrl drag: box zoom   ctrl right: zoom", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "alt drag: roll   middle click, C: centre", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "N: normal to face   ctrl Z/Y: view back/fwd", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "ctrl arrows: turn 15 (shift 90)   alt: roll", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "wheel: zoom   click: probe   F: fit", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "space: play   arrows: step", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "+/-: deform scale   R: reset view   1-6: views", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "G: free flight   H: view only", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "ctrl +/-/0: UI size", NK_TEXT_LEFT, P.dim);
+}
