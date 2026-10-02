@@ -11,14 +11,16 @@ A fast viewer for CalculiX results and models: `.frd`, `.inp`, `.dat`, and cgx
 (WebGL2; the showcase model is preloaded, Open... or drag and drop your own
 files, exports come as downloads).
 
-Ready-made builds are in [binaries/](binaries/):
+Ready-made builds are on the [Releases](https://github.com/BasemRajjoub/ccxview/releases) page
+([latest release](https://github.com/BasemRajjoub/ccxview/releases/latest), or
+[nightly](https://github.com/BasemRajjoub/ccxview/releases/tag/nightly) for the newest master):
 
-- **Linux**: `binaries/linux/ccxview` (glibc 2.34 or newer: Ubuntu 22.04,
-  Debian 12, Fedora 35, RHEL 9 and later). Double-click it or run it from a
-  terminal. Keep the `lib/` folder next to it.
-- **Windows**: `binaries/windows/ccxview.exe` (Windows 10/11, no DLLs needed).
-- **Browser**: `binaries/web/ccxview.html`, the same page as the link above,
-  works opened from disk.
+- **Linux**: `ccxview-linux-x86_64.tar.gz` (glibc 2.34 or newer: Ubuntu 22.04,
+  Debian 12, Fedora 35, RHEL 9 and later). Unpack, then double-click `ccxview`
+  or run it from a terminal. Keep the `lib/` folder next to it.
+- **Windows**: `ccxview-windows-x86_64.zip` (Windows 10/11, no DLLs needed).
+- **Browser**: `ccxview-web.zip`, the same page as the link above in one HTML
+  file that works opened from disk.
 
 ## What it does
 
@@ -98,12 +100,19 @@ Or Open... (Ctrl+O), drop a file on the window, or type a path in the box.
 ```sh
 make                 # Linux/macOS -> build/ccxview
 make PORTABLE=1      # Linux build for glibc >= 2.34
-make win             # Windows exe with mingw-w64 -> build/win/ccxview.exe
-make wasm            # browser build with Emscripten -> docs/index.html
+make win             # Windows exe with zig cc or mingw-w64 -> build/win/ccxview.exe
+make wasm            # browser build with Emscripten -> build/web/ccxview.html
 build.bat            # Windows with MSVC (no console window; "build.bat console" for one)
 make test            # unit tests
-scripts/pack-binaries.sh   # refresh binaries/
+scripts/pack-binaries.sh   # release archives in dist/
 ```
+
+Add `-j8` to compile in parallel; every source is its own object, so a rebuild
+compiles only what changed. GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml))
+builds and tests every push on Linux, Windows and the web, caching the compiles
+(ccache, zig's cache); each push to master publishes the browser build to GitHub
+Pages and refreshes the nightly release. For a versioned release push a tag:
+`git tag v1.2.0 && git push origin v1.2.0`; the three archives are attached to it.
 
 Dependencies: a C compiler and, on Linux, X11 and OpenGL development headers.
 Everything else is vendored (sokol, Nuklear, stb_image_write, stb_sprintf, minih264e, minimp4,

@@ -20,3 +20,4 @@ samples/*/ccx.log
 samples/*/*.csv
 samples/*/*.vtk
 samples/*/*.nam
+dist/

@@ -1,0 +1,192 @@
+# Build and test every push on Linux, Windows (zig cross build) and the web
+# (Emscripten). The compiles are cached between runs: ccache for gcc and emcc,
+# zig's own cache for zig cc, so a run recompiles only the sources that changed.
+#   push to master   -> also publishes the browser build to GitHub Pages, and puts
+#                       the archives on the "nightly" pre-release (replaced each time)
+#   push a tag v*    -> also makes a GitHub release with the three archives
+# Every run keeps the archives as downloadable artifacts for two weeks (Actions tab).
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+env:
+  ZIG_VERSION: 0.14.1
+  EMSDK_VERSION: 6.0.10              # same as the local emsdk
+  CCACHE_COMPILERCHECK: content   # restored toolchains get new mtimes; hash them instead
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04           # glibc 2.35 host; PORTABLE=1 brings the floor to 2.34
+    steps:
+      - uses: actions/checkout@v5
+      - name: X11 and GL headers
+        run: |   # the runner's package lists are usually fresh enough; update only when not
+          p="libx11-dev libxi-dev libxcursor-dev libgl-dev"
+          sudo apt-get install -y -qq --no-install-recommends $p || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $p; }
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: linux
+          max-size: 200M
+      - name: build
+        run: make -j"$(nproc)" PORTABLE=1 CC="ccache gcc"
+      - name: test
+        run: make -j"$(nproc)" test CC="ccache gcc"
+      - name: parse the samples headless
+        run: |
+          make -j"$(nproc)" build/bench PORTABLE=1 CC="ccache gcc"
+          for f in samples/*/*.frd samples/*/*.inp; do ./build/bench --quiet "$f"; done
+      - uses: actions/upload-artifact@v5
+        with:
+          name: build-linux
+          path: |
+            build/bin/ccxview
+            build/lib/
+          retention-days: 1
+
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # zig at a fixed path: its compile cache is keyed on where zig lives
+      - name: zig from the cache
+        id: zig
+        uses: actions/cache@v4
+        with:
+          path: ~/zig
+          key: zig-${{ env.ZIG_VERSION }}
+      - name: install zig
+        if: steps.zig.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/zig
+          curl -fsSL "https://ziglang.org/download/$ZIG_VERSION/zig-x86_64-linux-$ZIG_VERSION.tar.xz" | tar -xJ -C ~/zig --strip-components=1
+      - name: zig's compile cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig
+          key: zigcache-${{ env.ZIG_VERSION }}-${{ github.run_id }}
+          restore-keys: zigcache-${{ env.ZIG_VERSION }}-
+      - name: build
+        run: |
+          export ZIG_GLOBAL_CACHE_DIR=~/.cache/zig ZIG_LOCAL_CACHE_DIR=~/.cache/zig
+          make -j"$(nproc)" win ZIG=~/zig/zig
+      - uses: actions/upload-artifact@v5
+        with:
+          name: build-windows
+          path: build/win/ccxview.exe
+          retention-days: 1
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: emsdk from the cache
+        id: emsdk
+        uses: actions/cache@v4
+        with:
+          path: emsdk                     # with Emscripten's cache: libc and friends, built once
+          key: emsdk-${{ env.EMSDK_VERSION }}
+      - name: install emsdk
+        if: steps.emsdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+          emsdk/emsdk install "$EMSDK_VERSION"
+          emsdk/emsdk activate "$EMSDK_VERSION"
+          rm -rf emsdk/downloads emsdk/.git   # the unpacked SDK is what the cache keeps
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: web
+          max-size: 200M
+      - name: build
+        run: |
+          source emsdk/emsdk_env.sh
+          EM_COMPILER_WRAPPER=ccache make -j"$(nproc)" wasm
+      - uses: actions/upload-artifact@v5
+        with:
+          name: build-web
+          path: build/web/ccxview.html
+          retention-days: 1
+      - name: site for GitHub Pages
+        if: github.ref == 'refs/heads/master'
+        run: mkdir -p site && cp build/web/ccxview.html site/index.html
+      - uses: actions/upload-pages-artifact@v4
+        if: github.ref == 'refs/heads/master'
+        with:
+          path: site
+
+  package:
+    needs: [linux, windows, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with: { name: build-linux, path: build }
+      - uses: actions/download-artifact@v5
+        with: { name: build-windows, path: build/win }
+      - uses: actions/download-artifact@v5
+        with: { name: build-web, path: build/web }
+      - run: sudo apt-get install -y -qq patchelf
+      - run: scripts/pack-binaries.sh
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ccxview-linux-x86_64
+          path: dist/ccxview-linux-x86_64.tar.gz
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ccxview-windows-x86_64
+          path: dist/ccxview-windows-x86_64.zip
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ccxview-web
+          path: dist/ccxview-web.zip
+          compression-level: 0
+          retention-days: 14
+      - name: nightly pre-release
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f nightly "$GITHUB_SHA" && git push -f origin nightly
+          notes="The newest build of master, replaced on every push: ${GITHUB_SHA::7} ($(git log -1 --format=%s))."
+          gh release view nightly >/dev/null 2>&1 ||
+              gh release create nightly --prerelease --title "Nightly (master)" --notes "$notes"
+          gh release edit nightly --notes "$notes"
+          gh release upload nightly --clobber dist/ccxview-linux-x86_64.tar.gz dist/ccxview-windows-x86_64.zip dist/ccxview-web.zip
+      - name: release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "ccxview $GITHUB_REF_NAME" \
+              dist/ccxview-linux-x86_64.tar.gz dist/ccxview-windows-x86_64.zip dist/ccxview-web.zip
+    permissions:
+      contents: write                     # the release
+
+  pages:
+    if: github.ref == 'refs/heads/master'
+    needs: [web, linux, windows]          # publish only what also built and tested everywhere
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

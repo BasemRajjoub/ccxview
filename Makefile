@@ -1,11 +1,12 @@
 # ccxview -- Linux / macOS build. Windows: build.bat
 #   make            standalone build -> build/ccxview (Linux: launcher + bin/ + lib/)
 #   make PORTABLE=1 same, runs on glibc >= 2.34 (see src/glibc_old.h)
-#   scripts/pack-binaries.sh   copy the Linux and Windows builds into binaries/
+#   scripts/pack-binaries.sh   the release archives in dist/ (what CI attaches to a release)
 #   make bundle-mesa   + Mesa llvmpipe in build/lib/mesa (software renderer, large)
 #   scripts/build-portable.sh   the same inside a glibc-2.17 container (podman/docker)
 #   make win        Windows cross build, zig cc if zig is on PATH else mingw-w64 -> build/win/ccxview.exe (static runtime,
 #                   no console window; WIN_CONSOLE=1 for one)
+#   make wasm       browser build (Emscripten) -> build/web/ccxview.html
 #   make test       headless unit tests
 #   make bench      headless timing tool
 #   make gen        synthetic .frd generator
@@ -13,13 +14,17 @@
 #   make fuzz       byte-flip the sample files through every reader (never crash)
 #   make samples    test files into build/samples (showcase + elements + examples + synthetic 1M/5M)
 #   scripts/solve_showcase.sh [showcase|elements]   regenerate + solve a sample deck with ccx
+#
+# Every source compiles to its own object under build/obj/<variant>/ (with a .d file
+# listing the headers it includes), so a change rebuilds only what it touches, and
+# make -j compiles in parallel. CI wraps the compilers in ccache (.github/workflows/).
 
 CC      ?= cc
 # OPT is the optimisation for every build; RELEASE=1 (the shipped binaries, implied by
 # PORTABLE=1, win and wasm) adds link-time optimisation. No -march: the binaries travel.
 OPT     ?= -O3 -fno-math-errno
 RELEASE ?= $(PORTABLE)
-LTO      = $(if $(filter 1,$(RELEASE)),-flto -Wno-maybe-uninitialized,)   # LTO sees across files and guesses wrong about init
+LTO      = $(if $(filter 1,$(RELEASE)),$(if $(filter Darwin,$(UNAME)),-flto,-flto=auto -Wno-maybe-uninitialized),)   # LTO sees across files and guesses wrong about init
 CFLAGS  ?= $(OPT) -g $(LTO)
 CFLAGS  += -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-format-truncation
 CPPFLAGS += -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -DSOKOL_GLCORE -Ivendor
@@ -52,33 +57,41 @@ bundle-mesa: build/bin/ccxview
 	scripts/bundle.sh build/bin/ccxview --mesa
 endif
 
-build/sokol_impl.o: src/sokol_impl.c
-	@mkdir -p build
-	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) $(OPT) $(LTO) -std=c99 -w $(IMPL_FLAGS) -c $< -o $@
+# one object directory per set of flags, so switching PORTABLE or RELEASE never mixes them
+OBJ = build/obj/$(if $(filter 1,$(PORTABLE)),portable,$(if $(filter 1,$(RELEASE)),release,dev))
+NATIVE_OBJ = $(patsubst %.c,$(OBJ)/%.o,$(CORE) $(CORE_EXTRA) $(APP))
+DEPS = -MMD -MP -MF $(@:.o=.d) -MT $@
 
-build/ccxview build/bin/ccxview: $(CORE) $(APP) build/sokol_impl.o src/*.h
+$(OBJ)/src/sokol_impl.o: src/sokol_impl.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) $(CFLAGS) $(CORE) $(CORE_EXTRA) $(APP) build/sokol_impl.o -o $@ \
-	    -static-libgcc $(GUI_LIBS) -lm
+	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) $(OPT) $(LTO) $(DEPS) -std=c99 -w $(IMPL_FLAGS) -c $< -o $@
+$(OBJ)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) $(CFLAGS) $(DEPS) -c $< -o $@
+
+build/ccxview build/bin/ccxview: $(NATIVE_OBJ) $(OBJ)/src/sokol_impl.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@ -static-libgcc $(GUI_LIBS) -lm
 
 # the vendored MP4 muxer reads unaligned words on purpose: it is compiled
 # without the sanitizers, everything of ours with them
 build/video_mp4_nosan.o: src/video_mp4.c src/video_impl.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(OPT) -std=c99 -w -c $< -o $@
-build/test_main: tests/test_main.c $(filter-out src/video_mp4.c,$(CORE)) build/video_mp4_nosan.o src/*.h tests/*.h
-	@mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DCV_DEBUG -fsanitize=address,undefined tests/test_main.c $(filter-out src/video_mp4.c,$(CORE)) \
-	    build/video_mp4_nosan.o src/gpu.c -o $@ -lm -lpthread -ldl
+TEST_OBJ = $(patsubst %.c,build/obj/test/%.o,tests/test_main.c $(filter-out src/video_mp4.c,$(CORE)) src/gpu.c)
+build/obj/test/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DCV_DEBUG -fsanitize=address,undefined $(DEPS) -c $< -o $@
+build/test_main: $(TEST_OBJ) build/video_mp4_nosan.o
+	$(CC) $(CFLAGS) -fsanitize=address,undefined $^ -o $@ -lm -lpthread -ldl
 
 test: build/test_main
 	./build/test_main
 	scripts/check-sources.sh
 	sh tests/launcher.sh
 
-build/bench: tests/bench.c $(CORE) src/*.h
-	@mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/bench.c $(CORE) -o $@ -lm -lpthread
+build/bench: $(patsubst %.c,$(OBJ)/%.o,tests/bench.c $(CORE))
+	$(CC) $(CFLAGS) $^ -o $@ -lm -lpthread
 
 build/gen_frd: tests/gen_frd.c tests/frd_write.h
 	@mkdir -p build
@@ -132,20 +145,28 @@ WIN_ICON = build/win/icon.o
 WIN_LINK = $(WIN_SUBSYS) $(MINGW_LDFLAGS) -static -static-libgcc
 endif
 , := ,
+# zig cc caches every compile by content (ZIG_GLOBAL_CACHE_DIR), but not when asked for
+# dependency files: so with zig each object depends on every header and zig skips what
+# did not change; mingw writes .d files like the native build
+WIN_CFLAGS = $(OPT) $(WIN_LTO) -std=c99 -DSOKOL_GLCORE -Ivendor $(if $(ZIG),,$(DEPS))
+WIN_HDRS = $(if $(ZIG),$(wildcard src/*.h vendor/*.h),)
+WIN_OBJ = $(patsubst %.c,build/win/obj/%.o,$(WIN_SRC))
 win: build/win/ccxview.exe
-build/win/sokol_impl.o: src/sokol_impl.c
-	@mkdir -p build/win
-	$(WIN_CC) $(OPT) $(WIN_LTO) -std=c99 -w -DSOKOL_GLCORE -Ivendor -c $< -o $@
+build/win/obj/src/sokol_impl.o: src/sokol_impl.c $(WIN_HDRS)
+	@mkdir -p $(dir $@)
+	$(WIN_CC) $(WIN_CFLAGS) -w -c $< -o $@
+build/win/obj/%.o: %.c $(WIN_HDRS)
+	@mkdir -p $(dir $@)
+	$(WIN_CC) $(WIN_CFLAGS) -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
+	    -Wno-format-truncation -Wno-cast-function-type -Wno-typedef-redefinition -c $< -o $@
 build/win/icon.o: res/ccxview.rc res/ccxview.ico
 	@mkdir -p build/win
 	$(WINDRES) $< -O coff -o $@
 build/win/icon.res: res/ccxview.rc res/ccxview.ico
 	@mkdir -p build/win
 	$(ZIG) rc /fo $@ $<
-build/win/ccxview.exe: $(WIN_SRC) build/win/sokol_impl.o $(WIN_ICON) src/*.h
-	$(WIN_CC) $(OPT) $(WIN_LTO) -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
-	    -Wno-format-truncation -Wno-cast-function-type -Wno-typedef-redefinition -DSOKOL_GLCORE -Ivendor \
-	    $(WIN_SRC) build/win/sokol_impl.o $(WIN_ICON) -o $@ $(WIN_LINK) \
+build/win/ccxview.exe: $(WIN_OBJ) build/win/obj/src/sokol_impl.o $(WIN_ICON)
+	$(WIN_CC) $(OPT) $(WIN_LTO) $^ -o $@ $(WIN_LINK) \
 	    -lkernel32 -luser32 -lgdi32 -lshell32 -lopengl32 -lcomdlg32 -lole32
 	@echo "built $@ (test with: wine $@ model.frd)"
 
@@ -155,16 +176,23 @@ clean:
 .PHONY: all test bench gen corpus samples clean bundle-mesa win fuzz
 
 # ---- browser build (Emscripten). One self-contained HTML file with the showcase
-# model inside; serve docs/ with GitHub Pages. No threads (plain hosting has no
-# SharedArrayBuffer), so a model loads on the main thread.
+# model inside; CI publishes it as the GitHub Pages site. No threads (plain hosting
+# has no SharedArrayBuffer), so a model loads on the main thread.
 EMCC ?= emcc
 WASM_SRC = $(CORE) $(APP) src/web.c src/sokol_impl.c
 WASM_EMBED = $(foreach f,frd dat inp sta cvg,--embed-file samples/showcase/showcase.$(f)@/showcase.$(f))
-wasm: docs/index.html
-docs/index.html: $(WASM_SRC) src/*.h web/shell.html samples/showcase/showcase.frd
-	$(EMCC) -O3 -flto -std=gnu99 -Wall -Wno-unused-parameter -Wno-missing-field-initializers -Wno-macro-redefined -Wno-typedef-redefinition -DSOKOL_GLES3 -Ivendor \
-	    $(WASM_SRC) -o $@ --shell-file web/shell.html $(WASM_EMBED) \
+WASM_OBJ = $(patsubst %.c,build/web/obj/%.o,$(WASM_SRC))
+wasm: build/web/ccxview.html
+build/web/obj/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(EMCC) -O3 -flto -std=gnu99 -Wall -Wno-unused-parameter -Wno-missing-field-initializers -Wno-macro-redefined \
+	    -Wno-typedef-redefinition -DSOKOL_GLES3 -Ivendor $(DEPS) -c $< -o $@
+build/web/ccxview.html: $(WASM_OBJ) web/shell.html samples/showcase/showcase.frd
+	$(EMCC) -O3 -flto $(WASM_OBJ) -o $@ --shell-file web/shell.html $(WASM_EMBED) \
 	    -sSINGLE_FILE=1 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFORCE_FILESYSTEM=1 \
 	    -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=64MB -sMAXIMUM_MEMORY=4GB -sSTACK_SIZE=8MB \
 	    -sEXPORTED_FUNCTIONS=_main,_cv_web_unload -sEXPORTED_RUNTIME_METHODS=FS,UTF8ToString,stringToUTF8 \
 	    -lGL
+
+# the headers each object was built from (written by -MMD)
+-include $(NATIVE_OBJ:.o=.d) $(OBJ)/src/sokol_impl.d $(OBJ)/tests/bench.d $(WIN_OBJ:.o=.d) $(WASM_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
