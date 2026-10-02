@@ -36,8 +36,9 @@ coloured by the selected scalar, and a second style, the principal cross
 (three segments, red tension, blue compression). Drawn as ray-traced
 impostors like the node balls, so a million glyphs cost nothing; auto scale
 to about 1.5 element sizes with a slider; hidden by "hide when dense";
-follow the deformed shape through the displacement attribute. Needs a
-Jacobi eigen-decomposition with eigenvectors in field.c (+ test), an
-ellipsoid impostor shader in render.c, the glyph build next to the arrows in
-app_overlay.c, a Layers row, `--tensor ellipsoid|cross`, settings. About a
-day. Shells and beams give a disc (one zero axis), which is right.
+follow the deformed shape through the displacement attribute. The
+eigenvectors are there (cv_principal_dirs in field.c, Jacobi, used by the
+principal arrows); still needed: an ellipsoid impostor shader in render.c,
+the glyph build next to the arrows in app_overlay.c, a Layers row,
+`--tensor ellipsoid|cross`, settings. About a day. Shells and beams give a
+disc (one zero axis), which is right.
