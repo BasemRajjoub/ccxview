@@ -11,15 +11,14 @@ A fast viewer for CalculiX results and models: `.frd`, `.inp`, `.dat`, and cgx
 (WebGL2; the showcase model is preloaded, Open... or drag and drop your own
 files, exports come as downloads).
 
-Ready-made builds are on the [Releases](https://github.com/BasemRajjoub/ccxview/releases) page
-([latest release](https://github.com/BasemRajjoub/ccxview/releases/latest), or
-[nightly](https://github.com/BasemRajjoub/ccxview/releases/tag/nightly) for the newest master):
+Downloads of the [latest release](https://github.com/BasemRajjoub/ccxview/releases/latest)
+(older versions and their changes: [all releases](https://github.com/BasemRajjoub/ccxview/releases)):
 
-- **Linux**: `ccxview-linux-x86_64.tar.gz` (glibc 2.34 or newer: Ubuntu 22.04,
+- **Linux**: [ccxview-linux-x86_64.tar.gz](https://github.com/BasemRajjoub/ccxview/releases/latest/download/ccxview-linux-x86_64.tar.gz) (glibc 2.34 or newer: Ubuntu 22.04,
   Debian 12, Fedora 35, RHEL 9 and later). Unpack, then double-click `ccxview`
   or run it from a terminal. Keep the `lib/` folder next to it.
-- **Windows**: `ccxview-windows-x86_64.zip` (Windows 10/11, no DLLs needed).
-- **Browser**: `ccxview-web.zip`, the same page as the link above in one HTML
+- **Windows**: [ccxview-windows-x86_64.zip](https://github.com/BasemRajjoub/ccxview/releases/latest/download/ccxview-windows-x86_64.zip) (Windows 10/11, no DLLs needed).
+- **Browser**: [ccxview-web.zip](https://github.com/BasemRajjoub/ccxview/releases/latest/download/ccxview-web.zip), the same page as the link above in one HTML
   file that works opened from disk.
 
 ## What it does
@@ -108,11 +107,14 @@ scripts/pack-binaries.sh   # release archives in dist/
 ```
 
 Add `-j8` to compile in parallel; every source is its own object, so a rebuild
-compiles only what changed. GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml))
-builds and tests every push on Linux, Windows and the web, caching the compiles
-(ccache, zig's cache); each push to master publishes the browser build to GitHub
-Pages and refreshes the nightly release. For a versioned release push a tag:
-`git tag v1.2.0 && git push origin v1.2.0`; the three archives are attached to it.
+compiles only what changed. `ccxview --version` prints the version from [VERSION](VERSION).
+
+**Releasing.** Change the number in `VERSION` (e.g. `0.2.0`), commit and push to master.
+GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)) then builds
+Linux, Windows (mingw-w64) and the web in one job, runs the tests, creates the release
+`v0.2.0` with the three archives and generated notes, and updates the browser version on
+GitHub Pages. Other pushes build nothing. To build without releasing, run the workflow by
+hand from the Actions tab (it keeps the archives as artifacts for a week).
 
 Dependencies: a C compiler and, on Linux, X11 and OpenGL development headers.
 Everything else is vendored (sokol, Nuklear, stb_image_write, stb_sprintf, minih264e, minimp4,

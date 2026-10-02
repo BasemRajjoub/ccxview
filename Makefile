@@ -4,7 +4,7 @@
 #   scripts/pack-binaries.sh   the release archives in dist/ (what CI attaches to a release)
 #   make bundle-mesa   + Mesa llvmpipe in build/lib/mesa (software renderer, large)
 #   scripts/build-portable.sh   the same inside a glibc-2.17 container (podman/docker)
-#   make win        Windows cross build, zig cc if zig is on PATH else mingw-w64 -> build/win/ccxview.exe (static runtime,
+#   make win        Windows cross build, zig cc if zig is on PATH else mingw-w64 (ZIG= forces mingw; CI uses it) -> build/win/ccxview.exe (static runtime,
 #                   no console window; WIN_CONSOLE=1 for one)
 #   make wasm       browser build (Emscripten) -> build/web/ccxview.html
 #   make test       headless unit tests
@@ -48,6 +48,13 @@ CORE = src/frd.c src/mesh.c src/field.c src/os.c src/filedlg.c src/dat.c src/gau
 APP  = src/app.c src/app_field.c src/app_overlay.c src/app_path.c src/app_linearize.c src/app_cam.c src/app_load.c src/app_settings.c src/app_gauss.c src/app_deck.c src/app_fbd.c src/render.c src/ui.c src/ui_style.c src/ui_panels.c src/ui_view.c src/ui_bars.c src/ui_windows.c src/ui_plots.c src/font_data.c src/gpu.c
 CCX_EXAMPLES ?= $(HOME)/CalculiX-Examples
 
+# the release version (VERSION; bumping it on master makes a release, see .github/workflows),
+# given only to app.c so a bump recompiles that one file
+VERSION_STR := $(shell cat VERSION 2>/dev/null)
+VERSION_DEF =
+$(addsuffix /src/app.o,build/obj/dev build/obj/release build/obj/portable build/win/obj build/web/obj): VERSION
+$(addsuffix /src/app.o,build/obj/dev build/obj/release build/obj/portable build/win/obj build/web/obj): VERSION_DEF = -DCV_VERSION_NUM=$(VERSION_STR)
+
 ifeq ($(UNAME),Darwin)
 all: build/ccxview
 else
@@ -67,7 +74,7 @@ $(OBJ)/src/sokol_impl.o: src/sokol_impl.c
 	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) $(OPT) $(LTO) $(DEPS) -std=c99 -w $(IMPL_FLAGS) -c $< -o $@
 $(OBJ)/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(GUI_CFLAGS) $(CFLAGS) $(DEPS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(VERSION_DEF) $(GUI_CFLAGS) $(CFLAGS) $(DEPS) -c $< -o $@
 
 build/ccxview build/bin/ccxview: $(NATIVE_OBJ) $(OBJ)/src/sokol_impl.o
 	@mkdir -p $(dir $@)
@@ -137,18 +144,20 @@ ifneq ($(ZIG),)
 WIN_CC = $(ZIG) cc --target=x86_64-windows-gnu
 WIN_LTO =                                   # zig's lld cannot LTO against the mingw C runtime
 WIN_ICON = build/win/icon.res
+WIN_DEFS =
 WIN_LINK = $(if $(filter 1,$(WIN_CONSOLE)),-Wl$(,)--subsystem$(,)console,-Wl$(,)--subsystem$(,)windows)
 else
 WIN_CC = $(MINGW)
 WIN_LTO = -flto
 WIN_ICON = build/win/icon.o
+WIN_DEFS = -D__USE_MINGW_ANSI_STDIO=1                # printf with %zu on the old msvcrt too
 WIN_LINK = $(WIN_SUBSYS) $(MINGW_LDFLAGS) -static -static-libgcc
 endif
 , := ,
 # zig cc caches every compile by content (ZIG_GLOBAL_CACHE_DIR), but not when asked for
 # dependency files: so with zig each object depends on every header and zig skips what
 # did not change; mingw writes .d files like the native build
-WIN_CFLAGS = $(OPT) $(WIN_LTO) -std=c99 -DSOKOL_GLCORE -Ivendor $(if $(ZIG),,$(DEPS))
+WIN_CFLAGS = $(OPT) $(WIN_LTO) -std=c99 $(WIN_DEFS) -DSOKOL_GLCORE -Ivendor $(if $(ZIG),,$(DEPS))
 WIN_HDRS = $(if $(ZIG),$(wildcard src/*.h vendor/*.h),)
 WIN_OBJ = $(patsubst %.c,build/win/obj/%.o,$(WIN_SRC))
 win: build/win/ccxview.exe
@@ -158,7 +167,7 @@ build/win/obj/src/sokol_impl.o: src/sokol_impl.c $(WIN_HDRS)
 build/win/obj/%.o: %.c $(WIN_HDRS)
 	@mkdir -p $(dir $@)
 	$(WIN_CC) $(WIN_CFLAGS) -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
-	    -Wno-format-truncation -Wno-cast-function-type -Wno-typedef-redefinition -c $< -o $@
+	    -Wno-format-truncation -Wno-cast-function-type -Wno-typedef-redefinition $(VERSION_DEF) -c $< -o $@
 build/win/icon.o: res/ccxview.rc res/ccxview.ico
 	@mkdir -p build/win
 	$(WINDRES) $< -O coff -o $@
@@ -186,7 +195,7 @@ wasm: build/web/ccxview.html
 build/web/obj/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(EMCC) -O3 -flto -std=gnu99 -Wall -Wno-unused-parameter -Wno-missing-field-initializers -Wno-macro-redefined \
-	    -Wno-typedef-redefinition -DSOKOL_GLES3 -Ivendor $(DEPS) -c $< -o $@
+	    -Wno-typedef-redefinition -DSOKOL_GLES3 -Ivendor $(VERSION_DEF) $(DEPS) -c $< -o $@
 build/web/ccxview.html: $(WASM_OBJ) web/shell.html samples/showcase/showcase.frd
 	$(EMCC) -O3 -flto $(WASM_OBJ) -o $@ --shell-file web/shell.html $(WASM_EMBED) \
 	    -sSINGLE_FILE=1 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFORCE_FILESYSTEM=1 \

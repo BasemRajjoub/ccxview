@@ -1,0 +1,105 @@
+# Releases, and nothing else: a push to master that changes VERSION builds Linux, Windows
+# and the web in one job, runs the tests, creates the GitHub release v<VERSION> with the
+# three archives, and publishes the browser build to GitHub Pages. Other pushes run nothing.
+# Run by hand (Actions tab -> release -> Run workflow) to build without releasing, or tick
+# "release" to retry a release that failed.
+name: release
+
+on:
+  push:
+    branches: [master]
+    paths: [VERSION]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Create the release v<VERSION> and update Pages (else only build)
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  EMSDK_VERSION: 6.0.10              # same as the local emsdk
+  CCACHE_COMPILERCHECK: content     # restored toolchains get new mtimes; hash them instead
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04           # glibc 2.35 host; PORTABLE=1 brings the floor to 2.34
+    timeout-minutes: 30
+    permissions:
+      contents: write               # the release
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH: ${{ github.event_name == 'push' || inputs.release }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: version
+        id: v
+        run: |
+          v=$(tr -d ' \r\n' < VERSION)
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" = true ] && gh release view "v$v" >/dev/null 2>&1; then
+              echo "::error::release v$v exists already; raise the number in VERSION"
+              exit 1
+          fi
+      - name: compilers and headers
+        run: |   # the runner's package lists are usually fresh enough; update only when not
+          p="libx11-dev libxi-dev libxcursor-dev libgl-dev gcc-mingw-w64-x86-64 patchelf"
+          sudo apt-get install -y -qq --no-install-recommends $p || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $p; }
+      - name: emsdk from the cache
+        id: emsdk
+        uses: actions/cache@v4
+        with:
+          path: emsdk                     # with Emscripten's cache: libc and friends, built once
+          key: emsdk-${{ env.EMSDK_VERSION }}
+      - name: install emsdk
+        if: steps.emsdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+          emsdk/emsdk install "$EMSDK_VERSION"
+          emsdk/emsdk activate "$EMSDK_VERSION"
+          rm -rf emsdk/downloads emsdk/.git   # the unpacked SDK is what the cache keeps
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: release
+          max-size: 300M
+      - name: build Linux, Windows and web
+        run: |   # one make, so the three builds share the cores
+          source emsdk/emsdk_env.sh
+          EM_COMPILER_WRAPPER=ccache make -j"$(nproc)" PORTABLE=1 CC="ccache gcc" ZIG= \
+              MINGW="ccache x86_64-w64-mingw32-gcc" WINDRES=x86_64-w64-mingw32-windres all win wasm
+      - name: test
+        run: |
+          make -j"$(nproc)" test CC="ccache gcc"
+          make -j"$(nproc)" build/bench PORTABLE=1 CC="ccache gcc"
+          for f in samples/*/*.frd samples/*/*.inp; do ./build/bench --quiet "$f"; done
+      - run: scripts/pack-binaries.sh
+      - uses: actions/upload-artifact@v5
+        if: env.PUBLISH != 'true'
+        with:
+          name: ccxview-${{ steps.v.outputs.tag }}
+          path: dist/
+          retention-days: 7
+      - name: GitHub release
+        if: env.PUBLISH == 'true'
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" --target "$GITHUB_SHA" --generate-notes \
+              --title "ccxview ${{ steps.v.outputs.tag }}" \
+              dist/ccxview-linux-x86_64.tar.gz dist/ccxview-windows-x86_64.zip dist/ccxview-web.zip
+      - name: site for GitHub Pages
+        if: env.PUBLISH == 'true'
+        run: mkdir -p site && cp build/web/ccxview.html site/index.html
+      - uses: actions/upload-pages-artifact@v4
+        if: env.PUBLISH == 'true'
+        with:
+          path: site
+      - id: deploy
+        if: env.PUBLISH == 'true'
+        uses: actions/deploy-pages@v4

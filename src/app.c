@@ -18,6 +18,16 @@
 #include <math.h>
 #include <strings.h>
 
+/* the release version, from the VERSION file: the build passes it bare
+   (-DCV_VERSION_NUM=1.2.3, no quotes to survive every shell) */
+#define CV_STR_(x) #x
+#define CV_STR(x) CV_STR_(x)
+#ifdef CV_VERSION_NUM
+#define CV_VERSION CV_STR(CV_VERSION_NUM)
+#else
+#define CV_VERSION "dev"
+#endif
+
 cv_app G;
 static struct nk_context* g_nk;
 static void app_log(const char* tag, uint32_t level, uint32_t item, const char* msg, uint32_t line,
@@ -159,10 +169,10 @@ static void update_title(void) {
         if (G.loaded) {
             const char* b = cv_basename(G.path);
             fmt_bytes(fsz, sizeof fsz, G.file_bytes);
-            snprintf(title, sizeof title, "ccxview - %s (%s)  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s",
+            snprintf(title, sizeof title, "ccxview " CV_VERSION " - %s (%s)  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s",
                      b, fsz, fps, cpu, g, ram);
         } else {
-            snprintf(title, sizeof title, "ccxview  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s", fps, cpu, g, ram);
+            snprintf(title, sizeof title, "ccxview " CV_VERSION "  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s", fps, cpu, g, ram);
         }
         if (strlen(title) <= CV_TITLE_MAX) break;
     }
@@ -859,6 +869,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--log") && i + 1 < argc) cv_log_open(argv[++i]);
         else if (!strcmp(argv[i], "--verbose")) cv_log_set_verbose(true);
         else if (!strcmp(argv[i], "--check") && i + 1 < argc) check = argv[++i];
+        else if (!strcmp(argv[i], "--version")) { printf("ccxview %s\n", CV_VERSION); exit(0); }
         else if (!strcmp(argv[i], "--field") && i + 1 < argc) O.field = argv[++i];
         else if (!strcmp(argv[i], "--target") && i + 1 < argc)
             O.target_set = sscanf(argv[++i], "%f,%f,%f", &O.target[0], &O.target[1], &O.target[2]) == 3;
