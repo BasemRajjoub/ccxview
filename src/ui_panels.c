@@ -157,6 +157,7 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
         nk_checkbox_label(ctx, "Faces", &G.show_faces);
         {
             static const char* fm_names[FM_N] = { "field", "by type", "by material", "by group", "plain" };
+            uii_test_mark(ctx, "#faces mode");
             int fm = nk_combo(ctx, fm_names, FM_N, G.faces_mode, (int)row, nk_vec2(150 * s, 5 * row + 20 * s));
             if (fm != G.faces_mode) app_set_faces_mode(fm);
         }

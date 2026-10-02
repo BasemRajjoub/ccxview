@@ -19,12 +19,52 @@
 
 /* ---- small helpers ----------------------------------------------------------- */
 
-/* A tooltip now. Nuklear opens it as a popup, and a window with a popup open
-   takes no input that frame, the wheel included: none while the wheel turns, or
-   the panel under a widget with a tooltip would not scroll. */
+/* Tooltips are drawn by us, over everything, at the end of the frame (tip_draw),
+   not as Nuklear popups: a window has room for one popup, so a tooltip opened
+   before its widget kept a list under it from opening, and a window with a popup
+   open takes no input, the wheel included. Here a tooltip is only ink. */
+static char tip_text[400], tip_last[400];
+
+/* a tooltip this frame; the last one asked for wins */
 void tip_show(struct nk_context* ctx, const char* text) {
-    const struct nk_vec2 d = ctx->input.mouse.scroll_delta;
-    if (d.x == 0 && d.y == 0) nk_tooltip(ctx, text);
+    (void)ctx;
+    snprintf(tip_text, sizeof tip_text, "%s", text);
+}
+const char* uii_tip_shown(void) { return tip_last; }
+
+/* the tooltip asked for this frame, beside the mouse and inside the window; none
+   while a button is down or the wheel turns */
+static void tip_draw(struct nk_context* ctx, float s, float fw, float fh) {
+    const struct nk_input* in = &ctx->input;
+    bool busy = in->mouse.buttons[NK_BUTTON_LEFT].down || in->mouse.buttons[NK_BUTTON_RIGHT].down ||
+                in->mouse.buttons[NK_BUTTON_MIDDLE].down || in->mouse.scroll_delta.x != 0 || in->mouse.scroll_delta.y != 0;
+    snprintf(tip_last, sizeof tip_last, "%s", busy ? "" : tip_text);
+    tip_text[0] = 0;
+    if (!tip_last[0]) return;
+    const struct nk_user_font* f = ctx->style.font;
+    const struct nk_style_window* st = &ctx->style.window;
+    float pad = 6 * s, lh = f->height + 3 * s, w = 0;
+    int lines = 0;
+    for (const char* a = tip_last; *a; lines++) {
+        int n = (int)strcspn(a, "\n");
+        w = CV_MAX(w, f->width(f->userdata, f->height, a, n));
+        a += n + (a[n] == '\n');
+    }
+    w += 2 * pad;
+    float h = lines * lh + 2 * pad - 3 * s;
+    float x = in->mouse.pos.x + 14 * s, y = in->mouse.pos.y + 20 * s;
+    if (x + w > fw - 2) x = CV_MAX(fw - 2 - w, 2);
+    if (y + h > fh - 2) y = CV_MAX(in->mouse.pos.y - 8 * s - h, 2);       /* above the mouse, never under it */
+    struct nk_command_buffer* cv = cv_nk_overlay_begin(ctx);
+    nk_fill_rect(cv, nk_rect(x, y, w, h), 4 * s, st->background);
+    nk_stroke_rect(cv, nk_rect(x, y, w, h), 4 * s, 1, st->tooltip_border_color);
+    float ty = y + pad;
+    for (const char* a = tip_last; *a; ty += lh) {
+        int n = (int)strcspn(a, "\n");
+        nk_draw_text(cv, nk_rect(x + pad, ty, w - 2 * pad, f->height), a, n, f, st->background, ctx->style.text.color);
+        a += n + (a[n] == '\n');
+    }
+    cv_nk_overlay_end(ctx);
 }
 
 /* Nuklear's nk_begin makes a background window that takes input the active one
@@ -40,8 +80,10 @@ bool begin_background(struct nk_context* ctx, const char* name, struct nk_rect r
     return open;
 }
 
-/* tooltip for the widget laid out next */
+/* tooltip for the widget laid out next; none from a window under its own open list */
 void tip(struct nk_context* ctx, const char* text) {
+    uii_test_mark(ctx, text);
+    if (ctx->current && ctx->current->popup.win && ctx->current->popup.active) return;
     if (nk_widget_is_hovered(ctx)) tip_show(ctx, text);
 }
 
@@ -271,4 +313,5 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);
+    tip_draw(ctx, s, W, H);
 }

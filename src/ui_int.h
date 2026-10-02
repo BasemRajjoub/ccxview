@@ -81,7 +81,11 @@ struct nk_color uii_bg(int alpha);        /* G.bg itself, for halos behind that 
 
 /* ---- ui.c: small helpers */
 void tip(struct nk_context* ctx, const char* text);    /* tooltip for the widget laid out next */
-void tip_show(struct nk_context* ctx, const char* text);  /* a tooltip now, unless the wheel turns */
+void tip_show(struct nk_context* ctx, const char* text);  /* a tooltip this frame, whatever is hovered */
+const char* uii_tip_shown(void);                       /* the tooltip drawn in the last frame, "" for none */
+/* Nuklear's overlay buffer, drawn over every window and popup (sokol_impl.c) */
+struct nk_command_buffer* cv_nk_overlay_begin(struct nk_context* ctx);
+void cv_nk_overlay_end(struct nk_context* ctx);
 /* nk_begin of a window that stays under the others (NK_WINDOW_BACKGROUND) and
    leaves the active window as it was, unless it is the one clicked */
 bool begin_background(struct nk_context* ctx, const char* name, struct nk_rect r, nk_flags flags);
@@ -126,6 +130,10 @@ void window_overlay(struct nk_context* ctx, float s);
 void window_find(struct nk_context* ctx, float s, float row);
 void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh);
 void drop_hint(struct nk_context* ctx, float s, float row);
+
+/* ---- ui_test.c: --ui-test. tip() reports its widget; widgets without a tooltip are
+   marked by a name starting with '#'. Nothing unless a test runs. */
+void uii_test_mark(struct nk_context* ctx, const char* text);
 
 /* ---- ui_plots.c */
 void window_path(struct nk_context* ctx, float s, float row, int fw, int fh);

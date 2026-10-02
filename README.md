@@ -82,6 +82,7 @@ ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --software                # CPU rendering
 ccxview --check model.frd                   # headless parse for CI
+ccxview model.frd --ui-test DIR             # click through the interface, check it answers; failure pictures in DIR
 ```
 
 Or Open... (Ctrl+O), drop a file on the window, or type a path in the box.
@@ -113,6 +114,7 @@ make win             # Windows exe with zig cc or mingw-w64 -> build/win/ccxview
 make wasm            # browser build with Emscripten -> build/web/ccxview.html
 build.bat            # Windows with MSVC (no console window; "build.bat console" for one)
 make test            # unit tests
+make uitest          # the interface clicked through by a script (src/ui_test.c); needs a display or Xvfb
 scripts/pack-binaries.sh   # release archives in dist/
 ```
 

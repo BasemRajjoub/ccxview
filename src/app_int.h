@@ -51,6 +51,7 @@ typedef struct {
     int         shot_frames;    /* --frames N */
     int         frame_no;
     bool        browse;         /* --browse: start with the built-in browser open */
+    const char* ui_test;        /* --ui-test DIR: run the interface script (ui_test.c), failure pictures into DIR */
 } cv_opts;
 extern cv_opts O;
 

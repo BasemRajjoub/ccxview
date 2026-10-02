@@ -632,9 +632,6 @@ void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh
     }
     if (nk_window_is_hidden(ctx, "Formula")) G.show_calc_help = false;
     nk_end(ctx);
-    /* closed by OK: dropped next frame, so hand the focus to the panel now rather than
-       leave it to Nuklear, which can keep the panel read only */
-    if (!G.show_calc_help && nk_window_find(ctx, "Scene")) nk_window_set_focus(ctx, "Scene");
 }
 
 /* ---- units: what each quantity is in, in the file (a consistent set, or chosen one
@@ -798,6 +795,7 @@ void window_units(struct nk_context* ctx, float s, float row, int fw, int fh) {
             /* SI first, then US, then the rest; each with its base units beside it */
             static const int order[CV_SYS_N] = { CV_SYS_NONE, CV_SYS_MM_T_S, CV_SYS_M_KG_S, CV_SYS_MM_KG_MS,
                                                  CV_SYS_MM_G_MS, CV_SYS_IN_LBF_S, CV_SYS_FT_SLUG_S, CV_SYS_CM_G_S };
+            uii_test_mark(ctx, "#unit set");
             if (nk_combo_begin_label(ctx, t, nk_vec2(cw - 150 * s, CV_SYS_N * (row + 4 * s) + 20 * s))) {
                 nk_layout_row_dynamic(ctx, row, 2);
                 for (int k = 0; k < CV_SYS_N; k++) {
@@ -859,5 +857,4 @@ void window_units(struct nk_context* ctx, float s, float row, int fw, int fh) {
     }
     if (nk_window_is_hidden(ctx, "Units")) G.show_units = false;
     nk_end(ctx);
-    if (!G.show_units && nk_window_find(ctx, "Scene")) nk_window_set_focus(ctx, "Scene");
 }

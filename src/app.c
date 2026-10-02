@@ -54,6 +54,7 @@ static void video_frame(void);
 static void video_finish(void);
 static void seq_prepare(void);
 static void seq_end(void);
+static void event(const sapp_event* ev);
 
 bool cv_save_png(const char* path, int w, int h);
 bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h);
@@ -122,7 +123,7 @@ static void init(void) {
     G.tree[CV_TREE_CAMERA] = G.tree[CV_TREE_COLOURS] = 1;
     G.exp_video = true; G.exp_cycles = 1; G.exp_fps = 30; G.exp_lock_range = true;
     G.watch = O.watch;
-    settings_load();                     /* the user's last choices override the defaults above */
+    if (!O.ui_test) settings_load();     /* the user's last choices override the defaults above */
     for (int i = 0; i < O.nopts; i++)
         if (!settings_apply(O.opts[i])) fprintf(stderr, "ccxview: --opt %s: unknown key\n", O.opts[i]);
     app_colormap(G.cmap);
@@ -133,6 +134,7 @@ static void init(void) {
     if (O.gp) G.show_gp = true;
     if (O.vectors) G.show_vec = true;
     if (O.bg_set) memcpy(G.bg, O.bg, sizeof G.bg);
+    if (O.ui_test) ui_test_start(O.ui_test, event);
     if (O.gp_size > 0) G.gp_size = O.gp_size;
     if (O.gp_under) G.gp_on_top = false;
     if (O.xray) G.gp_on_top = true;
@@ -285,6 +287,7 @@ static void frame(void) {
         }
     }
 
+    ui_test_frame(g_nk);                 /* --ui-test: the script's next step, as events */
     g_nk = snk_new_frame();
     ui_frame(g_nk, sapp_width(), sapp_height());
 
@@ -391,6 +394,11 @@ static void frame(void) {
         if (!cv_save_png(O.shot_path, sapp_width(), sapp_height()))
             fprintf(stderr, "cannot write %s\n", O.shot_path);
         sapp_request_quit();
+    }
+    if (ui_test_on()) {                  /* --ui-test: a picture of each failure, then quit */
+        const char* shot = ui_test_shot();
+        if (shot && !cv_save_png(shot, sapp_width(), sapp_height())) fprintf(stderr, "cannot write %s\n", shot);
+        if (ui_test_result() >= 0) sapp_request_quit();
     }
     sg_commit();
     cv_gpu_frame_end();
@@ -560,13 +568,14 @@ static void export_now(void) {
 
 static void cleanup(void) {
     if (app_busy()) cv_thread_join(&G.job.thread);
-    if (!O.shot_path && !O.nopts) settings_save(sapp_width(), sapp_height());   /* scripted runs leave the file alone */
+    if (!O.shot_path && !O.nopts && !O.ui_test) settings_save(sapp_width(), sapp_height());   /* scripted runs leave the file alone */
     settings_free();
     unload();
     cv_render_shutdown();
     cv_snk_before_shutdown();
     snk_shutdown();
     sg_shutdown();
+    if (O.ui_test && ui_test_result() != 0) exit(1);     /* failed, or closed before the end */
 }
 
 /* A drag and what it does, fixed when the button goes down:
@@ -882,6 +891,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--log") && i + 1 < argc) cv_log_open(argv[++i]);
         else if (!strcmp(argv[i], "--verbose")) cv_log_set_verbose(true);
         else if (!strcmp(argv[i], "--check") && i + 1 < argc) check = argv[++i];
+        else if (!strcmp(argv[i], "--ui-test") && i + 1 < argc) O.ui_test = argv[++i];
         else if (!strcmp(argv[i], "--version")) { printf("ccxview %s\n", CV_VERSION); exit(0); }
         else if (!strcmp(argv[i], "--field") && i + 1 < argc) O.field = argv[++i];
         else if (!strcmp(argv[i], "--calc") && i + 1 < argc) O.calc = argv[++i];
@@ -936,7 +946,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else O.argv_path = argv[i];
     }
     if (check) exit(app_check(check));      /* headless: parse, print the messages, no window */
-    if (!size_set) settings_window_size(&O.win_w, &O.win_h);
+    if (!size_set && !O.ui_test) settings_window_size(&O.win_w, &O.win_h);
     cv_log_install_crash_handler(".", "ccxview " CV_VERSION);
     if (crash_test) crash_test_a();
     if (software) cv_gpu_software_mode();

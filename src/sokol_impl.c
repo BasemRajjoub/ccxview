@@ -9,6 +9,17 @@
 #include "nk.h"
 #include "sokol_nuklear.h"
 
+/* Nuklear's overlay command buffer: what is drawn into it lies over every window
+   and popup, and takes no input (ui.c draws the tooltips there). Begin after the
+   last window of the frame has ended, since the buffer must be the frame's last. */
+struct nk_command_buffer* cv_nk_overlay_begin(struct nk_context* ctx) {
+    nk_command_buffer_init(&ctx->overlay, &ctx->memory, NK_CLIPPING_ON);
+    nk_start_buffer(ctx, &ctx->overlay);
+    nk_push_scissor(&ctx->overlay, nk_null_rect);
+    return &ctx->overlay;
+}
+void cv_nk_overlay_end(struct nk_context* ctx) { nk_finish_buffer(ctx, &ctx->overlay); }
+
 /* GL_PROGRAM_POINT_SIZE: lets the vertex shader size points. sokol_gfx does not
    touch it, so enabling it once after sg_setup() is enough. */
 void cv_gl_enable_point_size(void) {

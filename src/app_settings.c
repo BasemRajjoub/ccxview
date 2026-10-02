@@ -280,7 +280,7 @@ void settings_add_recent(const char* path) {
     if (s) { *s = 0; cv_cfg_set(&C, "last_dir", dir); }
     /* written now, not only on a clean exit: closing the console, Ctrl+C or a
        crash would otherwise lose it. Scripted runs leave the file alone. */
-    if (!O.shot_path && !O.nopts) settings_save(0, 0);
+    if (!O.shot_path && !O.nopts && !O.ui_test) settings_save(0, 0);
 }
 
 int settings_recent(const char** out, int max) { return loaded ? cv_cfg_recent(&C, out, max) : 0; }

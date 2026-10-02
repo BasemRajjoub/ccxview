@@ -8,6 +8,7 @@
 #                   no console window; WIN_CONSOLE=1 for one)
 #   make wasm       browser build (Emscripten) -> build/web/ccxview.html
 #   make test       headless unit tests
+#   make uitest     the interface clicked through by a script (needs a display or Xvfb)
 #   make bench      headless timing tool
 #   make gen        synthetic .frd generator
 #   make corpus     parse every .frd under $(CCX_EXAMPLES)
@@ -45,7 +46,7 @@ else
 endif
 
 CORE = src/frd.c src/units.c src/mesh.c src/field.c src/calc.c src/os.c src/filedlg.c src/dat.c src/gauss.c src/inp.c src/inp_localsys.c src/fbd.c src/cgx.c src/sta.c src/log.c src/cfg.c src/export.c src/path.c src/video.c src/video_h264.c src/video_mp4.c
-APP  = src/app.c src/app_field.c src/app_overlay.c src/app_path.c src/app_linearize.c src/app_cam.c src/app_load.c src/app_settings.c src/app_gauss.c src/app_deck.c src/app_fbd.c src/render.c src/ui.c src/ui_style.c src/ui_panels.c src/ui_view.c src/ui_bars.c src/ui_windows.c src/ui_plots.c src/font_data.c src/gpu.c
+APP  = src/app.c src/app_field.c src/app_overlay.c src/app_path.c src/app_linearize.c src/app_cam.c src/app_load.c src/app_settings.c src/app_gauss.c src/app_deck.c src/app_fbd.c src/render.c src/ui.c src/ui_style.c src/ui_panels.c src/ui_view.c src/ui_bars.c src/ui_windows.c src/ui_plots.c src/ui_test.c src/font_data.c src/gpu.c
 CCX_EXAMPLES ?= $(HOME)/CalculiX-Examples
 
 # the release version (VERSION; bumping it on master makes a release, see .github/workflows),
@@ -97,6 +98,11 @@ test: build/test_main
 	./build/test_main
 	scripts/check-sources.sh
 	sh tests/launcher.sh
+
+# the interface, clicked through by a script in the real program (src/ui_test.c);
+# needs a display or Xvfb. Failure pictures: build/ui-test/
+uitest: all
+	scripts/ui-test.sh
 
 build/bench: $(patsubst %.c,$(OBJ)/%.o,tests/bench.c $(CORE))
 	$(CC) $(CFLAGS) $^ -o $@ -lm -lpthread
@@ -190,7 +196,7 @@ build/win/ccxview.exe: $(WIN_OBJ) build/win/obj/src/sokol_impl.o $(WIN_ICON)
 clean:
 	rm -rf build
 
-.PHONY: all test bench gen corpus samples clean bundle-mesa win fuzz
+.PHONY: all test uitest bench gen corpus samples clean bundle-mesa win fuzz
 
 # ---- browser build (Emscripten). One self-contained HTML file with the showcase
 # model inside; CI publishes it as the GitHub Pages site. No threads (plain hosting

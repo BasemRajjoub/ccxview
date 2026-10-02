@@ -27,4 +27,13 @@ bool  ui_mouse_captured(struct nk_context* ctx, bool wheel);
 bool  ui_text_focus(struct nk_context* ctx);
 void  ui_wheel_focus(struct nk_context* ctx);   /* wheel scrolls the panel under it */
 
+
+/* ---- ui_test.c: the interface driven by a script, see there */
+struct sapp_event;
+void ui_test_start(const char* dir, void (*send_event)(const struct sapp_event*));
+bool ui_test_on(void);
+void ui_test_frame(struct nk_context* ctx);   /* once a frame, before the frame's input goes to Nuklear */
+const char* ui_test_shot(void);               /* a failure this frame: save the window there */
+int  ui_test_result(void);                    /* -1 while running, then the number of failed cases */
+
 #endif
