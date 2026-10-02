@@ -137,10 +137,14 @@ MINGW ?= x86_64-w64-mingw32-gcc
 WINDRES ?= $(MINGW:gcc=windres)
 MINGW_LDFLAGS ?=
 ZIG ?= $(shell command -v zig 2>/dev/null)
+# Debug info, kept apart for the release (pack-binaries.sh) and read by scripts/symbolize.sh.
+# mingw gcc 8 and older die on -g with LTO (internal compiler error in dwarf2out): they
+# get -g1, functions and lines without variables, which is all a stack trace needs.
+ifeq ($(origin WIN_G),undefined)
+  WIN_GCC_MAJOR := $(if $(ZIG),,$(firstword $(subst ., ,$(shell $(MINGW) -dumpversion 2>/dev/null))))
+  WIN_G := $(if $(filter 4 5 6 7 8,$(WIN_GCC_MAJOR)),-g1,-g)
+endif
 # GUI subsystem: no cmd window behind the viewer. WIN_CONSOLE=1 keeps one (debugging).
-# debug info: kept apart for the release (pack-binaries.sh), read by scripts/symbolize.sh.
-# Old mingw gcc (8.x) dies on -g with LTO; WIN_G=-g1 (lines only) or WIN_G= there.
-WIN_G ?= -g
 WIN_SUBSYS = $(if $(filter 1,$(WIN_CONSOLE)),-mconsole,-mwindows)
 WIN_SRC = $(CORE) $(APP) vendor/tinyfiledialogs.c
 ifneq ($(ZIG),)
