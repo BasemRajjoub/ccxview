@@ -138,6 +138,9 @@ WINDRES ?= $(MINGW:gcc=windres)
 MINGW_LDFLAGS ?=
 ZIG ?= $(shell command -v zig 2>/dev/null)
 # GUI subsystem: no cmd window behind the viewer. WIN_CONSOLE=1 keeps one (debugging).
+# debug info: kept apart for the release (pack-binaries.sh), read by scripts/symbolize.sh.
+# Old mingw gcc (8.x) dies on -g with LTO; WIN_G=-g1 (lines only) or WIN_G= there.
+WIN_G ?= -g
 WIN_SUBSYS = $(if $(filter 1,$(WIN_CONSOLE)),-mconsole,-mwindows)
 WIN_SRC = $(CORE) $(APP) vendor/tinyfiledialogs.c
 ifneq ($(ZIG),)
@@ -157,7 +160,7 @@ endif
 # zig cc caches every compile by content (ZIG_GLOBAL_CACHE_DIR), but not when asked for
 # dependency files: so with zig each object depends on every header and zig skips what
 # did not change; mingw writes .d files like the native build
-WIN_CFLAGS = $(OPT) $(WIN_LTO) -std=c99 $(WIN_DEFS) -DSOKOL_GLCORE -Ivendor $(if $(ZIG),,$(DEPS))
+WIN_CFLAGS = $(OPT) $(WIN_G) $(WIN_LTO) -std=c99 $(WIN_DEFS) -DSOKOL_GLCORE -Ivendor $(if $(ZIG),,$(DEPS))
 WIN_HDRS = $(if $(ZIG),$(wildcard src/*.h vendor/*.h) vendor/miniz.c,)
 WIN_OBJ = $(patsubst %.c,build/win/obj/%.o,$(WIN_SRC))
 win: build/win/ccxview.exe
@@ -175,7 +178,7 @@ build/win/icon.res: res/ccxview.rc res/ccxview.ico
 	@mkdir -p build/win
 	$(ZIG) rc /fo $@ $<
 build/win/ccxview.exe: $(WIN_OBJ) build/win/obj/src/sokol_impl.o $(WIN_ICON)
-	$(WIN_CC) $(OPT) $(WIN_LTO) $^ -o $@ $(WIN_LINK) \
+	$(WIN_CC) $(OPT) $(WIN_G) $(WIN_LTO) $^ -o $@ $(WIN_LINK) \
 	    -lkernel32 -luser32 -lgdi32 -lshell32 -lopengl32 -lcomdlg32 -lole32
 	@echo "built $@ (test with: wine $@ model.frd)"
 

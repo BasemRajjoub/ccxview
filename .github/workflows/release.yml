@@ -1,6 +1,7 @@
 # Releases, and nothing else: a push to master that changes VERSION builds Linux, Windows
 # and the web in one job, runs the tests, creates the GitHub release v<VERSION> with the
-# three archives, and publishes the browser build to GitHub Pages. Other pushes run nothing.
+# three archives and the debug symbols, and publishes the browser build to GitHub Pages.
+# Other pushes run nothing.
 # Run by hand (Actions tab -> release -> Run workflow) to build without releasing, or tick
 # "release" to retry a release that failed.
 name: release
@@ -80,6 +81,10 @@ jobs:
           make -j"$(nproc)" test CC="ccache gcc"
           make -j"$(nproc)" build/bench PORTABLE=1 CC="ccache gcc"
           for f in samples/*/*.frd samples/*/*.inp; do ./build/bench --quiet "$f"; done
+      - name: crash report
+        run: |   # --crash-test dies before opening a window: the report and its stack must name the culprit
+          ! ./build/bin/ccxview --crash-test
+          scripts/symbolize.sh ccxview-crash.txt build/bin/ccxview | tee /dev/stderr | grep -q 'crash_test_b at .*app.c'
       - run: scripts/pack-binaries.sh
       - uses: actions/upload-artifact@v5
         if: env.PUBLISH != 'true'
@@ -92,7 +97,8 @@ jobs:
         run: |
           gh release create "${{ steps.v.outputs.tag }}" --target "$GITHUB_SHA" --generate-notes \
               --title "ccxview ${{ steps.v.outputs.tag }}" \
-              dist/ccxview-linux-x86_64.tar.gz dist/ccxview-windows-x86_64.zip dist/ccxview-web.zip
+              dist/ccxview-linux-x86_64.tar.gz dist/ccxview-windows-x86_64.zip dist/ccxview-web.zip \
+              dist/ccxview-symbols-x86_64.zip
       - name: site for GitHub Pages
         if: env.PUBLISH == 'true'
         run: mkdir -p site && cp build/web/ccxview.html site/index.html

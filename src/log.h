@@ -13,9 +13,12 @@ bool cv_log_verbose(void);
 void cv_logf(const char* fmt, ...);          /* timestamped; newline added */
 
 /* Crash report: on SIGSEGV & co (or a Windows unhandled exception) write
-   <dir>/ccxview-crash.txt with the last log lines and `context` (e.g. the
-   file being opened), then let the process die as usual. */
-void cv_log_install_crash_handler(const char* dir);
+   <dir>/ccxview-crash.txt (the temp folder when dir is not writable) with `app`
+   (name and version), the stack as module+offset per frame (scripts/symbolize.sh
+   names the functions and lines), `context` (e.g. the file being opened) and the
+   last log lines, then let the process die as usual. On Windows a message box
+   gives the path when there is no console. */
+void cv_log_install_crash_handler(const char* dir, const char* app);
 void cv_log_set_context(const char* what);   /* copied; NULL clears */
 
 #endif

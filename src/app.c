@@ -28,6 +28,17 @@
 #define CV_VERSION "dev"
 #endif
 
+/* --crash-test: a deliberate null write two calls deep, to check the crash report
+   and that scripts/symbolize.sh names these two functions */
+#if defined(__GNUC__)
+#define CV_NOINLINE __attribute__((noinline))
+#else
+#define CV_NOINLINE
+#endif
+static int* volatile crash_test_ptr;          /* NULL, unknown to the optimiser */
+static CV_NOINLINE void crash_test_b(void) { cv_log_set_context("--crash-test"); *crash_test_ptr = 1; }
+static CV_NOINLINE void crash_test_a(void) { cv_logf("--crash-test: writing to NULL"); crash_test_b(); cv_logf("survived"); }
+
 cv_app G;
 static struct nk_context* g_nk;
 static void app_log(const char* tag, uint32_t level, uint32_t item, const char* msg, uint32_t line,
@@ -844,7 +855,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     cv_gpu_remember_args(argc, argv);
     bool software = cv_gpu_is_software_run();
     const char* check = NULL;
-    bool size_set = false;
+    bool size_set = false, crash_test = false;
     if (getenv("CCXVIEW_LOG")) cv_log_open(getenv("CCXVIEW_LOG"));
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--shot") && i + 1 < argc) O.shot_path = argv[++i];
@@ -866,6 +877,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
             if (sscanf(argv[++i], "%dx%d", &w, &h) == 2 && w > 200 && h > 200) { O.win_w = w; O.win_h = h; size_set = true; }
         }
         else if (!strcmp(argv[i], "--software")) software = true;
+        else if (!strcmp(argv[i], "--crash-test")) crash_test = true;
         else if (!strcmp(argv[i], "--log") && i + 1 < argc) cv_log_open(argv[++i]);
         else if (!strcmp(argv[i], "--verbose")) cv_log_set_verbose(true);
         else if (!strcmp(argv[i], "--check") && i + 1 < argc) check = argv[++i];
@@ -924,7 +936,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     }
     if (check) exit(app_check(check));      /* headless: parse, print the messages, no window */
     if (!size_set) settings_window_size(&O.win_w, &O.win_h);
-    cv_log_install_crash_handler(".");
+    cv_log_install_crash_handler(".", "ccxview " CV_VERSION);
+    if (crash_test) crash_test_a();
     if (software) cv_gpu_software_mode();
     if (getenv("CCXVIEW_FAKE_NO_GPU") && !software) {   /* testing the fallback path */
         fprintf(stderr, "ccxview: CCXVIEW_FAKE_NO_GPU set, pretending the GL context failed\n");

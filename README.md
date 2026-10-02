@@ -62,7 +62,11 @@ Downloads of the [latest release](https://github.com/BasemRajjoub/ccxview/releas
   a picture later. All available from the command line for scripting.
 - **Robust.** Damaged records are skipped and listed, never a crash. Settings
   (in sections in `ccxview.ini`, beside the executable), open panel sections,
-  window size and recent files are remembered.
+  window size and recent files are remembered. Should the viewer itself crash,
+  it writes `ccxview-crash.txt` (beside it, else in the temp folder) with the
+  version, the stack and the last log lines; attach it to an issue.
+  `scripts/symbolize.sh` turns the stack into functions and lines, with the
+  debug symbols of each release (`ccxview-symbols-x86_64.zip`).
 
 ## Use
 
