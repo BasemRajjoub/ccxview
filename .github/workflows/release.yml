@@ -52,7 +52,7 @@ jobs:
           fi
       - name: compilers and headers
         run: |   # the runner's package lists are usually fresh enough; update only when not
-          p="libx11-dev libxi-dev libxcursor-dev libgl-dev gcc-mingw-w64-x86-64 patchelf"
+          p="libx11-dev libxi-dev libxcursor-dev libgl-dev gcc-mingw-w64-x86-64 patchelf xvfb xauth libgl1-mesa-dri libglx-mesa0"   # the last four: the interface test
           sudo apt-get install -y -qq --no-install-recommends $p || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $p; }
       - name: emsdk from the cache
         id: emsdk
@@ -81,6 +81,14 @@ jobs:
           make -j"$(nproc)" test CC="ccache gcc"
           make -j"$(nproc)" build/bench PORTABLE=1 CC="ccache gcc"
           for f in samples/*/*.frd samples/*/*.inp; do ./build/bench --quiet "$f"; done
+      - name: interface test
+        run: scripts/ui-test.sh   # the real program under Xvfb, clicked through by src/ui_test.c
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: ui-test-failures
+          path: build/ui-test/
+          retention-days: 7
       - name: crash report
         run: |   # --crash-test dies before opening a window: the report and its stack must name the culprit
           ! ./build/bin/ccxview --crash-test
