@@ -169,6 +169,9 @@ static void restyle(struct nk_context* ctx, float s) {
     SV(st->button.padding); SV(st->button.touch_padding);
     SV(st->contextual_button.padding); SV(st->menu_button.padding);
     SV(st->checkbox.padding); SV(st->checkbox.touch_padding); st->checkbox.spacing *= s;
+    /* a selected radio button is filled with the mark colour, as a ticked box is: a small dot
+       in a grey ring barely showed in the light and the pastel themes */
+    st->option.padding = nk_vec2(1, 1);
     SV(st->option.padding); SV(st->option.touch_padding); st->option.spacing *= s;
     SV(st->selectable.padding); SV(st->selectable.touch_padding);
     SV(st->slider.padding); SV(st->slider.spacing); SV(st->slider.cursor_size); st->slider.bar_height *= s;

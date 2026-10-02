@@ -149,6 +149,7 @@ bool settings_apply(const char* kv) {
     if (!strcmp(key, "ui_zoom")) { ui_set_zoom((float)atof(val)); return true; }
     if (!strcmp(key, "ui_font")) { ui_set_font_size((float)atof(val)); return true; }
     if (!strcmp(key, "ui_pixel_font")) { ui_set_pixel_font(parse_bool(val)); return true; }
+    if (!strcmp(key, "ui_theme")) { ui_set_theme(val); return true; }
     if (!strcmp(key, "export_open")) { G.tree[CV_TREE_EXPORT] = parse_bool(val); return true; }
     /* per-model things that are never saved here (the view file has them), but handy on the command line */
     if (!strcmp(key, "rep_follow")) { G.rep_follow = parse_bool(val); return true; }
