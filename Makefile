@@ -50,6 +50,7 @@ CCX_EXAMPLES ?= $(HOME)/CalculiX-Examples
 
 # the release version (VERSION; bumping it on master makes a release, see .github/workflows),
 # given only to app.c so a bump recompiles that one file
+.DEFAULT_GOAL := all
 VERSION_STR := $(shell cat VERSION 2>/dev/null)
 VERSION_DEF =
 $(addsuffix /src/app.o,build/obj/dev build/obj/release build/obj/portable build/win/obj build/web/obj): VERSION
