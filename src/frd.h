@@ -22,6 +22,8 @@ typedef struct {
     uint64_t data_off;                   /* byte offset of the first data record */
     uint64_t line;                       /* 1-based line of data_off (ASCII) */
     uint32_t n_rec;                      /* binary: records per 6-component pass */
+    bool     shear_yzx;                  /* stored as XX YY ZZ YZ ZX XY (FEMaster); comp[] and
+                                            the decoded values are in the usual XY YZ ZX order */
 } cv_field_desc;
 
 typedef struct {

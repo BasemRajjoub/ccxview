@@ -7,6 +7,7 @@
    and follow their header line directly as raw little-endian records. */
 #include "frd.h"
 #include <math.h>
+#include <ctype.h>
 
 /* ---- element types ------------------------------------------------------- */
 
@@ -357,6 +358,24 @@ static uint64_t binary_field_bytes(int ncomp, int fmt, uint32_t n_rec) {
     return total;
 }
 
+/* FEMaster writes a tensor as XX YY ZZ YZ ZX XY. Name the components in the usual
+   .frd order XY YZ ZX instead; cv_frd_read_field moves the values to match. */
+static bool comp_ends(const char* c, const char* ab) {
+    size_t k = strlen(c);
+    return k >= 2 && tolower((unsigned char)c[k - 2]) == ab[0] && tolower((unsigned char)c[k - 1]) == ab[1];
+}
+static void shear_order(cv_field_desc* d) {
+    if (d->ncomp != 6 || !comp_ends(d->comp[0], "xx") || !comp_ends(d->comp[1], "yy") || !comp_ends(d->comp[2], "zz") ||
+        !comp_ends(d->comp[3], "yz") || !comp_ends(d->comp[4], "zx") || !comp_ends(d->comp[5], "xy")) return;
+    char yz[12], zx[12];
+    memcpy(yz, d->comp[3], 12);
+    memcpy(zx, d->comp[4], 12);
+    memcpy(d->comp[3], d->comp[5], 12);
+    memcpy(d->comp[4], yz, 12);
+    memcpy(d->comp[5], zx, 12);
+    d->shear_yzx = true;
+}
+
 #define PUSH(v, x) do { if (!cv_push((v), (x))) goto oom; } while (0)
 
 bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
@@ -400,7 +419,8 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
             fr.d.data_off = (uint64_t)(ls - data);
             fr.d.line = c.line;
             if (fr.d.ncomp == 0) fr.d.ncomp = CV_MIN(CV_MAX(hdr_ncomp, 1), CV_MAX_COMP);
-            PUSH(frecs, fr);
+            shear_order(&fr.d);
+        PUSH(frecs, fr);
             in_hdr = false;
             if (tok_is(k, ke, "-1")) {
                 const char *s2, *e2;
@@ -459,6 +479,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
                 fr.d.line = c.line;
                 if (fr.d.ncomp == 0) fr.d.ncomp = 1;
                 fr.d.n_rec = 0;
+                shear_order(&fr.d);
                 PUSH(frecs, fr);
             }
             memset(&fr, 0, sizeof fr);
@@ -501,6 +522,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
                 } else {
                     c.p += bytes;
                 }
+                shear_order(&fr.d);
                 PUSH(frecs, fr);
                 in_hdr = false;
                 block = B_NONE;
@@ -629,6 +651,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
     if (in_hdr) {                               /* file ended inside a field header */
         fr.d.data_off = size;
         if (fr.d.ncomp == 0) fr.d.ncomp = 1;
+        shear_order(&fr.d);
         PUSH(frecs, fr);
     }
     if (!saw_end && size > 0)
@@ -800,6 +823,11 @@ void cv_frd_read_field(const cv_frd* f, const cv_field_desc* d, float* out, cv_m
         }
     }
 done:
+    if (d->shear_yzx)                           /* stored YZ ZX XY: to XY YZ ZX */
+        for (size_t i = 0; i < (size_t)f->n_nodes; i++) {
+            float* o = out + 6 * i, yz = o[3], zx = o[4];
+            o[3] = o[5]; o[4] = yz; o[5] = zx;
+        }
     if (unknown && msgs) {
         snprintf(buf, sizeof buf, "%s: %zu values for nodes not in the node block (ignored)",
                  d->name, unknown);

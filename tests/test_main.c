@@ -361,6 +361,49 @@ static void test_continuation_and_nan(void) {
     free(b.p);
 }
 
+/* FEMaster writes tensors XX YY ZZ YZ ZX XY: read back in the CalculiX order
+   XX YY ZZ XY YZ ZX, names and values; a CalculiX tensor stays as it is. */
+static void test_shear_order(void) {
+    for (int binary = 0; binary < 2; binary++) {
+        FILE* o = tmp_open();
+        uint32_t id[2] = { 1, 2 };
+        double xyz[6] = { 0,0,0, 1,0,0 };
+        fw_nodes(o, 2, id, xyz, binary);
+        const char* ccx[6] = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" };
+        const char* fem[6] = { "SXX", "SYY", "SZZ", "SYZ", "SZX", "SXY" };
+        float v[12] = { 1, 2, 3, 4, 5, 6,  11, 12, 13, 14, 15, 16 };
+        fw_step(o, 1, 1.0, 2, binary);
+        fw_field(o, "STRESS", 6, ccx, 0, 2, id, v, binary);
+        fw_step(o, 1, 1.0, 2, binary);
+        fw_field(o, "STRPOS", 6, fem, 0, 2, id, v, binary);
+        fprintf(o, "9999\n");
+        buf_t b = slurp(o);
+        cv_frd f;
+        CHECK(cv_frd_parse(&f, b.p, b.n));
+        if (f.n_steps == 1 && f.steps[0].nfields == 2) {
+            const cv_field_desc* c = &f.steps[0].fields[0];
+            const cv_field_desc* m = &f.steps[0].fields[1];
+            CHECK(!c->shear_yzx);
+            CHECK(m->shear_yzx);
+            CHECK(!strcmp(c->comp[3], "SXY") && !strcmp(c->comp[4], "SYZ") && !strcmp(c->comp[5], "SZX"));
+            CHECK(!strcmp(m->comp[3], "SXY") && !strcmp(m->comp[4], "SYZ") && !strcmp(m->comp[5], "SZX"));
+            float out[12];
+            cv_msgs ms = {0};
+            cv_frd_read_field(&f, c, out, &ms);
+            for (int i = 0; i < 12; i++) CHECK_NEAR(out[i], v[i], 1e-6);     /* CalculiX untouched */
+            cv_frd_read_field(&f, m, out, &ms);
+            const float want[12] = { 1, 2, 3, 6, 4, 5,  11, 12, 13, 16, 14, 15 };
+            for (int i = 0; i < 12; i++) CHECK_NEAR(out[i], want[i], 1e-6);
+            free(ms.a);
+        } else {
+            CHECK(!"fields missing");
+        }
+        cv_frd_free(&f);
+        free(f.msgs.a);
+        free(b.p);
+    }
+}
+
 static void test_field_math(void) {
     float s1[6] = { 100, 0, 0, 0, 0, 0 };
     CHECK_NEAR(cv_von_mises(s1), 100, 1e-4);
@@ -1384,6 +1427,7 @@ int main(void) {
     test_modal_flag();
     test_missing_node();
     test_continuation_and_nan();
+    test_shear_order();
     test_field_math();
     printf("%d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;

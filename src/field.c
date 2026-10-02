@@ -7,7 +7,8 @@
 #endif
 
 static bool is_stress(const char* name) {
-    return strncmp(name, "STRESS", 6) == 0 || strncmp(name, "ZZS", 3) == 0;
+    return strncmp(name, "STRESS", 6) == 0 || strncmp(name, "ZZS", 3) == 0 ||
+           !strcmp(name, "STRPOS") || !strcmp(name, "STRNEG") || !strcmp(name, "STRMID");   /* shell faces */
 }
 
 /* 0: not a tensor; 1: shears XY YZ ZX (.frd); 2: shears xy xz yz (.dat).
