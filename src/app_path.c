@@ -435,6 +435,7 @@ static const float* hist_get(void* ud, int s, int fi) {
     if (need > h->cap) { float* nb = realloc(h->buf, need * sizeof(float)); if (!nb) return NULL; h->buf = nb; h->cap = need; }
     cv_frd_read_field(&G.frd, d, h->buf, NULL);
     deck_localize(s, d, h->buf);
+    units_apply(d->name, d->ncomp, h->buf, G.frd.n_nodes);
     return h->buf;
 }
 
@@ -486,6 +487,7 @@ void refresh_hist(void) {
             if (need > cap) { float* nb = realloc(buf, need * sizeof(float)); if (!nb) break; buf = nb; cap = need; }
             cv_frd_read_field(&G.frd, d, buf, NULL);
             deck_localize(s, d, buf);
+            units_apply(d->name, d->ncomp, buf, G.frd.n_nodes);
             v = buf;
         }
         double sum = 0; int cnt = 0;

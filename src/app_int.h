@@ -57,6 +57,8 @@ extern cv_opts O;
 /* app_field.c: decoded fields, colours, displacement, the current step */
 void         cache_clear(void);
 const float* cache_get(int step, int field);
+void  units_apply(const char* field, int ncomp, float* v, size_t n);   /* model units -> shown */
+float units_len_raw(void);           /* shown lengths -> model lengths (the shape) */
 int          find_field(int step, const char* name);
 void         init_group_colors(void);
 void         refresh_tri_colors(void);

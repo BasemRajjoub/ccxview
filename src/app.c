@@ -112,6 +112,7 @@ static void init(void) {
     G.cam.fovy = 30.f * 3.14159265f / 180.f;
     G.cam.dist = 3;
     G.legend_decimals = 3;
+    for (int q = 0; q < CV_Q_N; q++) G.unit_in[q] = G.unit_show[q] = -1;   /* the system's, as input */
     G.clip_pos = 0.5f;
     G.clip_cap = true;
     G.rep_n[0] = G.rep_n[1] = G.rep_n[2] = 3;

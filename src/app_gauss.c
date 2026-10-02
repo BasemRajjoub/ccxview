@@ -5,6 +5,7 @@
    matches the current .frd increment. Everything here is rebuilt from that
    block; geometry follows the current skin, visibility and displacement. */
 #include "app.h"
+#include "app_int.h"     /* units_apply */
 #include "dat.h"
 #include "gauss.h"
 #include <math.h>
@@ -220,6 +221,7 @@ bool gp_refresh(void) {
     if (!P.epos || !P.enip || !rec) { free(rec); free_arrays(); return false; }
 
     cv_field_scalar(b->vals, b->ncomp, b->n, G.comp, rec);
+    units_apply(G.field_name, 1, rec, b->n);   /* a block's components share one quantity */
     size_t unknown = 0;
     for (uint32_t r = 0; r < b->n; r++) {
         uint32_t e = cv_frd_elem_index(&G.frd, b->elem[r]);

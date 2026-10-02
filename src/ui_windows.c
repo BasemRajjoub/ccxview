@@ -636,3 +636,228 @@ void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh
        leave it to Nuklear, which can keep the panel read only */
     if (!G.show_calc_help && nk_window_find(ctx, "Scene")) nk_window_set_focus(ctx, "Scene");
 }
+
+/* ---- units: what each quantity is in, in the file (a consistent set, or chosen one
+   by one), and what it is shown in (a preset, or chosen one by one) */
+
+static int unit_in_now(int q) { return cv_unit_input(G.units, cv_sys_temp(G.units), G.unit_in[q], q); }
+static int unit_shown_now(int q) {
+    return cv_unit_shown(G.units, cv_sys_temp(G.units), G.unit_in[q], q, G.unit_show[q]);
+}
+static const char* unit_label(const cv_unit* u) { return u ? (u->name[0] ? u->name : "ratio") : "?"; }
+
+void units_summary(char* out, size_t n) {
+    int l = unit_shown_now(CV_Q_LEN), p = unit_shown_now(CV_Q_STRESS);
+    if (l < 0 && p < 0) { snprintf(out, n, "not set"); return; }
+    snprintf(out, n, "%s, %s", l < 0 ? "?" : unit_label(cv_unit_get(CV_Q_LEN, l)),
+             p < 0 ? "?" : unit_label(cv_unit_get(CV_Q_STRESS, p)));
+}
+
+/* the input side: true when some quantity was chosen apart from the set */
+static bool units_in_custom(void) {
+    for (int q = 0; q < CV_Q_N; q++)
+        if (G.unit_in[q] >= 0 && G.unit_in[q] != cv_sys_unit(G.units, cv_sys_temp(G.units), q)) return true;
+    return false;
+}
+
+/* the display preset all the shown units match, -1 when chosen one by one */
+static int units_show_preset(void) {
+    for (int p = 0; p < CV_SHOW_N; p++) {
+        bool all = true;
+        for (int q = 0; q < CV_Q_N && all; q++) all = G.unit_show[q] == cv_show_unit(p, q);
+        if (all) return p;
+    }
+    return -1;
+}
+
+/* a choice among several: true when clicked while not the chosen one */
+static bool unit_chip(struct nk_context* ctx, const char* label, bool on) {
+    nk_bool v = on;
+    return nk_selectable_label(ctx, label, NK_TEXT_CENTERED, &v) && !on;
+}
+
+/* chips as wide as the widest label of a row, as many to a line as fit */
+static void chip_rows(struct nk_context* ctx, float s, float row, float cw, const char* const* labels, int n) {
+    const struct nk_user_font* f = ctx->style.font;
+    float w = 64 * s, sp = ctx->style.window.spacing.x;
+    for (int i = 0; i < n; i++)
+        w = CV_MAX(w, f->width(f->userdata, f->height, labels[i], (int)strlen(labels[i])) + 20 * s);
+    w = CV_MIN(w, cw);
+    nk_layout_row_static(ctx, row, (int)w, CV_MAX(1, (int)((cw + sp) / (w + sp))));
+}
+
+/* the name of a quantity's row, the accent when it is the field on screen */
+static void unit_row_head(struct nk_context* ctx, float s, float row, int q, bool here, const char* note) {
+    char t[128];
+    nk_layout_row_dynamic(ctx, 4 * s, 1);
+    nk_spacing(ctx, 1);
+    nk_layout_row_dynamic(ctx, row, 1);
+    snprintf(t, sizeof t, "%s%s%s", cv_quantity_name(q), here ? "   (the field shown)" : "", note);
+    nk_label_colored(ctx, t, NK_TEXT_LEFT, here ? P.accent : P.text);
+}
+
+/* tooltip of unit i: its size against the first (SI) unit */
+static void unit_tip(struct nk_context* ctx, int q, int i) {
+    if (q == CV_Q_TEMP || i == 0) return;
+    char t[96];
+    const cv_unit *u = cv_unit_get(q, i), *si = cv_unit_get(q, 0);
+    snprintf(t, sizeof t, "1 %s = %.6g %s", unit_label(u), u->si, unit_label(si));
+    tip(ctx, t);
+}
+
+/* input: every unit the quantity can be in; the set's own unit undoes a choice */
+static bool unit_row_in(struct nk_context* ctx, float s, float row, float cw, int q, bool here) {
+    int sysu = cv_sys_unit(G.units, cv_sys_temp(G.units), q), cur = unit_in_now(q);
+    bool own = G.unit_in[q] >= 0 && G.unit_in[q] != sysu;
+    unit_row_head(ctx, s, row, q, here, own ? "   - changed" : "");
+    const char* lab[32];
+    int n = CV_MIN(cv_unit_count(q), 32);
+    for (int i = 0; i < n; i++) lab[i] = unit_label(cv_unit_get(q, i));
+    chip_rows(ctx, s, row, cw, lab, n);
+    bool changed = false;
+    for (int i = 0; i < n; i++) {
+        if (i == sysu) tip(ctx, "The unit of the set chosen above");
+        else unit_tip(ctx, q, i);
+        if (unit_chip(ctx, lab[i], cur == i)) { G.unit_in[q] = i == sysu ? -1 : i; changed = true; }
+    }
+    return changed;
+}
+
+/* display: as input, or any unit of the quantity */
+static bool unit_row_show(struct nk_context* ctx, float s, float row, float cw, int q, bool here) {
+    char t[64];
+    int in = unit_in_now(q);
+    unit_row_head(ctx, s, row, q, here, "");
+    if (in < 0) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, "its input unit is not set: shown as in the file", NK_TEXT_LEFT, P.dim);
+        return false;
+    }
+    const char* lab[33];
+    int n = CV_MIN(cv_unit_count(q), 32);
+    snprintf(t, sizeof t, "as input (%s)", unit_label(cv_unit_get(q, in)));
+    lab[0] = t;
+    for (int i = 0; i < n; i++) lab[i + 1] = unit_label(cv_unit_get(q, i));
+    chip_rows(ctx, s, row, cw, lab, n + 1);
+    bool changed = false;
+    tip(ctx, "No conversion");
+    if (unit_chip(ctx, t, G.unit_show[q] < 0)) { G.unit_show[q] = -1; changed = true; }
+    for (int i = 0; i < n; i++) {
+        unit_tip(ctx, q, i);
+        if (unit_chip(ctx, lab[i + 1], G.unit_show[q] == i)) { G.unit_show[q] = i; changed = true; }
+    }
+    return changed;
+}
+
+/* "Unit set  [combo]": the label; the combo takes the rest of the row */
+static void set_row(struct nk_context* ctx, float s, float row, const char* label, const char* what) {
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 150 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_end(ctx);
+    tip(ctx, what);
+    nk_label(ctx, label, NK_TEXT_LEFT);
+}
+
+void window_units(struct nk_context* ctx, float s, float row, int fw, int fh) {
+    static bool was_open = false;
+    static int tab = 0;                           /* 0 input units, 1 display units */
+    if (!G.show_units) { was_open = false; return; }
+    if (!was_open) {
+        nk_window_show(ctx, "Units", NK_SHOWN);
+        tab = G.units > 0 || units_in_custom();   /* the input first, until it is set */
+    }
+    was_open = true;
+    float w = CV_MIN(700 * s, fw * 0.92f), h = CV_MIN(fh * 0.86f, 860 * s);
+    if (nk_begin(ctx, "Units", nk_rect((fw - w) / 2, (fh - h) / 2, w, h),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
+        float cw = nk_window_get_content_region(ctx).w;
+        bool changed = false, custom_in = units_in_custom();
+        int preset = units_show_preset();
+        char t[160];
+
+        /* both sides at a glance */
+        nk_layout_row_dynamic(ctx, row, 1);
+        snprintf(t, sizeof t, "Input: %s%s      Display: %s", cv_sys_name(G.units),
+                 custom_in ? " + changes" : "", preset < 0 ? "Custom" : cv_show_name(preset));
+        nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
+
+        /* the two tabs */
+        nk_layout_row_dynamic(ctx, row * 1.2f, 2);
+        if (unit_chip(ctx, "Input units", tab == 0)) tab = 0;
+        if (unit_chip(ctx, "Display units", tab == 1)) tab = 1;
+        uii_hsep(ctx, s);
+
+        int here = G.has_field && G.field_src != 2 ? cv_field_quantity(G.field_name, G.comp) : -1;
+        if (tab == 0) {
+            nk_layout_row_dynamic(ctx, row, 1);
+            nk_label_colored(ctx, "What the model was built in. CalculiX has no units: results come in that set.",
+                             NK_TEXT_LEFT, P.dim);
+            set_row(ctx, s, row, "Unit set", "A consistent set: length, mass, time; force and stress follow from them");
+            snprintf(t, sizeof t, "%s%s", cv_sys_name(G.units), custom_in ? "  + changes" : "");
+            /* SI first, then US, then the rest; each with its base units beside it */
+            static const int order[CV_SYS_N] = { CV_SYS_NONE, CV_SYS_MM_T_S, CV_SYS_M_KG_S, CV_SYS_MM_KG_MS,
+                                                 CV_SYS_MM_G_MS, CV_SYS_IN_LBF_S, CV_SYS_FT_SLUG_S, CV_SYS_CM_G_S };
+            if (nk_combo_begin_label(ctx, t, nk_vec2(cw - 150 * s, CV_SYS_N * (row + 4 * s) + 20 * s))) {
+                nk_layout_row_dynamic(ctx, row, 2);
+                for (int k = 0; k < CV_SYS_N; k++) {
+                    int i = order[k];
+                    if (nk_combo_item_label(ctx, cv_sys_name(i), NK_TEXT_LEFT)) {
+                        G.units = i;
+                        for (int q = 0; q < CV_Q_N; q++) G.unit_in[q] = -1;   /* the whole set */
+                        changed = true;
+                    }
+                    nk_label_colored(ctx, cv_sys_base(i), NK_TEXT_LEFT, P.dim);
+                }
+                nk_combo_end(ctx);
+            }
+            if (G.units > 0) {
+                nk_layout_row_template_begin(ctx, row);
+                nk_layout_row_template_push_static(ctx, 150 * s);
+                nk_layout_row_template_push_dynamic(ctx);
+                nk_layout_row_template_end(ctx);
+                nk_spacing(ctx, 1);
+                snprintf(t, sizeof t, "%s, %s", cv_sys_base(G.units), unit_label(cv_unit_get(CV_Q_TEMP, cv_sys_temp(G.units))));
+                nk_label_colored(ctx, t, NK_TEXT_LEFT, P.dim);
+            }
+            if (custom_in) {
+                nk_layout_row_dynamic(ctx, 2 * row, 1);
+                nk_label_colored_wrap(ctx, "Some quantities are set apart from the set. CalculiX solves in one consistent "
+                                      "set, so check those rows match what the model really used.", P.warn);
+            }
+            if (here >= 0) changed |= unit_row_in(ctx, s, row, cw, here, true);
+            for (int q = 0; q < CV_Q_N; q++) if (q != here) changed |= unit_row_in(ctx, s, row, cw, q, false);
+        } else {
+            nk_layout_row_dynamic(ctx, row, 1);
+            nk_label_colored(ctx, "What to read the results in. Values are converted from the input units.",
+                             NK_TEXT_LEFT, P.dim);
+            set_row(ctx, s, row, "Show in", "A whole set at once; change any quantity below");
+            if (nk_combo_begin_label(ctx, preset < 0 ? "Custom" : cv_show_name(preset),
+                                     nk_vec2(cw - 150 * s, CV_SHOW_N * (row + 4 * s) + 20 * s))) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                for (int p = 0; p < CV_SHOW_N; p++)
+                    if (nk_combo_item_label(ctx, cv_show_name(p), NK_TEXT_LEFT)) {
+                        for (int q = 0; q < CV_Q_N; q++) G.unit_show[q] = cv_show_unit(p, q);
+                        changed = true;
+                    }
+                nk_combo_end(ctx);
+            }
+            if (G.units <= 0 && !custom_in) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                nk_label_colored(ctx, "Set the input units first: until then only strains convert.", NK_TEXT_LEFT, P.warn);
+            }
+            if (here >= 0) changed |= unit_row_show(ctx, s, row, cw, here, true);
+            for (int q = 0; q < CV_Q_N; q++) if (q != here) changed |= unit_row_show(ctx, s, row, cw, q, false);
+        }
+
+        nk_layout_row_dynamic(ctx, 8 * s, 1);
+        nk_spacing(ctx, 1);
+        nk_layout_row_dynamic(ctx, 2 * row, 1);
+        nk_label_colored_wrap(ctx, "Formulas see the values as shown. Node coordinates and the deformed shape stay in model units.",
+                              P.dim);
+        if (changed) app_units_changed();
+    }
+    if (nk_window_is_hidden(ctx, "Units")) G.show_units = false;
+    nk_end(ctx);
+    if (!G.show_units && nk_window_find(ctx, "Scene")) nk_window_set_focus(ctx, "Scene");
+}

@@ -201,6 +201,7 @@ void unload(void) {
     G.playing = false;
     G.skin_dirty = false;
     G.field_name[0] = G.field_label[0] = 0;
+    for (int k = 0; k < 3; k++) G.legend_lines[k][0] = 0;
 }
 
 /* Default: von Mises if there is stress, else |DISP|, else the first field. */
@@ -353,10 +354,10 @@ static void apply_load(cv_job* j) {
         const float* v = cache_get(s, fi);
         int nc = G.frd.steps[s].fields[fi].ncomp;
         if (v && nc >= 3) {
-            float peak = 0;
+            float peak = 0, raw = units_len_raw();   /* in model units, like the mesh */
             for (uint32_t i = 0; i < N; i++) {
                 const float* r = v + (size_t)i * nc;
-                float m = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+                float m = raw * sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
                 if (m == m && m > peak) peak = m;
             }
             G.auto_scale = cv_auto_deform(peak, G.diag);

@@ -13,6 +13,7 @@
 #include "fbd.h"
 #include "sta.h"
 #include "anchor.h"
+#include "units.h"
 
 /* what the faces are coloured by */
 enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
@@ -129,6 +130,7 @@ typedef struct {
     bool      gp_on_top;      /* Gauss points drawn through the faces */
     int       probe_ip;       /* point hit by the probe (1-based), 0 none */
     char      field_label[96];   /* with the unit in [] when a unit set is chosen */
+    char      legend_lines[3][96];   /* the legend's title: the field, its component, its unit; any may be empty */
 
     cv_cache_entry cache[CV_CACHE_N];
     uint64_t  cache_clock;
@@ -294,6 +296,7 @@ typedef struct {
 
     bool      show_msgs;
     bool      show_calc_help;        /* the formula builder window */
+    bool      show_units;            /* the units window */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
     float     bg[3];                 /* view background */
@@ -326,7 +329,9 @@ typedef struct {
     bool      legend_grey;           /* greyscale, for printing */
     int       legend_fmt;            /* 0 auto, 1 fixed decimals, 2 scientific */
     int       legend_decimals;
-    int       units;                 /* CV_UNITS_*: unit set for labels (0: none shown) */
+    int       units;                 /* CV_SYS_*: the unit system the model was built in (0: not set) */
+    int       unit_in[CV_Q_N];       /* each quantity in the file: unit index (units.h), -1 the system's */
+    int       unit_show[CV_Q_N];     /* each quantity shown in: unit index, -1 as input */
     int       csys;                  /* results in: 0 global, 1..3 cylindrical about X, Y, Z */
     float     csys_o[3];             /* ... through this point */
     bool      legend_edit;           /* the legend settings window is open */
@@ -335,9 +340,8 @@ typedef struct {
 
 extern cv_app G;
 
-enum { CV_UNITS_NONE, CV_UNITS_MM, CV_UNITS_M, CV_UNITS_IN, CV_UNITS_N };
-extern const char* const cv_units_name[CV_UNITS_N];
-const char* app_unit(const char* field, int comp);   /* "" when unknown or no unit set */
+const char* app_unit(const char* field, int comp);   /* the unit shown, "" when unknown or no unit set */
+void app_units_changed(void);        /* file or shown units changed: values decoded again */
 /* cv_field_options with component names in the chosen coordinate system */
 int  app_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
 

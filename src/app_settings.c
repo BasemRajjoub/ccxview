@@ -30,6 +30,7 @@ typedef struct {
 #define I(k, a, b)        { #k, 'i', &G.k, a, b }
 #define F(k, a, b)        { #k, 'f', &G.k, a, b }
 #define TREE(name, t)     { "open_" name, 'i', &G.tree[t], 0, 1 }
+#define UNIT(name, q)     { "unit_in_" name, 'i', &G.unit_in[q], -1, 64 }, { "unit_" name, 'i', &G.unit_show[q], -1, 64 }
 
 static const setting S[] = {
     SEC("Layers"),
@@ -40,7 +41,13 @@ static const setting S[] = {
     B(vec_colored), F(vec_pct, 0.01f, 100), F(geo_size, 0.5f, 64), B(show_markers), B(show_ghost),
     SEC("Colours and legend"),
     I(cmap, 0, CV_CMAP_N - 1), I(bands, 0, 64), B(center_zero), B(legend_reverse), B(legend_grey),
-    I(legend_fmt, 0, 2), I(legend_decimals, 0, 9), B(hide_legend), I(units, 0, CV_UNITS_N - 1),
+    I(legend_fmt, 0, 2), I(legend_decimals, 0, 9), B(hide_legend),
+    SEC("Units: the model's system; each quantity in the file (unit_in_, -1: the system's) and shown in (unit_, -1: as input)"),
+    I(units, 0, CV_SYS_N - 1),
+    UNIT("length", CV_Q_LEN), UNIT("stress", CV_Q_STRESS), UNIT("force", CV_Q_FORCE), UNIT("temperature", CV_Q_TEMP),
+    UNIT("strain", CV_Q_STRAIN), UNIT("velocity", CV_Q_VELO), UNIT("acceleration", CV_Q_ACC),
+    UNIT("energy_density", CV_Q_ENERGY_D), UNIT("heat_flux", CV_Q_FLUX), UNIT("power", CV_Q_POWER),
+    UNIT("energy", CV_Q_ENERGY), UNIT("mass_flow", CV_Q_MASSFLOW), UNIT("volume", CV_Q_VOLUME), UNIT("mass", CV_Q_MASS),
     SEC("Legend and axes gizmo: view corner (tl tr bl br), gap x, gap y; auto = default place"),
     { "legend_pos", 'a', &G.legend_pos, 0, 0 }, { "gizmo_pos", 'a', &G.gizmo_pos, 0, 0 },
     SEC("Camera"),
@@ -67,6 +74,7 @@ enum { NS = sizeof S / sizeof S[0] };
 #undef I
 #undef F
 #undef TREE
+#undef UNIT
 
 /* keys written apart from the table */
 static const char* const OTHER[] = { "window_w", "window_h", "ui_zoom", "ui_font", "ui_pixel_font", "ui_theme", "last_dir" };

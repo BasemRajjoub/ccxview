@@ -189,14 +189,64 @@ static void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f,
     nk_draw_text(cv, nk_rect(x, y, w, f->height), txt, n, f, nk_rgba(0, 0, 0, 0), c);
 }
 
-/* nk_label in the ink colour, with the same plate */
-static void ink_label(struct nk_context* ctx, const char* txt) {
+/* nk_label in colour c, with the same plate */
+static void ink_label_c(struct nk_context* ctx, const char* txt, struct nk_color c) {
     struct nk_rect b = nk_widget_bounds(ctx);
     const struct nk_user_font* f = ctx->style.font;
     float px = ctx->style.text.padding.x, tw = f->width(f->userdata, f->height, txt, (int)strlen(txt));
     nk_fill_rect(nk_window_get_canvas(ctx), nk_rect(b.x + px - 2, b.y + (b.h - f->height) * 0.5f, CV_MIN(tw + 4, b.w), f->height),
                  3, uii_bg(110));
-    nk_label_colored(ctx, txt, NK_TEXT_LEFT, uii_on_bg());
+    nk_label_colored(ctx, txt, NK_TEXT_LEFT, c);
+}
+static void ink_label(struct nk_context* ctx, const char* txt) { ink_label_c(ctx, txt, uii_on_bg()); }
+
+/* ---- the legend's title: the field, its component, its unit (G.legend_lines), each
+   on a line of its own and wrapped when wider than the legend */
+enum { HEAD_PIECES = 4 };                        /* lines one title line may wrap to */
+
+/* byte lengths of the pieces txt breaks into to fit w: after a space, comma or
+   operator when there is one in the second half, else anywhere (never in a UTF-8
+   sequence); the last piece takes what is left. Returns the count. */
+static int wrap_pieces(const struct nk_user_font* f, const char* txt, float w, int* len, int max) {
+    int n = 0, at = 0, total = (int)strlen(txt);
+    while (at < total && n < max) {
+        int fit = 0;
+        for (;;) {
+            int next = fit + 1;
+            while (at + next < total && (txt[at + next] & 0xC0) == 0x80) next++;
+            if (at + next > total || (fit > 0 && f->width(f->userdata, f->height, txt + at, next) > w)) break;
+            fit = next;
+            if (at + fit >= total) break;
+        }
+        if (n == max - 1 || at + fit >= total) fit = total - at;
+        else {
+            int br = fit;
+            while (br > fit / 2 && !strchr(" +-*/,", txt[at + br - 1])) br--;
+            if (br > fit / 2) fit = br;
+        }
+        len[n++] = fit;
+        at += fit;
+    }
+    return n;
+}
+
+static float head_row(const struct nk_user_font* f, float row, float s) { return CV_MIN(row, f->height + 6 * s); }
+
+/* the legend width for the title: its widest line, within the legend's limits */
+static float head_width(const struct nk_user_font* f, float s) {
+    float w = 150 * s;
+    for (int k = 0; k < 3; k++) {
+        const char* t = G.legend_lines[k];
+        w = CV_MAX(w, f->width(f->userdata, f->height, t, (int)strlen(t)) + 24 * s);
+    }
+    return CV_MIN(w, 260 * s);
+}
+
+/* how many rows the title takes in a legend whose text is w wide */
+static int head_rows(const struct nk_user_font* f, float w) {
+    int n = 0, len[HEAD_PIECES];
+    for (int k = 0; k < 3; k++) if (G.legend_lines[k][0]) n += wrap_pieces(f, G.legend_lines[k], w, len, HEAD_PIECES);
+    return CV_MAX(n, 1);
 }
 
 static void panel_group_legend(struct nk_context* ctx, float s, float row) {
@@ -224,18 +274,44 @@ static void panel_group_legend(struct nk_context* ctx, float s, float row) {
     }
 }
 
+static struct nk_rect legend_title;     /* the field's name and unit: a click opens Units */
+
 static void panel_legend(struct nk_context* ctx, float s, float row) {
-    nk_layout_row_dynamic(ctx, row, 1);
+    char tt[200];
     {
-        char a[32], b[32], tt[200];
+        char a[32], b[32];
         legend_num(a, sizeof a, G.data_min); legend_num(b, sizeof b, G.data_max);
-        snprintf(tt, sizeof tt, "data %s .. %s%s%zu without data.  Drag: move it.  Right-click: legend settings",
+        snprintf(tt, sizeof tt, "data %s .. %s%s%zu without data.  Click the title: units.  Drag: move it.  Right-click: legend settings",
                  a, b, G.nan_count ? ",  " : ",  ", G.nan_count);
-        tip(ctx, tt);
     }
-    ink_label(ctx, G.field_label);
+    /* the title, a line each for field, component and unit (dim); a click opens Units */
+    const struct nk_user_font* hf = ctx->style.font;
+    struct nk_rect cr = nk_window_get_content_region(ctx);
+    float hr = head_row(hf, row, s), tw = cr.w - 2 * ctx->style.text.padding.x - 4;
+    int nrow = 0;
+    for (int k = 0; k < 3; k++) {
+        const char* ln = G.legend_lines[k];
+        if (!ln[0]) continue;
+        int len[HEAD_PIECES], np = wrap_pieces(hf, ln, tw, len, HEAD_PIECES);
+        for (int p = 0, at = 0; p < np; at += len[p++]) {
+            char piece[96];
+            snprintf(piece, sizeof piece, "%.*s", len[p], ln + at);
+            nk_layout_row_dynamic(ctx, hr, 1);
+            struct nk_rect b = nk_widget_bounds(ctx);
+            if (nrow == 0) {
+                legend_title = b;
+                tip(ctx, tt);
+            } else {
+                legend_title.w = CV_MAX(legend_title.w, b.x + b.w - legend_title.x);
+                legend_title.h = b.y + b.h - legend_title.y;
+            }
+            ink_label_c(ctx, piece, k == 2 ? uii_on_bg_dim() : uii_on_bg());
+            nrow++;
+        }
+    }
+    if (!nrow) { legend_title = nk_rect(0, 0, 0, 0); nk_layout_row_dynamic(ctx, hr, 1); nk_spacing(ctx, 1); nrow = 1; }
     struct nk_rect area;
-    nk_layout_row_dynamic(ctx, nk_window_get_content_region(ctx).h - row - 8 * s, 1);
+    nk_layout_row_dynamic(ctx, cr.h - nrow * (hr + ctx->style.window.spacing.y) - 8 * s, 1);
     if (nk_widget(&area, ctx) == NK_WIDGET_INVALID) return;
     struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
     const struct nk_user_font* font = ctx->style.font;
@@ -320,11 +396,12 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
     bool exporting = app_export_progress(&done, &total) != 0;
     bool loading = !G.loaded && app_busy();
     float sw = 14 * s;
-    nk_layout_row_begin(ctx, NK_STATIC, row, (exporting ? 5 : loading ? 4 : 3) + 2);
+    float ub = 150 * s;                    /* the units button */
+    nk_layout_row_begin(ctx, NK_STATIC, row, (exporting ? 5 : loading ? 4 : 3) + 4);
     nk_layout_row_push(ctx, pw);
     nk_label(ctx, G.loaded ? cv_basename(G.path) : "", NK_TEXT_LEFT);
     nk_layout_row_push(ctx, sw); uii_vsep(ctx);
-    float midw = CV_MAX(width - pw - bw - 6 * ctx->style.window.spacing.x - 2 * (sw + ctx->style.window.spacing.x), 10);
+    float midw = CV_MAX(width - pw - bw - ub - 7 * ctx->style.window.spacing.x - 3 * (sw + ctx->style.window.spacing.x), 10);
     if (exporting) {                       /* frame export: a real bar, the count, a stop button */
         nk_size cur = (nk_size)done;
         nk_layout_row_push(ctx, midw * 0.45f);
@@ -347,6 +424,15 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
     } else {
         nk_layout_row_push(ctx, midw);
         nk_label(ctx, mid, NK_TEXT_LEFT);
+    }
+    nk_layout_row_push(ctx, sw); uii_vsep(ctx);
+    nk_layout_row_push(ctx, ub);
+    {
+        char u[64], t[80];
+        units_summary(u, sizeof u);
+        snprintf(t, sizeof t, "units: %s", u);
+        tip(ctx, "Input units (what the model was built in) and display units");
+        if (nk_button_label(ctx, t)) G.show_units = !G.show_units;
     }
     nk_layout_row_push(ctx, sw); uii_vsep(ctx);
     nk_layout_row_push(ctx, bw);
@@ -387,10 +473,12 @@ void legend_controls(struct nk_context* ctx, float s, float row) {
         static const char* fmts[] = { "numbers: auto", "numbers: fixed", "numbers: scientific" };
         G.legend_fmt = nk_combo(ctx, fmts, 3, G.legend_fmt, (int)row, nk_vec2(200 * s, 3 * row + 20 * s));
         if (G.legend_fmt) nk_property_int(ctx, "#decimals", 0, &G.legend_decimals, 9, 1, 0.2f);
-        tip(ctx, "The consistent unit set the model was built in (CalculiX has none): shown in [] in the legend, probe and plots");
+        tip(ctx, "Input units (what the model was built in; CalculiX has none) and display units");
         {
-            int u = nk_combo(ctx, (const char**)cv_units_name, CV_UNITS_N, G.units, (int)row, nk_vec2(260 * s, CV_UNITS_N * row + 20 * s));
-            if (u != G.units) { bool lk = G.range_lock; float a = G.rmin, b = G.rmax; G.units = u; app_select(G.field_name, G.comp); if (lk) { G.range_lock = true; G.rmin = a; G.rmax = b; } }
+            char u[64], t[80];
+            units_summary(u, sizeof u);
+            snprintf(t, sizeof t, "Units: %s ...", u);
+            if (nk_button_label(ctx, t)) G.show_units = !G.show_units;
         }
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Centre the view on the field's minimum / maximum");
@@ -480,10 +568,12 @@ void window_legend(struct nk_context* ctx, float s, float row) {
         bool by_field = G.has_field && !by_group;
         if ((by_field || by_group) && !G.hide_legend) {
             float lw = 150 * s, lh = CV_MIN(440 * s, G.vp_h - 20 * s);
-            if (by_field) {                       /* as wide as the title (field, component, unit) */
+            if (by_field) {                       /* as wide as the title's widest line; taller by its extra lines */
                 const struct nk_user_font* f = ctx->style.font;
-                float tw = f->width(f->userdata, f->height, G.field_label, (int)strlen(G.field_label));
-                lw = CV_MIN(CV_MAX(lw, tw + 24 * s), 380 * s);
+                lw = head_width(f, s);
+                float tw = lw - 2 * ctx->style.window.padding.x - 2 * ctx->style.text.padding.x - 4;
+                lh = CV_MIN(lh + (head_rows(f, tw) - 1) * (head_row(f, row, s) + ctx->style.window.spacing.y),
+                            G.vp_h - 20 * s);
             }
             /* top-right until dragged; then the corner it was dropped nearest (anchor.h) */
             cv_anchor la = G.legend_pos.set ? G.legend_pos : (cv_anchor){ true, CV_TR, 10, 10 };
@@ -505,6 +595,15 @@ void window_legend(struct nk_context* ctx, float s, float row) {
                 if (nk_input_is_mouse_click_in_rect(&ctx->input, NK_BUTTON_RIGHT, b)) G.legend_edit = true;
                 if (by_group) panel_group_legend(ctx, s, row);
                 else panel_legend(ctx, s, row);
+                /* a click on the title, not the end of a drag: the units of that field */
+                const struct nk_input* in = &ctx->input;
+                struct nk_window* top = window_at(ctx, in->mouse.pos.x, in->mouse.pos.y);
+                if (by_field && !legend_drag.dropped && top && !strcmp(top->name_string, "Legend") &&
+                    nk_input_is_mouse_released(in, NK_BUTTON_LEFT) &&
+                    nk_input_is_mouse_hovering_rect(in, legend_title) &&
+                    NK_INBOX(in->mouse.buttons[NK_BUTTON_LEFT].clicked_pos.x, in->mouse.buttons[NK_BUTTON_LEFT].clicked_pos.y,
+                             legend_title.x, legend_title.y, legend_title.w, legend_title.h))
+                    G.show_units = true;
             }
             if (lh > 80 * s) nk_end(ctx);
             nk_style_pop_float(ctx);

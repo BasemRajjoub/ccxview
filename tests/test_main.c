@@ -1393,10 +1393,12 @@ static void test_localsys_requests(void) {
 }
 
 #include "t_calc.h"
+#include "t_units.h"
 
 int main(void) {
     test_gpu_env();
     test_calc();
+    test_units();
     test_video();
     test_cfg();
     test_export();

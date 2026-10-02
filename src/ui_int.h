@@ -28,6 +28,8 @@
 #define window_axes             uii_window_axes
 #define path_dirs               uii_path_dirs
 #define window_messages         uii_window_messages
+#define window_units            uii_window_units
+#define units_summary           uii_units_summary
 #define window_probe            uii_window_probe
 #define window_nav              uii_window_nav
 #define window_overlay          uii_window_overlay
@@ -110,6 +112,8 @@ void window_axes(struct nk_context* ctx, float s);
 extern const char* path_dirs[5];
 void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh);
 void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh);
+void window_units(struct nk_context* ctx, float s, float row, int fw, int fh);
+void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
 void window_nav(struct nk_context* ctx, float s);
 void window_overlay(struct nk_context* ctx, float s);
