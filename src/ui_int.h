@@ -1,0 +1,113 @@
+/* ui_int.h -- what the ui*.c files share; not for other modules (ui.h is the
+   interface). Include it after the headers ui.c includes. The short names are
+   macros for uii_ symbols, so the code reads as it did in one file and the
+   linker sees names no other module uses. */
+#ifndef CV_UI_INT_H
+#define CV_UI_INT_H
+
+#define U                       uii_U
+#define P                       uii_P
+#define themes                  uii_themes
+#define mix                     uii_mix
+#define apply_scale             uii_apply_scale
+#define tip                     uii_tip
+#define g_focus_open            uii_g_focus_open
+#define fmt_num                 uii_fmt_num
+#define tick_num                uii_tick_num
+#define sub_push                uii_sub_push
+#define recent_buttons          uii_recent_buttons
+#define panel_scene             uii_panel_scene
+#define section_view            uii_section_view
+#define cmap_combo              uii_cmap_combo
+#define legend_controls         uii_legend_controls
+#define panel_toolbar           uii_panel_toolbar
+#define panel_timebar           uii_panel_timebar
+#define panel_status            uii_panel_status
+#define window_legend           uii_window_legend
+#define window_legend_settings  uii_window_legend_settings
+#define window_axes             uii_window_axes
+#define path_dirs               uii_path_dirs
+#define window_messages         uii_window_messages
+#define window_probe            uii_window_probe
+#define window_nav              uii_window_nav
+#define window_overlay          uii_window_overlay
+#define window_find             uii_window_find
+#define window_browser          uii_window_browser
+#define drop_hint               uii_drop_hint
+#define window_path             uii_window_path
+#define window_history          uii_window_history
+#define window_convergence      uii_window_convergence
+
+/* ---- ui_style.c: scale + font, palette, themes */
+struct uii_scale {
+    float  zoom;              /* user factor, Ctrl +/- */
+    float  scale;             /* applied scale (desktop x zoom) */
+    struct nk_font_atlas atlas;
+    bool   atlas_live;
+    sg_image img; sg_view view; sg_sampler smp; snk_image_t snk;
+    struct nk_font* font;
+    int    theme;             /* index into themes[] */
+    bool   restyle;           /* theme changed: rebuild the style next frame */
+};
+extern struct uii_scale U;
+
+/* the colours we draw ourselves (hints, plots, legend), derived from the theme */
+struct uii_palette {
+    struct nk_color text, dim, warn, accent, accent_text, plot_bg, grid, frame, tick;
+};
+extern struct uii_palette P;
+
+struct uii_theme { const char* name; int nk; };
+enum { NTHEMES = 5 };
+extern const struct uii_theme themes[NTHEMES];
+
+struct nk_color mix(struct nk_color a, struct nk_color b, float t);
+void apply_scale(struct nk_context* ctx);
+/* ink for what is drawn straight over the 3D view (legend, gizmo): the theme
+   does not know G.bg, so dark ink on a light background, light ink on a dark one */
+struct nk_color uii_on_bg(void);
+struct nk_color uii_on_bg_dim(void);      /* secondary text and ticks: the ink 40% toward G.bg */
+struct nk_color uii_bg(int alpha);        /* G.bg itself, for halos behind that ink */
+
+/* ---- ui.c: small helpers */
+void tip(struct nk_context* ctx, const char* text);    /* tooltip for the widget laid out next */
+extern bool g_focus_open;                              /* Ctrl+L: put the cursor in the path box */
+void fmt_num(char* out, size_t n, double v);
+void tick_num(char* out, size_t n, double v, double step, double big);
+/* the legend's numbers follow the format chosen in its settings window */
+#define legend_num(out, n, v) app_legend_fmt(out, n, v)
+bool ui_slider_float(struct nk_context* ctx, float lo, float* v, float hi, float step);
+bool ui_slider_int(struct nk_context* ctx, int lo, int* v, int hi, int step);
+bool sub_push(struct nk_context* ctx, const char* title, int t);
+
+/* ---- ui_panels.c, ui_view.c: the sidebar */
+void recent_buttons(struct nk_context* ctx, float row);
+void panel_scene(struct nk_context* ctx, float s, float row);
+void section_view(struct nk_context* ctx, float s, float row);
+
+/* ---- ui_bars.c */
+void cmap_combo(struct nk_context* ctx, float s, float row);
+void legend_controls(struct nk_context* ctx, float s, float row);
+void panel_toolbar(struct nk_context* ctx, float s, float row);
+void panel_timebar(struct nk_context* ctx, float s, float row, float width);
+void panel_status(struct nk_context* ctx, float s, float row, float width);
+void window_legend(struct nk_context* ctx, float s, float row);
+void window_legend_settings(struct nk_context* ctx, float s, float row);
+void window_axes(struct nk_context* ctx, float s);
+
+/* ---- ui_windows.c */
+extern const char* path_dirs[5];
+void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh);
+void window_probe(struct nk_context* ctx, float s, float row);
+void window_nav(struct nk_context* ctx, float s);
+void window_overlay(struct nk_context* ctx, float s);
+void window_find(struct nk_context* ctx, float s, float row);
+void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh);
+void drop_hint(struct nk_context* ctx, float s, float row);
+
+/* ---- ui_plots.c */
+void window_path(struct nk_context* ctx, float s, float row, int fw, int fh);
+void window_history(struct nk_context* ctx, float s, float row, int fw, int fh);
+void window_convergence(struct nk_context* ctx, float s, float row, int fw, int fh);
+
+#endif

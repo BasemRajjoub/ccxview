@@ -21,12 +21,14 @@ enum { CV_COLOR_SOLID = 0, CV_COLOR_NODAL = 1, CV_COLOR_ELEM = 2, CV_COLOR_GROUP
 typedef struct {
     float mvp[16], mv[16];
     float proj[16];            /* projection alone: points need it to place ball depths */
+    float diag;                /* model size: the depth pull of edges is a fraction of it */
     float def_scale;           /* 0 = undeformed */
     float def_scale2;          /* on the second displacement (imaginary part of a harmonic response) */
     float rmin, rmax;
     int   bands;               /* 0 = smooth */
     bool  grey_out_of_range;   /* only while the range is locked */
     bool  faces, edges, points;
+    bool  outline;             /* the feature edges: never hidden with the dense mesh */
     bool  shade;               /* light + shadow on faces; off = exact colours */
     int   faces_color, edges_color, points_color;   /* CV_COLOR_* */
     float point_size;
@@ -68,6 +70,7 @@ void cv_render_tri_values(const float* v, size_t n_tri);            /* per trian
 void cv_render_groups(const uint32_t* tri, size_t n_tri, const uint32_t* first, const float* rgb, int ngroups);
 void cv_render_indices(const uint32_t* tri, size_t n_tri, const uint32_t* edge, size_t n_edge,
                        const uint32_t* pt, size_t n_pt);
+void cv_render_outline(const uint32_t* fedge, size_t n_fedge);   /* the skin's feature edges */
 void cv_render_colormap(int cmap, bool reverse, bool grey);
 
 /* Non-indexed vertex sets drawn with the same shader. NULL/0 clears.

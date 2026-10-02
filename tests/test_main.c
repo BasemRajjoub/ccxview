@@ -27,6 +27,9 @@ static int g_fail = 0, g_checks = 0;
 #include "t_export.h"
 #include "t_path.h"
 #include "t_video.h"
+#include "t_match.h"
+#include "t_anchor.h"
+#include "t_mesh.h"
 
 /* ---- helpers ---- */
 
@@ -1352,6 +1355,8 @@ int main(void) {
     test_cfg();
     test_export();
     test_path();
+    test_anchor();
+    test_feature_edges();
     test_sta();
     test_fbd();
     test_inp();
@@ -1361,6 +1366,7 @@ int main(void) {
     test_localsys_spread();
     test_localsys_datnames();
     test_localsys_requests();
+    test_match();
     test_gauss();
     test_dat();
     test_portal_wire();

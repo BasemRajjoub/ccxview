@@ -12,6 +12,7 @@
 #include "inp.h"
 #include "fbd.h"
 #include "sta.h"
+#include "anchor.h"
 
 /* what the faces are coloured by */
 enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
@@ -58,6 +59,7 @@ typedef struct {
     uint8_t*  vis;
     bool      crop;
     float     crop_lo[3], crop_hi[3];   /* world coordinates */
+    float     crease;         /* feature edges: degrees between faces that make a crease */
     /* outputs */
     bool      ok;
     char      err[256];
@@ -230,6 +232,8 @@ typedef struct {
     bool      edges_field, nodes_field;
     bool      edges_auto;            /* hide the edges while they are denser than ~3 px */
     bool      edges_dense;           /* ... and they are now (with hysteresis) */
+    bool      show_outline;          /* feature edges: borders, creases, material and type changes */
+    float     outline_angle;         /* crease angle, degrees; the skin is rebuilt when it changes */
     float*    axis_rgb[CV_AXIS_N];   /* 3 floats per group value */
     float     point_size;
     bool      shading;               /* off: flat true colours; on: light + shadow */
@@ -322,7 +326,7 @@ typedef struct {
     int       csys;                  /* results in: 0 global, 1..3 cylindrical about X, Y, Z */
     float     csys_o[3];             /* ... through this point */
     bool      legend_edit;           /* the legend settings window is open */
-    float     legend_auto[2];        /* where the legend was last put by itself; moved away = the user's place */
+    cv_anchor legend_pos, gizmo_pos;  /* dragged to: view corner + gap (unset: top-right, bottom-left) */
 } cv_app;
 
 extern cv_app G;

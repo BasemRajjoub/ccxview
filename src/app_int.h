@@ -43,6 +43,8 @@ typedef struct {
     bool        xray;           /* --xray: Gauss points through the faces */
     bool        no_faces;       /* --no-faces */
     float       gp_size;        /* --gp-size N */
+    bool        no_edges;       /* --no-edges */
+    float       outline;        /* --outline off|on|DEG: 0 off, > 0 the crease angle, < 0 unset */
     const char* argv_path;      /* the file to open */
     const char* shot_path;      /* --shot out.png: render, save the window, quit */
     int         shot_frames;    /* --frames N */
@@ -60,9 +62,23 @@ void         refresh_tri_colors(void);
 void         refresh_tri_values(void);
 void         refresh_field(void);
 void         refresh_gauss(void);
-void         refresh_vectors(void);
 void         refresh_markers(void);
+#define to_csys app_to_csys
+float*       to_csys(const cv_field_desc* d, const cv_frd* f, const float* vals);   /* a copy in the chosen cylindrical system, or NULL */
+
+/* app_overlay.c: vector arrows, clip caps */
+void         refresh_vectors(void);
+
+/* app_path.c: path plot, history */
 void         refresh_path(void);
+void         refresh_hist(void);
+
+/* app_linearize.c: stress linearization, locating points in the solid */
+#define line_locate app_line_locate
+#define line_interp app_line_interp
+void         refresh_lin(void);
+void         line_locate(const float A[3], const float B[3], int n, uint32_t* el, float* w);   /* elements + shape weights of n points on A..B */
+bool         line_interp(uint32_t e, const float* w, const float* v, int nc, float* out);
 
 /* app_cam.c: camera, symmetry, picking */
 void view_bounds(void);
