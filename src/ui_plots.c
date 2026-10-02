@@ -396,7 +396,7 @@ void window_history(struct nk_context* ctx, float s, float row, int fw, int fh) 
             }
             snprintf(txt, sizeof txt, "%s %.4g .. %.4g   (click: go to that step)", G.hist_by_step ? "step" : "time", xa, xb);
             nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
-        } else if (G.field_src != 0) {
+        } else if (G.field_src == 1) {
             nk_label(ctx, "(history of .frd fields only)", NK_TEXT_LEFT);
         }
     }

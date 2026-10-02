@@ -4,6 +4,7 @@
    clip caps), app_path.c (path plot, history), app_linearize.c (stress
    linearization). */
 #include "app_int.h"
+#include "calc.h"
 #include "gauss.h"
 #include "path.h"
 #include <math.h>
@@ -208,7 +209,7 @@ enum { ELEMTRI_MAX = 4000000 };
 #endif
 
 void refresh_tri_values(void) {
-    bool want = G.elem_mode && G.field_src == 0;
+    bool want = G.elem_mode && G.field_src != 1;
     if (!want || !G.has_field || !G.skin.n_tri) { cv_render_tri_values(NULL, 0); cv_render_aux(CV_AUX_ELEMTRI, NULL, NULL, NULL, 0); return; }
     if (G.skin.n_tri <= ELEMTRI_MAX) {
         size_t nv = G.skin.n_tri * 3;
@@ -286,7 +287,7 @@ void app_refresh_range(void) {
     G.nan_count = 0;
     for (size_t k = 0; k < n; k++) {
         uint32_t i = ids ? ids[k] : (uint32_t)k;
-        if (G.elem_mode && G.field_src == 0 && G.vis && !G.vis[i]) continue;
+        if (G.elem_mode && G.field_src != 1 && G.vis && !G.vis[i]) continue;
         float x = v[i];
         if (x != x) { G.nan_count++; continue; }
         if (isinf(x)) continue;
@@ -377,10 +378,46 @@ static bool subtract_compare(const cv_field_desc* d) {
     return true;
 }
 
+/* ---- calculated field: a formula over the .frd fields (calc.h) -------------------- */
+
+static const float* calc_get(void* ud, int step, int field) { return cache_get(step, field); }
+
+/* the formula's values at every node of this step; false with the label saying why not */
+static bool refresh_field_calc(void) {
+    if (!G.calc || !G.scalar || !G.elem_val) { snprintf(G.field_label, sizeof G.field_label, "= %s", G.calc_expr); return false; }
+    if (!cv_calc_eval(G.calc, &G.frd, G.step, calc_get, NULL, NULL, 0, G.scalar)) {
+        const char* m = cv_calc_missing(G.calc);
+        if (m[0]) snprintf(G.field_label, sizeof G.field_label, "= %s (%s not in this step)", G.calc_expr, m);
+        else snprintf(G.field_label, sizeof G.field_label, "= %s (out of memory)", G.calc_expr);
+        return false;
+    }
+    cv_elem_mean(&G.frd, G.scalar, G.elem_val);
+    snprintf(G.field_label, sizeof G.field_label, "= %s", G.calc_expr);
+    return true;
+}
+
+bool app_calc_set(const char* expr) {
+    if (!G.loaded) {                     /* kept for the next file */
+        snprintf(G.calc_expr, sizeof G.calc_expr, "%s", expr);
+        return false;
+    }
+    cv_calc* c = cv_calc_compile(&G.frd, expr, G.calc_err, sizeof G.calc_err);
+    if (!c) return false;
+    cv_calc_free(G.calc);
+    G.calc = c;
+    if (expr != G.calc_expr) snprintf(G.calc_expr, sizeof G.calc_expr, "%s", expr);
+    G.field_src = 2;
+    G.field_name[0] = 0;
+    G.comp = 0;
+    G.range_lock = false;
+    refresh_field();
+    return true;
+}
+
 void refresh_field(void) {
     if (G.field_src == 1) { refresh_field_dat(); return; }
-    int fi = find_field(G.step, G.field_name);
-    G.has_field = false;
+    int fi = G.field_src == 2 ? -1 : find_field(G.step, G.field_name);
+    G.has_field = G.field_src == 2 && refresh_field_calc();
     if (fi >= 0) {
         const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
         const float* vals = cache_get(G.step, fi);
@@ -398,7 +435,8 @@ void refresh_field(void) {
         }
     }
     if (!G.has_field) {
-        if (G.field_name[0]) snprintf(G.field_label, sizeof G.field_label, "%s (not in this step)", G.field_name);
+        if (G.field_src == 2) {}          /* the label says why */
+        else if (G.field_name[0]) snprintf(G.field_label, sizeof G.field_label, "%s (not in this step)", G.field_name);
         else G.field_label[0] = 0;
         cv_render_scalar(NULL, 0);
         refresh_markers();
@@ -498,6 +536,7 @@ void app_select_src(const char* field, int comp, int src) {
 }
 
 void app_select(const char* field, int comp) {
+    if (G.field_src == 2 && field[0]) G.field_src = 0;   /* a named field is a .frd one; "" keeps the formula */
     snprintf(G.field_name, sizeof G.field_name, "%s", field);
     G.comp = comp;
     G.range_lock = false;

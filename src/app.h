@@ -116,7 +116,10 @@ typedef struct {
     bool      has_field;      /* current step has the selected field */
     unsigned  field_gen;      /* bumped when the values or displacements change */
     bool      elem_mode;
-    int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points) */
+    int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points), 2: calculated */
+    char      calc_expr[256]; /* the calculated field's formula (calc.h), kept across files */
+    char      calc_err[128];  /* why the last formula did not compile, "" when it did */
+    struct cv_calc* calc;     /* calc_expr compiled for this file, NULL none */
     uint8_t*  vis;            /* last visibility mask (groups + crop), NULL = all */
 
     /* integration-point display */
@@ -198,7 +201,7 @@ typedef struct {
     int       hist_n;
     float*    hist_t;  float* hist_v;  int* hist_step;
     bool      hist_by_step;          /* x axis: step number instead of time */
-    char      hist_key[200];         /* what the curve was built for */
+    char      hist_key[480];         /* what the curve was built for */
     /* stress linearization along the straight line between the path's two nodes (ASME) */
     bool      lin_open;
     float     lin_p[2][3];           /* the ends */
@@ -357,6 +360,9 @@ void app_hist_close(void);
 bool app_hist_csv(const char* path);
 void app_select(const char* field, int comp);
 void app_select_src(const char* field, int comp, int src);
+/* Show the formula expr as the field (field_src 2). false: it does not compile,
+   calc_err says why, and the field shown stays. */
+bool app_calc_set(const char* expr);
 void app_set_elem_mode(bool on);
 void app_groups_changed(void);
 void app_fit(void);

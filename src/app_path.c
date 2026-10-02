@@ -2,6 +2,7 @@
    pick markers, picking its ends, a ray into the solid, the samples, CSV) and
    the history plot (the field at one node over every step). */
 #include "app_int.h"
+#include "calc.h"
 #include "gauss.h"
 #include "path.h"
 #include "export.h"     /* cv_fprintf */
@@ -421,16 +422,32 @@ bool app_path_csv(const char* path) {
    Each step's field is decoded into a scratch buffer (not the cache, which holds
    what is on screen); rebuilt only when the field, component, node or system change. */
 
+/* a step's field for the history: from the cache when there, else decoded into a
+   scratch buffer, so the history does not push out what is on screen */
+typedef struct { float* buf; size_t cap; } hist_scratch;
+
+static const float* hist_get(void* ud, int s, int fi) {
+    hist_scratch* h = ud;
+    for (int i = 0; i < CV_CACHE_N; i++)
+        if (G.cache[i].vals && G.cache[i].step == s && G.cache[i].field == fi) return G.cache[i].vals;
+    const cv_field_desc* d = &G.frd.steps[s].fields[fi];
+    size_t need = (size_t)CV_MAX(G.frd.n_nodes, 1) * (size_t)d->ncomp;
+    if (need > h->cap) { float* nb = realloc(h->buf, need * sizeof(float)); if (!nb) return NULL; h->buf = nb; h->cap = need; }
+    cv_frd_read_field(&G.frd, d, h->buf, NULL);
+    deck_localize(s, d, h->buf);
+    return h->buf;
+}
+
 void refresh_hist(void) {
     if (!G.hist_open || !G.loaded) return;
-    char key[200];
-    snprintf(key, sizeof key, "%s|%d|%d|%g|%g|%g|%u|%u|%d|%d|%d", G.field_name, G.comp, G.csys, G.csys_o[0], G.csys_o[1],
-             G.csys_o[2], G.hist_node, G.hist_elem, G.elem_mode, G.field_src, G.frd.n_steps);
+    char key[480];
+    snprintf(key, sizeof key, "%s|%d|%d|%g|%g|%g|%u|%u|%d|%d|%d|%s", G.field_name, G.comp, G.csys, G.csys_o[0], G.csys_o[1],
+             G.csys_o[2], G.hist_node, G.hist_elem, G.elem_mode, G.field_src, G.frd.n_steps, G.field_src == 2 ? G.calc_expr : "");
     if (!strcmp(key, G.hist_key)) return;
     snprintf(G.hist_key, sizeof G.hist_key, "%s", key);
     free(G.hist_t); free(G.hist_v); free(G.hist_step);
     G.hist_t = G.hist_v = NULL; G.hist_step = NULL; G.hist_n = 0;
-    if (G.field_src != 0 || G.frd.n_steps == 0 || G.hist_node >= G.frd.n_nodes) return;
+    if (G.field_src == 1 || (G.field_src == 2 && !G.calc) || G.frd.n_steps == 0 || G.hist_node >= G.frd.n_nodes) return;
     int ns = G.frd.n_steps;
     G.hist_t = malloc((size_t)ns * sizeof(float)); G.hist_v = malloc((size_t)ns * sizeof(float));
     G.hist_step = malloc((size_t)ns * sizeof(int));
@@ -440,6 +457,20 @@ void refresh_hist(void) {
     if (G.elem_mode && G.hist_elem < G.frd.n_elems) {
         nodes = G.frd.conn + G.frd.eoff[G.hist_elem];
         nn = G.frd.eoff[G.hist_elem + 1] - G.frd.eoff[G.hist_elem];
+    }
+    if (G.field_src == 2) {                             /* the formula at those nodes, step by step */
+        hist_scratch h = { NULL, 0 };
+        float* x = malloc((size_t)CV_MAX(nn, 1) * sizeof(float));
+        for (int s = 0; x && s < ns; s++) {
+            if (!cv_calc_eval(G.calc, &G.frd, s, hist_get, &h, nodes, nn, x)) continue;
+            double sum = 0; int cnt = 0;
+            for (uint32_t j = 0; j < nn; j++) if (x[j] == x[j]) { sum += x[j]; cnt++; }
+            G.hist_t[G.hist_n] = G.frd.steps[s].time;
+            G.hist_v[G.hist_n] = cnt ? (float)(sum / cnt) : NAN;
+            G.hist_step[G.hist_n++] = s;
+        }
+        free(x); free(h.buf);
+        return;
     }
     float* buf = NULL; size_t cap = 0;
     for (int s = 0; s < ns; s++) {

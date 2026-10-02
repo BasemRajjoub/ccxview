@@ -1349,8 +1349,11 @@ static void test_localsys_requests(void) {
     cv_inp_free(&d); free(d.msgs.a);
 }
 
+#include "t_calc.h"
+
 int main(void) {
     test_gpu_env();
+    test_calc();
     test_video();
     test_cfg();
     test_export();

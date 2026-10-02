@@ -139,8 +139,8 @@ void app_clip_caps(bool on, const float n[3], float dd, float f1, float f2) {
     static const int hex[6][4] = { { 0, 1, 2, 6 }, { 0, 2, 3, 6 }, { 0, 3, 7, 6 }, { 0, 7, 4, 6 }, { 0, 4, 5, 6 }, { 0, 5, 1, 6 } };
     static const int wedge[3][4] = { { 0, 1, 2, 3 }, { 1, 2, 3, 4 }, { 2, 3, 4, 5 } };
     static const int tet[1][4] = { { 0, 1, 2, 3 } };
-    bool nodal = G.has_field && G.field_src == 0 && !G.elem_mode && G.scalar;
-    bool elem = G.has_field && G.field_src == 0 && G.elem_mode && G.elem_val;
+    bool nodal = G.has_field && G.field_src != 1 && !G.elem_mode && G.scalar;
+    bool elem = G.has_field && G.field_src != 1 && G.elem_mode && G.elem_val;
     for (uint32_t e = 0; on && e < G.frd.n_elems; e++) {
         if (G.vis && !G.vis[e]) continue;
         int t = G.frd.etype[e], nc = t == 1 || t == 4 ? 8 : t == 2 || t == 5 ? 6 : t == 3 || t == 6 ? 4 : 0;

@@ -44,7 +44,7 @@ else
   GUI_LIBS   := $(shell pkg-config --libs x11 xi xcursor gl 2>/dev/null || echo -lX11 -lXi -lXcursor -lGL) -ldl -lpthread -lm
 endif
 
-CORE = src/frd.c src/mesh.c src/field.c src/os.c src/filedlg.c src/dat.c src/gauss.c src/inp.c src/inp_localsys.c src/fbd.c src/cgx.c src/sta.c src/log.c src/cfg.c src/export.c src/path.c src/video.c src/video_h264.c src/video_mp4.c
+CORE = src/frd.c src/mesh.c src/field.c src/calc.c src/os.c src/filedlg.c src/dat.c src/gauss.c src/inp.c src/inp_localsys.c src/fbd.c src/cgx.c src/sta.c src/log.c src/cfg.c src/export.c src/path.c src/video.c src/video_h264.c src/video_mp4.c
 APP  = src/app.c src/app_field.c src/app_overlay.c src/app_path.c src/app_linearize.c src/app_cam.c src/app_load.c src/app_settings.c src/app_gauss.c src/app_deck.c src/app_fbd.c src/render.c src/ui.c src/ui_style.c src/ui_panels.c src/ui_view.c src/ui_bars.c src/ui_windows.c src/ui_plots.c src/font_data.c src/gpu.c
 CCX_EXAMPLES ?= $(HOME)/CalculiX-Examples
 
@@ -158,7 +158,7 @@ endif
 # dependency files: so with zig each object depends on every header and zig skips what
 # did not change; mingw writes .d files like the native build
 WIN_CFLAGS = $(OPT) $(WIN_LTO) -std=c99 $(WIN_DEFS) -DSOKOL_GLCORE -Ivendor $(if $(ZIG),,$(DEPS))
-WIN_HDRS = $(if $(ZIG),$(wildcard src/*.h vendor/*.h),)
+WIN_HDRS = $(if $(ZIG),$(wildcard src/*.h vendor/*.h) vendor/miniz.c,)
 WIN_OBJ = $(patsubst %.c,build/win/obj/%.o,$(WIN_SRC))
 win: build/win/ccxview.exe
 build/win/obj/src/sokol_impl.o: src/sokol_impl.c $(WIN_HDRS)

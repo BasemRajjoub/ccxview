@@ -20,6 +20,7 @@ typedef struct {
     bool        conv;           /* --conv: open the convergence window */
     int         win_w, win_h;   /* --size WxH */
     const char* field;          /* --field NAME: start on that .frd field (first option) */
+    const char* calc;           /* --calc FORMULA: start on that calculated field */
     float       target[3];      /* --target x,y,z: orbit centre */
     bool        target_set;
     float       zoom;           /* --zoom F: closer by F */

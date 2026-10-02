@@ -1,6 +1,7 @@
 /* app_load.c -- background loading (.frd / .inp / .fbd / .dat / .sta), the skin
    job after group changes, taking a finished job into G, and the open dialog. */
 #include "app_int.h"
+#include "calc.h"
 #include "web.h"
 #include "cgx.h"
 #include "filedlg.h"
@@ -178,6 +179,7 @@ void unload(void) {
     app_lin_close();
     app_compare_close();
     cache_clear();
+    cv_calc_free(G.calc); G.calc = NULL;    /* its formula stays, for the next file */
     gp_clear();
     deck_clear();
     cv_skin_free(&G.skin);
@@ -384,6 +386,10 @@ static void apply_load(cv_job* j) {
             snprintf(G.field_name, sizeof G.field_name, "%s", G.keep_field);
             G.comp = G.keep_comp;
             G.step = CV_MIN(G.keep_step, G.frd.n_steps - 1);
+            if (!strcmp(G.keep_field, "=")) {            /* the calculated field */
+                G.field_name[0] = 0;
+                if (!app_calc_set(G.calc_expr)) pick_default_field();
+            }
         } else {
             pick_default_field();
         }
@@ -449,6 +455,11 @@ static void apply_load(cv_job* j) {
             cv_scalar_opt o[CV_MAX_OPTS];
             if (cv_field_options(&G.frd.steps[G.step].fields[fi], o, CV_MAX_OPTS) > 0) app_select_src(O.field, o[0].comp, 0);
         }
+    }
+    if (O.calc && !G.reload_keep && !app_calc_set(O.calc)) {
+        char m[200];
+        snprintf(m, sizeof m, "--calc: %s", G.calc_err);
+        cv_msg_add(&G.msgs, 0, false, m);
     }
     if (O.gauss && gp_loaded()) {
         for (int st = 0; st < G.frd.n_steps; st++) {
@@ -592,7 +603,7 @@ void app_reload(void) {
     G.reload_keep = true;
     G.keep_step = G.step;
     G.keep_comp = G.comp;
-    snprintf(G.keep_field, sizeof G.keep_field, "%s", G.field_src == 0 ? G.field_name : "");
+    snprintf(G.keep_field, sizeof G.keep_field, "%s", G.field_src == 0 ? G.field_name : G.field_src == 2 ? "=" : "");
     G.keep_cam = G.cam;
     char p[1024];
     snprintf(p, sizeof p, "%s", G.path);
@@ -614,6 +625,7 @@ bool app_view_save(const char* path) {
     cv_cfg_set_float(&c, "cam_x", G.cam.target.x); cv_cfg_set_float(&c, "cam_y", G.cam.target.y); cv_cfg_set_float(&c, "cam_z", G.cam.target.z);
     cv_cfg_set_int(&c, "step", G.step + 1);
     cv_cfg_set(&c, "field", G.field_src == 0 ? G.field_name : "");
+    cv_cfg_set(&c, "calc", G.field_src == 2 ? G.calc_expr : "");
     cv_cfg_set_int(&c, "comp", G.comp);
     cv_cfg_set_bool(&c, "elem_mode", G.elem_mode);
     cv_cfg_set_int(&c, "csys", G.csys);
@@ -656,6 +668,8 @@ bool app_view_load(const char* path) {
     if (step >= 0 && step < G.frd.n_steps) G.step = step;
     const char* f = cv_cfg_get(&c, "field", "");
     if (f[0] && find_field(G.step, f) >= 0) { snprintf(G.field_name, sizeof G.field_name, "%s", f); G.comp = cv_cfg_get_int(&c, "comp", G.comp); G.field_src = 0; }
+    const char* calc = cv_cfg_get(&c, "calc", "");
+    if (calc[0]) app_calc_set(calc);
     G.elem_mode = cv_cfg_get_bool(&c, "elem_mode", G.elem_mode);
     G.csys = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "csys", G.csys), 3));
     G.csys_o[0] = cv_cfg_get_float(&c, "csys_x", G.csys_o[0]); G.csys_o[1] = cv_cfg_get_float(&c, "csys_y", G.csys_o[1]);

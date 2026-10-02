@@ -52,6 +52,11 @@ Downloads of the [latest release](https://github.com/BasemRajjoub/ccxview/releas
   (membrane, membrane + bending, peak and total at both ends and their
   largest value on the line; bending from the components normal to the line
   as 5-A.4.1.2 asks, or from all six).
+- **Calculated fields.** Type a formula over the results and show it like any
+  field, with its history and exports: `S1 - S3` (Tresca), `MISES / 235`,
+  `sqrt(D1^2 + D2^2)`, `if(MISES > 200, 1, 0)`. Components, magnitudes, von
+  Mises and principal values by name, node coordinates `X Y Z`, the step
+  `TIME`, and the usual maths functions (TinyExpr).
 - **Export.** PNG of the view, MP4 video or PNG sequence of a deformation
   cycle or of every step, CSV, VTK for ParaView, and a view file to reproduce
   a picture later. All available from the command line for scripting.
@@ -68,6 +73,7 @@ ccxview model.frd --export mp4              # animation video
 ccxview model.frd --field DISP --vectors    # displacement arrows
 ccxview model.frd --gp                      # Gauss points
 ccxview model.frd --field DISP --history 17 # node 17 over all steps
+ccxview model.frd --calc "S1 - S3"          # a calculated field (Tresca)
 ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38 to 54
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --software                # CPU rendering
@@ -117,8 +123,8 @@ GitHub Pages. Other pushes build nothing. To build without releasing, run the wo
 hand from the Actions tab (it keeps the archives as artifacts for a week).
 
 Dependencies: a C compiler and, on Linux, X11 and OpenGL development headers.
-Everything else is vendored (sokol, Nuklear, stb_image_write, stb_sprintf, minih264e, minimp4,
-tinyfiledialogs), and the UI fonts are compiled in (Inter, Noto Sans Math, Lucide icons;
+Everything else is vendored (sokol, Nuklear, stb_image_write, stb_sprintf, TinyExpr, miniz,
+minih264e, minimp4, tinyfiledialogs), and the UI fonts are compiled in (Inter, Noto Sans Math, Lucide icons;
 regenerate with `scripts/embed-fonts.py`).
 
 `samples/showcase/` is the plate with a hole preloaded in the browser build,

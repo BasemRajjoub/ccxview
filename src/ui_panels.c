@@ -2,6 +2,7 @@
    Layers, Groups (with the deck's and cgx's sets), Fields and Export. Its View
    section is in ui_view.c. */
 #include "app.h"
+#include "calc.h"
 #include "ui.h"
 #include "cfg.h"
 #include "sokol_app.h"
@@ -286,6 +287,83 @@ static void section_groups(struct nk_context* ctx, float s, float row) {
 
 }
 
+/* ---- Calculated field: a formula over the .frd fields (calc.h) */
+static void section_calc(struct nk_context* ctx, float s, float row) {
+    static char buf[sizeof G.calc_expr], seen[sizeof G.calc_expr];
+    static int len;
+    if (strcmp(seen, G.calc_expr)) {                 /* set elsewhere: --calc, a view file */
+        snprintf(seen, sizeof seen, "%s", G.calc_expr);
+        snprintf(buf, sizeof buf, "%s", G.calc_expr);
+        len = (int)strlen(buf);
+    }
+    bool active = G.field_src == 2;
+    if (!nk_tree_push_id(ctx, NK_TREE_NODE, "Calculated", active ? NK_MAXIMIZED : NK_MINIMIZED, 200)) return;
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 56 * s);
+    nk_layout_row_template_end(ctx);
+    tip(ctx, "A formula of the fields, then Enter: STRESS_SXX - STRESS_SYY, sqrt(D1^2 + D2^2), if(MISES > 200, 1, 0)");
+    nk_flags ev = nk_edit_string(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, buf, &len, (int)sizeof buf - 1, nk_filter_default);
+    buf[len] = 0;
+    bool go = (ev & NK_EDIT_COMMITED) != 0;
+    tip(ctx, "Colour the model by the formula");
+    if (nk_button_label(ctx, "Show")) go = true;
+    if (go && buf[0]) {
+        if (app_calc_set(buf)) snprintf(seen, sizeof seen, "%s", G.calc_expr);
+    } else if (go) {
+        G.calc_err[0] = 0;
+    }
+    nk_layout_row_dynamic(ctx, row, 1);
+    if (G.calc_err[0] && strcmp(buf, G.calc_expr)) nk_label_colored(ctx, G.calc_err, NK_TEXT_LEFT, P.warn);
+    else if (strcmp(buf, G.calc_expr) && buf[0]) nk_label_colored(ctx, "Enter or Show to apply", NK_TEXT_LEFT, P.dim);
+    static const char* ex[][2] = {
+        { "examples", "" },
+        { "S1 - S3   (Tresca)", "S1 - S3" },
+        { "MISES / 235   (utilisation)", "MISES / 235" },
+        { "STRESS_SXX - STRESS_SYY", "STRESS_SXX - STRESS_SYY" },
+        { "sqrt(D1^2 + D2^2)   (in-plane)", "sqrt(D1^2 + D2^2)" },
+        { "if(MISES > 200, 1, 0)   (above a limit)", "if(MISES > 200, 1, 0)" },
+        { "sqrt(X^2 + Y^2)   (radius about Z)", "sqrt(X^2 + Y^2)" },
+    };
+    const char* items[CV_COUNT(ex)];
+    for (size_t i = 0; i < CV_COUNT(ex); i++) items[i] = ex[i][0];
+    tip(ctx, "Put an example in the box");
+    int pick = nk_combo(ctx, items, (int)CV_COUNT(ex), 0, (int)row, nk_vec2(280 * s, CV_COUNT(ex) * (row + 4 * s) + 8 * s));
+    if (pick > 0) { snprintf(buf, sizeof buf, "%s", ex[pick][1]); len = (int)strlen(buf); app_calc_set(buf); snprintf(seen, sizeof seen, "%s", G.calc_expr); }
+    if (nk_tree_push_id(ctx, NK_TREE_NODE, "Names and functions", NK_MINIMIZED, 201)) {
+        static char names[2048];
+        static unsigned gen;
+        static const cv_frd* of;
+        if (of != &G.frd || gen != G.field_gen || !names[0]) {   /* cheap, but not every frame */
+            cv_calc_names(&G.frd, names, sizeof names);
+            of = &G.frd; gen = G.field_gen;
+        }
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (const char* l = names; *l;) {
+            const char* e = strchr(l, '\n');
+            int n = e ? (int)(e - l) : (int)strlen(l);
+            char line[256];
+            snprintf(line, sizeof line, "%.*s", n, l);
+            tip(ctx, line);
+            nk_label_colored(ctx, line, NK_TEXT_LEFT, P.dim);
+            l += n + (e ? 1 : 0);
+        }
+        static const char* help[] = {
+            "FIELD_COMP (STRESS_SXX), COMP alone (SXX)",
+            "FIELD_MAG, FIELD_MISES, FIELD_P1..P3",
+            "MISES S1 S2 S3 (STRESS), E1 E2 E3 (TOSTRAIN)",
+            "+ - * / ^ %   < <= > >= == !=   && || !",
+            "abs sqrt exp ln log10 pow  sin cos tan  asin acos",
+            "atan atan2 sinh cosh tanh floor ceil  pi e",
+            "min max clamp(x,lo,hi) sign if(cond,a,b)",
+            "values in global axes; log is ln",
+        };
+        for (size_t i = 0; i < CV_COUNT(help); i++) { tip(ctx, help[i]); nk_label(ctx, help[i], NK_TEXT_LEFT); }
+        nk_tree_pop(ctx);
+    }
+    nk_tree_pop(ctx);
+}
+
 /* ---- Fields of the current step, and the .dat ones */
 static void section_fields(struct nk_context* ctx, float s, float row) {
     /* fields of the current step */
@@ -336,6 +414,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 }
                 nk_tree_pop(ctx);
             }
+            section_calc(ctx, s, row);
         }
         /* integration-point fields from the .dat, at this increment */
         if (gp_loaded()) {

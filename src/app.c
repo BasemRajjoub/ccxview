@@ -512,7 +512,7 @@ bool app_export_data(bool vtk) {
     char* sep = strrchr(base, cv_path_sep());
     if (dot && (!sep || dot > sep)) *dot = 0;
     snprintf(path, sizeof path, "%s_step%d.%s", base, G.step + 1, vtk ? "vtk" : "csv");
-    const float* sc = G.has_field && G.field_src == 0 && !G.elem_mode ? G.scalar : NULL;
+    const float* sc = G.has_field && G.field_src != 1 && !G.elem_mode ? G.scalar : NULL;
     bool ok = vtk ? cv_export_vtk(path, &G.frd, G.disp, sc, G.field_label, G.vis)
                   : cv_export_csv(path, &G.frd, G.disp, sc, G.field_label, G.vis);
     snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", path);
@@ -871,6 +871,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--check") && i + 1 < argc) check = argv[++i];
         else if (!strcmp(argv[i], "--version")) { printf("ccxview %s\n", CV_VERSION); exit(0); }
         else if (!strcmp(argv[i], "--field") && i + 1 < argc) O.field = argv[++i];
+        else if (!strcmp(argv[i], "--calc") && i + 1 < argc) O.calc = argv[++i];
         else if (!strcmp(argv[i], "--target") && i + 1 < argc)
             O.target_set = sscanf(argv[++i], "%f,%f,%f", &O.target[0], &O.target[1], &O.target[2]) == 3;
         else if (!strcmp(argv[i], "--zoom") && i + 1 < argc) O.zoom = (float)atof(argv[++i]);
