@@ -207,6 +207,8 @@ bool app_lin_csv(const char* path) {
         cv_fprintf(o, "# membrane: von Mises %.9g, Tresca %.9g\n", cv_mises6(m), cv_tresca6(m, false));
         cv_fprintf(o, "# membrane + bending at start: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb), cv_tresca6(mb, false));
         cv_fprintf(o, "# membrane + bending at end: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb2), cv_tresca6(mb2, false));
+        cv_fprintf(o, "# S1+S2+S3 (ASME VIII-2 5.3.2): membrane + bending at start %.9g, at end %.9g\n",
+                   mb[0] + mb[1] + mb[2], mb2[0] + mb2[1] + mb2[2]);
         double pk[2] = { -INFINITY, -INFINITY }, tt[2] = { -INFINITY, -INFINITY };   /* the largest anywhere on the line */
         for (int i = 0; i < G.lin_n; i++) {
             double l[6], s[6], p[6];

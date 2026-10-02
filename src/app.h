@@ -210,7 +210,7 @@ typedef struct {
     int       lin_n;                 /* sample points */
     float*    lin_s;                 /* 6 per point, NaN where the line is outside the solid */
     float     lin_t;                 /* line length */
-    int       lin_q;                 /* shown: 0 von Mises, 1 Tresca, 2.. a component */
+    int       lin_q;                 /* shown: 0 von Mises, 1 Tresca, 2..7 a component, 8 S1+S2+S3 */
     bool      lin_asme;              /* bending from the components normal to the line only (5-A.4.1.2) */
     char      lin_key[200];
     /* comparison: a second results file on the same mesh, shown as A - B */

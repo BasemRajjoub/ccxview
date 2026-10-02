@@ -12,21 +12,24 @@
 
 /* ---- stress linearization: membrane, bending, peak along a line through the wall --- */
 static double lin_q(const double t[6]) {
-    return G.lin_q == 0 ? cv_mises6(t) : G.lin_q == 1 ? cv_tresca6(t, false) : t[CV_MIN(G.lin_q - 2, 5)];
+    return G.lin_q == 0 ? cv_mises6(t) : G.lin_q == 1 ? cv_tresca6(t, false) :
+           G.lin_q == 8 ? t[0] + t[1] + t[2] : t[CV_MIN(G.lin_q - 2, 5)];
 }
 
-/* the linearized quantity: von Mises, Tresca or a component */
+/* the linearized quantity: von Mises, Tresca, a component or S1+S2+S3 (the trace) */
 static void lin_quantity(struct nk_context* ctx, float s, float row) {
     const cv_field_desc* d = G.lin_fi >= 0 ? &G.frd.steps[G.step].fields[G.lin_fi] : NULL;
-    char names[8][16] = { "von Mises", "Tresca" };
-    const char* items[8];
+    char names[9][16] = { "von Mises", "Tresca" };
+    const char* items[9];
     for (int c = 0; c < 6; c++) {
         if (!d) { snprintf(names[2 + c], 16, "%d", c + 1); continue; }
         if (G.csys > 0) cv_cyl_comp_name(d, c, names[2 + c]); else snprintf(names[2 + c], 16, "%s", d->comp[c]);
     }
-    for (int k = 0; k < 8; k++) items[k] = names[k];
-    tip(ctx, "The linearized quantity in the table and the plot (components in the coordinates chosen under Fields)");
-    G.lin_q = nk_combo(ctx, items, 8, G.lin_q, (int)row, nk_vec2(130 * s, 8 * row + 20 * s));
+    snprintf(names[8], 16, "S1+S2+S3");
+    for (int k = 0; k < 9; k++) items[k] = names[k];
+    tip(ctx, "The linearized quantity in the table and the plot (components in the coordinates chosen under Fields;\n"
+             "S1+S2+S3, the sum of the principal stresses, for the triaxial limit of ASME VIII-2 5.3.2)");
+    G.lin_q = nk_combo(ctx, items, 9, G.lin_q, (int)row, nk_vec2(130 * s, 9 * row + 20 * s));
 }
 
 static void lin_body(struct nk_context* ctx, float s, float row) {
