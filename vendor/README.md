@@ -13,6 +13,8 @@ Single-header libraries, unmodified, fetched from upstream master on 2026-09-25.
 | tinyfiledialogs.c/.h (3.21.4) | sourceforge.net/projects/tinyfiledialogs | zlib (compiled on Windows/macOS only) |
 | minih264e.h | github.com/lieff/minih264 | CC0 / public domain |
 | minimp4.h | github.com/lieff/minimp4 | CC0 / public domain |
+| tinyexpr.c/.h (fetched 2026-10-02) | github.com/codeplea/tinyexpr | zlib, [licenses/LICENSE-tinyexpr.txt](licenses/LICENSE-tinyexpr.txt) |
+| miniz.c/.h (3.1.2, fetched 2026-10-02) | github.com/richgel999/miniz (release amalgamation) | MIT, [licenses/LICENSE-miniz.txt](licenses/LICENSE-miniz.txt) |
 
 ## fonts
 
@@ -20,7 +22,7 @@ The UI font is compiled in: `src/font_data.c` holds subsets of the fonts below
 as byte arrays and `src/icons.h` their glyph ranges, both written by
 `scripts/embed-fonts.py` (fonttools) from the full TTFs, fetched 2026-10-02. The
 subsets keep each font's copyright and licence entries in its name table; the
-licence texts are in `fonts/` and ship in `binaries/licenses/`.
+licence texts are in `fonts/` and ship in the `licenses/` folder of every release archive.
 
 | Font | Upstream | What is embedded | License |
 |---|---|---|---|

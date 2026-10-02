@@ -14,6 +14,6 @@ Browser: ccxview.html -- WebGL2, one file: open it from disk or put it on any
          web server. Open... and drag and drop take files from your machine;
          exports arrive as downloads. Live: https://basemrajjoub.github.io/ccxview/
 
-licenses/ holds the licence of ccxview (GPL-2.0-or-later) and of the fonts
+licenses/ holds the licence of ccxview (GPL-2.0-or-later), of the fonts
 compiled into it: Inter and Noto Sans Math (SIL Open Font License 1.1) and
-Lucide (ISC).
+Lucide (ISC), and of the libraries TinyExpr (zlib) and miniz (MIT).

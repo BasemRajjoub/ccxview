@@ -17,6 +17,26 @@ void cv_gl_enable_point_size(void) {
 #endif
 }
 
+/* PNG deflate by miniz instead of stb's own compressor: smaller files (level 9
+   with a real match finder), still one translation unit. Deflate only. */
+#define MINIZ_NO_STDIO
+#define MINIZ_NO_TIME
+#define MINIZ_NO_ARCHIVE_APIS
+#define MINIZ_NO_INFLATE_APIS
+#define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
+#include "miniz.c"
+
+/* stb_image_write's hook: zlib-wrapped deflate of data into a malloc'd buffer */
+static unsigned char* cv_png_deflate(unsigned char* data, int len, int* out_len, int quality) {
+    (void)quality;
+    mz_ulong n = mz_compressBound((mz_ulong)len);
+    unsigned char* out = malloc(n);
+    if (!out) return NULL;
+    if (mz_compress2(out, &n, data, (mz_ulong)len, MZ_BEST_COMPRESSION) != MZ_OK) { free(out); return NULL; }
+    *out_len = (int)n;
+    return out;
+}
+#define STBIW_ZLIB_COMPRESS cv_png_deflate
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 

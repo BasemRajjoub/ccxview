@@ -4,7 +4,8 @@
 #                                      GLVND libraries for systems that lack them)
 #   dist/ccxview-windows-x86_64.zip    ccxview.exe
 #   dist/ccxview-web.zip               ccxview.html, one file: opens from disk or any web host
-# Each holds README.txt and licenses/ (GPL for ccxview, the embedded fonts' licences).
+# Each holds README.txt and licenses/ (GPL for ccxview, the embedded fonts' and the
+# vendored libraries' licences).
 # Takes build/bin/ccxview + build/lib/ (make PORTABLE=1), build/win/ccxview.exe
 # (make win), build/web/ccxview.html (make wasm). CI runs it for every release.
 set -euo pipefail
@@ -13,7 +14,7 @@ rm -rf dist && mkdir -p dist
 stage() {   # stage NAME: a fresh dist/NAME/ with the licences and the readme
     mkdir -p "dist/$1/licenses"
     cp LICENSE "dist/$1/licenses/LICENSE-ccxview.txt"
-    cp vendor/fonts/*.txt "dist/$1/licenses/"
+    cp vendor/fonts/*.txt vendor/licenses/*.txt "dist/$1/licenses/"
     cp scripts/release-readme.txt "dist/$1/README.txt"
 }
 if [ -e build/bin/ccxview ]; then
