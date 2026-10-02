@@ -10,6 +10,7 @@
 #include "sokol_nuklear.h"
 #include <math.h>
 #include "ui_int.h"
+#include "icons.h"
 
 /* a strip of colour map cm across r */
 static void cmap_strip(struct nk_command_buffer* cv, struct nk_rect r, int cm) {
@@ -55,7 +56,7 @@ void cmap_combo(struct nk_context* ctx, float s, float row) {
    looks (colormap, bands, range) below. Camera controls live in the View tree. */
 void panel_toolbar(struct nk_context* ctx, float s, float row) {
     /* line 1: deformation */
-    nk_layout_row_begin(ctx, NK_STATIC, row, 8);
+    nk_layout_row_begin(ctx, NK_STATIC, row, 9);
     nk_layout_row_push(ctx, 80 * s);
     tip(ctx, "Draw the shape displaced by DISP x scale");
     nk_checkbox_label(ctx, "Deform", &G.deform);
@@ -69,7 +70,7 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Scale so the largest displacement is ~10% of the model; never below 1");
     if (nk_button_label(ctx, "auto")) { G.deform_auto = true; G.deform_scale = G.auto_scale; }
     nk_layout_row_push(ctx, 24 * s);
-    nk_spacing(ctx, 1);
+    uii_vsep(ctx);
     nk_layout_row_push(ctx, 90 * s);
     tip(ctx, "Swing the deformation of this increment over time");
     if (nk_checkbox_label(ctx, "Animate", &G.anim_on) && G.anim_on) G.deform = true;
@@ -82,8 +83,10 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     nk_layout_row_push(ctx, 120 * s);
     tip(ctx, "Seconds per animation cycle");
     nk_property_float(ctx, "#sec", 0.2f, &G.anim_period, 20.f, 0.25f, 0.02f);
-    nk_layout_row_push(ctx, 50 * s);
-    if (nk_button_label(ctx, "Fit")) app_fit();
+    nk_layout_row_push(ctx, 24 * s);
+    uii_vsep(ctx);
+    nk_layout_row_push(ctx, 64 * s);
+    if (nk_button_label(ctx, IC_SCAN "  Fit")) app_fit();
     nk_layout_row_end(ctx);
 
     /* line 2: colours */
@@ -102,7 +105,7 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     int bj = nk_combo(ctx, band_names, bi == 4 ? 5 : 4, bi, (int)row, nk_vec2(110 * s, 180 * s));
     if (bj != bi && bj < 4) G.bands = band_vals[bj];
     nk_layout_row_push(ctx, 24 * s);
-    nk_spacing(ctx, 1);
+    if (G.range_lock) uii_vsep(ctx); else nk_spacing(ctx, 1);
     if (G.range_lock) {
         nk_layout_row_push(ctx, 120 * s);
         char a[32], b[32], lab[80];
@@ -124,13 +127,12 @@ void panel_timebar(struct nk_context* ctx, float s, float row, float width) {
     float fixed = (32 + 84 + 32 + 110 + 260) * s + 8 * ctx->style.window.spacing.x;
     nk_layout_row_begin(ctx, NK_STATIC, row, 6);
     nk_layout_row_push(ctx, 32 * s);
-    if (nk_button_symbol(ctx, NK_SYMBOL_TRIANGLE_LEFT)) app_set_step(G.step - 1);
+    if (nk_button_label(ctx, IC_STEP_BACK)) app_set_step(G.step - 1);
     nk_layout_row_push(ctx, 84 * s);
     tip(ctx, "Step through the increments (Space)");
-    if (nk_button_symbol_label(ctx, G.playing ? NK_SYMBOL_RECT_SOLID : NK_SYMBOL_TRIANGLE_RIGHT,
-                               G.playing ? "pause" : "play", NK_TEXT_RIGHT)) { G.playing = !G.playing; G.last_tick = 0; }
+    if (nk_button_label(ctx, G.playing ? IC_PAUSE "  pause" : IC_PLAY "  play")) { G.playing = !G.playing; G.last_tick = 0; }
     nk_layout_row_push(ctx, 32 * s);
-    if (nk_button_symbol(ctx, NK_SYMBOL_TRIANGLE_RIGHT)) app_set_step(G.step + 1);
+    if (nk_button_label(ctx, IC_STEP_FORWARD)) app_set_step(G.step + 1);
     nk_layout_row_push(ctx, CV_MAX(width - fixed, 60 * s));
     struct nk_rect sb = nk_widget_bounds(ctx);
     int st = G.step;
@@ -317,10 +319,12 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
     int done = 0, total = 0;
     bool exporting = app_export_progress(&done, &total) != 0;
     bool loading = !G.loaded && app_busy();
-    nk_layout_row_begin(ctx, NK_STATIC, row, exporting ? 5 : loading ? 4 : 3);
+    float sw = 14 * s;
+    nk_layout_row_begin(ctx, NK_STATIC, row, (exporting ? 5 : loading ? 4 : 3) + 2);
     nk_layout_row_push(ctx, pw);
     nk_label(ctx, G.loaded ? cv_basename(G.path) : "", NK_TEXT_LEFT);
-    float midw = CV_MAX(width - pw - bw - 6 * ctx->style.window.spacing.x, 10);
+    nk_layout_row_push(ctx, sw); uii_vsep(ctx);
+    float midw = CV_MAX(width - pw - bw - 6 * ctx->style.window.spacing.x - 2 * (sw + ctx->style.window.spacing.x), 10);
     if (exporting) {                       /* frame export: a real bar, the count, a stop button */
         nk_size cur = (nk_size)done;
         nk_layout_row_push(ctx, midw * 0.45f);
@@ -344,6 +348,7 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
         nk_layout_row_push(ctx, midw);
         nk_label(ctx, mid, NK_TEXT_LEFT);
     }
+    nk_layout_row_push(ctx, sw); uii_vsep(ctx);
     nk_layout_row_push(ctx, bw);
     if (nm) {
         if (nk_button_label(ctx, badge)) G.show_msgs = !G.show_msgs;

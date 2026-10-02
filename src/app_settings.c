@@ -69,7 +69,7 @@ enum { NS = sizeof S / sizeof S[0] };
 #undef TREE
 
 /* keys written apart from the table */
-static const char* const OTHER[] = { "window_w", "window_h", "ui_zoom", "ui_theme", "last_dir" };
+static const char* const OTHER[] = { "window_w", "window_h", "ui_zoom", "ui_font", "ui_pixel_font", "ui_theme", "last_dir" };
 
 static bool in_range(const setting* e, float v) { return !(e->lo < e->hi) || (v >= e->lo && v <= e->hi); }
 
@@ -124,6 +124,8 @@ void settings_load(void) {
     cv_cfg_unset(&C, "export_open");
     for (int i = 0; i < NS; i++) if (S[i].kind != '#') get_one(&S[i]);
     ui_set_zoom(cv_cfg_get_float(&C, "ui_zoom", 1.f));
+    ui_set_font_size(cv_cfg_get_float(&C, "ui_font", ui_get_font_size()));
+    ui_set_pixel_font(cv_cfg_get_bool(&C, "ui_pixel_font", false));
     ui_set_theme(cv_cfg_get(&C, "ui_theme", NULL));
 }
 
@@ -137,6 +139,8 @@ bool settings_apply(const char* kv) {
     const setting* e = find(key);
     if (e) { set_from_text(e, val); return true; }
     if (!strcmp(key, "ui_zoom")) { ui_set_zoom((float)atof(val)); return true; }
+    if (!strcmp(key, "ui_font")) { ui_set_font_size((float)atof(val)); return true; }
+    if (!strcmp(key, "ui_pixel_font")) { ui_set_pixel_font(parse_bool(val)); return true; }
     if (!strcmp(key, "export_open")) { G.tree[CV_TREE_EXPORT] = parse_bool(val); return true; }
     /* per-model things that are never saved here (the view file has them), but handy on the command line */
     if (!strcmp(key, "rep_follow")) { G.rep_follow = parse_bool(val); return true; }
@@ -249,6 +253,8 @@ void settings_save(int win_w, int win_h) {
     merge_disk_recent();
     for (int i = 0; i < NS; i++) if (S[i].kind != '#') put_one(&S[i]);
     cv_cfg_set_float(&C, "ui_zoom", ui_get_zoom());
+    cv_cfg_set_float(&C, "ui_font", ui_get_font_size());
+    cv_cfg_set_bool(&C, "ui_pixel_font", ui_get_pixel_font());
     cv_cfg_set(&C, "ui_theme", ui_get_theme());
     if (win_w > 0 && win_h > 0) { cv_cfg_set_int(&C, "window_w", win_w); cv_cfg_set_int(&C, "window_h", win_h); }
     write_layout();

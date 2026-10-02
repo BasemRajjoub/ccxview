@@ -24,6 +24,23 @@ void tip(struct nk_context* ctx, const char* text) {
     if (nk_widget_is_hovered(ctx)) nk_tooltip(ctx, text);
 }
 
+/* separators: a faint line across the middle of a cell, or of a thin row */
+void uii_vsep(struct nk_context* ctx) {
+    struct nk_rect r;
+    if (!nk_widget(&r, ctx)) return;
+    float x = roundf(r.x + r.w * 0.5f) + 0.5f, m = r.h * 0.18f;
+    nk_stroke_line(nk_window_get_canvas(ctx), x, r.y + m, x, r.y + r.h - m, 1.f,
+                   mix(P.dim, ctx->style.window.background, 0.45f));
+}
+void uii_hsep(struct nk_context* ctx, float s) {
+    struct nk_rect r;
+    nk_layout_row_dynamic(ctx, roundf(7 * s), 1);
+    if (!nk_widget(&r, ctx)) return;
+    float y = roundf(r.y + r.h * 0.5f) + 0.5f;
+    nk_stroke_line(nk_window_get_canvas(ctx), r.x, y, r.x + r.w, y, 1.f,
+                   mix(P.dim, ctx->style.window.background, 0.45f));
+}
+
 bool g_focus_open;          /* Ctrl+L: put the cursor in the path box */
 void ui_focus_open(void) { g_focus_open = true; }
 
@@ -130,7 +147,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     }
     apply_scale(ctx);
     const float s = U.scale;
-    const float row = roundf(13.f * s) + 10.f * s;
+    const float row = U.px + 10.f * s;
     const float pad = ctx->style.window.padding.y * 2;
     const float panel_w = roundf(310 * s);
     const float trow = roundf(row * 1.35f);              /* time bar: room for step ticks */

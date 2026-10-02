@@ -10,6 +10,7 @@
 #include "sokol_nuklear.h"
 #include <math.h>
 #include "ui_int.h"
+#include "icons.h"
 
 /* ---- panels --------------------------------------------------------------------- */
 
@@ -145,11 +146,13 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 nk_checkbox_label(ctx, "Couplings", &G.show_links);
             }
         }
+        if ((geo_loaded() || deck_has_bc() || deck_has_loads() || deck_has_discrete())) uii_hsep(ctx, s);
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Balls at the field's minimum and maximum (legend settings: go there)");
         nk_checkbox_label(ctx, "Min / max", &G.show_markers);
         tip(ctx, "The undeformed edges in grey behind the deformed shape");
         nk_checkbox_label(ctx, "Undeformed", &G.show_ghost);
+        uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 2);
         nk_checkbox_label(ctx, "Faces", &G.show_faces);
         {
             static const char* fm_names[FM_N] = { "field", "by type", "by material", "by group", "plain" };
@@ -173,8 +176,9 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             tip(ctx, "Hide the edges, nodes and Gauss points while the mesh is denser than ~3 px on\nscreen, where they would paint the surface black; zoom in to see them");
             nk_checkbox_label(ctx, "hide when dense", &G.edges_auto);
             if (dense) nk_label_colored(ctx, "hidden: zoom in", NK_TEXT_LEFT, P.warn);
-            else nk_spacing(ctx, 1);
+            else nk_label(ctx, "", NK_TEXT_LEFT);   /* nk_spacing ending a row opens the next one */
         }
+        uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Nodes of the visible elements, as small balls");
         nk_checkbox_label(ctx, "Nodes", &G.show_nodes);
         tip(ctx, "Paint the field on the nodes too");
@@ -451,7 +455,7 @@ void panel_scene(struct nk_context* ctx, float s, float row) {
                                  (int)sizeof G.open_buf - 1, nk_filter_default);
     G.open_buf[G.open_len] = 0;
     if (ev & NK_EDIT_COMMITED) app_open(G.open_buf);          /* typed path + Enter */
-    if (nk_button_label(ctx, G.dlg_running ? "..." : "Open...")) app_open_dialog();
+    if (nk_button_label(ctx, G.dlg_running ? "..." : IC_FOLDER_OPEN "  Open")) app_open_dialog();
     if (G.loaded) {                          /* recent files: a drop-down under the path box (the empty view lists them) */
         const char* recent[CV_CFG_RECENT];
         int nr = settings_recent(recent, CV_CFG_RECENT);
@@ -489,8 +493,8 @@ void panel_scene(struct nk_context* ctx, float s, float row) {
     section_view(ctx, s, row);
     section_export(ctx, s, row);
 
+    uii_hsep(ctx, s);
     nk_layout_row_dynamic(ctx, row, 1);
-    nk_label(ctx, "", NK_TEXT_LEFT);
     nk_label_colored(ctx, "drag: orbit   shift/right/middle: pan", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "hold X/Y/Z + drag: about that axis", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "ctrl drag: box zoom   ctrl right: zoom", NK_TEXT_LEFT, P.dim);

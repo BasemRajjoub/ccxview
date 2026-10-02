@@ -11,10 +11,16 @@
 #include "nuklear_style.c"          /* upstream demo themes: set_style() */
 #include <math.h>
 #include "ui_int.h"
+#include "icons.h"
+
+/* the embedded fonts (font_data.c, from scripts/embed-fonts.py): Inter for text,
+   the math symbols Inter lacks from Noto Sans Math, and the Lucide icons */
+extern const unsigned char cv_font_text[], cv_font_math[], cv_font_icons[];
+extern const unsigned cv_font_text_size, cv_font_math_size, cv_font_icons_size;
 
 /* ---- scale + font -------------------------------------------------------------- */
 
-struct uii_scale U = { 1.f, 0.f };
+struct uii_scale U = { .zoom = 1.f, .font_size = 15.f };
 
 /* the colours we draw ourselves (hints, plots, legend), derived from the theme */
 struct uii_palette P;
@@ -56,9 +62,34 @@ float ui_scale(void) { return U.scale > 0 ? U.scale : 1.f; }
 float ui_get_zoom(void) { return U.zoom; }
 void ui_set_zoom(float z) { U.zoom = CV_MIN(CV_MAX(z, 0.5f), 3.f); }
 
+float ui_get_font_size(void) { return U.font_size; }
+bool ui_get_pixel_font(void) { return U.pixel_font; }
+void ui_set_pixel_font(bool on) { U.pixel_font = on; }
+void ui_set_font_size(float px) { U.font_size = CV_MIN(CV_MAX(roundf(px), 10.f), 24.f); }
+
 void ui_zoom(int dir) {
     if (dir == 0) U.zoom = 1.f;
     else U.zoom = CV_MIN(CV_MAX(U.zoom * (dir > 0 ? 1.1f : 1.f / 1.1f), 0.5f), 3.f);
+}
+
+#define ICON_SCALE 1.2f
+
+/* After the bake. Nuklear puts every glyph ascent + 0.5 below the line top, a
+   fraction of a pixel off the grid, so the linear sampler smears each one over
+   two rows: move the glyphs onto whole pixels. And centre the icons (baked a
+   size up, on their own em box) on the capitals' ink, where the eye reads the
+   middle of a label. */
+static void snap_glyphs(void) {
+    struct nk_font_glyph* g = U.atlas.glyphs;
+    float cap = 0;
+    for (int i = 0; i < U.atlas.glyph_count; i++)
+        if (g[i].codepoint == 'H') { cap = (g[i].y0 + g[i].y1) * 0.5f; break; }
+    for (int i = 0; i < U.atlas.glyph_count; i++) {
+        float y = g[i].y0;
+        if (g[i].codepoint >= 0xE000 && cap > 0) y += cap - (g[i].y0 + g[i].y1) * 0.5f;
+        float d = roundf(y) - g[i].y0;
+        g[i].y0 += d; g[i].y1 += d;
+    }
 }
 
 static void bake_font(struct nk_context* ctx, float px) {
@@ -70,12 +101,32 @@ static void bake_font(struct nk_context* ctx, float px) {
     }
     nk_font_atlas_init_default(&U.atlas);
     nk_font_atlas_begin(&U.atlas);
+    static const nk_rune text[] = { FONT_TEXT_RANGES, 0 }, math[] = { FONT_MATH_RANGES, 0 };
+    static const nk_rune icons[] = { FONT_ICON_RANGES, 0 };
+    if (U.pixel_font) {                /* Nuklear's ProggyClean (ASCII, Latin-1) as before; */
+        struct nk_font_config pc = nk_font_config(px);   /* the rest from Inter, merged below */
+        pc.oversample_h = 3; pc.oversample_v = 2;
+        U.font = nk_font_atlas_add_default(&U.atlas, px, &pc);
+    }
     struct nk_font_config cfg = nk_font_config(px);
-    cfg.oversample_h = 3;
-    cfg.oversample_v = 2;
-    U.font = nk_font_atlas_add_default(&U.atlas, px, &cfg);
+    cfg.range = text;
+    cfg.merge_mode = U.pixel_font;
+    /* whole pixels, not 3x oversampling at fractional pens: the stems stay one pixel wide */
+    cfg.oversample_h = 1; cfg.oversample_v = 1; cfg.pixel_snap = nk_true;
+    struct nk_font* inter = nk_font_atlas_add_from_memory(&U.atlas, (void*)cv_font_text, cv_font_text_size, px, &cfg);
+    if (!U.pixel_font) U.font = inter;
+    struct nk_font_config mc = nk_font_config(px);       /* merged: found after Inter's ranges */
+    mc.merge_mode = nk_true; mc.range = math;
+    mc.oversample_h = 1; mc.oversample_v = 1; mc.pixel_snap = nk_true;
+    nk_font_atlas_add_from_memory(&U.atlas, (void*)cv_font_math, cv_font_math_size, px, &mc);
+    float ipx = roundf(px * ICON_SCALE);                 /* thin strokes: a size up */
+    struct nk_font_config ic = nk_font_config(ipx);
+    ic.merge_mode = nk_true; ic.range = icons;
+    ic.oversample_h = 2; ic.oversample_v = 2;
+    nk_font_atlas_add_from_memory(&U.atlas, (void*)cv_font_icons, cv_font_icons_size, ipx, &ic);
     int w, h;
     const void* pixels = nk_font_atlas_bake(&U.atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
+    snap_glyphs();
     U.img = sg_make_image(&(sg_image_desc){
         .width = w, .height = h, .pixel_format = SG_PIXELFORMAT_RGBA8,
         .data.mip_levels[0] = { pixels, (size_t)w * (size_t)h * 4 },
@@ -130,6 +181,17 @@ static void restyle(struct nk_context* ctx, float s) {
     SV(st->tab.node_minimize_button.padding); SV(st->tab.node_maximize_button.padding);
     SV(st->scrollh.padding); SV(st->scrollv.padding);
 
+    {   /* rounded controls, square windows */
+        st->button.rounding = 4 * s; st->contextual_button.rounding = 3 * s; st->menu_button.rounding = 3 * s;
+        st->combo.rounding = 4 * s; st->combo.button.rounding = 3 * s;
+        st->property.rounding = 4 * s; st->property.edit.rounding = 3 * s;
+        st->edit.rounding = 4 * s; st->selectable.rounding = 3 * s;
+        st->slider.rounding = 3 * s; st->progress.rounding = 3 * s; st->progress.cursor_rounding = 3 * s;
+        st->scrollv.rounding = st->scrollh.rounding = 4 * s;
+        st->scrollv.rounding_cursor = st->scrollh.rounding_cursor = 4 * s;
+        st->tab.rounding = 4 * s; st->window.rounding = 0;
+        st->window.popup_border = 1; st->checkbox.border = 0;
+    }
     if (themes[U.theme].nk < 0) {
         /* calmer palette than the default */
         st->window.fixed_background = nk_style_item_color(nk_rgba(38, 38, 40, 245));
@@ -172,13 +234,16 @@ static void restyle(struct nk_context* ctx, float s) {
 
 void apply_scale(struct nk_context* ctx) {
     float s = desktop_scale() * U.zoom;
-    if (fabsf(s - U.scale) < 0.01f && U.atlas_live) {
+    float px = roundf((U.pixel_font ? 13.f : U.font_size) * s);   /* ProggyClean is drawn for 13 */
+    if (fabsf(s - U.scale) < 0.01f && px == U.px && U.pixel_font == U.baked_pixel && U.atlas_live) {
         if (U.restyle) { U.restyle = false; restyle(ctx, s); }
         return;
     }
     U.scale = s;
     U.restyle = false;
-    bake_font(ctx, roundf(13.f * s));
+    U.px = px;
+    U.baked_pixel = U.pixel_font;
+    bake_font(ctx, U.px);
     restyle(ctx, s);
 }
 

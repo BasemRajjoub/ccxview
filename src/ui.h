@@ -13,6 +13,10 @@ float ui_scale(void);
 void  ui_zoom(int dir);      /* +1 bigger, -1 smaller, 0 reset */
 float ui_get_zoom(void);
 void  ui_set_zoom(float z);
+float ui_get_font_size(void);            /* UI font height, pixels at scale 1 */
+void  ui_set_font_size(float px);        /* rounded, 10 .. 24; applied next frame */
+bool  ui_get_pixel_font(void);           /* ProggyClean (13 px) instead of Inter */
+void  ui_set_pixel_font(bool on);
 const char* ui_get_theme(void);          /* theme by name, as saved in the settings */
 void  ui_set_theme(const char* name);    /* unknown names are ignored */
 void  ui_focus_open(void);   /* Ctrl+L: cursor into the path box */

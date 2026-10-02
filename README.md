@@ -107,7 +107,8 @@ scripts/pack-binaries.sh   # refresh binaries/
 
 Dependencies: a C compiler and, on Linux, X11 and OpenGL development headers.
 Everything else is vendored (sokol, Nuklear, stb_image_write, stb_sprintf, minih264e, minimp4,
-tinyfiledialogs).
+tinyfiledialogs), and the UI fonts are compiled in (Inter, Noto Sans Math, Lucide icons;
+regenerate with `scripts/embed-fonts.py`).
 
 `samples/showcase/` is the plate with a hole preloaded in the browser build,
 `samples/elements/` one small solved deck with every element type and feature,
@@ -116,4 +117,6 @@ in [docs/spec.md](docs/spec.md); the `.inp` keywords the viewer reads in
 [docs/keywords.md](docs/keywords.md).
 
 License: GPL-2.0-or-later, the same as CalculiX. Vendored libraries keep
-their own licences (zlib, MIT, public domain), see [vendor/README.md](vendor/README.md).
+their own licences (zlib, MIT, public domain), see [vendor/README.md](vendor/README.md);
+the embedded fonts are under the SIL Open Font License 1.1 (Inter, Noto Sans Math)
+and ISC (Lucide), texts in [vendor/fonts/](vendor/fonts/).

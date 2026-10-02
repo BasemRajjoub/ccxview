@@ -4,12 +4,15 @@
 #   binaries/linux/lib/      X11 + GLVND libraries for systems that lack them
 #   binaries/windows/ccxview.exe
 #   binaries/web/ccxview.html   the browser build, one file, opens from disk or any web host
+#   binaries/licenses/       GPL for ccxview, and the embedded fonts' licences
 # Expects build/bin/ccxview (make PORTABLE=1), build/win/ccxview.exe (make win)
 # and docs/index.html (make wasm).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-rm -rf binaries/linux binaries/windows binaries/web
-mkdir -p binaries/linux/lib binaries/windows binaries/web
+rm -rf binaries/linux binaries/windows binaries/web binaries/licenses
+mkdir -p binaries/linux/lib binaries/windows binaries/web binaries/licenses
+cp LICENSE binaries/licenses/LICENSE-ccxview.txt
+cp vendor/fonts/*.txt binaries/licenses/
 cp build/bin/ccxview binaries/linux/ccxview
 cp build/lib/*.so* binaries/linux/lib/
 chmod 755 binaries/linux/ccxview binaries/linux/lib/*

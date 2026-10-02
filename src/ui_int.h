@@ -48,7 +48,13 @@ struct uii_scale {
     struct nk_font* font;
     int    theme;             /* index into themes[] */
     bool   restyle;           /* theme changed: rebuild the style next frame */
+    float  font_size;         /* user setting, pixels at scale 1 (Inter) */
+    bool   pixel_font;        /* user setting: Nuklear's ProggyClean instead of Inter */
+    bool   baked_pixel;       /* the atlas has ProggyClean */
+    float  px;                /* font height in pixels (scaled) */
 };
+void uii_vsep(struct nk_context* ctx);              /* a vertical line in the next cell */
+void uii_hsep(struct nk_context* ctx, float s);     /* a horizontal line across the row */
 extern struct uii_scale U;
 
 /* the colours we draw ourselves (hints, plots, legend), derived from the theme */

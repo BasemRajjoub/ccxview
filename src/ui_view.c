@@ -239,6 +239,37 @@ void section_view(struct nk_context* ctx, float s, float row) {
             int t = nk_combo(ctx, names, NTHEMES, U.theme, (int)row, nk_vec2(200 * s, 6 * row + 20 * s));
             if (t != U.theme) { U.theme = t; U.restyle = true; }
         }
+        {   /* the usual screen UI sizes; set on release, as the rebake moves the rows */
+            static const int sizes[] = { 12, 13, 14, 15, 16, 18, 20 };
+            enum { NSIZES = sizeof sizes / sizeof sizes[0] };
+            static int pend = -1;
+            int cur = 0;
+            for (int i = 0; i < NSIZES; i++) if (sizes[i] <= ui_get_font_size()) cur = i;
+            if (pend < 0) pend = cur;
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_static(ctx, 84 * s);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 44 * s);
+            nk_layout_row_template_end(ctx);
+            const bool pixel = ui_get_pixel_font();
+            if (pixel) nk_widget_disable_begin(ctx);
+            nk_label(ctx, "UI font", NK_TEXT_LEFT);
+            tip(ctx, "Height of the panel text, pixels at 100% (Ctrl +/- zooms the whole UI)");
+            ui_slider_int(ctx, 0, &pend, NSIZES - 1, 1);
+            char v[16];
+            snprintf(v, sizeof v, "%d px", pixel ? 13 : sizes[pend]);
+            nk_label(ctx, v, NK_TEXT_RIGHT);
+            if (pixel) nk_widget_disable_end(ctx);
+            nk_layout_row_dynamic(ctx, row, 1);
+            nk_bool pf = pixel;
+            tip(ctx, "Nuklear's ProggyClean, a pixel font for 13 px, instead of Inter;\n"
+                     "Greek, maths and the icons still come from the embedded fonts");
+            if (nk_checkbox_label(ctx, "Pixel font (ProggyClean)", &pf)) ui_set_pixel_font(pf);
+            if (!ctx->input.mouse.buttons[NK_BUTTON_LEFT].down) {
+                if (pend != cur) ui_set_font_size((float)sizes[pend]);
+                pend = -1;
+            }
+        }
         nk_tree_state_pop(ctx);
     }
 
