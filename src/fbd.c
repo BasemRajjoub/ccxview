@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <stdarg.h>
+#include "stb_sprintf.h"
 
 typedef struct { char s[32]; } nm;
 typedef struct { nm n; int8_t sign; } snm;
@@ -484,15 +485,18 @@ static bool mesh_body(mesh* M, const mctx* m, const rsurf* S, const kv* sk, size
 typedef CV_VEC(char) strbuf;
 
 static void sb_printf(strbuf* b, bool* oom, const char* fmt, ...) {
-    va_list ap;
+    va_list ap, ap2;
     va_start(ap, fmt);
+    va_copy(ap2, ap);
     char tmp[256];
-    int n = vsnprintf(tmp, sizeof tmp, fmt, ap);
+    int n = stbsp_vsnprintf(tmp, sizeof tmp, fmt, ap);
     va_end(ap);
-    if (n < 0) return;
-    if (!cv_reserve(*b, b->n + (size_t)n + 1)) { *oom = true; return; }
-    memcpy(b->a + b->n, tmp, (size_t)n + 1);
-    b->n += (size_t)n;
+    if (n >= 0 && cv_reserve(*b, b->n + (size_t)n + 1)) {
+        if ((size_t)n < sizeof tmp) memcpy(b->a + b->n, tmp, (size_t)n + 1);
+        else stbsp_vsnprintf(b->a + b->n, (size_t)n + 1, fmt, ap2);     /* longer than tmp: format again in place */
+        b->n += (size_t)n;
+    } else if (n >= 0) *oom = true;
+    va_end(ap2);
 }
 
 /* ids, 16 to a line as Abaqus wants them */

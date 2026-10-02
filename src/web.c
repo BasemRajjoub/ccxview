@@ -7,9 +7,6 @@
 #include "cfg.h"
 #include <sys/stat.h>
 #include <strings.h>
-#include "cfg.h"
-#include <sys/stat.h>
-#include <strings.h>
 #include "sokol_app.h"
 
 EM_JS(void, web_settings_load, (const char* path), {

@@ -4,6 +4,7 @@
 #include "app_int.h"
 #include "gauss.h"
 #include "path.h"
+#include "export.h"     /* cv_fprintf */
 #include <math.h>
 
 /* ---- stress linearization: a tensor along a straight line through the solid ------
@@ -197,15 +198,15 @@ bool app_lin_csv(const char* path) {
     bool ok = app_lin_mb(m, b);
     FILE* o = fopen(path, "wb");
     if (!o) return false;
-    fprintf(o, "# %s linearized from (%.9g, %.9g, %.9g) to (%.9g, %.9g, %.9g), t = %.9g, step %d\n", d->name,
+    cv_fprintf(o, "# %s linearized from (%.9g, %.9g, %.9g) to (%.9g, %.9g, %.9g), t = %.9g, step %d\n", d->name,
             G.lin_p[0][0], G.lin_p[0][1], G.lin_p[0][2], G.lin_p[1][0], G.lin_p[1][1], G.lin_p[1][2], G.lin_t, G.step + 1);
     if (ok) {
         double mb[6], mb2[6];
         for (int c = 0; c < 6; c++) { mb[c] = m[c] + b[c]; mb2[c] = m[c] - b[c]; }
-        fprintf(o, "# bending from %s\n", G.lin_asme ? "the components normal to the line only (5-A.4.1.2)" : "all six components");
-        fprintf(o, "# membrane: von Mises %.9g, Tresca %.9g\n", cv_mises6(m), cv_tresca6(m, false));
-        fprintf(o, "# membrane + bending at start: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb), cv_tresca6(mb, false));
-        fprintf(o, "# membrane + bending at end: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb2), cv_tresca6(mb2, false));
+        cv_fprintf(o, "# bending from %s\n", G.lin_asme ? "the components normal to the line only (5-A.4.1.2)" : "all six components");
+        cv_fprintf(o, "# membrane: von Mises %.9g, Tresca %.9g\n", cv_mises6(m), cv_tresca6(m, false));
+        cv_fprintf(o, "# membrane + bending at start: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb), cv_tresca6(mb, false));
+        cv_fprintf(o, "# membrane + bending at end: von Mises %.9g, Tresca %.9g\n", cv_mises6(mb2), cv_tresca6(mb2, false));
         double pk[2] = { -INFINITY, -INFINITY }, tt[2] = { -INFINITY, -INFINITY };   /* the largest anywhere on the line */
         for (int i = 0; i < G.lin_n; i++) {
             double l[6], s[6], p[6];
@@ -214,23 +215,23 @@ bool app_lin_csv(const char* path) {
             pk[0] = CV_MAX(pk[0], cv_mises6(p)); pk[1] = CV_MAX(pk[1], cv_tresca6(p, false));
             tt[0] = CV_MAX(tt[0], cv_mises6(s)); tt[1] = CV_MAX(tt[1], cv_tresca6(s, false));
         }
-        fprintf(o, "# peak, max on the line: von Mises %.9g, Tresca %.9g\n", pk[0], pk[1]);
-        fprintf(o, "# total, max on the line: von Mises %.9g, Tresca %.9g\n", tt[0], tt[1]);
+        cv_fprintf(o, "# peak, max on the line: von Mises %.9g, Tresca %.9g\n", pk[0], pk[1]);
+        cv_fprintf(o, "# total, max on the line: von Mises %.9g, Tresca %.9g\n", tt[0], tt[1]);
     } else {
-        fprintf(o, "# the line leaves the solid: no linearization\n");
+        cv_fprintf(o, "# the line leaves the solid: no linearization\n");
     }
-    fprintf(o, "x");
-    for (int c = 0; c < 6; c++) fprintf(o, ",%s", d->comp[c]);
-    for (int c = 0; c < 6; c++) fprintf(o, ",%s_lin", d->comp[c]);
-    fprintf(o, ",mises,mises_lin\n");
+    cv_fprintf(o, "x");
+    for (int c = 0; c < 6; c++) cv_fprintf(o, ",%s", d->comp[c]);
+    for (int c = 0; c < 6; c++) cv_fprintf(o, ",%s_lin", d->comp[c]);
+    cv_fprintf(o, ",mises,mises_lin\n");
     for (int i = 0; i < G.lin_n; i++) {
         double x = G.lin_t * i / (G.lin_n - 1), s[6], l[6];
         const float* v = G.lin_s + 6 * i;
-        fprintf(o, "%.9g", x);
+        cv_fprintf(o, "%.9g", x);
         if (ok) cv_lin_at(m, b, G.lin_t, x, l); else for (int c = 0; c < 6; c++) l[c] = NAN;
-        for (int c = 0; c < 6; c++) { s[c] = v[c]; fprintf(o, ",%.9g", v[c]); }
-        for (int c = 0; c < 6; c++) fprintf(o, ",%.9g", l[c]);
-        fprintf(o, ",%.9g,%.9g\n", cv_mises6(s), ok ? cv_mises6(l) : NAN);
+        for (int c = 0; c < 6; c++) { s[c] = v[c]; cv_fprintf(o, ",%.9g", v[c]); }
+        for (int c = 0; c < 6; c++) cv_fprintf(o, ",%.9g", l[c]);
+        cv_fprintf(o, ",%.9g,%.9g\n", cv_mises6(s), ok ? cv_mises6(l) : NAN);
     }
     return fclose(o) == 0;
 }

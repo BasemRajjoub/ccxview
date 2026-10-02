@@ -6,6 +6,10 @@
 
 #include "frd.h"
 
+/* fprintf through stb_sprintf: the same text on every platform, and on Windows
+   about twice as fast as the C runtime's for the many floats an export writes. */
+int cv_fprintf(FILE* o, const char* fmt, ...);
+
 /* CSV: "id,x,y,z[,dx,dy,dz][,<label>]" per node; disp / scalar may be NULL.
    vis (per element, may be NULL): only nodes of visible elements are written. */
 bool cv_export_csv(const char* path, const cv_frd* f, const float* disp, const float* scalar,

@@ -591,7 +591,10 @@ static void worker(void* p) {
 
 void cv_filedlg_start(const char* parent, const char* start_dir) {
     if (!D.lock_ready) { cv_mutex_init(&D.lock); D.lock_ready = true; }
-    if (D.state == CV_DLG_RUNNING) return;
+    cv_mutex_lock(&D.lock);
+    int s = D.state;
+    cv_mutex_unlock(&D.lock);
+    if (s == CV_DLG_RUNNING) return;
     if (D.thread.h_) cv_thread_join(&D.thread);
     snprintf(D.parent, sizeof D.parent, "%s", parent ? parent : "");
     snprintf(D.start, sizeof D.start, "%s", start_dir ? start_dir : "");

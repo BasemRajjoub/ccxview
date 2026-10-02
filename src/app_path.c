@@ -4,6 +4,7 @@
 #include "app_int.h"
 #include "gauss.h"
 #include "path.h"
+#include "export.h"     /* cv_fprintf */
 #include <math.h>
 
 /* ---- path plot ------------------------------------------------------------------- */
@@ -401,7 +402,7 @@ bool app_path_csv(const char* path) {
     if (!G.path_n) return false;
     FILE* o = fopen(path, "wb");
     if (!o) return false;
-    fprintf(o, "distance,id,x,y,z,%s\n", G.has_field ? G.field_label : "value");
+    cv_fprintf(o, "distance,id,x,y,z,%s\n", G.has_field ? G.field_label : "value");
     const float *A = G.path_p[0], *B = G.path_p[1];
     for (uint32_t i = 0; i < G.path_n; i++) {
         float p[3], f = G.path_n > 1 ? (float)i / (G.path_n - 1) : 0;
@@ -409,9 +410,9 @@ bool app_path_csv(const char* path) {
         if (G.path_surface) { memcpy(p, G.frd.xyz + 3 * (size_t)G.path_nodes[i], sizeof p); id = G.frd.node_id[G.path_nodes[i]]; }
         else for (int k = 0; k < 3; k++) p[k] = A[k] + f * (B[k] - A[k]);
         float v = G.has_field && !G.elem_mode ? app_path_value(i) : NAN;
-        if (id) fprintf(o, "%.9g,%u,%.9g,%.9g,%.9g,", G.path_dist[i], id, p[0], p[1], p[2]);
-        else fprintf(o, "%.9g,,%.9g,%.9g,%.9g,", G.path_dist[i], p[0], p[1], p[2]);
-        if (v == v) fprintf(o, "%.9g\n", v); else fprintf(o, "nan\n");
+        if (id) cv_fprintf(o, "%.9g,%u,%.9g,%.9g,%.9g,", G.path_dist[i], id, p[0], p[1], p[2]);
+        else cv_fprintf(o, "%.9g,,%.9g,%.9g,%.9g,", G.path_dist[i], p[0], p[1], p[2]);
+        if (v == v) cv_fprintf(o, "%.9g\n", v); else cv_fprintf(o, "nan\n");
     }
     return fclose(o) == 0;
 }
@@ -492,11 +493,11 @@ bool app_hist_csv(const char* path) {
     if (!G.hist_n) return false;
     FILE* o = fopen(path, "wb");
     if (!o) return false;
-    fprintf(o, "step,time,%s %s %u\n", G.field_label, G.elem_mode ? "element" : "node",
+    cv_fprintf(o, "step,time,%s %s %u\n", G.field_label, G.elem_mode ? "element" : "node",
             G.elem_mode ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node]);
     for (int i = 0; i < G.hist_n; i++) {
-        fprintf(o, "%d,%.9g,", G.hist_step[i] + 1, G.hist_t[i]);
-        if (G.hist_v[i] == G.hist_v[i]) fprintf(o, "%.9g\n", G.hist_v[i]); else fprintf(o, "nan\n");
+        cv_fprintf(o, "%d,%.9g,", G.hist_step[i] + 1, G.hist_t[i]);
+        if (G.hist_v[i] == G.hist_v[i]) cv_fprintf(o, "%.9g\n", G.hist_v[i]); else cv_fprintf(o, "nan\n");
     }
     return fclose(o) == 0;
 }

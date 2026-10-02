@@ -27,6 +27,34 @@ static int t_export_count_lines(const char* s) {
     return n;
 }
 
+/* cv_fprintf: stb_sprintf behind fprintf. Text longer than its 512-byte chunk,
+   the size modifiers the writers use, and floats that read back exactly. */
+static void test_fprintf(void) {
+    const char* path = "build/t_fprintf.txt";
+    FILE* o = fopen(path, "wb");
+    CHECK(o != NULL);
+    if (!o) return;
+    char big[2000];
+    memset(big, 'x', sizeof big - 1);
+    big[sizeof big - 1] = 0;
+    float v[] = { 601027.5625f, -1.17549435e-38f, 3.40282347e+38f, 1e-7f, 0.1f, 123456789.f };
+    CHECK_EQ(cv_fprintf(o, "%s|%zu|%llu|%u|%d\n", big, (size_t)42, 18446744073709551615ull, 7u, -3), 1999 + 30);
+    for (size_t i = 0; i < CV_COUNT(v); i++) cv_fprintf(o, "%.9g\n", v[i]);
+    fclose(o);
+    char* s = t_export_slurp(path);
+    CHECK(s != NULL);
+    if (!s) return;
+    CHECK(strlen(s) > 2000 && strncmp(s + 1999, "|42|18446744073709551615|7|-3\n", 30) == 0);
+    char* p = strchr(s, '\n') + 1;
+    for (size_t i = 0; i < CV_COUNT(v); i++) {
+        char* e;
+        CHECK((float)strtod(p, &e) == v[i]);
+        CHECK(*e == '\n');
+        p = e + 1;
+    }
+    free(s);
+}
+
 static void test_export(void) {
     /* One hex8 (nodes 0-7, ids 1-8) + one tet4 (nodes 8-11, ids 9-12), sharing
        nothing. eoff/conn use dense node indices, as frd.c leaves them. */

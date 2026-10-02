@@ -1354,6 +1354,7 @@ int main(void) {
     test_video();
     test_cfg();
     test_export();
+    test_fprintf();
     test_path();
     test_anchor();
     test_feature_edges();
