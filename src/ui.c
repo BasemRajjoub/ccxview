@@ -4,7 +4,7 @@
      ui_panels.c   the scene sidebar (left): file, layers, groups and sets, fields, export
      ui_view.c     the sidebar's View section: camera, colours, symmetry, cuts, symbol sizes
      ui_bars.c     toolbar, time bar, status bar, legend and its settings, axes gizmo
-     ui_windows.c  messages, formula reference, probe, find, overlay, navigation mark, file browser, drop hint
+     ui_windows.c  messages, formula builder, probe, find, overlay, navigation mark, file browser, drop hint
      ui_plots.c    linearization, path, history and convergence plots
    This file also answers the input focus queries and holds the small widget helpers. */
 #include "app.h"
@@ -135,6 +135,32 @@ bool sub_push(struct nk_context* ctx, const char* title, int t) {
 
 /* ---- frame ------------------------------------------------------------------------ */
 
+/* A press goes to the topmost window under the mouse that takes input. Nuklear
+   activates a clicked window only when no window above it covers the point, and
+   counts the display-only overlays (NO_INPUT) as covering: once a closed window
+   has left a panel read only, a click on it under an overlay never woke it again. */
+static void click_focus(struct nk_context* ctx) {
+    const struct nk_input* in = &ctx->input;
+    if (!nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT) && !nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) &&
+        !nk_input_is_mouse_pressed(in, NK_BUTTON_MIDDLE)) return;
+    float mx = in->mouse.pos.x, my = in->mouse.pos.y;
+    for (struct nk_window* w = ctx->begin; w; w = w->next) {          /* an open popup has it */
+        const struct nk_window* p = w->popup.active ? w->popup.win : NULL;
+        if (p && !(w->flags & NK_WINDOW_HIDDEN) && NK_INBOX(mx, my, p->bounds.x, p->bounds.y, p->bounds.w, p->bounds.h))
+            return;
+    }
+    for (struct nk_window* w = ctx->end; w; w = w->prev) {
+        if (w->flags & (NK_WINDOW_HIDDEN | NK_WINDOW_CLOSED | NK_WINDOW_NO_INPUT)) continue;
+        if (!NK_INBOX(mx, my, w->bounds.x, w->bounds.y, w->bounds.w, w->bounds.h)) continue;
+        if (w != ctx->active || (w->flags & NK_WINDOW_ROM)) {
+            if (!(w->flags & NK_WINDOW_BACKGROUND)) nk_window_set_focus(ctx, w->name_string);
+            else ctx->active = w;
+            w->flags &= ~(nk_flags)NK_WINDOW_ROM;
+        }
+        return;
+    }
+}
+
 void ui_frame(struct nk_context* ctx, int fw, int fh) {
     /* Nuklear, closing a window, hands the focus to the one below without raising
        it; once another window is added on top, that one stays active but read only
@@ -145,6 +171,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
         nk_window_set_focus(ctx, w->name_string);
         w->flags &= ~(nk_flags)NK_WINDOW_ROM;
     }
+    click_focus(ctx);
     apply_scale(ctx);
     const float s = U.scale;
     const float row = U.px + 10.f * s;

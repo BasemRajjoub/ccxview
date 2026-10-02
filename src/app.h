@@ -293,7 +293,7 @@ typedef struct {
     float     probe_value;
 
     bool      show_msgs;
-    bool      show_calc_help;        /* the formula reference window */
+    bool      show_calc_help;        /* the formula builder window */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
     float     bg[3];                 /* view background */

@@ -1,4 +1,4 @@
-/* ui_windows.c -- the floating windows: messages, the formula reference, probe, find, the text overlay
+/* ui_windows.c -- the floating windows: messages, the formula builder, probe, find, the text overlay
    and navigation mark in the view, the built-in file browser and the drop hint.
    The plot windows are in ui_plots.c. */
 #include "app.h"
@@ -409,52 +409,111 @@ void drop_hint(struct nk_context* ctx, float s, float row) {
     nk_end(ctx);
 }
 
-/* ---- Formula reference: what a calculated field can be made of, one row each.
-   A click on a name or an example puts it on the clipboard. */
-static void help_copy(const char* t) {
-    sapp_set_clipboard_string(t);
-    snprintf(G.note, sizeof G.note, "copied %s", t);
-    G.note_t = cv_now();
+/* ---- Formula builder: the formula of the Calculated box, typed or put together
+   from buttons. Each button inserts at the cursor: this file's fields and their
+   components, the derived results, operators, functions; an example replaces it all. */
+static struct nk_text_edit fb_te;
+static char fb_mem[sizeof G.calc_expr];
+static bool fb_focus;                                /* give the box the keyboard back next frame */
+
+static void fb_set(const char* t) {
+    nk_textedit_init_fixed(&fb_te, fb_mem, sizeof fb_mem - 1);
+    nk_str_append_text_char(&fb_te.string, t, (int)strlen(t));
+    fb_te.cursor = nk_str_len(&fb_te.string);
 }
 
-static void help_head(struct nk_context* ctx, float s, float row, const char* t) {
-    nk_layout_row_dynamic(ctx, 6 * s, 1);
+static const char* fb_text(void) {                   /* fb_mem without a terminator of its own */
+    static char t[sizeof fb_mem];
+    int n = CV_MIN(nk_str_len_char(&fb_te.string), (int)sizeof t - 1);
+    memcpy(t, fb_mem, (size_t)n);
+    t[n] = 0;
+    return t;
+}
+
+static void fb_insert(const char* t) {
+    fb_te.mode = NK_TEXT_EDIT_MODE_INSERT;          /* nk_textedit_text types only in insert mode */
+    nk_textedit_text(&fb_te, t, (int)strlen(t));
+    fb_focus = true;
+}
+
+/* a button that inserts ins (label when NULL), with a tooltip */
+static void fb_key(struct nk_context* ctx, const char* label, const char* ins, const char* why) {
+    if (why) tip(ctx, why);
+    if (nk_button_label(ctx, label)) fb_insert(ins ? ins : label);
+}
+
+static void fb_head(struct nk_context* ctx, float s, float row, const char* t) {
+    nk_layout_row_dynamic(ctx, 4 * s, 1);
     nk_spacing(ctx, 1);
     nk_layout_row_dynamic(ctx, row, 1);
     nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
 }
 
-/* rows of { what to write, what it means }; with copy the first column is a button that
-   copies it, up to a double space ("S1  S2  S3" copies S1) */
-static void help_rows(struct nk_context* ctx, float s, float row, const char* const (*r)[2], size_t n, bool copy) {
-    nk_layout_row_template_begin(ctx, row);
-    nk_layout_row_template_push_static(ctx, 170 * s);
-    nk_layout_row_template_push_dynamic(ctx);
-    nk_layout_row_template_end(ctx);
-    for (size_t i = 0; i < n; i++) {
-        if (!copy) { nk_label(ctx, r[i][0], NK_TEXT_LEFT); nk_label_colored(ctx, r[i][1], NK_TEXT_LEFT, P.dim); continue; }
-        char t[64];
-        const char* gap = strstr(r[i][0], "  ");
-        snprintf(t, sizeof t, "%.*s", gap ? (int)(gap - r[i][0]) : (int)strlen(r[i][0]), r[i][0]);
-        tip(ctx, t);
-        if (nk_button_label(ctx, r[i][0])) help_copy(t);
-        nk_label_colored(ctx, r[i][1], NK_TEXT_LEFT, P.dim);
-    }
+/* what a field holds, for the names CalculiX (and FEMaster) write */
+static const char* fb_about(const char* f) {
+    static const char* const k[][2] = {
+        { "DISP", "displacement" }, { "STRESS", "stress" }, { "TOSTRAIN", "total strain" },
+        { "MESTRAIN", "mechanical strain" }, { "THSTRAIN", "thermal strain" }, { "PE", "equiv. plastic strain" },
+        { "FORC", "nodal force" }, { "EXTFORC", "external force" }, { "ENER", "energy density" },
+        { "ERROR", "error estimate" }, { "HERROR", "heat error estimate" }, { "ZZS", "smoothed stress" },
+        { "NDTEMP", "temperature" }, { "FLUX", "heat flux" }, { "RFL", "heat reaction" },
+        { "CONTACT", "contact" }, { "SDV", "state variables" }, { "VELO", "velocity" },
+        { "STRPOS", "stress, shell top" }, { "STRNEG", "stress, shell bottom" }, { "STRMID", "stress, shell middle" },
+        { "SHR", "shell resultants" }, { "PDISP", "displacement, complex" }, { "PSTRESS", "stress, complex" },
+    };
+    for (size_t i = 0; i < CV_COUNT(k); i++) if (!strcmp(f, k[i][0])) return k[i][1];
+    return "";
 }
 
 void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open = false;
     if (!G.show_calc_help) { was_open = false; return; }
-    if (!was_open) nk_window_show(ctx, "Formula reference", NK_SHOWN);
+    static char seen[sizeof G.calc_expr];
+    if (!was_open) { nk_window_show(ctx, "Formula", NK_SHOWN); fb_set(calc_draft()); fb_focus = true; }
+    else if (strcmp(seen, G.calc_expr)) fb_set(G.calc_expr);   /* set elsewhere: --calc, the examples list */
+    snprintf(seen, sizeof seen, "%s", G.calc_expr);
     was_open = true;
-    float w = CV_MIN(620 * s, fw * 0.9f), h = fh * 0.8f;
-    if (nk_begin(ctx, "Formula reference", nk_rect((fw - w) / 2, fh * 0.1f, w, h),
+    float w = CV_MIN(720 * s, fw * 0.92f), h = CV_MIN(fh * 0.86f, 900 * s);
+    if (nk_begin(ctx, "Formula", nk_rect((fw - w) / 2, (fh - h) / 2, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
+        float cw = nk_window_get_content_region(ctx).w, sp = ctx->style.window.spacing.x;
+
+        /* the formula, and what to do with it */
+        bool apply = false, close = false;
+        nk_layout_row_template_begin(ctx, row * 1.3f);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_push_static(ctx, 34 * s);
+        nk_layout_row_template_push_static(ctx, 34 * s);
+        nk_layout_row_template_push_static(ctx, 60 * s);
+        nk_layout_row_template_push_static(ctx, 60 * s);
+        nk_layout_row_template_end(ctx);
+        if (fb_focus) { nk_edit_focus(ctx, 0); fb_focus = false; }
+        nk_flags ev = nk_edit_buffer(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, &fb_te, nk_filter_default);
+        if (ev & NK_EDIT_COMMITED) apply = true;
+        tip(ctx, "Delete the character before the cursor");
+        if (nk_button_label(ctx, "\xe2\x86\x90")) {
+            if (fb_te.select_start != fb_te.select_end) nk_textedit_delete_selection(&fb_te);
+            else if (fb_te.cursor > 0) { nk_textedit_delete(&fb_te, fb_te.cursor - 1, 1); fb_te.cursor--; }
+            fb_focus = true;
+        }
+        tip(ctx, "Clear the formula");
+        if (nk_button_label(ctx, "C")) { fb_set(""); fb_focus = true; }
+        tip(ctx, "Colour the model by the formula; the window stays open (Enter does the same)");
+        if (nk_button_label(ctx, "Show")) apply = true;
+        tip(ctx, "Colour the model by the formula and close");
+        if (nk_button_label(ctx, "OK")) apply = close = true;
+        const char* t = fb_text();
+        if (apply) {
+            calc_draft_set(t);
+            if (!t[0]) { G.calc_err[0] = 0; }
+            else if (!app_calc_set(t)) close = false;      /* keep the window: the error shows below */
+        }
         nk_layout_row_dynamic(ctx, row, 1);
-        nk_label_colored(ctx, "Click a name to copy it; any case works (stress_sxx = STRESS_SXX).", NK_TEXT_LEFT, P.dim);
+        if (G.calc_err[0] && strcmp(t, G.calc_expr)) nk_label_colored(ctx, G.calc_err, NK_TEXT_LEFT, P.warn);
+        else if (t[0] && !strcmp(t, G.calc_expr)) nk_label_colored(ctx, "shown", NK_TEXT_LEFT, P.dim);
+        else nk_label_colored(ctx, "Type, or click the buttons below: they insert at the cursor.", NK_TEXT_LEFT, P.dim);
 
         /* this file's fields, from cv_calc_names: "NAME: C1 C2 ..." per line, then "X Y Z TIME" */
-        help_head(ctx, s, row, "Fields in this file   (FIELD_COMP; COMP alone when only one field has it)");
         static char names[2048];
         static unsigned gen;
         static const cv_frd* of;
@@ -462,8 +521,10 @@ void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh
             cv_calc_names(&G.frd, names, sizeof names);
             of = &G.frd; gen = G.field_gen;
         }
-        float name_w = 110 * s, cell = 78 * s;
-        int per = CV_MAX(1, (int)((nk_window_get_content_region(ctx).w - name_w - 8 * s) / (cell + ctx->style.window.spacing.x)));
+        bool has_stress = false, has_strain = false;
+        fb_head(ctx, s, row, "Fields in this file");
+        float name_w = 80 * s, about_w = 130 * s, cell = 64 * s;
+        int per = CV_MAX(1, (int)((cw - name_w - about_w - 2 * sp) / (cell + sp)));
         for (const char* l = names; *l;) {
             const char* e = strchr(l, '\n');
             size_t n = e ? (size_t)(e - l) : strlen(l);
@@ -471,84 +532,107 @@ void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh
             snprintf(line, sizeof line, "%.*s", (int)CV_MIN(n, sizeof line - 1), l);
             l += n + (e ? 1 : 0);
             char* colon = strchr(line, ':');
-            const char* field = colon ? line : "";
+            if (!colon) continue;                        /* X Y Z TIME: under Results */
+            *colon = 0;
+            const char* field = line;
+            has_stress |= !strcmp(field, "STRESS");
+            has_strain |= !strcmp(field, "TOSTRAIN");
             int nt = 0;
-            if (colon) *colon = 0;
-            for (char* t = colon ? colon + 1 : line; *t && nt < 24;) {    /* split at spaces */
-                while (*t == ' ') *t++ = 0;
-                if (!*t) break;
-                tok[nt++] = t;
-                while (*t && *t != ' ') t++;
+            for (char* p = colon + 1; *p && nt < 24;) {   /* split at spaces */
+                while (*p == ' ') *p++ = 0;
+                if (!*p) break;
+                tok[nt++] = p;
+                while (*p && *p != ' ') p++;
             }
-            for (int k = 0; k < nt || k == 0; k += per) {
+            for (int k = 0; k < nt; k += per) {
                 int m = CV_MIN(per, nt - k);
-                nk_layout_row_begin(ctx, NK_STATIC, row, 1 + per);
+                nk_layout_row_begin(ctx, NK_STATIC, row, 2 + per);
                 nk_layout_row_push(ctx, name_w);
-                nk_label(ctx, k ? "" : colon ? field : "node, step", NK_TEXT_LEFT);
+                nk_label(ctx, k ? "" : field, NK_TEXT_LEFT);
+                nk_layout_row_push(ctx, about_w);
+                nk_label_colored(ctx, k ? "" : fb_about(field), NK_TEXT_LEFT, P.dim);
                 for (int j = 0; j < m; j++) {
                     char full[64];
-                    if (colon && nt > 1) snprintf(full, sizeof full, "%s_%s", field, tok[k + j]);
-                    else if (colon) snprintf(full, sizeof full, "%s", field);     /* one component: the field alone */
-                    else snprintf(full, sizeof full, "%s", tok[k + j]);
+                    if (nt > 1) snprintf(full, sizeof full, "%s_%s", field, tok[k + j]);
+                    else snprintf(full, sizeof full, "%s", field);   /* one component: the field alone */
                     nk_layout_row_push(ctx, cell);
-                    tip(ctx, full);
-                    if (nk_button_label(ctx, tok[k + j])) help_copy(full);
+                    fb_key(ctx, tok[k + j], full, full);
                 }
                 nk_layout_row_end(ctx);
-                if (nt == 0) break;
             }
         }
 
-        static const char* const derived[][2] = {
-            { "MISES",       "von Mises stress of STRESS" },
-            { "S1  S2  S3",  "principal stresses of STRESS, S1 the largest" },
-            { "E1  E2  E3",  "principal strains of TOSTRAIN" },
-            { "FIELD_MAG",   "length of a vector: DISP_MAG" },
-            { "FIELD_MISES", "von Mises of any stress or strain tensor: STRPOS_MISES" },
-            { "FIELD_P1",    "principal values of a tensor, P1 \xe2\x89\xa5 P2 \xe2\x89\xa5 P3" },
-            { "X  Y  Z",     "node coordinates, undeformed" },
-            { "TIME",        "the step's time (frequency, load factor)" },
+        /* shortcuts and the node values; only what this file can give */
+        fb_head(ctx, s, row, "Results   (values in global axes)");
+        static const char* const res[][3] = {
+            { "MISES", "S", "von Mises stress of STRESS" },
+            { "S1", "S", "largest principal stress" }, { "S2", "S", "middle principal stress" },
+            { "S3", "S", "smallest principal stress" },
+            { "E1", "E", "largest principal strain (TOSTRAIN)" }, { "E2", "E", "middle principal strain" },
+            { "E3", "E", "smallest principal strain" },
+            { "X", "", "node x, undeformed" }, { "Y", "", "node y, undeformed" }, { "Z", "", "node z, undeformed" },
+            { "TIME", "", "the step's time (frequency, load factor)" },
         };
-        help_head(ctx, s, row, "Results   (values in global axes)");
-        help_rows(ctx, s, row, derived, CV_COUNT(derived), true);
+        int pr = CV_MAX(1, (int)((cw + sp) / (cell + sp)));
+        nk_layout_row_static(ctx, row, (int)cell, pr);
+        for (size_t i = 0; i < CV_COUNT(res); i++) {
+            if ((res[i][1][0] == 'S' && !has_stress) || (res[i][1][0] == 'E' && !has_strain)) continue;
+            fb_key(ctx, res[i][0], NULL, res[i][2]);
+        }
 
-        static const char* const ops[][2] = {
-            { "+  -  *  /",          "arithmetic" },
-            { "^",                    "power: D1^2; -a^2 is -(a^2)" },
-            { "%",                    "remainder" },
-            { "<  <=  >  >=  ==  !=", "compare: 1 if true, else 0" },
-            { "&&  ||  !",            "and, or, not" },
+        /* operators and numbers, a keypad */
+        fb_head(ctx, s, row, "Operators and numbers");
+        static const char* const ops[][3] = {
+            { "+", " + ", "add" }, { "-", " - ", "subtract" }, { "*", " * ", "multiply" }, { "/", " / ", "divide" },
+            { "^", "^", "power: D1^2 (-a^2 is -(a^2))" }, { "%", " % ", "remainder" },
+            { "(", "(", NULL }, { ")", ")", NULL }, { ",", ", ", "between the arguments of a function" },
+            { "<", " < ", "less: 1 if true, else 0" }, { "<=", " <= ", "less or equal" },
+            { ">", " > ", "greater" }, { ">=", " >= ", "greater or equal" },
+            { "==", " == ", "equal" }, { "!=", " != ", "not equal" },
+            { "&&", " && ", "and" }, { "||", " || ", "or" }, { "!", "!", "not" },
         };
-        help_head(ctx, s, row, "Operators");
-        help_rows(ctx, s, row, ops, CV_COUNT(ops), false);
+        float key = 44 * s;
+        int pk = CV_MAX(1, (int)((cw + sp) / (key + sp)));
+        nk_layout_row_static(ctx, row, (int)key, pk);
+        for (size_t i = 0; i < CV_COUNT(ops); i++) fb_key(ctx, ops[i][0], ops[i][1], ops[i][2]);
+        nk_layout_row_static(ctx, row, (int)key, pk);
+        static const char* const digits[] = { "7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ".", "e" };
+        for (size_t i = 0; i < CV_COUNT(digits); i++)
+            fb_key(ctx, digits[i], NULL, digits[i][0] == 'e' ? "exponent: 2.1e5 (e alone is 2.718...)" : NULL);
 
-        static const char* const fns[][2] = {
-            { "if(c, a, b)",       "a where c is true (not 0), else b" },
-            { "min(a, b)",         "the smaller; max(a, b) the larger" },
-            { "clamp(x, lo, hi)",  "x held between lo and hi" },
-            { "abs(x)",            "absolute value; sign(x) is -1, 0 or 1" },
-            { "sqrt(x)",           "square root; pow(x, y) is x^y" },
-            { "exp(x)",            "e^x" },
-            { "ln(x)",             "natural log (log is ln too); log10(x)" },
-            { "sin(x)",            "cos tan, in radians; sinh cosh tanh" },
-            { "asin(x)",           "acos atan; atan2(y, x) by quadrant" },
-            { "floor(x)",          "round down; ceil(x) up" },
-            { "pi",                "3.14159...; e is 2.71828..." },
+        fb_head(ctx, s, row, "Functions");
+        static const char* const fns[][3] = {
+            { "if", "if(", "if(c, a, b): a where c is true (not 0), else b" },
+            { "min", "min(", "min(a, b): the smaller" }, { "max", "max(", "max(a, b): the larger" },
+            { "clamp", "clamp(", "clamp(x, lo, hi): x held between lo and hi" },
+            { "abs", "abs(", "absolute value" }, { "sign", "sign(", "-1, 0 or 1" },
+            { "sqrt", "sqrt(", "square root" }, { "pow", "pow(", "pow(x, y) is x^y" },
+            { "exp", "exp(", "e^x" }, { "ln", "ln(", "natural log (log is ln too)" }, { "log10", "log10(", "base-10 log" },
+            { "sin", "sin(", "sine, radians" }, { "cos", "cos(", "cosine, radians" }, { "tan", "tan(", "tangent, radians" },
+            { "asin", "asin(", "arc sine" }, { "acos", "acos(", "arc cosine" }, { "atan", "atan(", "arc tangent" },
+            { "atan2", "atan2(", "atan2(y, x): the angle of (x, y)" },
+            { "sinh", "sinh(", NULL }, { "cosh", "cosh(", NULL }, { "tanh", "tanh(", NULL },
+            { "floor", "floor(", "round down" }, { "ceil", "ceil(", "round up" },
+            { "pi", "pi", "3.14159..." },
         };
-        help_head(ctx, s, row, "Functions");
-        help_rows(ctx, s, row, fns, CV_COUNT(fns), true);
+        nk_layout_row_static(ctx, row, (int)cell, pr);
+        for (size_t i = 0; i < CV_COUNT(fns); i++) fb_key(ctx, fns[i][0], fns[i][1], fns[i][2]);
 
-        static const char* const ex[][2] = {
-            { "S1 + S2 + S3",          "sum of principal stresses (ASME VIII-2 5.3.2)" },
-            { "S1 - S3",               "Tresca" },
-            { "MISES / 235",           "utilisation for a yield of 235" },
-            { "if(MISES > 200, 1, 0)", "where von Mises is above 200" },
-            { "sqrt(D1^2 + D2^2)",     "in-plane displacement" },
-            { "sqrt(X^2 + Y^2)",       "radius about Z" },
-        };
-        help_head(ctx, s, row, "Examples");
-        help_rows(ctx, s, row, ex, CV_COUNT(ex), true);
+        fb_head(ctx, s, row, "Examples   (replace the formula)");
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_static(ctx, 230 * s);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_end(ctx);
+        for (int i = 0; i < calc_example_count; i++) {
+            if (!calc_example_ok(i)) continue;
+            if (nk_button_label(ctx, calc_examples[i][0])) { fb_set(calc_examples[i][0]); fb_focus = true; }
+            nk_label_colored(ctx, calc_examples[i][2], NK_TEXT_LEFT, P.dim);
+        }
+        if (close) G.show_calc_help = false;           /* not begun next frame: gone */
     }
-    if (nk_window_is_hidden(ctx, "Formula reference")) G.show_calc_help = false;
+    if (nk_window_is_hidden(ctx, "Formula")) G.show_calc_help = false;
     nk_end(ctx);
+    /* closed by OK: dropped next frame, so hand the focus to the panel now rather than
+       leave it to Nuklear, which can keep the panel read only */
+    if (!G.show_calc_help && nk_window_find(ctx, "Scene")) nk_window_set_focus(ctx, "Scene");
 }

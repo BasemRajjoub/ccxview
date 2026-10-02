@@ -90,6 +90,11 @@ bool sub_push(struct nk_context* ctx, const char* title, int t);
 void recent_buttons(struct nk_context* ctx, float row);
 void panel_scene(struct nk_context* ctx, float s, float row);
 void section_view(struct nk_context* ctx, float s, float row);
+const char* calc_draft(void);                       /* the formula in the Calculated box */
+void calc_draft_set(const char* t);
+extern const char* const calc_examples[][3];   /* { formula, needs S/E/D, what it is } */
+extern const int calc_example_count;
+bool calc_example_ok(int i);                   /* this file has the fields it needs */
 
 /* ---- ui_bars.c */
 void cmap_combo(struct nk_context* ctx, float s, float row);

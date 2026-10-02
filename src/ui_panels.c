@@ -288,51 +288,104 @@ static void section_groups(struct nk_context* ctx, float s, float row) {
 }
 
 /* ---- Calculated field: a formula over the .frd fields (calc.h) */
+static char calc_buf[sizeof G.calc_expr], calc_seen[sizeof G.calc_expr];   /* the formula being typed */
+static int calc_len;
+const char* calc_draft(void) { return calc_buf; }
+void calc_draft_set(const char* t) { snprintf(calc_buf, sizeof calc_buf, "%s", t); calc_len = (int)strlen(calc_buf); }
+
+/* typical formulas: { formula, fields it needs (S stress, E strain, D displacement), what it is };
+   shared with the formula builder */
+const char* const calc_examples[][3] = {
+    { "S1 + S2 + S3",                  "S", "sum of principal stresses, triaxial check (ASME VIII-2 5.3.2)" },
+    { "S1 - S3",                       "S", "Tresca stress intensity" },
+    { "(S1 - S3) / 2",                 "S", "largest shear stress" },
+    { "(S1 + S2 + S3) / 3",            "S", "hydrostatic (mean) stress" },
+    { "-(S1 + S2 + S3) / 3",           "S", "pressure, positive in compression" },
+    { "(S1 + S2 + S3) / 3 / MISES",    "S", "stress triaxiality" },
+    { "MISES * sign(S1 + S2 + S3)",    "S", "signed von Mises: the sign of the mean stress (fatigue)" },
+    { "max(S1, 0)",                    "S", "largest tensile stress (Rankine), compression shown as 0" },
+    { "max(abs(S1), abs(S3))",         "S", "largest principal stress by size, either sign" },
+    { "(2*S2 - S1 - S3) / (S1 - S3)",  "S", "Lode parameter: -1 tension, 0 shear, 1 compression" },
+    { "MISES / 235",                   "S", "utilisation for a yield of 235 (S235 steel, MPa)" },
+    { "235 / MISES",                   "S", "safety factor against a yield of 235" },
+    { "if(MISES > 235, 1, 0)",         "S", "where von Mises is above 235: 1, else 0" },
+    { "if(Z > 0, MISES, 0)",           "S", "von Mises only where z > 0" },
+    { "STRESS_SXX * 1e-6",             "S", "SXX from Pa to MPa" },
+    { "E1",                            "E", "largest principal strain" },
+    { "E1 - E3",                       "E", "largest engineering shear strain" },
+    { "E1 + E2 + E3",                  "E", "volumetric strain" },
+    { "DISP_MAG * 1000",               "D", "displacement from m to mm" },
+    { "sqrt(DISP_D1^2 + DISP_D2^2)",   "D", "in-plane (xy) displacement" },
+    { "sqrt(X^2 + Y^2)",               "",  "radius about the z axis" },
+    { "atan2(Y, X) * 180 / pi",        "",  "angle about the z axis, degrees" },
+};
+const int calc_example_count = (int)CV_COUNT(calc_examples);
+
+/* whether this file has the fields example i needs */
+bool calc_example_ok(int i) {
+    static char names[2048];
+    static unsigned gen;
+    static const cv_frd* of;
+    if (of != &G.frd || gen != G.field_gen || !names[0]) {
+        cv_calc_names(&G.frd, names, sizeof names);
+        of = &G.frd; gen = G.field_gen;
+    }
+    const char* need = calc_examples[i][1];
+    const char* f = need[0] == 'S' ? "STRESS:" : need[0] == 'E' ? "TOSTRAIN:" : need[0] == 'D' ? "DISP:" : NULL;
+    if (!f) return true;
+    size_t n = strlen(f);
+    for (const char* l = names; l && *l; l = strchr(l, '\n'), l = l ? l + 1 : NULL)
+        if (!strncmp(l, f, n)) return true;
+    return false;
+}
+
 static void section_calc(struct nk_context* ctx, float s, float row) {
-    static char buf[sizeof G.calc_expr], seen[sizeof G.calc_expr];
-    static int len;
-    if (strcmp(seen, G.calc_expr)) {                 /* set elsewhere: --calc, a view file */
-        snprintf(seen, sizeof seen, "%s", G.calc_expr);
-        snprintf(buf, sizeof buf, "%s", G.calc_expr);
-        len = (int)strlen(buf);
+    if (strcmp(calc_seen, G.calc_expr)) {                 /* set elsewhere: --calc, a view file */
+        snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
+        snprintf(calc_buf, sizeof calc_buf, "%s", G.calc_expr);
+        calc_len = (int)strlen(calc_buf);
     }
     bool active = G.field_src == 2;
     if (!nk_tree_push_id(ctx, NK_TREE_NODE, "Calculated", active ? NK_MAXIMIZED : NK_MINIMIZED, 200)) return;
     nk_layout_row_template_begin(ctx, row);
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 56 * s);
-    nk_layout_row_template_push_static(ctx, row);
     nk_layout_row_template_end(ctx);
     tip(ctx, "A formula of the fields, then Enter: STRESS_SXX - STRESS_SYY, sqrt(D1^2 + D2^2), if(MISES > 200, 1, 0)");
-    nk_flags ev = nk_edit_string(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, buf, &len, (int)sizeof buf - 1, nk_filter_default);
-    buf[len] = 0;
+    nk_flags ev = nk_edit_string(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, calc_buf, &calc_len, (int)sizeof calc_buf - 1, nk_filter_default);
+    calc_buf[calc_len] = 0;
     bool go = (ev & NK_EDIT_COMMITED) != 0;
     tip(ctx, "Colour the model by the formula");
     if (nk_button_label(ctx, "Show")) go = true;
-    tip(ctx, "The names of this file's fields, the operators and the functions");
-    if (nk_button_label(ctx, IC_INFO)) G.show_calc_help = !G.show_calc_help;
-    if (go && buf[0]) {
-        if (app_calc_set(buf)) snprintf(seen, sizeof seen, "%s", G.calc_expr);
+    if (go && calc_buf[0]) {
+        if (app_calc_set(calc_buf)) snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
     } else if (go) {
         G.calc_err[0] = 0;
     }
+    if (G.calc_err[0] && strcmp(calc_buf, G.calc_expr)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, G.calc_err, NK_TEXT_LEFT, P.warn);
+    } else if (strcmp(calc_buf, G.calc_expr) && calc_buf[0]) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, "Enter or Show to apply", NK_TEXT_LEFT, P.dim);
+    }
     nk_layout_row_dynamic(ctx, row, 1);
-    if (G.calc_err[0] && strcmp(buf, G.calc_expr)) nk_label_colored(ctx, G.calc_err, NK_TEXT_LEFT, P.warn);
-    else if (strcmp(buf, G.calc_expr) && buf[0]) nk_label_colored(ctx, "Enter or Show to apply", NK_TEXT_LEFT, P.dim);
-    static const char* ex[][2] = {
-        { "examples", "" },
-        { "S1 - S3   (Tresca)", "S1 - S3" },
-        { "MISES / 235   (utilisation)", "MISES / 235" },
-        { "STRESS_SXX - STRESS_SYY", "STRESS_SXX - STRESS_SYY" },
-        { "sqrt(D1^2 + D2^2)   (in-plane)", "sqrt(D1^2 + D2^2)" },
-        { "if(MISES > 200, 1, 0)   (above a limit)", "if(MISES > 200, 1, 0)" },
-        { "sqrt(X^2 + Y^2)   (radius about Z)", "sqrt(X^2 + Y^2)" },
-    };
-    const char* items[CV_COUNT(ex)];
-    for (size_t i = 0; i < CV_COUNT(ex); i++) items[i] = ex[i][0];
-    tip(ctx, "Put an example in the box");
-    int pick = nk_combo(ctx, items, (int)CV_COUNT(ex), 0, (int)row, nk_vec2(280 * s, CV_COUNT(ex) * (row + 4 * s) + 8 * s));
-    if (pick > 0) { snprintf(buf, sizeof buf, "%s", ex[pick][1]); len = (int)strlen(buf); app_calc_set(buf); snprintf(seen, sizeof seen, "%s", G.calc_expr); }
+    tip(ctx, "Build a formula from buttons: this file's fields, operators, functions and examples");
+    if (nk_button_label(ctx, "Formula...")) G.show_calc_help = !G.show_calc_help;
+    /* a list, not a combo: a combo this low in the panel opens past its edge, clipped away */
+    if (nk_tree_push_id(ctx, NK_TREE_NODE, "Examples", NK_MINIMIZED, 201)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (int i = 0; i < calc_example_count; i++) {
+            if (!calc_example_ok(i)) continue;
+            tip(ctx, calc_examples[i][2]);
+            if (nk_button_label(ctx, calc_examples[i][0])) {
+                calc_draft_set(calc_examples[i][0]);
+                app_calc_set(calc_buf);
+                snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
+            }
+        }
+        nk_tree_pop(ctx);
+    }
     nk_tree_pop(ctx);
 }
 
