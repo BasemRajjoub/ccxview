@@ -117,8 +117,9 @@ void refresh_path(void) {
     app_aux_upload(CV_AUX_RAYLN, &pos, &disp, NULL);
     pos.n = disp.n = 0;
     if (G.loaded) {
-        uint32_t m[2];
+        uint32_t m[3];
         int k = 0;
+        if (G.hist_open) m[k++] = G.hist_node;       /* stays while its history plot is open, whatever the step */
         if (G.probe_on && G.probe.hit) m[k++] = G.probe.node;
         if (G.path_arm && G.path_a != UINT32_MAX) m[k++] = G.path_a;
         for (int i = 0; i < k; i++) if (m[i] < G.frd.n_nodes) path_vertex(&pos, &disp, m[i]);
@@ -137,6 +138,7 @@ void app_marks_sync(void) {
     uint64_t k[] = { G.loaded, (uintptr_t)G.frd.xyz, (uintptr_t)G.disp, (uint64_t)G.step,
                      G.probe_on && G.probe.hit ? G.probe.node : UINT32_MAX,
                      G.path_arm ? G.path_a : UINT32_MAX,
+                     G.hist_open ? G.hist_node : UINT32_MAX,
                      G.path_n ? G.path_gen : UINT64_MAX };
     static uint64_t last[sizeof k / sizeof k[0]];
     if (!memcmp(k, last, sizeof k)) return;

@@ -390,14 +390,14 @@ void window_history(struct nk_context* ctx, float s, float row, int fw, int fh) 
                 nk_fill_circle(cv, nk_rect(x - 2 * s, y - 2 * s, 4 * s, 4 * s), nk_rgb(255, 200, 120));
                 px = x; py = y; have = true;
             }
-            if (inside && near >= 0) {                   /* hover: the point's values; click: go to that step */
+            if (inside && near >= 0) {                   /* hover: the point's values; click: go to that increment */
                 char num[32];
                 fmt_num(num, sizeof num, G.hist_v[near]);
                 snprintf(txt, sizeof txt, "step %d  t=%.4g  %s", G.hist_step[near] + 1, G.hist_t[near], num);
                 tip_show(ctx, txt);
                 if (nk_input_is_mouse_pressed(&ctx->input, NK_BUTTON_LEFT)) app_set_step(G.hist_step[near]);
             }
-            snprintf(txt, sizeof txt, "%s %.4g .. %.4g   (click: go to that step)", G.hist_by_step ? "step" : "time", xa, xb);
+            snprintf(txt, sizeof txt, "%s %.4g .. %.4g   (click: go to that increment)", G.hist_by_step ? "step" : "time", xa, xb);
             nk_draw_text(cv, nk_rect(x0, y0 + h + 2 * s, w, font->height), txt, (int)strlen(txt), font, nk_rgba(0, 0, 0, 0), P.dim);
         } else if (G.field_src == 1) {
             nk_label(ctx, "(history of .frd fields only)", NK_TEXT_LEFT);
