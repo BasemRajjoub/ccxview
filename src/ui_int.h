@@ -11,6 +11,8 @@
 #define mix                     uii_mix
 #define apply_scale             uii_apply_scale
 #define tip                     uii_tip
+#define tip_show                uii_tip_show
+#define begin_background        uii_begin_background
 #define g_focus_open            uii_g_focus_open
 #define fmt_num                 uii_fmt_num
 #define tick_num                uii_tick_num
@@ -79,6 +81,10 @@ struct nk_color uii_bg(int alpha);        /* G.bg itself, for halos behind that 
 
 /* ---- ui.c: small helpers */
 void tip(struct nk_context* ctx, const char* text);    /* tooltip for the widget laid out next */
+void tip_show(struct nk_context* ctx, const char* text);  /* a tooltip now, unless the wheel turns */
+/* nk_begin of a window that stays under the others (NK_WINDOW_BACKGROUND) and
+   leaves the active window as it was, unless it is the one clicked */
+bool begin_background(struct nk_context* ctx, const char* name, struct nk_rect r, nk_flags flags);
 extern bool g_focus_open;                              /* Ctrl+L: put the cursor in the path box */
 void fmt_num(char* out, size_t n, double v);
 void tick_num(char* out, size_t n, double v, double step, double big);

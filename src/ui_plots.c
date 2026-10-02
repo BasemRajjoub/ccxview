@@ -394,7 +394,7 @@ void window_history(struct nk_context* ctx, float s, float row, int fw, int fh) 
                 char num[32];
                 fmt_num(num, sizeof num, G.hist_v[near]);
                 snprintf(txt, sizeof txt, "step %d  t=%.4g  %s", G.hist_step[near] + 1, G.hist_t[near], num);
-                nk_tooltip(ctx, txt);
+                tip_show(ctx, txt);
                 if (nk_input_is_mouse_pressed(&ctx->input, NK_BUTTON_LEFT)) app_set_step(G.hist_step[near]);
             }
             snprintf(txt, sizeof txt, "%s %.4g .. %.4g   (click: go to that step)", G.hist_by_step ? "step" : "time", xa, xb);

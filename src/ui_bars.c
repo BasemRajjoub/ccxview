@@ -618,21 +618,22 @@ void window_legend(struct nk_context* ctx, float s, float row) {
    clicking the centre returns to the iso view. */
 void window_axes(struct nk_context* ctx, float s) {
     if (!G.loaded || G.hide_axes) return;
-    float size = GIZMO_PX * s, r = size * 0.36f;
+    float size = GIZMO_PX * s, r = size * 0.33f, tip_r = 9 * s;
     overlay_drag(ctx, &gizmo_drag, "axes", gizmo_box(s), 0, &G.gizmo_pos, s);
     cv_box gb = gizmo_box(s);
     struct nk_rect wr = nk_rect(gb.x, gb.y, gb.w, gb.h);
     bool dragging = gizmo_drag.moving || gizmo_drag.dropped;    /* a drag that ends on a tip is no click */
     nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(nk_rgba(0, 0, 0, 0)));
     nk_style_push_float(ctx, &ctx->style.window.border, 0);
-    if (nk_begin(ctx, "axes", wr, NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
+    if (begin_background(ctx, "axes", wr, NK_WINDOW_NO_SCROLLBAR)) {
         nk_window_set_bounds(ctx, "axes", wr);
         struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
+        nk_push_scissor(cv, wr);                  /* the whole box, not the padded content region */
         const struct nk_user_font* font = ctx->style.font;
         const struct nk_input* in = &ctx->input;
         v3 eye, fwd, right, up;
         cam_basis(&G.cam, &eye, &fwd, &right, &up);
-        float cx = wr.x + size * 0.5f, cy = wr.y + size * 0.5f - 6 * s;
+        float cx = wr.x + size * 0.5f, cy = wr.y + tip_r + r + 1 * s;   /* a tip straight up still fits */
 
         typedef struct { float x, y, depth; int axis; bool neg; } tip_t;
         tip_t tips[6];
@@ -651,7 +652,6 @@ void window_axes(struct nk_context* ctx, float s) {
             for (int j = i; j > 0 && tips[j].depth > tips[j - 1].depth; j--) {
                 tip_t t = tips[j]; tips[j] = tips[j - 1]; tips[j - 1] = t;
             }
-        float tip_r = 9 * s;
         int clicked_view = -1;
         for (int i = 0; i < 6; i++) {
             const tip_t* t = &tips[i];

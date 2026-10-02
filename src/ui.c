@@ -19,9 +19,30 @@
 
 /* ---- small helpers ----------------------------------------------------------- */
 
+/* A tooltip now. Nuklear opens it as a popup, and a window with a popup open
+   takes no input that frame, the wheel included: none while the wheel turns, or
+   the panel under a widget with a tooltip would not scroll. */
+void tip_show(struct nk_context* ctx, const char* text) {
+    const struct nk_vec2 d = ctx->input.mouse.scroll_delta;
+    if (d.x == 0 && d.y == 0) nk_tooltip(ctx, text);
+}
+
+/* Nuklear's nk_begin makes a background window that takes input the active one
+   on every frame it is not clicked (iter is the window itself there), so the
+   window really in use loses the focus: its panel no longer scrolls with the
+   wheel. Give it back; a click on the background window (click_focus) still
+   makes that one active. */
+bool begin_background(struct nk_context* ctx, const char* name, struct nk_rect r, nk_flags flags) {
+    struct nk_window* was = ctx->active;
+    bool open = nk_begin(ctx, name, r, flags | NK_WINDOW_BACKGROUND);
+    if (was && was != ctx->current && ctx->active == ctx->current && !(was->flags & NK_WINDOW_HIDDEN))
+        ctx->active = was;
+    return open;
+}
+
 /* tooltip for the widget laid out next */
 void tip(struct nk_context* ctx, const char* text) {
-    if (nk_widget_is_hovered(ctx)) nk_tooltip(ctx, text);
+    if (nk_widget_is_hovered(ctx)) tip_show(ctx, text);
 }
 
 /* separators: a faint line across the middle of a cell, or of a thin row */
@@ -71,14 +92,26 @@ bool ui_mouse_captured(struct nk_context* ctx, bool wheel) {
 }
 
 /* Nuklear scrolls only its active window, and a window becomes active by
-   being clicked. Make the one under the wheel active, so a panel scrolls
-   without a click first. */
+   being clicked. Make the one under the wheel active, as a click would (see
+   click_focus), so any window, now or later, scrolls without a click first. The
+   top one under the mouse; an open popup or combo keeps the wheel, and hints,
+   overlays and the gizmo take none. */
 void ui_wheel_focus(struct nk_context* ctx) {
     float mx = ctx->input.mouse.pos.x, my = ctx->input.mouse.pos.y;
     for (struct nk_window* w = ctx->begin; w; w = w->next) {
-        if (w->flags & (NK_WINDOW_HIDDEN | NK_WINDOW_BACKGROUND)) continue;
-        struct nk_rect b = w->bounds;
-        if (mx >= b.x && my >= b.y && mx < b.x + b.w && my < b.y + b.h) { ctx->active = w; return; }
+        const struct nk_window* p = w->popup.active && w->popup.type != NK_PANEL_TOOLTIP ? w->popup.win : NULL;
+        if (p && !(w->flags & NK_WINDOW_HIDDEN) && NK_INBOX(mx, my, p->bounds.x, p->bounds.y, p->bounds.w, p->bounds.h))
+            return;
+    }
+    for (struct nk_window* w = ctx->end; w; w = w->prev) {
+        if (w->flags & (NK_WINDOW_HIDDEN | NK_WINDOW_CLOSED | NK_WINDOW_NO_INPUT)) continue;
+        if (!NK_INBOX(mx, my, w->bounds.x, w->bounds.y, w->bounds.w, w->bounds.h)) continue;
+        if (w->flags & NK_WINDOW_BACKGROUND) return;
+        if (w != ctx->active || (w->flags & NK_WINDOW_ROM)) {
+            nk_window_set_focus(ctx, w->name_string);
+            w->flags &= ~(nk_flags)NK_WINDOW_ROM;
+        }
+        return;
     }
 }
 
@@ -145,7 +178,7 @@ static void click_focus(struct nk_context* ctx) {
         !nk_input_is_mouse_pressed(in, NK_BUTTON_MIDDLE)) return;
     float mx = in->mouse.pos.x, my = in->mouse.pos.y;
     for (struct nk_window* w = ctx->begin; w; w = w->next) {          /* an open popup has it */
-        const struct nk_window* p = w->popup.active ? w->popup.win : NULL;
+        const struct nk_window* p = w->popup.active && w->popup.type != NK_PANEL_TOOLTIP ? w->popup.win : NULL;
         if (p && !(w->flags & NK_WINDOW_HIDDEN) && NK_INBOX(mx, my, p->bounds.x, p->bounds.y, p->bounds.w, p->bounds.h))
             return;
     }
