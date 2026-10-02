@@ -4,7 +4,7 @@
      ui_panels.c   the scene sidebar (left): file, layers, groups and sets, fields, export
      ui_view.c     the sidebar's View section: camera, colours, symmetry, cuts, symbol sizes
      ui_bars.c     toolbar, time bar, status bar, legend and its settings, axes gizmo
-     ui_windows.c  messages, probe, find, overlay, navigation mark, file browser, drop hint
+     ui_windows.c  messages, formula reference, probe, find, overlay, navigation mark, file browser, drop hint
      ui_plots.c    linearization, path, history and convergence plots
    This file also answers the input focus queries and holds the small widget helpers. */
 #include "app.h"
@@ -201,6 +201,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_axes(ctx, s);
     window_probe(ctx, s, row);
     window_messages(ctx, s, row, fw, fh);
+    window_calc_help(ctx, s, row, fw, fh);
     window_convergence(ctx, s, row, fw, fh);
     window_legend_settings(ctx, s, row);
     window_overlay(ctx, s);

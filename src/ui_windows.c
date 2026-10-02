@@ -1,4 +1,4 @@
-/* ui_windows.c -- the floating windows: messages, probe, find, the text overlay
+/* ui_windows.c -- the floating windows: messages, the formula reference, probe, find, the text overlay
    and navigation mark in the view, the built-in file browser and the drop hint.
    The plot windows are in ui_plots.c. */
 #include "app.h"
@@ -10,6 +10,7 @@
 #include "sokol_nuklear.h"
 #include <math.h>
 #include "ui_int.h"
+#include "calc.h"
 
 void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open = false;
@@ -405,5 +406,149 @@ void drop_hint(struct nk_context* ctx, float s, float row) {
         nk_label_colored(ctx, "or Open... (Ctrl+O)", NK_TEXT_CENTERED, P.dim);
         if (nr) { nk_label(ctx, "", NK_TEXT_LEFT); recent_buttons(ctx, row); }
     }
+    nk_end(ctx);
+}
+
+/* ---- Formula reference: what a calculated field can be made of, one row each.
+   A click on a name or an example puts it on the clipboard. */
+static void help_copy(const char* t) {
+    sapp_set_clipboard_string(t);
+    snprintf(G.note, sizeof G.note, "copied %s", t);
+    G.note_t = cv_now();
+}
+
+static void help_head(struct nk_context* ctx, float s, float row, const char* t) {
+    nk_layout_row_dynamic(ctx, 6 * s, 1);
+    nk_spacing(ctx, 1);
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
+}
+
+/* rows of { what to write, what it means }; with copy the first column is a button that
+   copies it, up to a double space ("S1  S2  S3" copies S1) */
+static void help_rows(struct nk_context* ctx, float s, float row, const char* const (*r)[2], size_t n, bool copy) {
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 170 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_end(ctx);
+    for (size_t i = 0; i < n; i++) {
+        if (!copy) { nk_label(ctx, r[i][0], NK_TEXT_LEFT); nk_label_colored(ctx, r[i][1], NK_TEXT_LEFT, P.dim); continue; }
+        char t[64];
+        const char* gap = strstr(r[i][0], "  ");
+        snprintf(t, sizeof t, "%.*s", gap ? (int)(gap - r[i][0]) : (int)strlen(r[i][0]), r[i][0]);
+        tip(ctx, t);
+        if (nk_button_label(ctx, r[i][0])) help_copy(t);
+        nk_label_colored(ctx, r[i][1], NK_TEXT_LEFT, P.dim);
+    }
+}
+
+void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh) {
+    static bool was_open = false;
+    if (!G.show_calc_help) { was_open = false; return; }
+    if (!was_open) nk_window_show(ctx, "Formula reference", NK_SHOWN);
+    was_open = true;
+    float w = CV_MIN(620 * s, fw * 0.9f), h = fh * 0.8f;
+    if (nk_begin(ctx, "Formula reference", nk_rect((fw - w) / 2, fh * 0.1f, w, h),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, "Click a name to copy it; any case works (stress_sxx = STRESS_SXX).", NK_TEXT_LEFT, P.dim);
+
+        /* this file's fields, from cv_calc_names: "NAME: C1 C2 ..." per line, then "X Y Z TIME" */
+        help_head(ctx, s, row, "Fields in this file   (FIELD_COMP; COMP alone when only one field has it)");
+        static char names[2048];
+        static unsigned gen;
+        static const cv_frd* of;
+        if (of != &G.frd || gen != G.field_gen || !names[0]) {
+            cv_calc_names(&G.frd, names, sizeof names);
+            of = &G.frd; gen = G.field_gen;
+        }
+        float name_w = 110 * s, cell = 78 * s;
+        int per = CV_MAX(1, (int)((nk_window_get_content_region(ctx).w - name_w - 8 * s) / (cell + ctx->style.window.spacing.x)));
+        for (const char* l = names; *l;) {
+            const char* e = strchr(l, '\n');
+            size_t n = e ? (size_t)(e - l) : strlen(l);
+            char line[512], *tok[24];
+            snprintf(line, sizeof line, "%.*s", (int)CV_MIN(n, sizeof line - 1), l);
+            l += n + (e ? 1 : 0);
+            char* colon = strchr(line, ':');
+            const char* field = colon ? line : "";
+            int nt = 0;
+            if (colon) *colon = 0;
+            for (char* t = colon ? colon + 1 : line; *t && nt < 24;) {    /* split at spaces */
+                while (*t == ' ') *t++ = 0;
+                if (!*t) break;
+                tok[nt++] = t;
+                while (*t && *t != ' ') t++;
+            }
+            for (int k = 0; k < nt || k == 0; k += per) {
+                int m = CV_MIN(per, nt - k);
+                nk_layout_row_begin(ctx, NK_STATIC, row, 1 + per);
+                nk_layout_row_push(ctx, name_w);
+                nk_label(ctx, k ? "" : colon ? field : "node, step", NK_TEXT_LEFT);
+                for (int j = 0; j < m; j++) {
+                    char full[64];
+                    if (colon && nt > 1) snprintf(full, sizeof full, "%s_%s", field, tok[k + j]);
+                    else if (colon) snprintf(full, sizeof full, "%s", field);     /* one component: the field alone */
+                    else snprintf(full, sizeof full, "%s", tok[k + j]);
+                    nk_layout_row_push(ctx, cell);
+                    tip(ctx, full);
+                    if (nk_button_label(ctx, tok[k + j])) help_copy(full);
+                }
+                nk_layout_row_end(ctx);
+                if (nt == 0) break;
+            }
+        }
+
+        static const char* const derived[][2] = {
+            { "MISES",       "von Mises stress of STRESS" },
+            { "S1  S2  S3",  "principal stresses of STRESS, S1 the largest" },
+            { "E1  E2  E3",  "principal strains of TOSTRAIN" },
+            { "FIELD_MAG",   "length of a vector: DISP_MAG" },
+            { "FIELD_MISES", "von Mises of any stress or strain tensor: STRPOS_MISES" },
+            { "FIELD_P1",    "principal values of a tensor, P1 \xe2\x89\xa5 P2 \xe2\x89\xa5 P3" },
+            { "X  Y  Z",     "node coordinates, undeformed" },
+            { "TIME",        "the step's time (frequency, load factor)" },
+        };
+        help_head(ctx, s, row, "Results   (values in global axes)");
+        help_rows(ctx, s, row, derived, CV_COUNT(derived), true);
+
+        static const char* const ops[][2] = {
+            { "+  -  *  /",          "arithmetic" },
+            { "^",                    "power: D1^2; -a^2 is -(a^2)" },
+            { "%",                    "remainder" },
+            { "<  <=  >  >=  ==  !=", "compare: 1 if true, else 0" },
+            { "&&  ||  !",            "and, or, not" },
+        };
+        help_head(ctx, s, row, "Operators");
+        help_rows(ctx, s, row, ops, CV_COUNT(ops), false);
+
+        static const char* const fns[][2] = {
+            { "if(c, a, b)",       "a where c is true (not 0), else b" },
+            { "min(a, b)",         "the smaller; max(a, b) the larger" },
+            { "clamp(x, lo, hi)",  "x held between lo and hi" },
+            { "abs(x)",            "absolute value; sign(x) is -1, 0 or 1" },
+            { "sqrt(x)",           "square root; pow(x, y) is x^y" },
+            { "exp(x)",            "e^x" },
+            { "ln(x)",             "natural log (log is ln too); log10(x)" },
+            { "sin(x)",            "cos tan, in radians; sinh cosh tanh" },
+            { "asin(x)",           "acos atan; atan2(y, x) by quadrant" },
+            { "floor(x)",          "round down; ceil(x) up" },
+            { "pi",                "3.14159...; e is 2.71828..." },
+        };
+        help_head(ctx, s, row, "Functions");
+        help_rows(ctx, s, row, fns, CV_COUNT(fns), true);
+
+        static const char* const ex[][2] = {
+            { "S1 + S2 + S3",          "sum of principal stresses (ASME VIII-2 5.3.2)" },
+            { "S1 - S3",               "Tresca" },
+            { "MISES / 235",           "utilisation for a yield of 235" },
+            { "if(MISES > 200, 1, 0)", "where von Mises is above 200" },
+            { "sqrt(D1^2 + D2^2)",     "in-plane displacement" },
+            { "sqrt(X^2 + Y^2)",       "radius about Z" },
+        };
+        help_head(ctx, s, row, "Examples");
+        help_rows(ctx, s, row, ex, CV_COUNT(ex), true);
+    }
+    if (nk_window_is_hidden(ctx, "Formula reference")) G.show_calc_help = false;
     nk_end(ctx);
 }

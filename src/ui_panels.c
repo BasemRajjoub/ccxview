@@ -301,6 +301,7 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
     nk_layout_row_template_begin(ctx, row);
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 56 * s);
+    nk_layout_row_template_push_static(ctx, row);
     nk_layout_row_template_end(ctx);
     tip(ctx, "A formula of the fields, then Enter: STRESS_SXX - STRESS_SYY, sqrt(D1^2 + D2^2), if(MISES > 200, 1, 0)");
     nk_flags ev = nk_edit_string(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, buf, &len, (int)sizeof buf - 1, nk_filter_default);
@@ -308,6 +309,8 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
     bool go = (ev & NK_EDIT_COMMITED) != 0;
     tip(ctx, "Colour the model by the formula");
     if (nk_button_label(ctx, "Show")) go = true;
+    tip(ctx, "The names of this file's fields, the operators and the functions");
+    if (nk_button_label(ctx, IC_INFO)) G.show_calc_help = !G.show_calc_help;
     if (go && buf[0]) {
         if (app_calc_set(buf)) snprintf(seen, sizeof seen, "%s", G.calc_expr);
     } else if (go) {
@@ -330,37 +333,6 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Put an example in the box");
     int pick = nk_combo(ctx, items, (int)CV_COUNT(ex), 0, (int)row, nk_vec2(280 * s, CV_COUNT(ex) * (row + 4 * s) + 8 * s));
     if (pick > 0) { snprintf(buf, sizeof buf, "%s", ex[pick][1]); len = (int)strlen(buf); app_calc_set(buf); snprintf(seen, sizeof seen, "%s", G.calc_expr); }
-    if (nk_tree_push_id(ctx, NK_TREE_NODE, "Names and functions", NK_MINIMIZED, 201)) {
-        static char names[2048];
-        static unsigned gen;
-        static const cv_frd* of;
-        if (of != &G.frd || gen != G.field_gen || !names[0]) {   /* cheap, but not every frame */
-            cv_calc_names(&G.frd, names, sizeof names);
-            of = &G.frd; gen = G.field_gen;
-        }
-        nk_layout_row_dynamic(ctx, row, 1);
-        for (const char* l = names; *l;) {
-            const char* e = strchr(l, '\n');
-            int n = e ? (int)(e - l) : (int)strlen(l);
-            char line[256];
-            snprintf(line, sizeof line, "%.*s", n, l);
-            tip(ctx, line);
-            nk_label_colored(ctx, line, NK_TEXT_LEFT, P.dim);
-            l += n + (e ? 1 : 0);
-        }
-        static const char* help[] = {
-            "FIELD_COMP (STRESS_SXX), COMP alone (SXX)",
-            "FIELD_MAG, FIELD_MISES, FIELD_P1..P3",
-            "MISES S1 S2 S3 (STRESS), E1 E2 E3 (TOSTRAIN)",
-            "+ - * / ^ %   < <= > >= == !=   && || !",
-            "abs sqrt exp ln log10 pow  sin cos tan  asin acos",
-            "atan atan2 sinh cosh tanh floor ceil  pi e",
-            "min max clamp(x,lo,hi) sign if(cond,a,b)",
-            "values in global axes; log is ln",
-        };
-        for (size_t i = 0; i < CV_COUNT(help); i++) { tip(ctx, help[i]); nk_label(ctx, help[i], NK_TEXT_LEFT); }
-        nk_tree_pop(ctx);
-    }
     nk_tree_pop(ctx);
 }
 

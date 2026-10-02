@@ -104,6 +104,7 @@ void window_axes(struct nk_context* ctx, float s);
 /* ---- ui_windows.c */
 extern const char* path_dirs[5];
 void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh);
+void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh);
 void window_probe(struct nk_context* ctx, float s, float row);
 void window_nav(struct nk_context* ctx, float s);
 void window_overlay(struct nk_context* ctx, float s);
