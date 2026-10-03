@@ -470,7 +470,7 @@ void loads_refresh(void) {
         float p[3], d[6], Q[3][3], dir[3];
         /* solid symbols while there are not too many of them (a cone is 20 triangles) */
         bool solid = (uint64_t)a->nbcs + a->ncloads + a->ndloads + a->ntemps <= 40000;
-        for (int k = 0; k < 4; k++) { all[k]->solid = solid; all[k]->T = 0.03f * G.sym_len * CV_MIN(CV_MAX(G.sym_thick, 0.1f), 10.f); }
+        for (int k = 0; k < 4; k++) { all[k]->solid = solid; all[k]->T = 0.045f * G.sym_len * CV_MIN(CV_MAX(G.sym_thick, 0.1f), 10.f); }
 
         /* sized within each kind: their units differ */
         float fmax = 0, mmax = 0, qmax = 0, umax = 0, rmax = 0, dmax[CV_DL_N] = { 0 }, bmax[CV_BL_N] = { 0 };

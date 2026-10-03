@@ -317,7 +317,7 @@ typedef struct {
     float     bc_scale, load_scale;  /* supports / springs and load arrows, times sym_len */
     bool      sym_auto;              /* symbol size follows the model's size (else sym_size) */
     float     sym_size;              /* symbol size by hand, model units */
-    float     sym_thick;             /* thickness of the symbols' lines, times the default (3 % of the symbol size) */
+    float     sym_thick;             /* thickness of the symbols' lines, times the default (4.5 % of the symbol size) */
 
     /* file dialogs */
     char      exe_dir[1024];

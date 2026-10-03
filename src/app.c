@@ -607,9 +607,14 @@ static void drag_move(float dx, float dy, bool shift) {
     if (mode == CV_NAV_ROTATE && shift) mode = CV_NAV_PAN;
     switch (mode) {
         case CV_NAV_PAN: {
-            float k = 2.f * G.cam.dist * tanf(G.cam.fovy * 0.5f) / (float)CV_MAX(G.vp_h, 1);
+            /* the point of the model that was grabbed stays under the cursor: in
+               perspective a pixel is worth more the deeper the point lies. Off the
+               model (or parallel projection, where depth does not matter): the target's. */
+            float depth = G.cam.dist;
+            if (drag.pivot_on && !G.cam.ortho) depth = CV_MAX(v3_dot(v3_sub(drag.pivot, eye0), f0), 1e-6f * G.cam.dist);
+            float k = 2.f * depth * tanf(G.cam.fovy * 0.5f) / (float)CV_MAX(G.vp_h, 1);
             G.cam.target = v3_add(G.cam.target, v3_add(v3_scale(r0, -dx * k), v3_scale(u0, dy * k)));
-            nav_mark(CV_NAV_PAN, G.cam.target);
+            nav_mark(CV_NAV_PAN, drag.pivot_on ? drag.pivot : G.cam.target);
             break;
         }
         case CV_NAV_ZOOM: {                          /* drag up: closer */
@@ -691,7 +696,7 @@ static void event(const sapp_event* ev) {
                 /* rotate about the part of the model that was grabbed; off the model, about the target */
                 bool on = false;
                 drag.pivot_on = false;
-                if (drag.mode == CV_NAV_ROTATE && G.orbit_cursor)
+                if ((drag.mode == CV_NAV_ROTATE && G.orbit_cursor) || drag.mode == CV_NAV_PAN)
                     drag.pivot_on = app_cursor_point(ev->mouse_x, ev->mouse_y, &drag.pivot, &on) && on;
                 else if (drag.mode == CV_NAV_ZOOM && !app_cursor_point(ev->mouse_x, ev->mouse_y, &drag.pivot, &on))
                     drag.pivot = G.cam.target;

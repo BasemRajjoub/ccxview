@@ -15,7 +15,7 @@
 #include <stdarg.h>
 #include "ui_int.h"
 
-enum { OP_END, OP_CASE, OP_AT_TIP, OP_AT_WIN, OP_AT_POPUP, OP_AT_CLOSE, OP_AT_TITLE, OP_AT_VIEW, OP_CLICK, OP_PRESS, OP_RELEASE,
+enum { OP_END, OP_CASE, OP_AT_TIP, OP_AT_WIN, OP_AT_POPUP, OP_AT_CLOSE, OP_AT_TITLE, OP_AT_VIEW, OP_AT_MODEL, OP_CLICK, OP_PRESS, OP_RELEASE,
        OP_WHEEL, OP_WAIT, OP_DO, OP_EXPECT };
 
 typedef struct {
@@ -195,6 +195,22 @@ static bool zoomed(struct nk_context* ctx) { return G.cam.dist != was.cam.dist; 
 static bool not_zoomed(struct nk_context* ctx) { return G.cam.dist == was.cam.dist; }
 static bool turned(struct nk_context* ctx) { return memcmp(&G.cam, &was.cam, sizeof G.cam) != 0; }
 static bool scene_scrolled(struct nk_context* ctx) { struct nk_window* w = win_of(ctx, "Scene"); return w && (float)w->scrollbar.y != was.scroll; }
+/* pan: the point of the model under the cursor when the drag began is still under it */
+static v3 grabbed; static bool grabbed_on;
+/* the orbit target three times as deep, the eye where it was: the same picture, but
+   the model no longer at the target's depth, as after zooming in on a detail */
+static void target_far(struct nk_context* ctx) {
+    v3 eye, f, r, u;
+    cam_basis(&G.cam, &eye, &f, &r, &u);
+    G.cam.dist *= 3;
+    G.cam.target = v3_add(eye, v3_scale(f, G.cam.dist));
+}
+static void grab(struct nk_context* ctx) { grabbed_on = false; app_cursor_point(T.mx, T.my, &grabbed, &grabbed_on); }
+static bool grab_on_model(struct nk_context* ctx) { return grabbed_on; }
+static bool grab_follows(struct nk_context* ctx) {
+    float sx, sy;
+    return app_project(grabbed, &sx, &sy) && fabsf(sx - T.mx) < 3 && fabsf(sy - T.my) < 3;
+}
 static bool tip_cmap(struct nk_context* ctx) { return !strncmp(uii_tip_shown(), "Colour map", 10); }
 static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 
@@ -215,10 +231,13 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 #define AT_CLOSE(win)       { OP_AT_CLOSE, win }
 #define AT_TITLE(win)       { OP_AT_TITLE, win }
 #define AT_VIEW(fx, fy)     { OP_AT_VIEW, NULL, NULL, fx, fy }
+#define AT_MODEL            { OP_AT_MODEL }
 #define CLICK               { OP_CLICK }
 #define RCLICK              { OP_CLICK, .n = 1 }
 #define PRESS               { OP_PRESS }
 #define RELEASE             { OP_RELEASE }
+#define RPRESS              { OP_PRESS, .n = 1 }
+#define RRELEASE            { OP_RELEASE, .n = 1 }
 #define WHEEL(turns)        { OP_WHEEL, .y = turns }
 #define WAIT(frames)        { OP_WAIT, .n = frames }
 #define DO(f)               { OP_DO, .fn = f }
@@ -269,6 +288,12 @@ static const step script[] = {
 
     CASE("view: a drag turns the model"),
     DO(snapshot), AT_VIEW(0.5f, 0.5f), PRESS, AT_VIEW(0.6f, 0.55f), AT_VIEW(0.7f, 0.6f), RELEASE, EXPECT(turned, "the camera turns"),
+
+    CASE("view: a right drag pans, the point grabbed stays under the cursor"),
+    DO(target_far), WAIT(2), AT_MODEL, DO(grab), EXPECT(grab_on_model, "the cursor is on the model"),
+    RPRESS, AT_VIEW(0.45f, 0.6f), AT_VIEW(0.6f, 0.35f), EXPECT(grab_follows, "the grabbed point follows the cursor"),
+    RRELEASE, DO(snapshot), AT_VIEW(0.05f, 0.05f), DO(grab), RPRESS, AT_VIEW(0.2f, 0.2f), RRELEASE,
+    EXPECT(turned, "a drag off the model pans too"),
 
     CASE("units: opened from the status bar, a list in it, closed"),
     AT_TIP("Status", TIP_UNITS), CLICK, EXPECT(units_shown, "the Units window opens"),
@@ -342,6 +367,16 @@ const char* ui_test_shot(void) {
 static bool target(struct nk_context* ctx, const step* s, float* x, float* y) {
     const struct nk_style* st = &ctx->style;
     if (s->op == OP_AT_VIEW) { *x = G.vp_x + s->x * G.vp_w; *y = G.vp_y + s->y * G.vp_h; return true; }
+    if (s->op == OP_AT_MODEL) {                 /* a point of the view that lies on the model, the nearest to its middle */
+        float best = 1e30f;
+        for (int j = 1; j < 16; j++) for (int i = 1; i < 16; i++) {
+            float px = G.vp_x + G.vp_w * i / 16.f, py = G.vp_y + G.vp_h * j / 16.f, d2 = (i - 8.f) * (i - 8.f) + (j - 8.f) * (j - 8.f);
+            v3 p; bool on = false;
+            if (d2 < best && app_cursor_point(px, py, &p, &on) && on) { best = d2; *x = px; *y = py; }
+        }
+        if (best > 1e29f) fail("no point of the view lies on the model");
+        return best < 1e29f;
+    }
     if (s->op == OP_AT_TIP) {
         const mark* m = find_mark(s->a, s->b);
         struct nk_window* w = m ? win_of(ctx, m->win) : NULL;
@@ -407,7 +442,7 @@ void ui_test_frame(struct nk_context* ctx) {
             }
             T.resetting = false; T.wait = 4;
             break;
-        case OP_AT_TIP: case OP_AT_WIN: case OP_AT_POPUP: case OP_AT_CLOSE: case OP_AT_TITLE: case OP_AT_VIEW:
+        case OP_AT_TIP: case OP_AT_WIN: case OP_AT_POPUP: case OP_AT_CLOSE: case OP_AT_TITLE: case OP_AT_VIEW: case OP_AT_MODEL:
             if (target(ctx, s, &x, &y)) { move_to(x, y); T.wait = s->n ? 0 : 2; }    /* n: the next step in the same frame */
             break;
         case OP_CLICK:                          /* down in one frame, up in the next, as a hand does */
