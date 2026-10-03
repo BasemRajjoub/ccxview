@@ -34,12 +34,27 @@ static void symbol_sizes(struct nk_context* ctx, float s, float row) {
     (void)s;
     if (deck) {
         bool ch = false;
+        nk_layout_row_dynamic(ctx, row, 2);
+        tip(ctx, "Symbols sized from the model: 2.5 % of its diagonal, whatever the mesh.\nOff: the size beside it, in model units, the same for every model");
+        if (nk_checkbox_label(ctx, "auto size", &G.sym_auto)) app_symbol_size();
+        if (G.sym_auto) {
+            char b[48];
+            snprintf(b, sizeof b, "%.4g", G.sym_len);
+            nk_label_colored(ctx, b, NK_TEXT_RIGHT, P.dim);
+        } else {
+            float v = G.sym_size, big = CV_MAX(G.diag, 1e-6f);
+            tip(ctx, "Symbol size in model units");
+            nk_property_float(ctx, "#size", big * 1e-5f, &v, big, G.sym_auto_len * 0.1f, G.sym_auto_len * 0.01f);
+            if (v != G.sym_size && v > 0) { G.sym_size = v; app_symbol_size(); }
+        }
+        ch |= scale_slider(ctx, row, "thickness", "Thickness of the symbols' lines, times the default", &G.sym_thick, 0.2f, 5.f);
+        if (G.sym_thick < 0) G.sym_thick = 1.f;
         if (deck_has_bc() || deck_has_discrete()) {
-            ch |= scale_slider(ctx, row, "supports", "Supports, springs and masses, times the mesh's symbol size (about two elements)", &G.bc_scale, 0.1f, 10.f);
+            ch |= scale_slider(ctx, row, "supports", "Supports, springs and masses, times the symbol size", &G.bc_scale, 0.1f, 10.f);
             if (G.bc_scale < 0) G.bc_scale = 1.f;
         }
         if (deck_has_loads()) {
-            ch |= scale_slider(ctx, row, "loads", "Load arrows, times the mesh's symbol size", &G.load_scale, 0.1f, 10.f);
+            ch |= scale_slider(ctx, row, "loads", "Load arrows, times the symbol size", &G.load_scale, 0.1f, 10.f);
             if (G.load_scale < 0) G.load_scale = 1.f;
         }
         if (ch) deck_refresh_highlight();

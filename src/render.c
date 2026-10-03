@@ -630,18 +630,19 @@ void cv_render_draw(const cv_draw* d) {
         static const float bc_rgb[3] = { 0.15f, 0.85f, 0.85f }, ld_rgb[3] = { 1.0f, 0.78f, 0.10f },
                            mom_rgb[3] = { 1.0f, 0.35f, 0.85f }, heat_rgb[3] = { 1.0f, 0.32f, 0.18f };
         /* forces and pressures yellow, moments magenta, heat red */
-        if (d->supports && A[CV_AUX_BCLN].n)
-            draw_layer(R.pip_line_ni, A[CV_AUX_BCLN].v, NO_IB, (int)A[CV_AUX_BCLN].n,
-                       CV_COLOR_SOLID, bc_rgb, false, d, 1, false, 4 * PULL, 0);
-        if (d->loads && A[CV_AUX_LDLN].n)
-            draw_layer(R.pip_line_ni, A[CV_AUX_LDLN].v, NO_IB, (int)A[CV_AUX_LDLN].n,
-                       CV_COLOR_SOLID, ld_rgb, false, d, 1, false, 4 * PULL, 0);
-        if (d->loads && A[CV_AUX_MOMLN].n)
-            draw_layer(R.pip_line_ni, A[CV_AUX_MOMLN].v, NO_IB, (int)A[CV_AUX_MOMLN].n,
-                       CV_COLOR_SOLID, mom_rgb, false, d, 1, false, 4 * PULL, 0);
-        if (d->loads && A[CV_AUX_HEATLN].n)
-            draw_layer(R.pip_line_ni, A[CV_AUX_HEATLN].v, NO_IB, (int)A[CV_AUX_HEATLN].n,
-                       CV_COLOR_SOLID, heat_rgb, false, d, 1, false, 4 * PULL, 0);
+        const struct { int ln, tri; bool on; const float* rgb; } sym[4] = {
+            { CV_AUX_BCLN, CV_AUX_BCTRI, d->supports, bc_rgb }, { CV_AUX_LDLN, CV_AUX_LDTRI, d->loads, ld_rgb },
+            { CV_AUX_MOMLN, CV_AUX_MOMTRI, d->loads, mom_rgb }, { CV_AUX_HEATLN, CV_AUX_HEATTRI, d->loads, heat_rgb },
+        };
+        for (int k = 0; k < 4; k++) {
+            if (!sym[k].on) continue;
+            if (A[sym[k].ln].n)
+                draw_layer(R.pip_line_ni, A[sym[k].ln].v, NO_IB, (int)A[sym[k].ln].n,
+                           CV_COLOR_SOLID, sym[k].rgb, false, d, 1, false, 4 * PULL, 0);
+            if (A[sym[k].tri].n)                  /* solid heads, cones and thick strokes, lit */
+                draw_layer(R.pip_tri_ni, A[sym[k].tri].v, NO_IB, (int)A[sym[k].tri].n,
+                           CV_COLOR_SOLID, sym[k].rgb, true, d, 1, false, 4 * PULL, 0);
+        }
         static const float vec_rgb[3] = { 0.95f, 0.95f, 0.95f };
         if (d->vectors && A[CV_AUX_VECLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_VECLN].v, NO_IB, (int)A[CV_AUX_VECLN].n,

@@ -99,7 +99,8 @@ typedef struct {
     v3        vmin, vmax;     /* view box: undeformed + deformed as drawn */
     float     vdiag;
     float     mean_edge;      /* mean skin edge length, for the edge fade */
-    float     sym_len;        /* symbol size from the mesh: a few elements, within 0.5..4 % of the meshed part */
+    float     sym_len;        /* symbol size in model units: sym_auto_len, or sym_size when set by hand */
+    float     sym_auto_len;   /* 2.5 % of the diagonal of the meshed part, undeformed */
     cv_msgs   msgs;           /* loader + decode messages (frd.msgs holds the parser's) */
     double    load_seconds;
 
@@ -314,6 +315,9 @@ typedef struct {
     bool      vec_colored;
     float     vec_pct;               /* longest arrow, percent of the model diagonal */
     float     bc_scale, load_scale;  /* supports / springs and load arrows, times sym_len */
+    bool      sym_auto;              /* symbol size follows the model's size (else sym_size) */
+    float     sym_size;              /* symbol size by hand, model units */
+    float     sym_thick;             /* thickness of the symbols' lines, times the default (3 % of the symbol size) */
 
     /* file dialogs */
     char      exe_dir[1024];
@@ -465,6 +469,7 @@ void deck_seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const
 /* where a deck node is drawn and how it moves; false when it is not shown */
 bool deck_node_pd(uint32_t id, float p[3], float d[6]);
 uint32_t deck_elem(const cv_frd* f, uint32_t id);    /* the shown element of a deck element id, UINT32_MAX if none */
+void app_symbol_size(void);          /* G.sym_len from the model or the hand-set size; redraws the symbols */
 void loads_refresh(void);            /* app_loads.c: the support and load glyphs of the step on screen */
 void app_node_disp6(uint32_t node, float d[6]);
 void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);

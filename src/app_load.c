@@ -325,9 +325,9 @@ static void apply_load(cv_job* j) {
         }
         G.mean_edge = n ? (float)(sum / n) : 0.f;
     }
-    /* Symbol size: about two elements, so a support or an arrow reads next to
-       its node without covering the part; within 0.5 .. 4 % of the meshed part
-       (a far reference node or geometry would stretch the whole-model diagonal). */
+    /* Symbol size: 2.5 % of the diagonal of the meshed part (a far reference node
+       or geometry would stretch the whole-model diagonal), so supports and arrows
+       look the same on every model whatever its mesh; or the size set by hand. */
     {
         float lo[3] = { INFINITY, INFINITY, INFINITY }, hi[3] = { -INFINITY, -INFINITY, -INFINITY };
         for (size_t i = 0; i < G.skin.n_pt; i++) {
@@ -337,8 +337,8 @@ static void apply_load(cv_job* j) {
         float d = 0;
         if (G.skin.n_pt) for (int k = 0; k < 3; k++) d += (hi[k] - lo[k]) * (hi[k] - lo[k]);
         d = d > 0 ? sqrtf(d) : G.diag;
-        float l = G.mean_edge > 0 ? 2.f * G.mean_edge : 0.02f * d;
-        G.sym_len = CV_MIN(CV_MAX(l, 0.005f * d), 0.04f * d);
+        G.sym_auto_len = 0.025f * d;
+        G.sym_len = G.sym_auto || !(G.sym_size > 0) ? G.sym_auto_len : G.sym_size;
     }
 
     /* Auto deformation from the last step that has DISP (usually the largest).

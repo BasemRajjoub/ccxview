@@ -45,7 +45,11 @@ step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
 | `*HEADING` | skipped, its lines do not start a block |
 
 Symbols of one kind are sized against the largest value of that kind in the
-step. `samples/symbols/` holds a deck with one small part per symbol
+step. Their base size is 2.5 % of the model's diagonal, the same on a coarse and
+a fine mesh, or a size in model units set by hand (View > Symbol sizes: auto
+size, thickness; `--opt sym_auto=0 --opt sym_size=5 --opt sym_thick=2`). Heads
+and supports are solid cones and every stroke a thin tube, so a symbol reads
+from any side; a deck with more than 40000 of them falls back to plain lines. `samples/symbols/` holds a deck with one small part per symbol
 (`scripts/gen_symbols.py`): open `symbols.frd` and step through it.
 
 ## Results in local systems

@@ -65,6 +65,7 @@ void deck_clear(void) {
     cv_render_aux(CV_AUX_LDLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_MOMLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_HEATLN, NULL, NULL, NULL, 0);
+    for (int k = CV_AUX_BCTRI; k <= CV_AUX_HEATTRI; k++) cv_render_aux(k, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_DISCLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_LINKLN, NULL, NULL, NULL, 0);
 }
@@ -355,7 +356,7 @@ static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
 
 /* ---- glyphs: supports as cones, loads as arrows -------------------------------
    All in world units, L = bc_scale (supports, springs) or 1.5 load_scale (loads)
-   times sym_len, the mesh's symbol size; every vertex carries
+   times sym_len, the symbol size; every vertex carries
    its node's displacement so the glyphs ride along with the deformed shape. */
 
 void deck_seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const float* d) {
@@ -633,6 +634,12 @@ static bool surf_shown(int si) {
         if (D.link_on[i] && (l->kind == CV_LINK_TIE || l->kind == CV_LINK_CONTACT) && (l->surf[0] == si || l->surf[1] == si)) return true;
     }
     return false;
+}
+
+void app_symbol_size(void) {
+    if (!G.sym_auto && !(G.sym_size > 0)) G.sym_size = G.sym_auto_len;     /* by hand: starts from what was shown */
+    G.sym_len = G.sym_auto ? G.sym_auto_len : G.sym_size;
+    if (G.loaded) deck_refresh_highlight();
 }
 
 void deck_refresh_highlight(void) {

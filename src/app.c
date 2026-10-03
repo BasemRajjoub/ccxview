@@ -99,6 +99,7 @@ static void init(void) {
     G.vec_colored = true;
     G.vec_pct = 5.f;
     G.bc_scale = G.load_scale = 1.f;
+    G.sym_auto = true; G.sym_thick = 1.f;
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
     G.geo_size = 6.f;
