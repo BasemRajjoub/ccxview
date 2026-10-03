@@ -147,9 +147,13 @@ static const char* kVS =
        different distance at every depth and, with the eye close (near plane far
        in front of the model), reaches from the back wall through the front one. */
     "  if (u_q.w != 0.0) {\n"                /* perspective: w = -z_view */
-    "    float w2 = gl_Position.w - u_p.w;\n"
-    "    gl_Position.xy *= w2 / gl_Position.w;\n"    /* same screen point */
-    "    gl_Position.z += u_q.z * u_p.w;\n"
+    /* never past the eye: a vertex nearer than the pull would come out behind it
+       (w < 0) and its triangle would cover the screen. In front of the eye at most
+       half its distance; behind the eye (to be clipped) not at all. */
+    "    float pl = min(u_p.w, 0.5 * max(gl_Position.w, 0.0));\n"
+    "    float w2 = gl_Position.w - pl;\n"
+    "    if (gl_Position.w > 0.0) gl_Position.xy *= w2 / gl_Position.w;\n"    /* same screen point */
+    "    gl_Position.z += u_q.z * pl;\n"
     "    gl_Position.w = w2;\n"
     "  } else gl_Position.z += u_q.z * u_p.w;\n"
     "  v_r = u_p.y * gl_Position.w / max(u_q.x, 1e-6);\n"
@@ -641,7 +645,7 @@ void cv_render_draw(const cv_draw* d) {
                            CV_COLOR_SOLID, sym[k].rgb, false, d, 1, false, 4 * PULL, 0);
             if (A[sym[k].tri].n)                  /* solid heads, cones and thick strokes, lit */
                 draw_layer(R.pip_tri_ni, A[sym[k].tri].v, NO_IB, (int)A[sym[k].tri].n,
-                           CV_COLOR_SOLID, sym[k].rgb, true, d, 1, false, 4 * PULL, 0);
+                           CV_COLOR_SOLID, sym[k].rgb, true, d, 1, false, 0.f, 0);     /* bodies of their own: true depth */
         }
         static const float vec_rgb[3] = { 0.95f, 0.95f, 0.95f };
         if (d->vectors && A[CV_AUX_VECLN].n)
