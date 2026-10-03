@@ -61,15 +61,7 @@ void deck_clear(void) {
     memset(&D, 0, sizeof D);
     cv_render_aux(CV_AUX_HLPT, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_HLTRI, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_BCLN, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_LDLN, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_MOMLN, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_HEATLN, NULL, NULL, NULL, 0);
-    for (int k = CV_AUX_BCTRI; k <= CV_AUX_HEATTRI; k++) cv_render_aux(k, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_DISCLN, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_LINKLN, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_DISCTRI, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_LINKTRI, NULL, NULL, NULL, 0);
+    for (int k = 0; k < CV_INST_N; k++) if (k != CV_INST_VEC) cv_render_inst(k, NULL, 0);
 }
 
 bool deck_has_discrete(void) { return D.on && D.d.ndisc > 0; }
@@ -366,28 +358,6 @@ void deck_seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const
     push3(pos, b); push6(disp, d);
 }
 
-/* arrow whose head sits at `tip`, shaft along -dir (unit) of length len */
-void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir[3], float len, const float d[6], bool twin) {
-    float tail[3] = { tip[0] - dir[0] * len, tip[1] - dir[1] * len, tip[2] - dir[2] * len };
-    deck_seg(pos, disp, tail, tip, d);
-    /* a perpendicular for the head: the axis least aligned with dir */
-    int k = fabsf(dir[0]) <= fabsf(dir[1]) ? (fabsf(dir[0]) <= fabsf(dir[2]) ? 0 : 2) : (fabsf(dir[1]) <= fabsf(dir[2]) ? 1 : 2);
-    float up[3] = { 0, 0, 0 }; up[k] = 1;
-    float side[3] = { dir[1] * up[2] - dir[2] * up[1], dir[2] * up[0] - dir[0] * up[2], dir[0] * up[1] - dir[1] * up[0] };
-    float sl = sqrtf(side[0] * side[0] + side[1] * side[1] + side[2] * side[2]);
-    if (sl > 0) for (int i = 0; i < 3; i++) side[i] /= sl;
-    float hl = len * 0.28f, hw = len * 0.12f;
-    for (int h = 0; h < (twin ? 2 : 1); h++) {
-        float back = h ? hl * 1.6f : 0.f;
-        float base[3] = { tip[0] - dir[0] * (hl + back), tip[1] - dir[1] * (hl + back), tip[2] - dir[2] * (hl + back) };
-        float t[3] = { tip[0] - dir[0] * back, tip[1] - dir[1] * back, tip[2] - dir[2] * back };
-        for (int sgn = -1; sgn <= 1; sgn += 2) {
-            float w[3] = { base[0] + side[0] * hw * sgn, base[1] + side[1] * hw * sgn, base[2] + side[2] * hw * sgn };
-            deck_seg(pos, disp, t, w, d);
-        }
-    }
-}
-
 static void node_pd(uint32_t i, float p[3], float d[6]) {
     memcpy(p, G.frd.xyz + 3 * i, 3 * sizeof(float));
     app_node_disp6(i, d);
@@ -537,8 +507,7 @@ static void refresh_discrete(void) {
             discrete_symbol(&lp, &ld, q->kind, a, da, b, db, L, lane);
         }
     }
-    app_aux_upload(CV_AUX_DISCLN, &lp, &ld, NULL);
-    deck_tubes_upload(CV_AUX_DISCTRI, &lp, &ld, deck_stroke());
+    deck_lines_inst(CV_INST_DISC, &lp, &ld, deck_stroke());
     cv_free_vec(lp); cv_free_vec(ld);
 }
 
@@ -625,8 +594,7 @@ static void refresh_links(void) {
             cv_free_vec(tgt);
         }
     }
-    app_aux_upload(CV_AUX_LINKLN, &lp, &ld, NULL);
-    deck_tubes_upload(CV_AUX_LINKTRI, &lp, &ld, 0.5f * deck_stroke());    /* spiders have many legs: thinner */
+    deck_lines_inst(CV_INST_LINK, &lp, &ld, 0.5f * deck_stroke());    /* spiders have many legs: thinner */
     cv_free_vec(lp); cv_free_vec(ld);
 }
 

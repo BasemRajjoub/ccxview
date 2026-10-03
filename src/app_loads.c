@@ -19,25 +19,28 @@
                        given temperature: a diamond; body heat: a zigzag block arrow
 
    A node in a *TRANSFORM has its DOFs along the local axes there, and its symbols
-   follow them. Symbols are sized within their own kind by magnitude. Heads and supports
-   are solid cones and every stroke a thin tube, so they read from any side; beyond
-   40000 symbols they are plain lines. All in world
+   follow them. Symbols are sized within their own kind by magnitude. Every symbol is
+   made of round bodies, cones and tubes, that the GPU draws from one stored body
+   (render.h, cv_render_inst): 15 numbers each, lit, readable from any side, never
+   thinner than a pixel. All in world
    units of G.sym_len; every vertex carries its node's displacement, so the symbols
    ride with the deformed shape. */
 #include "app.h"
 #include "inp.h"
 #include <math.h>
 
-/* One colour's symbols: lines (p, d: positions and 6 displacement values per vertex)
-   and, when solid, triangles (tp, td): every stroke also as a tube of radius T, heads
-   and supports as cones. Lines alone when there are too many symbols for that. */
-typedef struct { cv_fvec p, d, tp, td; bool solid; float T; } layer;
+/* One colour's symbols: round bodies between two points (render.h), CV_INST_FLOATS
+   numbers each, drawn by the GPU from one stored body. T: the radius of a stroke. */
+typedef struct { cv_fvec in; float T; } layer;
 
-static void vtx(layer* l, const float* a, const float* d) {
-    if (cv_reserve(l->tp, l->tp.n + 3)) for (int k = 0; k < 3; k++) l->tp.a[l->tp.n++] = a[k];
-    if (cv_reserve(l->td, l->td.n + 6)) for (int k = 0; k < 6; k++) l->td.a[l->td.n++] = d[k];
+void deck_inst(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal, const float d[6]) {
+    if (!cv_reserve(*v, v->n + CV_INST_FLOATS)) return;
+    float* o = v->a + v->n;
+    memcpy(o, a, 12); memcpy(o + 3, b, 12);
+    o[6] = ra; o[7] = rb; o[8] = scal;
+    memcpy(o + 9, d, 24);
+    v->n += CV_INST_FLOATS;
 }
-static void tri(layer* l, const float* a, const float* b, const float* c, const float* d) { vtx(l, a, d); vtx(l, b, d); vtx(l, c, d); }
 
 static float norm3(float v[3]) {
     float n = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -58,55 +61,23 @@ static void along(const float p[3], const float dir[3], float t, float out[3]) {
     for (int i = 0; i < 3; i++) out[i] = p[i] + dir[i] * t;
 }
 
-/* a cylinder from a to b, n sides, with or without its end discs */
-static void cyl(layer* l, const float a[3], const float b[3], float r, int n, bool caps, const float d[6]) {
-    float ax[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, u[3], v[3], pa[3], pb[3], qa[3], qb[3];
-    if (norm3(ax) <= 0) return;
-    frame(ax, u, v);
-    for (int s = 0; s <= n; s++) {
-        float t = 6.2831853f * s / n, c = r * cosf(t), sn = r * sinf(t);
-        for (int i = 0; i < 3; i++) { qa[i] = a[i] + c * u[i] + sn * v[i]; qb[i] = b[i] + c * u[i] + sn * v[i]; }
-        if (s) {
-            tri(l, pa, qa, qb, d); tri(l, pa, qb, pb, d);
-            if (caps) { tri(l, a, qa, pa, d); tri(l, b, pb, qb, d); }
-        }
-        memcpy(pa, qa, sizeof pa); memcpy(pb, qb, sizeof pb);
-    }
-}
 /* a cone: its tip at `tip`, pointing along dir, h long, r at the base */
 static void cone(layer* l, const float tip[3], const float dir[3], float h, float r, const float d[6]) {
-    enum { N = 10 };
-    float u[3], v[3], c[3], p[3], q[3];
-    frame(dir, u, v);
+    float c[3];
     along(tip, dir, -h, c);
-    for (int s = 0; s <= N; s++) {
-        float t = 6.2831853f * s / N;
-        for (int i = 0; i < 3; i++) q[i] = c[i] + r * (cosf(t) * u[i] + sinf(t) * v[i]);
-        if (s) { tri(l, tip, p, q, d); tri(l, c, q, p, d); }
-        memcpy(p, q, sizeof p);
-    }
+    deck_inst(&l->in, c, tip, r, 0, 0, d);
 }
-
-/* a stroke: a line, and when solid a tube round it (the line still shows from far away) */
-static void seg(layer* l, const float* a, const float* b, const float* d) {
-    deck_seg(&l->p, &l->d, a, b, d);
-    if (l->solid) cyl(l, a, b, l->T, 5, false, d);
-}
-/* an arrow head at tip along dir for an arrow len long: a cone, or two strokes */
+/* a stroke: a tube of the layer's thickness */
+static void seg(layer* l, const float* a, const float* b, const float* d) { deck_inst(&l->in, a, b, l->T, l->T, 0, d); }
+/* an arrow head at tip along dir for an arrow len long */
 static void head(layer* l, const float tip[3], const float dir[3], float len, const float d[6]) {
-    if (l->solid) { cone(l, tip, dir, 0.3f * len, fmaxf(0.11f * len, 2.5f * l->T), d); return; }
-    float u[3], v[3], w[3];
-    frame(dir, u, v);
-    for (int sgn = -1; sgn <= 1; sgn += 2) {
-        for (int i = 0; i < 3; i++) w[i] = tip[i] - dir[i] * 0.28f * len + sgn * 0.12f * len * u[i];
-        deck_seg(&l->p, &l->d, tip, w, d);
-    }
+    cone(l, tip, dir, 0.3f * len, fmaxf(0.11f * len, 2.5f * l->T), d);
 }
 /* an arrow len long arriving at tip along dir */
 static void arrow(layer* l, const float tip[3], const float dir[3], float len, const float d[6]) {
     float t[3], b[3];
     along(tip, dir, -len, t);
-    along(tip, dir, l->solid ? -0.25f * len : 0, b);
+    along(tip, dir, -0.25f * len, b);
     seg(l, t, b, d);
     head(l, tip, dir, len, d);
 }
@@ -130,25 +101,17 @@ static void turning(layer* l, const float c[3], const float dir[3], float r, con
     float u[3], v[3], e[3];
     frame(dir, u, v);
     arc(l, c, dir, r, 0, 1.5f * 3.14159265f, d, e);
-    float h = 0.45f * r;                            /* at 270 degrees: at -v, moving along +u */
-    if (l->solid) {
-        float t[3];
-        along(e, u, 0.6f * h, t);
-        cone(l, t, u, 1.1f * h, fmaxf(0.45f * h, 2.5f * l->T), d);
-        return;
-    }
-    for (int sgn = -1; sgn <= 1; sgn += 2) {
-        float w[3];
-        for (int i = 0; i < 3; i++) w[i] = e[i] - h * u[i] + sgn * 0.6f * h * v[i];
-        seg(l, e, w, d);
-    }
+    float h = 0.45f * r, t[3];                      /* at 270 degrees: at -v, moving along +u */
+    (void)v;
+    along(e, u, 0.6f * h, t);
+    cone(l, t, u, 1.1f * h, fmaxf(0.45f * h, 2.5f * l->T), d);
 }
 
 /* a moment about dir at p: the double-headed arrow, and the turning arc round its shaft */
 static void moment(layer* l, const float p[3], const float dir[3], float len, const float d[6]) {
     float c[3], t[3], b[3];
     along(p, dir, -len, t);
-    along(p, dir, l->solid ? -0.5f * len : 0, b);
+    along(p, dir, -0.5f * len, b);
     seg(l, t, b, d);
     head(l, p, dir, len, d);
     along(p, dir, -0.27f * len, c);                 /* the second head, behind the first */
@@ -183,11 +146,7 @@ static void zigzag(layer* l, const float from[3], const float dir[3], float len,
 static void heat_arrow(layer* l, const float tip[3], const float dir[3], float len, const float d[6]) {
     float t[3];
     along(tip, dir, -len, t);
-    float u[3], v[3], m[3];
-    frame(dir, u, v);
-    along(tip, dir, -0.3f * len, m);
     zigzag(l, t, dir, 0.7f * len, d);
-    if (!l->solid) seg(l, m, tip, d);               /* a short straight end, and the head on it */
     head(l, tip, dir, len, d);
 }
 /* convection on a face at p (out: the outward normal): a zigzag ending in a bar, the fluid */
@@ -213,15 +172,12 @@ static void rays(layer* l, const float p[3], const float out[3], float len, cons
     along(p, out, len, a);
     seg(l, e, a, d);
 }
-/* a given temperature at a node: a diamond */
+/* a given temperature at a node: a diamond, two cones base to base */
 static void diamond(layer* l, const float p[3], float r, const float d[6]) {
-    float c[6][3];
-    for (int k = 0; k < 6; k++) { memcpy(c[k], p, sizeof c[k]); c[k][k / 2] += k & 1 ? -r : r; }
-    if (l->solid) {                                 /* the eight faces */
-        for (int x = 0; x < 2; x++) for (int y = 2; y < 4; y++) for (int z = 4; z < 6; z++) tri(l, c[x], c[y], c[z], d);
-        return;
-    }
-    for (int a = 0; a < 6; a++) for (int b = a + 1; b < 6; b++) if (a / 2 != b / 2) seg(l, c[a], c[b], d);
+    static const float up[3] = { 0, 0, 1 }, dn[3] = { 0, 0, -1 };
+    float t[3];
+    along(p, up, r, t); cone(l, t, up, r, r, d);
+    along(p, dn, r, t); cone(l, t, dn, r, r, d);
 }
 
 /* a load on a whole body, leaving it at `from` along dir: the outline of a broad
@@ -243,34 +199,16 @@ static void block_arrow(layer* l, const float from[3], const float dir[3], float
 
 /* supports at p from the mask of its held DOFs (bit k-1 for DOF k), along the axes
    Q (rows): per axis one cone with its tip on the node; a held rotation about the
-   axis adds a plate behind its base (a rotation alone: a shorter cone). As lines:
-   two crossed triangles, the plate a second base line. */
+   axis adds a plate behind its base (a rotation alone: a shorter cone) */
 static void support(layer* l, const float p[3], const float d[6], unsigned mask, float L, const float Q[3][3]) {
     for (int k = 0; k < 3; k++) {
         bool tr = mask & (1u << k), rot = mask & (8u << k);
         if (!tr && !rot) continue;
-        float h = tr ? L : 0.7f * L, r = l->solid ? 0.26f * L : 0.35f * L;
-        if (l->solid) {
-            float c[3], a[3], b[3];
-            along(p, Q[k], -h, c);
-            deck_seg(&l->p, &l->d, p, c, d);        /* its axis: what is left of it from far away */
-            cone(l, p, Q[k], h, r, d);
-            if (rot) {
-                along(p, Q[k], -1.12f * h, a); along(p, Q[k], -1.22f * h, b);
-                cyl(l, a, b, 1.25f * r, 12, true, d);
-            }
-            continue;
-        }
-        for (int m = 1; m <= 2; m++) {             /* the two triangles, across the other axes */
-            const float* ej = Q[(k + m) % 3];
-            float c[3], b0[3], b1[3];
-            along(p, Q[k], -h, c);
-            along(c, ej, -r, b0); along(c, ej, r, b1);
-            seg(l, p, b0, d); seg(l, p, b1, d); seg(l, b0, b1, d);
-            if (rot) {                              /* the second base, a little further out */
-                along(b0, Q[k], -0.2f * h, b0); along(b1, Q[k], -0.2f * h, b1);
-                seg(l, b0, b1, d);
-            }
+        float h = tr ? L : 0.7f * L, r = 0.26f * L, a[3], b[3];
+        cone(l, p, Q[k], h, r, d);
+        if (rot) {
+            along(p, Q[k], -1.12f * h, a); along(p, Q[k], -1.22f * h, b);
+            deck_inst(&l->in, a, b, 1.25f * r, 1.25f * r, 0, d);
         }
     }
 }
@@ -285,14 +223,13 @@ static void cross(layer* l, const float p[3], float r, const float d[6]) {
 
 float deck_stroke(void) { return 0.045f * G.sym_len * CV_MIN(CV_MAX(G.sym_thick, 0.1f), 10.f); }
 
-/* springs, dashpots, masses, gaps and links are built as lines elsewhere: the same lines as tubes */
-void deck_tubes_upload(int which, const cv_fvec* pos, const cv_fvec* disp, float r) {
-    layer l = {{0}};
-    size_t nseg = pos->n / 6;
-    if (r > 0 && nseg <= 60000 && disp->n == 2 * pos->n)
-        for (size_t i = 0; i < nseg; i++) cyl(&l, pos->a + 6 * i, pos->a + 6 * i + 3, r, 5, false, disp->a + 12 * i);
-    app_aux_upload(which, &l.tp, &l.td, NULL);
-    cv_free_vec(l.tp); cv_free_vec(l.td);
+/* springs, dashpots, masses, gaps and links are built as lines (deck_seg pairs): each as a tube */
+void deck_lines_inst(int which, const cv_fvec* pos, const cv_fvec* disp, float r) {
+    cv_fvec in = {0};
+    size_t nseg = disp->n == 2 * pos->n ? pos->n / 6 : 0;
+    for (size_t i = 0; i < nseg; i++) deck_inst(&in, pos->a + 6 * i, pos->a + 6 * i + 3, r, r, 0, disp->a + 12 * i);
+    cv_render_inst(which, in.a, (uint32_t)(in.n / CV_INST_FLOATS));
+    cv_free_vec(in);
 }
 
 /* ---- where things are ------------------------------------------------------------ */
@@ -475,14 +412,12 @@ static bool bolt_at(const cv_inp* dk, const cv_pretension* t, float cen[3], floa
 void loads_refresh(void) {
     layer bc = {{0}}, ld = {{0}}, mo = {{0}}, ht = {{0}};
     layer* all[4] = { &bc, &ld, &mo, &ht };
+    for (int k = 0; k < 4; k++) all[k]->T = deck_stroke();
     const cv_inp* dk = G.loaded ? deck_get() : NULL;
     const cv_applied* a = applied(dk);
     float L = CV_MAX(G.bc_scale, 0.01f) * G.sym_len, LL = 1.5f * CV_MAX(G.load_scale, 0.01f) * G.sym_len;
     if (a) {
         float p[3], d[6], Q[3][3], dir[3];
-        /* solid symbols while there are not too many of them (a cone is 20 triangles) */
-        bool solid = (uint64_t)a->nbcs + a->ncloads + a->ndloads + a->ntemps <= 40000;
-        for (int k = 0; k < 4; k++) { all[k]->solid = solid; all[k]->T = deck_stroke(); }
 
         /* sized within each kind: their units differ */
         float fmax = 0, mmax = 0, qmax = 0, umax = 0, rmax = 0, dmax[CV_DL_N] = { 0 }, bmax[CV_BL_N] = { 0 };
@@ -629,11 +564,9 @@ void loads_refresh(void) {
         for (uint32_t i = 0; i < a->ntemps; i++)
             if (deck_node_pd(a->temps[i].node, p, d)) diamond(&ht, p, 0.3f * L, d);
     }
-    static const int ln[4] = { CV_AUX_BCLN, CV_AUX_LDLN, CV_AUX_MOMLN, CV_AUX_HEATLN };
-    static const int tr[4] = { CV_AUX_BCTRI, CV_AUX_LDTRI, CV_AUX_MOMTRI, CV_AUX_HEATTRI };
+    static const int which[4] = { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT };
     for (int k = 0; k < 4; k++) {
-        app_aux_upload(ln[k], &all[k]->p, &all[k]->d, NULL);
-        app_aux_upload(tr[k], &all[k]->tp, &all[k]->td, NULL);
-        cv_free_vec(all[k]->p); cv_free_vec(all[k]->d); cv_free_vec(all[k]->tp); cv_free_vec(all[k]->td);
+        cv_render_inst(which[k], all[k]->in.a, (uint32_t)(all[k]->in.n / CV_INST_FLOATS));
+        cv_free_vec(all[k]->in);
     }
 }

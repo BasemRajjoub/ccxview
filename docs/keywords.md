@@ -49,7 +49,10 @@ step. Their base size is 2.5 % of the model's diagonal, the same on a coarse and
 a fine mesh, or a size in model units set by hand (View > Symbol sizes: auto
 size, thickness; `--opt sym_auto=0 --opt sym_size=5 --opt sym_thick=2`). Heads
 and supports are solid cones and every stroke a thin tube, so a symbol reads
-from any side; a deck with more than 40000 of them falls back to plain lines. `samples/symbols/` holds a deck with one small part per symbol
+from any side. They are drawn by GPU instancing (one stored body, 15 numbers per
+cone or tube), never thinner than about a pixel, so there is no limit on their
+number worth naming; above 30000 bodies of one colour the body has six sides
+instead of twelve. Vector arrows (Layers > Vectors) are drawn the same way. `samples/symbols/` holds a deck with one small part per symbol
 (`scripts/gen_symbols.py`): open `symbols.frd` and step through it.
 
 ## Results in local systems

@@ -121,46 +121,90 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
 #define GLSL_HDR "#version 410\n"
 #endif
 
+/* what both vertex shaders share: the uniforms and outputs, and from the deformed
+   model-space point p to the clip position */
+/* u_p: x deform scale, y point size (symbols: the least radius in pixels), z on top, w pull.
+   u_q: x P[1][1] * viewport height (px -> view units), y scale of the second displacement,
+        z proj[10], w proj[11] (-1 perspective, 0 parallel).
+   v_r: a point's sphere radius in view units. v_wpos: the deformed model-space position,
+        for the clip plane. */
+#define VS_UNIFORMS \
+    "uniform mat4 u_mvp;\n" \
+    "uniform mat4 u_mv;\n" \
+    "uniform vec4 u_p;\n" \
+    "uniform vec4 u_q;\n" \
+    "out vec3 v_vpos;\n" \
+    "out float v_s;\n" \
+    "out float v_r;\n" \
+    "out vec3 v_wpos;\n"
+/* From the deformed point p to the clip position.
+   "On top": depth squeezed into the front 2% of the range, so these points pass in
+   front of the faces yet still hide one another near-to-far.
+   Pull: edges lie ON faces, so they are moved toward the eye by u_p.w view units to
+   win against them. In view space, not in clip depth: a clip-depth pull is a
+   different distance at every depth and, with the eye close (near plane far in front
+   of the model), reaches from the back wall through the front one. Never past the
+   eye: a vertex nearer than the pull would come out behind it (w < 0) and its
+   triangle would cover the screen; at most half its distance, none behind the eye. */
+#define VS_TAIL \
+    "  gl_Position = u_mvp * vec4(p, 1.0);\n" \
+    "  if (u_p.z > 0.5) gl_Position.z = -gl_Position.w + (gl_Position.z + gl_Position.w) * 0.02;\n" \
+    "  if (u_q.w != 0.0) {\n"                /* perspective: w = -z_view */ \
+    "    float pl = min(u_p.w, 0.5 * max(gl_Position.w, 0.0));\n" \
+    "    float w2 = gl_Position.w - pl;\n" \
+    "    if (gl_Position.w > 0.0) gl_Position.xy *= w2 / gl_Position.w;\n"    /* same screen point */ \
+    "    gl_Position.z += u_q.z * pl;\n" \
+    "    gl_Position.w = w2;\n" \
+    "  } else gl_Position.z += u_q.z * u_p.w;\n" \
+    "  v_r = u_p.y * gl_Position.w / max(u_q.x, 1e-6);\n" \
+    "  v_vpos = (u_mv * vec4(p, 1.0)).xyz;\n" \
+    "  v_wpos = p;\n" \
+    "  gl_PointSize = u_p.y;\n" \
+    ""
+
 static const char* kVS =
     GLSL_HDR
-    "uniform mat4 u_mvp;\n"
-    "uniform mat4 u_mv;\n"
-    "uniform vec4 u_p;\n"                    /* x: deform scale, y: point size, z: on top, w: pull */
-    "uniform vec4 u_q;\n"                    /* x: P[1][1] * viewport height (px -> view units), y: scale of a_disp2,
-                                                z: proj[10], w: proj[11] (-1 perspective, 0 ortho) */
+    VS_UNIFORMS
     "in vec3 a_pos;\n"
     "in vec3 a_disp;\n"
     "in float a_scal;\n"
     "in vec3 a_disp2;\n"
-    "out vec3 v_vpos;\n"
-    "out float v_s;\n"
-    "out float v_r;\n"                       /* point: sphere radius in view units */
-    "out vec3 v_wpos;\n"                     /* deformed model-space position, for the clip plane */
     "void main() {\n"
     "  vec3 p = a_pos + a_disp * u_p.x + a_disp2 * u_q.y;\n"
-    "  gl_Position = u_mvp * vec4(p, 1.0);\n"
-    /* "on top": squeeze depth into the front 2% of the range, so these points
-       pass in front of the faces yet still hide one another near-to-far */
-    "  if (u_p.z > 0.5) gl_Position.z = -gl_Position.w + (gl_Position.z + gl_Position.w) * 0.02;\n"
-    /* edges lie ON faces: pulled toward the eye by u_p.w view units so they win
-       against them. In view space, not in clip depth: a clip-depth pull is a
-       different distance at every depth and, with the eye close (near plane far
-       in front of the model), reaches from the back wall through the front one. */
-    "  if (u_q.w != 0.0) {\n"                /* perspective: w = -z_view */
-    /* never past the eye: a vertex nearer than the pull would come out behind it
-       (w < 0) and its triangle would cover the screen. In front of the eye at most
-       half its distance; behind the eye (to be clipped) not at all. */
-    "    float pl = min(u_p.w, 0.5 * max(gl_Position.w, 0.0));\n"
-    "    float w2 = gl_Position.w - pl;\n"
-    "    if (gl_Position.w > 0.0) gl_Position.xy *= w2 / gl_Position.w;\n"    /* same screen point */
-    "    gl_Position.z += u_q.z * pl;\n"
-    "    gl_Position.w = w2;\n"
-    "  } else gl_Position.z += u_q.z * u_p.w;\n"
-    "  v_r = u_p.y * gl_Position.w / max(u_q.x, 1e-6);\n"
-    "  v_vpos = (u_mv * vec4(p, 1.0)).xyz;\n"
     "  v_s = a_scal;\n"
-    "  v_wpos = p;\n"
-    "  gl_PointSize = u_p.y;\n"
+    VS_TAIL
+    "}\n";
+
+/* The instanced symbol body: a_m is a vertex of the unit body (cos, sin round the
+   axis, t along it: 0 at a, 1 at b; cos = sin = 0 for the middle of an end disc);
+   the instance gives the two ends, their radii and how the body moves. The radius
+   is at least u_p.y pixels where it is not 0 (a cone keeps its tip). */
+static const char* kVSI =
+    GLSL_HDR
+    VS_UNIFORMS
+    "in vec3 a_m;\n"
+    "in vec3 i_a;\n"
+    "in vec3 i_b;\n"
+    "in vec3 i_r;\n"                          /* radius at a, at b, scalar */
+    "in vec3 i_disp;\n"
+    "in vec3 i_disp2;\n"
+    "void main() {\n"
+    "  vec3 mv = i_disp * u_p.x + i_disp2 * u_q.y;\n"
+    "  vec3 A = i_a + mv, B = i_b + mv, ax = B - A;\n"
+    "  float L = length(ax);\n"
+    "  vec3 w = L > 0.0 ? ax / L : vec3(0.0, 0.0, 1.0);\n"
+    "  vec3 aw = abs(w);\n"
+    "  vec3 up = aw.x <= aw.y ? (aw.x <= aw.z ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0))\n"
+    "                         : (aw.y <= aw.z ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0));\n"
+    "  vec3 u = normalize(cross(w, up));\n"
+    "  vec3 v = cross(w, u);\n"
+    "  vec3 c = mix(A, B, a_m.z);\n"
+    "  float r = mix(i_r.x, i_r.y, a_m.z);\n"
+    "  float wc = (u_mvp * vec4(c, 1.0)).w;\n"                       /* 1 in a parallel projection */
+    "  if (r > 0.0 && wc > 0.0) r = max(r, u_p.y * 2.0 * wc / max(u_q.x, 1e-6));\n"
+    "  vec3 p = c + r * (a_m.x * u + a_m.y * v);\n"
+    "  v_s = i_r.z;\n"
+    VS_TAIL
     "}\n";
 
 static const char* kFS =
@@ -236,6 +280,9 @@ static struct {
     sg_shader   shd, shd_prim, shd_pt;
     sg_pipeline pip_tri, pip_tri_prim, pip_line, pip_pt;
     sg_pipeline pip_tri_ni, pip_line_ni, pip_pt_ni;   /* non-indexed: the aux vertex sets */
+    sg_shader   shd_inst;
+    sg_pipeline pip_inst;             /* the instanced symbol bodies */
+    sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
     sg_image    etex_img;  sg_view etex_view;
     sg_buffer   ib_grp;               /* skin triangles ordered by group */
@@ -304,15 +351,13 @@ void cv_render_colormap(int cm, bool reverse, bool grey) {
     R.cmap_view = sg_make_view(&(sg_view_desc){ .texture.image = R.cmap_img });
 }
 
-static sg_shader make_shader(const char* fs_src) {
+static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, const char* fs_src) {
     return sg_make_shader(&(sg_shader_desc){
-        .vertex_func.source = kVS,
+        .vertex_func.source = vs_src,
         .fragment_func.source = fs_src,
         .attrs = {
-            [0] = { .glsl_name = "a_pos" },
-            [1] = { .glsl_name = "a_disp" },
-            [2] = { .glsl_name = "a_scal" },
-            [3] = { .glsl_name = "a_disp2" },
+            [0] = { .glsl_name = attr[0] }, [1] = { .glsl_name = attr[1] }, [2] = { .glsl_name = attr[2] },
+            [3] = { .glsl_name = attr[3] }, [4] = { .glsl_name = attr[4] }, [5] = { .glsl_name = attr[5] },
         },
         .uniform_blocks[0] = {
             .stage = SG_SHADERSTAGE_VERTEX, .size = sizeof(vs_params),
@@ -349,6 +394,28 @@ static sg_shader make_shader(const char* fs_src) {
         },
         .label = "ccxview",
     });
+}
+
+static sg_shader make_shader(const char* fs_src) {
+    static const char* const attr[6] = { "a_pos", "a_disp", "a_scal", "a_disp2", NULL, NULL };
+    return make_shader_vs(kVS, attr, fs_src);
+}
+
+/* the unit body of the instanced symbols as plain triangles: n sides, an end disc
+   at a, and one at b when cap_b. Returns the vertex count. */
+static int unit_body(float* v, int n, bool cap_b) {
+    int k = 0;
+#define MV(c, s_, t) (v[k++] = (c), v[k++] = (s_), v[k++] = (t))
+    for (int i = 0; i < n; i++) {
+        float t0 = 6.2831853f * i / n, t1 = 6.2831853f * (i + 1) / n;
+        float c0 = cosf(t0), s0 = sinf(t0), c1 = cosf(t1), s1 = sinf(t1);
+        MV(c0, s0, 0); MV(c1, s1, 0); MV(c1, s1, 1);
+        MV(c0, s0, 0); MV(c1, s1, 1); MV(c0, s0, 1);
+        MV(0, 0, 0); MV(c1, s1, 0); MV(c0, s0, 0);
+        if (cap_b) { MV(0, 0, 1); MV(c0, s0, 1); MV(c1, s1, 1); }
+    }
+#undef MV
+    return k / 3;
 }
 
 void cv_render_init(void) {
@@ -409,6 +476,35 @@ void cv_render_init(void) {
     R.pip_line_ni = sg_make_pipeline(&pd);
     pd.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
     R.pip_tri_ni = sg_make_pipeline(&pd);
+
+    {   /* instanced symbols: the unit body per vertex, 15 floats per instance */
+        static const char* const attr[6] = { "a_m", "i_a", "i_b", "i_r", "i_disp", "i_disp2" };
+        R.shd_inst = make_shader_vs(kVSI, attr, kFS);
+        sg_pipeline_desc pi = {
+            .shader = R.shd_inst,
+            .layout = {
+                .buffers = { [0] = { .stride = 12 },
+                             [1] = { .stride = CV_INST_FLOATS * 4, .step_func = SG_VERTEXSTEP_PER_INSTANCE } },
+                .attrs = {
+                    [0] = { .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [1] = { .buffer_index = 1, .offset = 0,  .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [2] = { .buffer_index = 1, .offset = 12, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [3] = { .buffer_index = 1, .offset = 24, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [4] = { .buffer_index = 1, .offset = 36, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [5] = { .buffer_index = 1, .offset = 48, .format = SG_VERTEXFORMAT_FLOAT3 },
+                },
+            },
+            .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+            .index_type = SG_INDEXTYPE_NONE,
+            .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
+        };
+        R.pip_inst = sg_make_pipeline(&pi);
+        float v[12 * 12 * 3];
+        R.body_n[0] = unit_body(v, 12, true);
+        R.body[0] = make_buf(v, (size_t)R.body_n[0] * 12, false);
+        R.body_n[1] = unit_body(v, 6, false);
+        R.body[1] = make_buf(v, (size_t)R.body_n[1] * 12, false);
+    }
 
     R.smp_lin = sg_make_sampler(&(sg_sampler_desc){
         .min_filter = SG_FILTER_LINEAR, .mag_filter = SG_FILTER_LINEAR,
@@ -489,6 +585,29 @@ typedef struct { sg_buffer pos, disp, scal, disp2; } vset;
    depth buffer's step with the eye close to the model, far below any wall thickness */
 #define PULL 3e-4f
 
+static void uniforms(const cv_draw* d, bool has_disp, bool has_disp2, int mode, const float rgb[3], bool shade,
+                     float point_size, bool on_top, float pull) {
+    vs_params vs;
+    memcpy(vs.mvp, d->mvp, sizeof vs.mvp);
+    memcpy(vs.mv, d->mv, sizeof vs.mv);
+    vs.p[0] = has_disp ? d->def_scale : 0.f;
+    vs.p[1] = point_size;
+    vs.p[2] = on_top ? 1.f : 0.f;
+    vs.p[3] = pull * d->diag;
+    vs.q[0] = d->proj[5] * (float)d->vp_h;      /* pixels -> view units for the ball radius */
+    vs.q[1] = has_disp2 ? d->def_scale2 : 0.f;
+    vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
+    sg_apply_uniforms(0, &SG_RANGE(vs));
+    fs_params fs = {
+        .color = { rgb[0], rgb[1], rgb[2], 1 },
+        .rng = { d->rmin, d->rmax, (float)d->bands, (float)mode },
+        .flags = { d->grey_out_of_range ? 1.f : 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, 0 },
+        .pz = { d->proj[10], d->proj[14], d->proj[11], d->proj[15] },
+        .clip = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 1e30f },
+    };
+    sg_apply_uniforms(1, &SG_RANGE(fs));
+}
+
 static void draw_layer(sg_pipeline pip, vset v, sg_buffer ib, int count, int mode, const float rgb[3],
                        bool shade, const cv_draw* d, float point_size, bool on_top, float pull, int first) {
     if (!v.pos.id || count <= 0) return;      /* ib is {0} for the non-indexed pipelines */
@@ -507,25 +626,7 @@ static void draw_layer(sg_pipeline pip, vset v, sg_buffer ib, int count, int mod
         .samplers = { [0] = R.smp_lin, [1] = R.smp_near },
     };
     sg_apply_bindings(&b);
-    vs_params vs;
-    memcpy(vs.mvp, d->mvp, sizeof vs.mvp);
-    memcpy(vs.mv, d->mv, sizeof vs.mv);
-    vs.p[0] = v.disp.id ? d->def_scale : 0.f;
-    vs.p[1] = point_size;
-    vs.p[2] = on_top ? 1.f : 0.f;
-    vs.p[3] = pull * d->diag;
-    vs.q[0] = d->proj[5] * (float)d->vp_h;      /* pixels -> view units for the ball radius */
-    vs.q[1] = v.disp2.id ? d->def_scale2 : 0.f;
-    vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
-    sg_apply_uniforms(0, &SG_RANGE(vs));
-    fs_params fs = {
-        .color = { rgb[0], rgb[1], rgb[2], 1 },
-        .rng = { d->rmin, d->rmax, (float)d->bands, (float)mode },
-        .flags = { d->grey_out_of_range ? 1.f : 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, 0 },
-        .pz = { d->proj[10], d->proj[14], d->proj[11], d->proj[15] },
-        .clip = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 1e30f },
-    };
-    sg_apply_uniforms(1, &SG_RANGE(fs));
+    uniforms(d, v.disp.id != 0, v.disp2.id != 0, mode, rgb, shade, point_size, on_top, pull);
     sg_draw(first, count, 1);
 }
 
@@ -548,6 +649,32 @@ void cv_render_aux2(int which, const float* pos, const float* disp, const float*
     A[which].v.disp2 = make_buf(disp2, (size_t)n * 12, false);
     A[which].v.scal = make_buf(scal, (size_t)n * 4, false);
     A[which].n = A[which].v.pos.id ? n : 0;
+}
+
+static struct { sg_buffer buf; uint32_t n; } I[CV_INST_N];
+
+void cv_render_inst(int which, const float* inst, uint32_t n) {
+    if (which < 0 || which >= CV_INST_N) return;
+    kill_buf(&I[which].buf);
+    I[which].n = 0;
+    if (!inst || n == 0) return;
+    I[which].buf = make_buf(inst, (size_t)n * CV_INST_FLOATS * 4, false);
+    I[which].n = I[which].buf.id ? n : 0;
+}
+
+/* a layer of symbols, lit; min_px: the least radius on screen */
+static void draw_inst(int which, int mode, const float rgb[3], const cv_draw* d, float min_px) {
+    if (!I[which].n) return;
+    int lod = I[which].n > 30000 ? 1 : 0;       /* great numbers: six sides, one end disc */
+    sg_apply_pipeline(R.pip_inst);
+    sg_bindings b = {
+        .vertex_buffers = { [0] = R.body[lod], [1] = I[which].buf },
+        .views = { [0] = R.cmap_view, [1] = R.etex_view },
+        .samplers = { [0] = R.smp_lin, [1] = R.smp_near },
+    };
+    sg_apply_bindings(&b);
+    uniforms(d, true, true, mode, rgb, true, min_px, false, 0.f);
+    sg_draw(0, R.body_n[lod], (int)I[which].n);
 }
 
 void cv_render_draw(const cv_draw* d) {
@@ -634,36 +761,18 @@ void cv_render_draw(const cv_draw* d) {
         static const float bc_rgb[3] = { 0.15f, 0.85f, 0.85f }, ld_rgb[3] = { 1.0f, 0.78f, 0.10f },
                            mom_rgb[3] = { 1.0f, 0.35f, 0.85f }, heat_rgb[3] = { 1.0f, 0.32f, 0.18f };
         /* forces and pressures yellow, moments magenta, heat red */
-        const struct { int ln, tri; bool on; const float* rgb; } sym[4] = {
-            { CV_AUX_BCLN, CV_AUX_BCTRI, d->supports, bc_rgb }, { CV_AUX_LDLN, CV_AUX_LDTRI, d->loads, ld_rgb },
-            { CV_AUX_MOMLN, CV_AUX_MOMTRI, d->loads, mom_rgb }, { CV_AUX_HEATLN, CV_AUX_HEATTRI, d->loads, heat_rgb },
-        };
-        for (int k = 0; k < 4; k++) {
-            if (!sym[k].on) continue;
-            if (A[sym[k].ln].n)
-                draw_layer(R.pip_line_ni, A[sym[k].ln].v, NO_IB, (int)A[sym[k].ln].n,
-                           CV_COLOR_SOLID, sym[k].rgb, false, d, 1, false, 4 * PULL, 0);
-            if (A[sym[k].tri].n)                  /* solid heads, cones and thick strokes, lit */
-                draw_layer(R.pip_tri_ni, A[sym[k].tri].v, NO_IB, (int)A[sym[k].tri].n,
-                           CV_COLOR_SOLID, sym[k].rgb, true, d, 1, false, 0.f, 0);     /* bodies of their own: true depth */
+        static const float link_rgb[3] = { 0.55f, 0.95f, 0.45f }, disc_rgb[3] = { 0.80f, 0.45f, 0.95f },
+                           vec_rgb[3] = { 0.95f, 0.95f, 0.95f };
+        const float px = 0.6f;                    /* the least radius of a stroke on screen */
+        if (d->supports) draw_inst(CV_INST_BC, CV_COLOR_SOLID, bc_rgb, d, px);
+        if (d->loads) {
+            draw_inst(CV_INST_LD, CV_COLOR_SOLID, ld_rgb, d, px);
+            draw_inst(CV_INST_MOM, CV_COLOR_SOLID, mom_rgb, d, px);
+            draw_inst(CV_INST_HEAT, CV_COLOR_SOLID, heat_rgb, d, px);
         }
-        static const float vec_rgb[3] = { 0.95f, 0.95f, 0.95f };
-        if (d->vectors && A[CV_AUX_VECLN].n)
-            draw_layer(R.pip_line_ni, A[CV_AUX_VECLN].v, NO_IB, (int)A[CV_AUX_VECLN].n,
-                       d->vectors_color, vec_rgb, false, d, 1, false, 4 * PULL, 0);
-        static const float link_rgb[3] = { 0.55f, 0.95f, 0.45f }, disc_rgb[3] = { 0.80f, 0.45f, 0.95f };
-        const struct { int ln, tri; bool on; const float* rgb; } more[2] = {
-            { CV_AUX_LINKLN, CV_AUX_LINKTRI, d->links, link_rgb }, { CV_AUX_DISCLN, CV_AUX_DISCTRI, d->discrete, disc_rgb },
-        };
-        for (int k = 0; k < 2; k++) {
-            if (!more[k].on) continue;
-            if (A[more[k].ln].n)
-                draw_layer(R.pip_line_ni, A[more[k].ln].v, NO_IB, (int)A[more[k].ln].n,
-                           CV_COLOR_SOLID, more[k].rgb, false, d, 1, false, 4 * PULL, 0);
-            if (A[more[k].tri].n)
-                draw_layer(R.pip_tri_ni, A[more[k].tri].v, NO_IB, (int)A[more[k].tri].n,
-                           CV_COLOR_SOLID, more[k].rgb, true, d, 1, false, 0.f, 0);
-        }
+        if (d->vectors) draw_inst(CV_INST_VEC, d->vectors_color, vec_rgb, d, px);
+        if (d->links) draw_inst(CV_INST_LINK, CV_COLOR_SOLID, link_rgb, d, px);
+        if (d->discrete) draw_inst(CV_INST_DISC, CV_COLOR_SOLID, disc_rgb, d, px);
     }
     {
         /* cgx geometry: surfaces as patches, curves pulled onto them, points as balls */
@@ -682,5 +791,6 @@ void cv_render_draw(const cv_draw* d) {
 }
 
 static void clear_aux(void) {
+    for (int i = 0; i < CV_INST_N; i++) cv_render_inst(i, NULL, 0);
     for (int i = 0; i < CV_AUX_N; i++) cv_render_aux(i, NULL, NULL, NULL, 0);
 }

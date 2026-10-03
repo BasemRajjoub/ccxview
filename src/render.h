@@ -81,14 +81,22 @@ void cv_render_colormap(int cmap, bool reverse, bool grey);
 /* Gauss points, set highlights, cgx geometry (points, curve segments as vertex
    pairs, surface triangles) */
 enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_GEOTRI,
-       CV_AUX_BCLN, CV_AUX_LDLN, CV_AUX_MOMLN, CV_AUX_HEATLN,
-       CV_AUX_BCTRI, CV_AUX_LDTRI, CV_AUX_MOMTRI, CV_AUX_HEATTRI,     /* the same four as solid symbols (triangles) */
-       CV_AUX_DISCTRI, CV_AUX_LINKTRI,                                /* DISCLN and LINKLN as tubes */
-       CV_AUX_DISCLN, CV_AUX_LINKLN, CV_AUX_VECLN, CV_AUX_MARK, CV_AUX_PATHLN, CV_AUX_RAYLN, CV_AUX_PICKPT, CV_AUX_ELEMTRI, CV_AUX_CAPTRI, CV_AUX_N };   /* BCLN: support glyphs, LDLN: load arrows, MOMLN: moments, HEATLN: thermal loads,
-                                                             DISCLN: springs / dashpots / masses (line pairs) */
+       CV_AUX_MARK, CV_AUX_PATHLN, CV_AUX_RAYLN, CV_AUX_PICKPT, CV_AUX_ELEMTRI, CV_AUX_CAPTRI, CV_AUX_N };
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n);
 /* the same with the second displacement part (harmonic: -DISPI, scaled by def_scale2) */
 void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n);
+
+/* Symbols: supports, loads, springs, links and vector arrows. Each is made of round
+   bodies between two points, a radius at either end: a tube (equal radii), a cone
+   (one of them 0), a plate (a short tube). One such body is kept on the GPU and
+   drawn once per instance, so a symbol costs 15 numbers whatever its shape:
+     a[3], b[3], radius at a, radius at b, scalar (colour, when the layer is coloured
+     by the field), disp[3], disp2[3] (how the whole body moves with the shape).
+   A body is never drawn thinner than about a pixel, so symbols stay visible from far
+   away and a radius of nearly 0 gives a line of constant width. NULL / 0 clears. */
+enum { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_DISC, CV_INST_LINK, CV_INST_VEC, CV_INST_N };
+#define CV_INST_FLOATS 15
+void cv_render_inst(int which, const float* inst, uint32_t n);
 
 void cv_render_draw(const cv_draw* d);
 

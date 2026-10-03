@@ -464,15 +464,15 @@ void deck_compare_close(void);
 bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted (tie, contact surfaces) */
 /* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */
 /* d: 6 wide, DISP then -DISPI (app_node_disp6); disp gets 6 per vertex, uploaded with app_aux_upload */
-void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir[3], float len, const float d[6], bool twin);
 void deck_seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const float* d);   /* one line, both ends moving by d */
 /* where a deck node is drawn and how it moves; false when it is not shown */
 bool deck_node_pd(uint32_t id, float p[3], float d[6]);
 uint32_t deck_elem(const cv_frd* f, uint32_t id);    /* the shown element of a deck element id, UINT32_MAX if none */
 void app_symbol_size(void);          /* G.sym_len from the model or the hand-set size; redraws the symbols */
-/* the lines of pos / disp (deck_seg pairs) uploaded as tubes of radius r to layer `which`; none when r <= 0
-   or there are too many */
-void deck_tubes_upload(int which, const cv_fvec* pos, const cv_fvec* disp, float r);
+/* a symbol body (render.h, cv_render_inst) appended to v: from a to b, a radius at either end */
+void deck_inst(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal, const float d[6]);
+/* the lines of pos / disp (deck_seg pairs) as tubes of radius r, uploaded to instance layer `which` */
+void deck_lines_inst(int which, const cv_fvec* pos, const cv_fvec* disp, float r);
 float deck_stroke(void);             /* the radius of a symbol's stroke: G.sym_len and G.sym_thick */
 void loads_refresh(void);            /* app_loads.c: the support and load glyphs of the step on screen */
 void app_node_disp6(uint32_t node, float d[6]);

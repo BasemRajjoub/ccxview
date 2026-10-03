@@ -18,9 +18,17 @@ bool app_field_is_vector(void) {
     return d->ncomp == 3 || (G.comp <= CV_COMP_P1 && G.comp >= CV_COMP_P3_XZ && cv_tensor_order(d));
 }
 
+/* an arrow len long arriving at tip along dir: a tube and a cone, coloured by sv */
+static void vec_arrow(cv_fvec* in, const float tip[3], const float dir[3], float len, float sv, const float d[6]) {
+    float t[3], b[3];
+    for (int k = 0; k < 3; k++) { t[k] = tip[k] - dir[k] * len; b[k] = tip[k] - dir[k] * 0.3f * len; }
+    deck_inst(in, t, b, 0.03f * len, 0.03f * len, sv, d);
+    deck_inst(in, b, tip, 0.11f * len, 0, sv, d);
+}
+
 /* a principal value as a pair of arrows through the node along its direction:
    pointing out for tension, in for compression (the usual stress-cross picture) */
-static void principal_arrows(const float* v, const uint32_t* ids, size_t n, size_t stride, cv_fvec* pos, cv_fvec* disp, cv_fvec* scal) {
+static void principal_arrows(const float* v, const uint32_t* ids, size_t n, size_t stride, cv_fvec* in) {
     bool xz = G.comp <= CV_COMP_P1_XZ;
     int k = (xz ? CV_COMP_P1_XZ : CV_COMP_P1) - G.comp;
     float peak = 0;
@@ -39,34 +47,32 @@ static void principal_arrows(const float* v, const uint32_t* ids, size_t n, size
         const float* p = G.frd.xyz + 3 * (size_t)i;
         float d[6];
         app_node_disp6(i, d);
-        size_t before = pos->n;
         for (int sgn = -1; sgn <= 1; sgn += 2) {
             float dir[3] = { vec[k][0] * sgn, vec[k][1] * sgn, vec[k][2] * sgn };
             if (val[k] >= 0) {
                 float tip[3] = { p[0] + dir[0] * h, p[1] + dir[1] * h, p[2] + dir[2] * h };
-                deck_arrow(pos, disp, tip, dir, h, d, false);
+                vec_arrow(in, tip, dir, h, G.scalar[i], d);
             } else {                                    /* head at the node, shaft outside */
-                float in[3] = { -dir[0], -dir[1], -dir[2] };
-                deck_arrow(pos, disp, p, in, h, d, false);
+                float back[3] = { -dir[0], -dir[1], -dir[2] };
+                vec_arrow(in, p, back, h, G.scalar[i], d);
             }
         }
-        for (size_t q = before; q < pos->n; q += 3) cv_push(*scal, G.scalar[i]);
     }
 }
 
 void refresh_vectors(void) {
-    if (!G.show_vec || !app_field_is_vector() || !G.has_field) { cv_render_aux(CV_AUX_VECLN, NULL, NULL, NULL, 0); return; }
+    if (!G.show_vec || !app_field_is_vector() || !G.has_field) { cv_render_inst(CV_INST_VEC, NULL, 0); return; }
     int fi = find_field(G.step, G.field_name);
     const float* v = cache_get(G.step, fi);
-    if (!v) { cv_render_aux(CV_AUX_VECLN, NULL, NULL, NULL, 0); return; }
+    if (!v) { cv_render_inst(CV_INST_VEC, NULL, 0); return; }
     const uint32_t* ids = G.skin.n_pt ? G.skin.pt : NULL;
     size_t n = ids ? G.skin.n_pt : G.frd.n_nodes;
     size_t stride = n / 200000 + 1;                     /* huge models: a sample */
     if (G.frd.steps[G.step].fields[fi].ncomp == 6) {
-        cv_fvec pos = {0}, disp = {0}, scal = {0};
-        if (G.scalar) principal_arrows(v, ids, n, stride, &pos, &disp, &scal);
-        app_aux_upload(CV_AUX_VECLN, &pos, &disp, scal.a);
-        cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(scal);
+        cv_fvec in = {0};
+        if (G.scalar) principal_arrows(v, ids, n, stride, &in);
+        cv_render_inst(CV_INST_VEC, in.a, (uint32_t)(in.n / CV_INST_FLOATS));
+        cv_free_vec(in);
         return;
     }
     float peak = 0;
@@ -75,7 +81,7 @@ void refresh_vectors(void) {
         float m = sqrtf(v[3 * i] * v[3 * i] + v[3 * i + 1] * v[3 * i + 1] + v[3 * i + 2] * v[3 * i + 2]);
         if (m == m && m > peak) peak = m;
     }
-    cv_fvec pos = {0}, disp = {0}, scal = {0};
+    cv_fvec in = {0};
     float L = CV_MAX(G.vec_pct, 0.1f) * 0.01f * G.diag;
     for (size_t j = 0; peak > 0 && j < n; j += stride) {
         uint32_t i = ids ? ids[j] : (uint32_t)j;
@@ -87,13 +93,10 @@ void refresh_vectors(void) {
         float tip[3] = { p[0] + dir[0] * len, p[1] + dir[1] * len, p[2] + dir[2] * len };
         float d[6];
         app_node_disp6(i, d);
-        size_t before = pos.n;
-        deck_arrow(&pos, &disp, tip, dir, len, d, false);
-        float sv = G.scalar ? G.scalar[i] : NAN;
-        for (size_t k = before; k < pos.n; k += 3) cv_push(scal, sv);
+        vec_arrow(&in, tip, dir, len, G.scalar ? G.scalar[i] : NAN, d);
     }
-    app_aux_upload(CV_AUX_VECLN, &pos, &disp, scal.a);
-    cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(scal);
+    cv_render_inst(CV_INST_VEC, in.a, (uint32_t)(in.n / CV_INST_FLOATS));
+    cv_free_vec(in);
 }
 
 void app_vectors_changed(void) { refresh_vectors(); }
