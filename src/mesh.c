@@ -199,25 +199,75 @@ typedef struct {
     CV_VEC(uint32_t) faces;      /* element << 3 | local face */
 } emit_t;
 
-static bool emit_face(emit_t* o, const cv_frd* f, uint32_t e, const face_t* fc, int local) {
+/* The mid-side node of a quadratic element between its corners a and b (local,
+   0-based, in the .frd order of the connectivity: for a hex and a wedge the mid nodes
+   of the bottom face, then of the upright edges, then of the top face), -1 for a
+   linear element. */
+static int mid_of(int type, int a, int b) {
+    static const int8_t hex[12][3] = { {0,1,8}, {1,2,9}, {2,3,10}, {3,0,11}, {0,4,12}, {1,5,13}, {2,6,14}, {3,7,15},
+                                       {4,5,16}, {5,6,17}, {6,7,18}, {7,4,19} };
+    static const int8_t wed[9][3] = { {0,1,6}, {1,2,7}, {2,0,8}, {0,3,9}, {1,4,10}, {2,5,11}, {3,4,12}, {4,5,13}, {5,3,14} };
+    static const int8_t tet[6][3] = { {0,1,4}, {1,2,5}, {2,0,6}, {0,3,7}, {1,3,8}, {2,3,9} };
+    static const int8_t tri[3][3] = { {0,1,3}, {1,2,4}, {2,0,5} };
+    static const int8_t qua[4][3] = { {0,1,4}, {1,2,5}, {2,3,6}, {3,0,7} };
+    const int8_t (*t)[3]; int n;
+    switch (type) {
+        case 4:  t = hex; n = 12; break;
+        case 5:  t = wed; n = 9; break;
+        case 6:  t = tet; n = 6; break;
+        case 8:  t = tri; n = 3; break;
+        case 10: t = qua; n = 4; break;
+        default: return -1;
+    }
+    for (int i = 0; i < n; i++) if ((t[i][0] == a && t[i][1] == b) || (t[i][0] == b && t[i][1] == a)) return t[i][2];
+    return -1;
+}
+
+/* the mid-side nodes of a face of element e (dense indices), false for a linear element */
+static bool face_mids(const cv_frd* f, uint32_t e, const face_t* fc, uint32_t m[4]) {
+    const uint32_t* cn = f->conn + f->eoff[e];
+    uint32_t nn = f->eoff[e + 1] - f->eoff[e];
+    for (int i = 0; i < fc->n; i++) {
+        int k = mid_of(f->etype[e], fc->v[i], fc->v[(i + 1) % fc->n]);
+        if (k < 0 || (uint32_t)k >= nn) return false;
+        m[i] = cn[k];
+    }
+    return true;
+}
+
+static void put_tri(emit_t* o, uint32_t e, uint32_t a, uint32_t b, uint32_t c) {
+    o->tri.a[o->tri.n++] = a; o->tri.a[o->tri.n++] = b; o->tri.a[o->tri.n++] = c;
+    o->tri_elem.a[o->tri_elem.n++] = e;
+}
+static void put_edge(emit_t* o, uint32_t a, uint32_t b) {
+    if (a > b) { uint32_t t = a; a = b; b = t; }
+    o->edges.a[o->edges.n++] = ((uint64_t)a << 32) | b;
+}
+
+/* A face as triangles and its sides as edges. With mid (and a quadratic element)
+   through its mid-side nodes: a corner triangle at every corner and the middle,
+   so the colours and the shape follow every node of the face; else corners only. */
+static bool emit_face(emit_t* o, const cv_frd* f, uint32_t e, const face_t* fc, int local, bool mid) {
     if (!cv_push(o->faces, (e << 3) | (uint32_t)local)) return false;
     const uint32_t* cn = f->conn + f->eoff[e];
-    uint32_t v[4];
-    for (int i = 0; i < fc->n; i++) v[i] = cn[fc->v[i]];
-    if (!cv_reserve(o->tri, o->tri.n + 6) || !cv_reserve(o->tri_elem, o->tri_elem.n + 2) ||
-        !cv_reserve(o->edges, o->edges.n + 4))
+    uint32_t v[4], m[4];
+    int n = fc->n;
+    for (int i = 0; i < n; i++) v[i] = cn[fc->v[i]];
+    if (!cv_reserve(o->tri, o->tri.n + 18) || !cv_reserve(o->tri_elem, o->tri_elem.n + 6) ||
+        !cv_reserve(o->edges, o->edges.n + 8))
         return false;
-    o->tri.a[o->tri.n++] = v[0]; o->tri.a[o->tri.n++] = v[1]; o->tri.a[o->tri.n++] = v[2];
-    o->tri_elem.a[o->tri_elem.n++] = e;
-    if (fc->n == 4) {
-        o->tri.a[o->tri.n++] = v[0]; o->tri.a[o->tri.n++] = v[2]; o->tri.a[o->tri.n++] = v[3];
-        o->tri_elem.a[o->tri_elem.n++] = e;
+    if (mid && face_mids(f, e, fc, m)) {
+        for (int i = 0; i < n; i++) {
+            put_tri(o, e, v[i], m[i], m[(i + n - 1) % n]);
+            put_edge(o, v[i], m[i]); put_edge(o, m[i], v[(i + 1) % n]);
+        }
+        put_tri(o, e, m[0], m[1], m[2]);
+        if (n == 4) put_tri(o, e, m[0], m[2], m[3]);
+        return true;
     }
-    for (int i = 0; i < fc->n; i++) {
-        uint32_t a = v[i], b = v[(i + 1) % fc->n];
-        if (a > b) { uint32_t t = a; a = b; b = t; }
-        o->edges.a[o->edges.n++] = ((uint64_t)a << 32) | b;
-    }
+    put_tri(o, e, v[0], v[1], v[2]);
+    if (n == 4) put_tri(o, e, v[0], v[2], v[3]);
+    for (int i = 0; i < n; i++) put_edge(o, v[i], v[(i + 1) % n]);
     return true;
 }
 
@@ -279,13 +329,14 @@ static int skin_face(const cv_frd* f, uint32_t code, uint32_t v[4], bool* shell)
 typedef struct {
     uint64_t key;        /* a << 32 | b with a < b; 0 = empty (a == b is never stored) */
     uint32_t face;       /* index into the skin's face list of its first face; UINT32_MAX: a beam */
+    uint32_t mid;        /* its mid-side node when the faces are drawn through them, else UINT32_MAX */
     uint8_t  count;      /* faces on it, saturating at 3 */
     uint8_t  feat;
 } fe_slot;
 
 /* The two faces' normals are compared only when the second one arrives, so a
    slot keeps the first face's index, not its normal: 16 bytes per edge. */
-static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg) {
+static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg, bool mid) {
     size_t cap = 16;
     while (cap < 2 * s->n_edge + 2) cap *= 2;
     fe_slot* h = calloc(cap, sizeof *h);
@@ -299,6 +350,12 @@ static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
         int n = skin_face(f, code, v, &shell);
         float nm[3];
         bool have_nm = false;
+        uint32_t mids[4] = { UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX };
+        if (mid) {
+            const face_t* ft; bool solid;
+            faces_of(f->etype[e], &ft, &solid);
+            if (!face_mids(f, e, &ft[code & 7], mids)) mids[0] = mids[1] = mids[2] = mids[3] = UINT32_MAX;
+        }
         for (int i = 0; i < n; i++) {
             uint32_t a = v[i], b = v[(i + 1) % n];
             if (a == b) continue;
@@ -307,7 +364,7 @@ static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
             size_t j = (size_t)((key * 0x9E3779B97F4A7C15ull) >> 20) & (cap - 1);
             while (h[j].key && h[j].key != key) j = (j + 1) & (cap - 1);
             fe_slot* sl = &h[j];
-            if (!sl->key) { sl->key = key; sl->face = (uint32_t)fi; sl->count = 1; continue; }
+            if (!sl->key) { sl->key = key; sl->face = (uint32_t)fi; sl->count = 1; sl->mid = mids[i]; continue; }
             if (sl->count >= 2 || sl->face == UINT32_MAX) { sl->count = 3; sl->feat = 1; continue; }
             sl->count = 2;
             uint32_t code0 = s->face[sl->face], e0 = code0 >> 3, v0[4];
@@ -335,18 +392,21 @@ static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
             uint64_t key = ((uint64_t)a << 32) | b;
             size_t j = (size_t)((key * 0x9E3779B97F4A7C15ull) >> 20) & (cap - 1);
             while (h[j].key && h[j].key != key) j = (j + 1) & (cap - 1);
-            if (!h[j].key) { h[j].key = key; h[j].face = UINT32_MAX; h[j].count = 1; }
+            if (!h[j].key) { h[j].key = key; h[j].face = UINT32_MAX; h[j].count = 1; h[j].mid = UINT32_MAX; }
             h[j].feat = 1;
         }
     }
-    for (size_t j = 0; j < cap; j++) nfeat += h[j].key && (h[j].feat || h[j].count == 1);
+    for (size_t j = 0; j < cap; j++)                /* an edge with a mid node: two pieces */
+        if (h[j].key && (h[j].feat || h[j].count == 1)) nfeat += h[j].mid != UINT32_MAX ? 2 : 1;
     s->fedge = malloc(CV_MAX(nfeat, 1) * 2 * sizeof *s->fedge);
     if (!s->fedge) { free(h); return false; }
     size_t k = 0;
     for (size_t j = 0; j < cap; j++)
         if (h[j].key && (h[j].feat || h[j].count == 1)) {
-            s->fedge[k++] = (uint32_t)(h[j].key >> 32);
-            s->fedge[k++] = (uint32_t)h[j].key;
+            uint32_t a = (uint32_t)(h[j].key >> 32), b = (uint32_t)h[j].key;
+            if (h[j].mid != UINT32_MAX) { s->fedge[k++] = a; s->fedge[k++] = h[j].mid; a = h[j].mid; }
+            s->fedge[k++] = a;
+            s->fedge[k++] = b;
         }
     s->n_fedge = nfeat;
     free(h);
@@ -354,10 +414,13 @@ static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
 }
 
 bool cv_skin_build(cv_skin* s, const cv_frd* f, const uint8_t* vis) {
-    return cv_skin_build_crease(s, f, vis, CV_CREASE_DEG);
+    return cv_skin_build_opt(s, f, vis, CV_CREASE_DEG, true);
+}
+bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg) {
+    return cv_skin_build_opt(s, f, vis, crease_deg, true);
 }
 
-bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg) {
+bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg, bool mid) {
     memset(s, 0, sizeof *s);
     const uint32_t N = f->n_nodes, E = f->n_elems;
     emit_t o = {0};
@@ -373,7 +436,7 @@ bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
         int nf = faces_of(f->etype[e], &ft, &solid);
         for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) used[f->conn[j]] = 1;
         if (!solid) {
-            for (int i = 0; i < nf; i++) if (!emit_face(&o, f, e, &ft[i], i)) goto oom;
+            for (int i = 0; i < nf; i++) if (!emit_face(&o, f, e, &ft[i], i, mid)) goto oom;
             continue;
         }
         for (int i = 0; i < nf; i++) off[face_min(f, e, &ft[i]) + 1]++;
@@ -421,7 +484,7 @@ bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
                     uint32_t code = keys.a[i].code, e = code >> 3;
                     const face_t* ft; bool solid;
                     faces_of(f->etype[e], &ft, &solid);
-                    if (!emit_face(&o, f, e, &ft[code & 7], (int)(code & 7))) {
+                    if (!emit_face(&o, f, e, &ft[code & 7], (int)(code & 7), mid)) {
                         cv_free_vec(keys); cv_free_vec(matched); goto oom;
                     }
                 }
@@ -474,7 +537,7 @@ bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
     s->face = o.faces.a;        s->n_face = o.faces.n;
     cv_free_vec(o.edges);
     free(off); free(faces); free(used);
-    if (!skin_features(s, f, vis, crease_deg)) { cv_skin_free(s); return false; }
+    if (!skin_features(s, f, vis, crease_deg, mid)) { cv_skin_free(s); return false; }
     return true;
 
 oom:

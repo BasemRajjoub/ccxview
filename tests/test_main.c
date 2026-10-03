@@ -1416,6 +1416,7 @@ int main(void) {
     test_path();
     test_anchor();
     test_feature_edges();
+    test_mid_faces();
     test_sta();
     test_fbd();
     test_inp();

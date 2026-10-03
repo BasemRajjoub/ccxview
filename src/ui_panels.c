@@ -180,6 +180,11 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             if (dense) nk_label_colored(ctx, "hidden: zoom in", NK_TEXT_LEFT, P.warn);
             else nk_label(ctx, "", NK_TEXT_LEFT);   /* nk_spacing ending a row opens the next one */
         }
+        if (G.show_faces) {
+            tip(ctx, "Faces of quadratic elements (C3D20, C3D10, S8, ...) drawn through their mid-side nodes:\ncolours and shape follow every node. Off: corners only, a third of the triangles,\nbut a value at a mid node (bending through one shell layer) does not show");
+            if (nk_checkbox_label(ctx, "mid-side nodes", &G.mid_faces)) app_groups_changed();
+            nk_label(ctx, "", NK_TEXT_LEFT);
+        }
         uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Nodes of the visible elements, as small balls");
         nk_checkbox_label(ctx, "Nodes", &G.show_nodes);

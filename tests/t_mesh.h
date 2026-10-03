@@ -134,4 +134,93 @@ static void test_feature_edges(void) {
     cv_skin_free(&s);
 }
 
+/* ---- quadratic faces through their mid-side nodes ---------------------------------- */
+
+static double tm_area(const cv_frd* f, const cv_skin* s) {
+    double a = 0;
+    for (size_t t = 0; t < s->n_tri; t++) {
+        const float *p = f->xyz + 3 * s->tri[3 * t], *q = f->xyz + 3 * s->tri[3 * t + 1], *r = f->xyz + 3 * s->tri[3 * t + 2];
+        double u[3] = { q[0] - p[0], q[1] - p[1], q[2] - p[2] }, v[3] = { r[0] - p[0], r[1] - p[1], r[2] - p[2] };
+        double c[3] = { u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0] };
+        a += 0.5 * sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]);
+    }
+    return a;
+}
+
+/* the skin of f with and without mid-side nodes covers the same area (straight-sided
+   elements), with `per` times the triangles; every triangle has an area */
+static void tm_same_skin(const cv_frd* f, double per) {
+    cv_skin a, b;
+    CHECK(cv_skin_build_opt(&a, f, NULL, CV_CREASE_DEG, false));
+    CHECK(cv_skin_build_opt(&b, f, NULL, CV_CREASE_DEG, true));
+    double aa = tm_area(f, &a), ab = tm_area(f, &b);
+    CHECK(aa > 0);
+    CHECK_NEAR(ab / aa, 1.0, 1e-5);
+    if (per > 0) CHECK_NEAR((double)b.n_tri / (double)a.n_tri, per, 1e-9);
+    CHECK_EQ(a.n_face, b.n_face);
+    cv_skin one = b;
+    for (size_t t = 0; t < b.n_tri; t++) {
+        one.tri = b.tri + 3 * t; one.n_tri = 1;
+        CHECK(tm_area(f, &one) > 1e-9 * aa);
+    }
+    cv_skin_free(&a); cv_skin_free(&b);
+}
+
+static void test_mid_faces(void) {
+    /* one C3D20 in .frd order: corners, the mid nodes of the bottom face, of the
+       upright edges, of the top face */
+    static const float c[8][3] = { {0,0,0}, {2,0,0}, {2,2,0}, {0,2,0}, {0,0,2}, {2,0,2}, {2,2,2}, {0,2,2} };
+    static const int ed[12][2] = { {0,1}, {1,2}, {2,3}, {3,0}, {0,4}, {1,5}, {2,6}, {3,7}, {4,5}, {5,6}, {6,7}, {7,4} };
+    static tm_mesh m;
+    tm_init(&m);
+    uint32_t v[20];
+    for (int i = 0; i < 8; i++) v[i] = tm_node(&m, c[i][0], c[i][1], c[i][2]);
+    for (int i = 0; i < 12; i++)
+        v[8 + i] = tm_node(&m, 0.5f * (c[ed[i][0]][0] + c[ed[i][1]][0]), 0.5f * (c[ed[i][0]][1] + c[ed[i][1]][1]),
+                           0.5f * (c[ed[i][0]][2] + c[ed[i][1]][2]));
+    {   /* tm_mesh holds 8 nodes per element: this one needs room of its own */
+        static uint32_t conn[20], eoff[2] = { 0, 20 };
+        static uint8_t et[1] = { 4 };
+        static uint32_t mat[1] = { 1 };
+        memcpy(conn, v, sizeof conn);
+        m.f.conn = conn; m.f.eoff = eoff; m.f.etype = et; m.f.emat = mat; m.f.n_elems = 1;
+    }
+    cv_skin s;
+    CHECK(cv_skin_build_opt(&s, &m.f, NULL, CV_CREASE_DEG, false));
+    CHECK_EQ(s.n_tri, 12); CHECK_EQ(s.n_edge, 12); CHECK_EQ(s.n_fedge, 12);
+    cv_skin_free(&s);
+    CHECK(cv_skin_build(&s, &m.f, NULL));            /* the default: through the mid nodes */
+    CHECK_EQ(s.n_tri, 36);                           /* six per face */
+    CHECK_EQ(s.n_edge, 24);                          /* every side in two pieces */
+    CHECK_EQ(s.n_fedge, 24);                         /* the outline follows them */
+    bool seen[20] = { false };
+    for (size_t i = 0; i < 3 * s.n_tri; i++) seen[s.tri[i]] = true;
+    for (int i = 0; i < 20; i++) CHECK(seen[i]);     /* every node of the element colours a face */
+    {
+        const float a[3] = { 0, 0, 0 }, mid[3] = { 1, 0, 0 }, b[3] = { 2, 0, 0 };
+        CHECK(tm_has_fedge(&m, &s, a, mid) && tm_has_fedge(&m, &s, mid, b) && !tm_has_fedge(&m, &s, a, b));
+    }
+    cv_skin_free(&s);
+    tm_same_skin(&m.f, 3.0);
+
+    /* the element zoo as CalculiX wrote it: C3D20R, C3D10, C3D15 and the solids its
+       shells and beams became. A mid node taken from the wrong edge would fold a
+       face over and change its area. */
+    FILE* fp = fopen("samples/elements/elements.frd", "rb");
+    CHECK(fp != NULL);
+    if (fp) {
+        fseek(fp, 0, SEEK_END);
+        long n = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        char* buf = malloc((size_t)n + 1);
+        CHECK(buf && fread(buf, 1, (size_t)n, fp) == (size_t)n);
+        fclose(fp);
+        cv_frd f;
+        CHECK(cv_frd_parse(&f, buf, (size_t)n));
+        tm_same_skin(&f, 0);
+        cv_frd_free(&f); free(f.msgs.a);
+        free(buf);
+    }
+}
+
 #endif

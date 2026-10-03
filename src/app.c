@@ -79,6 +79,7 @@ static void init(void) {
     G.show_faces = G.show_edges = true;
     G.show_outline = true;
     G.outline_angle = CV_CREASE_DEG;
+    G.mid_faces = true;
     G.edges_auto = true;
     G.orbit_cursor = G.zoom_cursor = true;
     G.show_pivot = true;

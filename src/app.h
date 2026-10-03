@@ -61,6 +61,7 @@ typedef struct {
     bool      crop;
     float     crop_lo[3], crop_hi[3];   /* world coordinates */
     float     crease;         /* feature edges: degrees between faces that make a crease */
+    bool      mid;            /* quadratic faces through their mid-side nodes */
     /* outputs */
     bool      ok;
     char      err[256];
@@ -240,6 +241,7 @@ typedef struct {
     bool      edges_dense;           /* ... and they are now (with hysteresis) */
     bool      show_outline;          /* feature edges: borders, creases, material and type changes */
     float     outline_angle;         /* crease angle, degrees; the skin is rebuilt when it changes */
+    bool      mid_faces;             /* quadratic faces drawn through their mid-side nodes (the skin is rebuilt when it changes) */
     float*    axis_rgb[CV_AXIS_N];   /* 3 floats per group value */
     float     point_size;
     bool      shading;               /* off: flat true colours; on: light + shadow */

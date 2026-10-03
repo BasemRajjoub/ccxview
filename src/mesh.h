@@ -32,7 +32,7 @@ void cv_crop_mask(const cv_frd* f, const float lo[3], const float hi[3], uint8_t
 
 /* ---- skin ------------------------------------------------------------------
    Exterior faces of the visible solids (+ every visible shell face) as
-   triangles over corner nodes, the unique edges of those faces (+ beams), and
+   triangles over their nodes (cv_skin_build_opt), the unique edges of those faces (+ beams), and
    the nodes of visible elements. Indices are dense node indices.
    Feature edges are the part's outline, which stays readable on a mesh too
    fine for its element edges: skin edges used by one face only (shell borders,
@@ -54,6 +54,11 @@ typedef struct {
 
 bool cv_skin_build(cv_skin* s, const cv_frd* f, const uint8_t* vis);   /* vis may be NULL; CV_CREASE_DEG */
 bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg);
+/* mid: the faces of quadratic elements (C3D20, C3D15, C3D10, S8, S6, ...) through
+   their mid-side nodes -- a quad as six triangles, a triangle as four, an edge as
+   two pieces -- so colours and shape follow every node. Without it corners only:
+   a third of the triangles, but a value or a bend at a mid node does not show. */
+bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg, bool mid);
 
 /* Corner nodes (dense indices) of face `face` (0-based, CalculiX order: S1 -> 0)
    of element e. Returns 3 or 4, 0 if the element has no such face. Shells have

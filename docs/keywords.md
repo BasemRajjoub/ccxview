@@ -94,6 +94,16 @@ discrete `SPRINGA`, `SPRING1`, `SPRING2`, `DASHPOTA`, `DASHPOT1`,
 `DASHPOT2`, `MASS`, `GAPUNI`, `DCOUP3D`. Elements whose nodes are missing are
 dropped and reported in the message bar.
 
+## Quadratic elements
+
+The faces of quadratic elements (`C3D20`, `C3D15`, `C3D10`, `S8`, `S6`, the solids
+CalculiX expands shells and beams into) are drawn through their mid-side nodes: a
+quadrilateral as six triangles, a triangle as four, every edge in two pieces. The
+colours and the shape then follow every node. It matters most for a shell in
+bending: the expanded solid has one element across the wall, and only its mid nodes
+carry the neutral plane. Layers > "mid-side nodes" off (`--opt mid_faces=0`) draws
+corners only, a third of the triangles, for very large models.
+
 ## Not read
 
 Materials beyond the name, step controls, amplitudes (a load is drawn with the
