@@ -135,7 +135,7 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             if (deck_has_bc() || deck_has_loads()) {
                 tip(ctx, "*BOUNDARY: a cone per fixed dof, tip on the node (double base for a rotation),\ncross for a temperature");
                 nk_checkbox_label(ctx, "Supports", &G.show_bc);
-                tip(ctx, "*CLOAD as arrows at the nodes, *DLOAD pressures at the faces;\nlength follows the magnitude");
+                tip(ctx, "*CLOAD forces as yellow arrows, moments as magenta double-headed arrows with a turning arc,\n*DLOAD pressures as arrows at the faces; length follows the magnitude within each kind");
                 nk_checkbox_label(ctx, "Loads", &G.show_loads);
             }
             if (deck_has_discrete()) {

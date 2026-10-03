@@ -63,6 +63,7 @@ void deck_clear(void) {
     cv_render_aux(CV_AUX_HLTRI, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_BCLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_LDLN, NULL, NULL, NULL, 0);
+    cv_render_aux(CV_AUX_MOMLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_DISCLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_LINKLN, NULL, NULL, NULL, 0);
 }
@@ -381,6 +382,36 @@ void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir
     }
 }
 
+/* A moment about `dir` (unit) at p: the double-headed arrow of the textbooks, its
+   tip on the node, and around its shaft three quarters of a circle ending in a
+   head that turns the way the moment does (right hand about dir). */
+static void moment(cv_fvec* pos, cv_fvec* disp, const float p[3], const float dir[3], float len, const float d[6]) {
+    deck_arrow(pos, disp, p, dir, len, d, true);
+    int k = fabsf(dir[0]) <= fabsf(dir[1]) ? (fabsf(dir[0]) <= fabsf(dir[2]) ? 0 : 2) : (fabsf(dir[1]) <= fabsf(dir[2]) ? 1 : 2);
+    float up[3] = { 0, 0, 0 }; up[k] = 1;
+    float u[3] = { dir[1] * up[2] - dir[2] * up[1], dir[2] * up[0] - dir[0] * up[2], dir[0] * up[1] - dir[1] * up[0] };
+    float ul = sqrtf(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    if (ul <= 0) return;
+    for (int i = 0; i < 3; i++) u[i] /= ul;
+    float v[3] = { dir[1] * u[2] - dir[2] * u[1], dir[2] * u[0] - dir[0] * u[2], dir[0] * u[1] - dir[1] * u[0] };
+    enum { NSEG = 12 };
+    float r = 0.3f * len, c[3], a[3], b[3] = { 0, 0, 0 };
+    for (int i = 0; i < 3; i++) c[i] = p[i] - dir[i] * len * 0.8f;        /* near the tail, clear of the heads */
+    for (int s = 0; s <= NSEG; s++) {
+        float t = 1.5f * 3.14159265f * s / NSEG;
+        for (int i = 0; i < 3; i++) a[i] = c[i] + r * (cosf(t) * u[i] + sinf(t) * v[i]);
+        if (s) seg(pos, disp, b, a, d);
+        memcpy(b, a, sizeof b);
+    }
+    /* the head at the arc's end (t = 270 degrees: at -v, moving along +u) */
+    float h = 0.45f * r;
+    for (int sgn = -1; sgn <= 1; sgn += 2) {
+        float w[3];
+        for (int i = 0; i < 3; i++) w[i] = b[i] - h * u[i] + sgn * 0.6f * h * v[i];
+        seg(pos, disp, b, w, d);
+    }
+}
+
 /* supports at node p, from the mask of its fixed dofs (bit k-1 for dof k,
    bit 6 for temperature), as in most FE pre-processors: per axis one cone (two
    crossed triangles) with its tip on the node, standing on that axis; a fixed
@@ -670,7 +701,7 @@ static bool surf_shown(int si) {
 }
 
 static void refresh_glyphs(void) {
-    cv_fvec bp = {0}, bd = {0}, lp = {0}, ld = {0};
+    cv_fvec bp = {0}, bd = {0}, lp = {0}, ld = {0}, mp = {0}, md = {0};
     const cv_frd* f = &G.frd;
     float L = CV_MAX(G.bc_scale, 0.01f) * G.sym_len, LL = 1.5f * CV_MAX(G.load_scale, 0.01f) * G.sym_len;
     if (D.on && G.loaded) {
@@ -692,16 +723,22 @@ static void refresh_glyphs(void) {
             if (deck_node_pd(node, p, d)) support(&bp, &bd, p, d, bits, L);
         }
         free(m);
-        float vmax = 0, pmax = 0;
-        for (uint32_t i = 0; i < D.d.ncloads; i++) vmax = fmaxf(vmax, fabsf(D.d.cloads[i].value));
+        /* forces, moments and pressures are sized among their own kind: their units differ */
+        float vmax = 0, mmax = 0, pmax = 0;
+        for (uint32_t i = 0; i < D.d.ncloads; i++) {
+            float a = fabsf(D.d.cloads[i].value);
+            if (D.d.cloads[i].dof > 3) mmax = fmaxf(mmax, a); else vmax = fmaxf(vmax, a);
+        }
         for (uint32_t i = 0; i < D.d.ndloads; i++) pmax = fmaxf(pmax, fabsf(D.d.dloads[i].value));
         for (uint32_t i = 0; i < D.d.ncloads; i++) {
             const cv_cload* c = &D.d.cloads[i];
             float p[3], d[6], dir[3];
             if (!deck_node_pd(c->node, p, d)) continue;
             axis_vec((c->dof - 1) % 3, c->value < 0 ? -1.f : 1.f, 1.f, dir);
-            float len = LL * (vmax > 0 ? 0.5f + 0.5f * fabsf(c->value) / vmax : 1.f);
-            deck_arrow(&lp, &ld, p, dir, len, d, c->dof > 3);
+            float big = c->dof > 3 ? mmax : vmax;
+            float len = LL * (big > 0 ? 0.5f + 0.5f * fabsf(c->value) / big : 1.f);
+            if (c->dof > 3) moment(&mp, &md, p, dir, len, d);
+            else deck_arrow(&lp, &ld, p, dir, len, d, false);
         }
         for (uint32_t i = 0; i < D.d.ndloads; i++) {
             const cv_dload* q = &D.d.dloads[i];
@@ -730,7 +767,8 @@ static void refresh_glyphs(void) {
     }
     app_aux_upload(CV_AUX_BCLN, &bp, &bd, NULL);
     app_aux_upload(CV_AUX_LDLN, &lp, &ld, NULL);
-    cv_free_vec(bp); cv_free_vec(bd); cv_free_vec(lp); cv_free_vec(ld);
+    app_aux_upload(CV_AUX_MOMLN, &mp, &md, NULL);
+    cv_free_vec(bp); cv_free_vec(bd); cv_free_vec(lp); cv_free_vec(ld); cv_free_vec(mp); cv_free_vec(md);
 }
 
 void deck_refresh_highlight(void) {

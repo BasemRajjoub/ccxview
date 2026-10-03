@@ -18,7 +18,7 @@ step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
 | `*SOLID SECTION`, `*SHELL SECTION`, `*BEAM SECTION`, ... | `MATERIAL=` per `ELSET=`: the material of each element, for the Material groups |
 | `*MATERIAL` | the material's name |
 | `*BOUNDARY` | supports: node, first and last DOF; drawn as cones (Layers > Supports) |
-| `*CLOAD` | point loads: node, DOF, magnitude; drawn as arrows (Layers > Loads) |
+| `*CLOAD` | point loads: node, DOF, magnitude (Layers > Loads). Forces (DOF 1-3) are yellow arrows; moments (DOF 4-6) are magenta double-headed arrows with an arc that turns the way the moment does. Each kind is sized against its own largest value |
 | `*DLOAD` | pressure on element faces (`P1`..`P6`, shell `P`); drawn as arrows on the faces |
 | `*SPRING`, `*DASHPOT` | the DOF of a one-node spring or dashpot |
 | `*EQUATION` | multi-point constraints, drawn as links between the nodes |
