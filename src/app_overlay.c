@@ -102,7 +102,7 @@ void refresh_vectors(void) {
 void app_vectors_changed(void) { refresh_vectors(); }
 
 /* ---- clip caps: the plane cut through the solid elements, filled ---------------------
-   Each solid is split into tetrahedra over its corners; a tet crossing the plane
+   Each solid is split into tetrahedra over its nodes; a tet crossing the plane
    gives one or two triangles. Vertices carry the undeformed position (with the
    DISPI part baked in), DISP and the value, interpolated along the cut edges, so
    the shader's deformation puts them exactly on the plane; a hair inside it, so the
@@ -110,13 +110,13 @@ void app_vectors_changed(void) { refresh_vectors(); }
 
 typedef struct { cv_fvec pos, disp, val; float n[3], eps; bool has_disp; } cap_out;
 
-static void cap_vertex(cap_out* o, const float X[][3], const float U[][3], const float* S, int i, int j, float t) {
+static void cap_vertex(cap_out* o, float X[][3], float U[][3], const float* S, int i, int j, float t) {
     for (int k = 0; k < 3; k++) cv_push(o->pos, X[i][k] + t * (X[j][k] - X[i][k]) - o->eps * o->n[k]);
     if (o->has_disp) for (int k = 0; k < 3; k++) cv_push(o->disp, U[i][k] + t * (U[j][k] - U[i][k]));
     cv_push(o->val, S[i] + t * (S[j] - S[i]));
 }
 
-static void cap_tet(cap_out* o, const int v[4], const float* sd, const float X[][3], const float U[][3], const float* S) {
+static void cap_tet(cap_out* o, const int v[4], const float* sd, float X[][3], float U[][3], const float* S) {
     int in[4], out[4], ni = 0, no = 0;
     for (int k = 0; k < 4; k++) { if (sd[v[k]] > 0) out[no++] = v[k]; else in[ni++] = v[k]; }
     if (!ni || !no) return;
@@ -130,28 +130,76 @@ static void cap_tet(cap_out* o, const int v[4], const float* sd, const float X[]
     #undef CUT
 }
 
+/* A point of a quadratic element that is no node of it, the middle of an 8-node face
+   or of a 20-node brick, from the element's own shape functions there: `wc` on each
+   of the nc corners c[], `wm` on each of the nm mid nodes m[]. */
+static void cap_extra(int at, const int* c, int nc, float wc, const int* m, int nm, float wm,
+                      float X[][3], float U[][3], float* S, float* sd) {
+    for (int k = 0; k < 3; k++) X[at][k] = U[at][k] = 0;
+    S[at] = sd[at] = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        const int* v = pass ? m : c;
+        int n = pass ? nm : nc;
+        float w = pass ? wm : wc;
+        for (int i = 0; i < n; i++) {
+            for (int k = 0; k < 3; k++) { X[at][k] += w * X[v[i]][k]; U[at][k] += w * U[v[i]][k]; }
+            S[at] += w * S[v[i]]; sd[at] += w * sd[v[i]];
+        }
+    }
+}
+
+/* Linear cells: a brick as six tetrahedra about its diagonal, a wedge as three. */
+static const int kHexTet[6][4] = { { 0, 1, 2, 6 }, { 0, 2, 3, 6 }, { 0, 3, 7, 6 }, { 0, 7, 4, 6 }, { 0, 4, 5, 6 }, { 0, 5, 1, 6 } };
+static const int kWedgeTet[3][4] = { { 0, 1, 2, 3 }, { 1, 2, 3, 4 }, { 2, 3, 4, 5 } };
+
+/* Quadratic cells cut through their mid nodes (.frd order: the mid nodes of the bottom
+   face, of the upright edges, of the top face), so the cut shows what the nodes say
+   inside the element too -- the neutral plane of a shell one element thick.
+   A C3D20: its 20 nodes, the middles of its six faces (20..25) and its own (26), as
+   eight bricks. A C3D15: its 15 nodes and the middles of its three quadrilateral faces
+   (15..17), as eight wedges. A C3D10: four corner tetrahedra and the octahedron
+   between them as four more. */
+static const int kHex27[8][8] = {
+    { 0, 8, 20, 11, 12, 22, 26, 25 }, { 8, 1, 9, 20, 22, 13, 23, 26 }, { 20, 9, 2, 10, 26, 23, 14, 24 },
+    { 11, 20, 10, 3, 25, 26, 24, 15 }, { 12, 22, 26, 25, 4, 16, 21, 19 }, { 22, 13, 23, 26, 16, 5, 17, 21 },
+    { 26, 23, 14, 24, 21, 17, 6, 18 }, { 25, 26, 24, 15, 19, 21, 18, 7 },
+};
+static const int kHexFace[6][8] = {       /* four corners, then the four mid nodes between them */
+    { 0, 1, 2, 3, 8, 9, 10, 11 }, { 4, 5, 6, 7, 16, 17, 18, 19 }, { 0, 1, 5, 4, 8, 13, 16, 12 },
+    { 1, 2, 6, 5, 9, 14, 17, 13 }, { 2, 3, 7, 6, 10, 15, 18, 14 }, { 3, 0, 4, 7, 11, 12, 19, 15 },
+};
+static const int kWedge18[8][6] = {
+    { 0, 6, 8, 9, 15, 17 }, { 6, 1, 7, 15, 10, 16 }, { 8, 7, 2, 17, 16, 11 }, { 6, 7, 8, 15, 16, 17 },
+    { 9, 15, 17, 3, 12, 14 }, { 15, 10, 16, 12, 4, 13 }, { 17, 16, 11, 14, 13, 5 }, { 15, 16, 17, 12, 13, 14 },
+};
+static const int kWedgeFace[3][8] = { { 0, 1, 4, 3, 6, 10, 12, 9 }, { 1, 2, 5, 4, 7, 11, 13, 10 }, { 2, 0, 3, 5, 8, 9, 14, 11 } };
+static const int kTet10[8][4] = { { 0, 4, 6, 7 }, { 4, 1, 5, 8 }, { 6, 5, 2, 9 }, { 7, 8, 9, 3 },
+                                  { 6, 8, 4, 5 }, { 6, 8, 5, 9 }, { 6, 8, 9, 7 }, { 6, 8, 7, 4 } };
+
 void app_clip_caps(bool on, const float n[3], float dd, float f1, float f2) {
     static char key[256];
     char k[256];
     on = on && G.clip_cap && G.loaded && G.frd.n_elems <= 4000000;
-    snprintf(k, sizeof k, "%d|%g|%g|%g|%g|%g|%g|%u|%p|%zu|%d|%d|%d", on, n[0], n[1], n[2], dd, f1, f2, G.field_gen,
-             (void*)G.skin.tri, G.skin.n_tri, G.elem_mode, G.has_field, G.field_src);
+    snprintf(k, sizeof k, "%d|%g|%g|%g|%g|%g|%g|%u|%p|%zu|%d|%d|%d|%d", on, n[0], n[1], n[2], dd, f1, f2, G.field_gen,
+             (void*)G.skin.tri, G.skin.n_tri, G.elem_mode, G.has_field, G.field_src, G.mid_faces);
     if (!strcmp(k, key)) return;
     snprintf(key, sizeof key, "%s", k);
     cap_out o = { .n = { n[0], n[1], n[2] }, .eps = 1e-5f * G.diag, .has_disp = G.disp != NULL };
-    static const int hex[6][4] = { { 0, 1, 2, 6 }, { 0, 2, 3, 6 }, { 0, 3, 7, 6 }, { 0, 7, 4, 6 }, { 0, 4, 5, 6 }, { 0, 5, 1, 6 } };
-    static const int wedge[3][4] = { { 0, 1, 2, 3 }, { 1, 2, 3, 4 }, { 2, 3, 4, 5 } };
-    static const int tet[1][4] = { { 0, 1, 2, 3 } };
+    static const int tet[4] = { 0, 1, 2, 3 };
     bool nodal = G.has_field && G.field_src != 1 && !G.elem_mode && G.scalar;
     bool elem = G.has_field && G.field_src != 1 && G.elem_mode && G.elem_val;
     for (uint32_t e = 0; on && e < G.frd.n_elems; e++) {
         if (G.vis && !G.vis[e]) continue;
         int t = G.frd.etype[e], nc = t == 1 || t == 4 ? 8 : t == 2 || t == 5 ? 6 : t == 3 || t == 6 ? 4 : 0;
-        uint32_t b = G.frd.eoff[e];
-        if (!nc || G.frd.eoff[e + 1] - b < (uint32_t)nc) continue;
-        float X[8][3], U[8][3], S[8], sd[8];
+        uint32_t b = G.frd.eoff[e], have = G.frd.eoff[e + 1] - b;
+        if (!nc || have < (uint32_t)nc) continue;
+        /* through the mid nodes when the element has them and the faces are drawn so */
+        int nq = t == 4 ? 20 : t == 5 ? 15 : t == 6 ? 10 : 0;
+        bool quad = G.mid_faces && nq && have >= (uint32_t)nq;
+        int nn = quad ? nq : nc;
+        float X[27][3], U[27][3], S[27], sd[27];
         int pos = 0, neg = 0;
-        for (int i = 0; i < nc; i++) {
+        for (int i = 0; i < nn; i++) {
             uint32_t nd = G.frd.conn[b + i];
             const float* x = G.frd.xyz + 3 * (size_t)nd;
             float p = 0;
@@ -165,9 +213,32 @@ void app_clip_caps(bool on, const float n[3], float dd, float f1, float f2) {
             if (sd[i] > 0) pos++; else neg++;
         }
         if (!pos || !neg) continue;
-        const int (*tt)[4] = nc == 8 ? hex : nc == 6 ? wedge : tet;
-        int nt = nc == 8 ? 6 : nc == 6 ? 3 : 1;
-        for (int q = 0; q < nt; q++) cap_tet(&o, tt[q], sd, X, U, S);
+        if (!quad) {
+            const int (*tt)[4] = nc == 8 ? kHexTet : nc == 6 ? kWedgeTet : NULL;
+            int nt = nc == 8 ? 6 : nc == 6 ? 3 : 1;
+            for (int q = 0; q < nt; q++) cap_tet(&o, tt ? tt[q] : tet, sd, X, U, S);
+            continue;
+        }
+        int v[4];
+        if (nq == 10) {
+            for (int q = 0; q < 8; q++) cap_tet(&o, kTet10[q], sd, X, U, S);
+        } else if (nq == 20) {
+            static const int corners[8] = { 0, 1, 2, 3, 4, 5, 6, 7 }, mids[12] = { 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
+            for (int fc = 0; fc < 6; fc++) cap_extra(20 + fc, kHexFace[fc], 4, -0.25f, kHexFace[fc] + 4, 4, 0.5f, X, U, S, sd);
+            cap_extra(26, corners, 8, -0.25f, mids, 12, 0.25f, X, U, S, sd);
+            for (int c = 0; c < 8; c++)
+                for (int q = 0; q < 6; q++) {
+                    for (int j = 0; j < 4; j++) v[j] = kHex27[c][kHexTet[q][j]];
+                    cap_tet(&o, v, sd, X, U, S);
+                }
+        } else {
+            for (int fc = 0; fc < 3; fc++) cap_extra(15 + fc, kWedgeFace[fc], 4, -0.25f, kWedgeFace[fc] + 4, 4, 0.5f, X, U, S, sd);
+            for (int c = 0; c < 8; c++)
+                for (int q = 0; q < 3; q++) {
+                    for (int j = 0; j < 4; j++) v[j] = kWedge18[c][kWedgeTet[q][j]];
+                    cap_tet(&o, v, sd, X, U, S);
+                }
+        }
     }
     cv_render_aux(CV_AUX_CAPTRI, o.pos.a, o.has_disp ? o.disp.a : NULL, o.val.a, (uint32_t)(o.pos.n / 3));
     cv_free_vec(o.pos); cv_free_vec(o.disp); cv_free_vec(o.val);
