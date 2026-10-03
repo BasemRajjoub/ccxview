@@ -20,6 +20,11 @@
 # listing the headers it includes), so a change rebuilds only what it touches, and
 # make -j compiles in parallel. CI wraps the compilers in ccache (.github/workflows/).
 
+# a git checkout uses the project's hooks (scripts/git-hooks), unless it has its own
+ifneq ($(wildcard .git),)
+  $(shell git config core.hooksPath >/dev/null 2>&1 || git config core.hooksPath scripts/git-hooks 2>/dev/null)
+endif
+
 CC      ?= cc
 # OPT is the optimisation for every build; RELEASE=1 (the shipped binaries, implied by
 # PORTABLE=1, win and wasm) adds link-time optimisation. No -march: the binaries travel.
