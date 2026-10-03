@@ -530,10 +530,24 @@ static void surface_nodes(const cv_frd* f, const cv_surface* s, u32vec* out) {
 /* Displacement of the deck-only nodes: the mean over the nodes each one is tied to
    through its links (a rigid body's or coupling's driven set, an equation's other
    terms). An estimate, no rotation; enough for the glyphs to follow the shape. */
+typedef struct { uint32_t id; float d[6]; } est_rec;
+static int est_cmp(const void* a, const void* b) {
+    uint32_t x = ((const est_rec*)a)->id, y = ((const est_rec*)b)->id;
+    return x < y ? -1 : x > y;
+}
+
+/* Deck nodes the results do not hold, and how they move:
+   - reference nodes of couplings and rigid bodies: the mean of the nodes they drive;
+   - the nodes of shells, beams and plane elements. CalculiX expands these into
+     solids with nodes of their own (a shell node becomes one on either face, a
+     beam node the corners of its section) and writes only those. The deck node
+     sits in their middle and moves as their mean: of the expanded element's nodes,
+     those nearest to it. */
 static void estimate_absent(void) {
     free(D.est_id); free(D.est_d);
     D.est_id = NULL; D.est_d = NULL; D.n_est = 0;
     if (!D.on || !G.loaded || !D.d.mesh.n_nodes || !G.disp) return;
+    CV_VEC(est_rec) v = {0};
     for (int i = 0; i < D.d.nlinks; i++) {
         const cv_link* l = &D.d.links[i];
         if (!l->ref || cv_frd_node_index(&G.frd, l->ref) != UINT32_MAX) continue;
@@ -544,26 +558,56 @@ static void estimate_absent(void) {
         }
         if (l->surf[0] >= 0 && l->surf[0] < D.d.nsurfs) surface_nodes(&G.frd, &D.d.surfs[l->surf[0]], &tgt);
         if (tgt.n) {
-            float m[6] = {0}, d[6];
+            est_rec r = { l->ref, { 0 } };
+            float d[6];
             for (size_t j = 0; j < tgt.n; j++) {
                 app_node_disp6(tgt.a[j], d);
-                for (int k = 0; k < 6; k++) m[k] += d[k] / (float)tgt.n;
+                for (int k = 0; k < 6; k++) r.d[k] += d[k] / (float)tgt.n;
             }
-            uint32_t* id = realloc(D.est_id, (D.n_est + 1) * sizeof(uint32_t));
-            float* dd = realloc(D.est_d, (D.n_est + 1) * 6 * sizeof(float));
-            if (id) D.est_id = id;
-            if (dd) D.est_d = dd;
-            if (id && dd) { D.est_id[D.n_est] = l->ref; memcpy(D.est_d + 6 * D.n_est, m, sizeof m); D.n_est++; }
+            cv_push(v, r);
         }
         cv_free_vec(tgt);
     }
-    /* sort by id for the lookup; a node driven by two links keeps the first */
-    for (uint32_t i = 1; i < D.n_est; i++)
-        for (uint32_t j = i; j > 0 && D.est_id[j] < D.est_id[j - 1]; j--) {
-            uint32_t t = D.est_id[j]; D.est_id[j] = D.est_id[j - 1]; D.est_id[j - 1] = t;
-            float td[6]; memcpy(td, D.est_d + 6 * j, sizeof td);
-            memcpy(D.est_d + 6 * j, D.est_d + 6 * (j - 1), sizeof td); memcpy(D.est_d + 6 * (j - 1), td, sizeof td);
+    const cv_frd *dm = &D.d.mesh, *f = &G.frd;
+    for (uint32_t de = 0; de < dm->n_elems; de++) {
+        if (dm->etype[de] < 7 || dm->etype[de] > 12) continue;       /* shells, plane elements, beams */
+        uint32_t e = deck_elem(f, dm->elem_id[de]);
+        if (e == UINT32_MAX || f->etype[e] < 1 || f->etype[e] > 6) continue;   /* not expanded into a solid */
+        for (uint32_t j = dm->eoff[de]; j < dm->eoff[de + 1]; j++) {
+            uint32_t dn = dm->conn[j];
+            if (cv_frd_node_index(f, dm->node_id[dn]) != UINT32_MAX) continue;
+            const float* q = dm->xyz + 3 * (size_t)dn;
+            float best = INFINITY;
+            for (uint32_t k = f->eoff[e]; k < f->eoff[e + 1]; k++) {
+                const float* p = f->xyz + 3 * (size_t)f->conn[k];
+                best = fminf(best, (p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1]) + (p[2] - q[2]) * (p[2] - q[2]));
+            }
+            est_rec r = { dm->node_id[dn], { 0 } };
+            float lim = best * 1.1f + 1e-12f * G.diag * G.diag, d[6];
+            int cnt = 0;
+            for (uint32_t k = f->eoff[e]; k < f->eoff[e + 1]; k++) {
+                const float* p = f->xyz + 3 * (size_t)f->conn[k];
+                if ((p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1]) + (p[2] - q[2]) * (p[2] - q[2]) > lim) continue;
+                app_node_disp6(f->conn[k], d);
+                for (int m = 0; m < 6; m++) r.d[m] += d[m];
+                cnt++;
+            }
+            for (int m = 0; m < 6 && cnt; m++) r.d[m] /= (float)cnt;
+            if (cnt) cv_push(v, r);
         }
+    }
+    if (!v.n) return;
+    /* sorted by id for the lookup; a node met twice keeps its first estimate */
+    qsort(v.a, v.n, sizeof *v.a, est_cmp);
+    D.est_id = malloc(v.n * sizeof(uint32_t));
+    D.est_d = malloc(v.n * 6 * sizeof(float));
+    for (size_t i = 0; D.est_id && D.est_d && i < v.n; i++) {
+        if (D.n_est && D.est_id[D.n_est - 1] == v.a[i].id) continue;
+        D.est_id[D.n_est] = v.a[i].id;
+        memcpy(D.est_d + 6 * D.n_est, v.a[i].d, 6 * sizeof(float));
+        D.n_est++;
+    }
+    cv_free_vec(v);
 }
 
 /* spiders: reference node to every driven node (equation: first term to the others) */
@@ -633,7 +677,9 @@ void deck_refresh_highlight(void) {
             if (s->is_elem || !D.set_on[i]) continue;
             for (uint32_t j = 0; j < s->n; j++) {
                 uint32_t n = shown_node(f, s->ids[j]);
+                float p[3], d[6];
                 if (n != UINT32_MAX) push_node(&pp, &pd, n);
+                else if (deck_node_pd(s->ids[j], p, d)) { push3(&pp, p); push6(&pd, d); }    /* a shell's or beam's own node */
             }
         }
         for (int i = 0; i < D.d.nsurfs; i++) {
@@ -641,7 +687,9 @@ void deck_refresh_highlight(void) {
             if (!surf_shown(i)) continue;
             for (uint32_t j = 0; j < s->nn; j++) {           /* node surface: as balls */
                 uint32_t n = shown_node(f, s->nodes[j]);
+                float p[3], d[6];
                 if (n != UINT32_MAX) push_node(&pp, &pd, n);
+                else if (deck_node_pd(s->nodes[j], p, d)) { push3(&pp, p); push6(&pd, d); }
             }
             for (uint32_t j = 0; j < s->n; j++) {            /* element faces: as triangles */
                 uint32_t e = deck_elem(f, s->elem[j]);
