@@ -211,6 +211,7 @@ static bool grab_follows(struct nk_context* ctx) {
     float sx, sy;
     return app_project(grabbed, &sx, &sy) && fabsf(sx - T.mx) < 3 && fabsf(sy - T.my) < 3;
 }
+static bool scene_still(struct nk_context* ctx) { return !scene_scrolled(ctx); }
 static bool tip_cmap(struct nk_context* ctx) { return !strncmp(uii_tip_shown(), "Colour map", 10); }
 static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 
@@ -284,6 +285,8 @@ static const step script[] = {
     DO(sections_open), WAIT(2), DO(snapshot), AT_WIN("Scene", 0.5f, 0.5f), WHEEL(-3), WAIT(2),
     EXPECT(scene_scrolled, "the sidebar scrolls"), EXPECT(not_zoomed, "the view does not zoom"),
     DO(snapshot), AT_VIEW(0.5f, 0.5f), WHEEL(-3), WAIT(2), EXPECT(zoomed, "the view zooms"),
+    EXPECT(scene_still, "the sidebar does not scroll with it"),
+    DO(snapshot), WHEEL(3), WAIT(2), EXPECT(scene_still, "nor on the way back"),
     AT_WIN("Scene", 0.5f, 0.5f), WHEEL(30), WAIT(2),
 
     CASE("view: a drag turns the model"),

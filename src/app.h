@@ -470,6 +470,10 @@ void deck_seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const
 bool deck_node_pd(uint32_t id, float p[3], float d[6]);
 uint32_t deck_elem(const cv_frd* f, uint32_t id);    /* the shown element of a deck element id, UINT32_MAX if none */
 void app_symbol_size(void);          /* G.sym_len from the model or the hand-set size; redraws the symbols */
+/* the lines of pos / disp (deck_seg pairs) uploaded as tubes of radius r to layer `which`; none when r <= 0
+   or there are too many */
+void deck_tubes_upload(int which, const cv_fvec* pos, const cv_fvec* disp, float r);
+float deck_stroke(void);             /* the radius of a symbol's stroke: G.sym_len and G.sym_thick */
 void loads_refresh(void);            /* app_loads.c: the support and load glyphs of the step on screen */
 void app_node_disp6(uint32_t node, float d[6]);
 void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);

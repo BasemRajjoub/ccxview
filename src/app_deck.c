@@ -68,6 +68,8 @@ void deck_clear(void) {
     for (int k = CV_AUX_BCTRI; k <= CV_AUX_HEATTRI; k++) cv_render_aux(k, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_DISCLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_LINKLN, NULL, NULL, NULL, 0);
+    cv_render_aux(CV_AUX_DISCTRI, NULL, NULL, NULL, 0);
+    cv_render_aux(CV_AUX_LINKTRI, NULL, NULL, NULL, 0);
 }
 
 bool deck_has_discrete(void) { return D.on && D.d.ndisc > 0; }
@@ -536,6 +538,7 @@ static void refresh_discrete(void) {
         }
     }
     app_aux_upload(CV_AUX_DISCLN, &lp, &ld, NULL);
+    deck_tubes_upload(CV_AUX_DISCTRI, &lp, &ld, deck_stroke());
     cv_free_vec(lp); cv_free_vec(ld);
 }
 
@@ -623,6 +626,7 @@ static void refresh_links(void) {
         }
     }
     app_aux_upload(CV_AUX_LINKLN, &lp, &ld, NULL);
+    deck_tubes_upload(CV_AUX_LINKTRI, &lp, &ld, 0.5f * deck_stroke());    /* spiders have many legs: thinner */
     cv_free_vec(lp); cv_free_vec(ld);
 }
 

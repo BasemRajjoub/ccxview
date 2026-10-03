@@ -671,8 +671,11 @@ static void drag_move(float dx, float dy, bool shift) {
 
 static void event(const sapp_event* ev) {
     if (ev->type == SAPP_EVENTTYPE_MOUSE_SCROLL && g_nk) ui_wheel_focus(g_nk);
-    bool nk_busy = snk_handle_event(ev);
-    bool over_ui = g_nk && ui_mouse_captured(g_nk, ev->type == SAPP_EVENTTYPE_MOUSE_SCROLL);
+    bool wheel = ev->type == SAPP_EVENTTYPE_MOUSE_SCROLL;
+    bool over_ui = g_nk && ui_mouse_captured(g_nk, wheel);
+    /* Nuklear scrolls its active window wherever the mouse is: a wheel turn over the
+       3D view is the view's alone, or the sidebar would scroll while the model zooms */
+    bool nk_busy = wheel && !over_ui ? false : snk_handle_event(ev);
 
     switch (ev->type) {
         case SAPP_EVENTTYPE_FILES_DROPPED:

@@ -651,14 +651,19 @@ void cv_render_draw(const cv_draw* d) {
         if (d->vectors && A[CV_AUX_VECLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_VECLN].v, NO_IB, (int)A[CV_AUX_VECLN].n,
                        d->vectors_color, vec_rgb, false, d, 1, false, 4 * PULL, 0);
-        static const float link_rgb[3] = { 0.55f, 0.95f, 0.45f };
-        if (d->links && A[CV_AUX_LINKLN].n)
-            draw_layer(R.pip_line_ni, A[CV_AUX_LINKLN].v, NO_IB, (int)A[CV_AUX_LINKLN].n,
-                       CV_COLOR_SOLID, link_rgb, false, d, 1, false, 4 * PULL, 0);
-        static const float disc_rgb[3] = { 0.80f, 0.45f, 0.95f };
-        if (d->discrete && A[CV_AUX_DISCLN].n)
-            draw_layer(R.pip_line_ni, A[CV_AUX_DISCLN].v, NO_IB, (int)A[CV_AUX_DISCLN].n,
-                       CV_COLOR_SOLID, disc_rgb, false, d, 1, false, 4 * PULL, 0);
+        static const float link_rgb[3] = { 0.55f, 0.95f, 0.45f }, disc_rgb[3] = { 0.80f, 0.45f, 0.95f };
+        const struct { int ln, tri; bool on; const float* rgb; } more[2] = {
+            { CV_AUX_LINKLN, CV_AUX_LINKTRI, d->links, link_rgb }, { CV_AUX_DISCLN, CV_AUX_DISCTRI, d->discrete, disc_rgb },
+        };
+        for (int k = 0; k < 2; k++) {
+            if (!more[k].on) continue;
+            if (A[more[k].ln].n)
+                draw_layer(R.pip_line_ni, A[more[k].ln].v, NO_IB, (int)A[more[k].ln].n,
+                           CV_COLOR_SOLID, more[k].rgb, false, d, 1, false, 4 * PULL, 0);
+            if (A[more[k].tri].n)
+                draw_layer(R.pip_tri_ni, A[more[k].tri].v, NO_IB, (int)A[more[k].tri].n,
+                           CV_COLOR_SOLID, more[k].rgb, true, d, 1, false, 0.f, 0);
+        }
     }
     {
         /* cgx geometry: surfaces as patches, curves pulled onto them, points as balls */

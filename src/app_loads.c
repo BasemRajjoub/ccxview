@@ -283,6 +283,18 @@ static void cross(layer* l, const float p[3], float r, const float d[6]) {
     }
 }
 
+float deck_stroke(void) { return 0.045f * G.sym_len * CV_MIN(CV_MAX(G.sym_thick, 0.1f), 10.f); }
+
+/* springs, dashpots, masses, gaps and links are built as lines elsewhere: the same lines as tubes */
+void deck_tubes_upload(int which, const cv_fvec* pos, const cv_fvec* disp, float r) {
+    layer l = {{0}};
+    size_t nseg = pos->n / 6;
+    if (r > 0 && nseg <= 60000 && disp->n == 2 * pos->n)
+        for (size_t i = 0; i < nseg; i++) cyl(&l, pos->a + 6 * i, pos->a + 6 * i + 3, r, 5, false, disp->a + 12 * i);
+    app_aux_upload(which, &l.tp, &l.td, NULL);
+    cv_free_vec(l.tp); cv_free_vec(l.td);
+}
+
 /* ---- where things are ------------------------------------------------------------ */
 
 static const float IDENT[3][3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
@@ -470,7 +482,7 @@ void loads_refresh(void) {
         float p[3], d[6], Q[3][3], dir[3];
         /* solid symbols while there are not too many of them (a cone is 20 triangles) */
         bool solid = (uint64_t)a->nbcs + a->ncloads + a->ndloads + a->ntemps <= 40000;
-        for (int k = 0; k < 4; k++) { all[k]->solid = solid; all[k]->T = 0.045f * G.sym_len * CV_MIN(CV_MAX(G.sym_thick, 0.1f), 10.f); }
+        for (int k = 0; k < 4; k++) { all[k]->solid = solid; all[k]->T = deck_stroke(); }
 
         /* sized within each kind: their units differ */
         float fmax = 0, mmax = 0, qmax = 0, umax = 0, rmax = 0, dmax[CV_DL_N] = { 0 }, bmax[CV_BL_N] = { 0 };
