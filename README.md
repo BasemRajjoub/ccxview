@@ -22,7 +22,7 @@ Download the [latest release](https://github.com/BasemRajjoub/ccxview/releases/l
 - Fields are decoded only when shown: a file with hundreds of steps opens as fast as one with a single step.
 - Stays smooth on millions of elements: everything is drawn on the GPU.
 - Moving a filled clip plane through 5 million elements: 12 ms.
-- 1 to 2 MB to download. Runs without a GPU too, and in the browser.
+- About 2 MB or less to download. Runs without a GPU too, and in the browser.
 
 Measured on one desktop PC; `build/bench file.frd` prints the numbers for yours.
 
