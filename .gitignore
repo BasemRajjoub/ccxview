@@ -13,6 +13,7 @@ samples/showcase/*.mp4
 !docs/demo.gif
 ccxview.ini
 !samples/elements/elements.frd
+!samples/symbols/symbols.frd
 !samples/vessel/vessel.frd
 samples/*/*.12d
 samples/*/spooles.out

@@ -768,12 +768,20 @@ static void test_inp(void) {
     CHECK(d.msgs.n >= 3);                              /* bad line, missing node, U1 */
     CHECK_EQ(d.nbcs, 2 + 5);                           /* 1,1-3  2,2  and NGEN (5 nodes) dof 11 */
     if (d.nbcs == 7) { CHECK_EQ(d.bcs[0].dof_lo, 1); CHECK_EQ(d.bcs[0].dof_hi, 3); CHECK_EQ(d.bcs[6].dof_lo, 11); }
-    CHECK_EQ(d.ncloads, 5 + 1);                        /* NGEN dof 2, node 8 dof 1 (second step overrides) */
-    bool n8 = false;
-    for (uint32_t i = 0; i < d.ncloads; i++) if (d.cloads[i].node == 8 && d.cloads[i].dof == 1) n8 = d.cloads[i].value == 2.0f;
-    CHECK(n8);
-    CHECK_EQ(d.ndloads, 2);                            /* ESMALL = 2 and (dropped) 3; GRAV skipped */
+    CHECK_EQ(d.ncloads, 5 + 1 + 1);                    /* NGEN dof 2, node 8 dof 1 in both steps */
+    CHECK_EQ(d.ndloads, 2);                            /* ESMALL = 2 and (dropped) 3 */
     if (d.ndloads == 2) { CHECK_EQ(d.dloads[0].face, 1); CHECK_NEAR(d.dloads[0].value, 3.0, 0); }
+    CHECK_EQ(d.nbody, 1);                              /* GRAV on EBIG */
+    for (int st = 0; st < 2; st++) {                   /* the second step gives node 8 a new value */
+        cv_applied ap;
+        CHECK(cv_inp_applied(&d, st, &ap));
+        CHECK_EQ(ap.ncloads, 6);
+        float n8 = 0;
+        for (uint32_t i = 0; i < ap.ncloads; i++) if (ap.cloads[i].node == 8 && ap.cloads[i].dof == 1) n8 = ap.cloads[i].value;
+        CHECK_NEAR(n8, st ? 2.0 : 1.0, 0);
+        CHECK_EQ(ap.nbcs, 3 + 1 + 5);                  /* one entry per DOF */
+        cv_applied_free(&ap);
+    }
     cv_skin sk;
     CHECK(cv_skin_build(&sk, &d.mesh, NULL));
     CHECK_EQ(sk.n_face, 0);                            /* two hexes on the same 8 corners: every face is shared */
@@ -1394,11 +1402,13 @@ static void test_localsys_requests(void) {
 
 #include "t_calc.h"
 #include "t_units.h"
+#include "t_loads.h"
 
 int main(void) {
     test_gpu_env();
     test_calc();
     test_units();
+    test_loads();
     test_video();
     test_cfg();
     test_export();

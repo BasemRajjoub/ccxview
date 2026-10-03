@@ -461,6 +461,11 @@ bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted 
 /* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */
 /* d: 6 wide, DISP then -DISPI (app_node_disp6); disp gets 6 per vertex, uploaded with app_aux_upload */
 void deck_arrow(cv_fvec* pos, cv_fvec* disp, const float tip[3], const float dir[3], float len, const float d[6], bool twin);
+void deck_seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const float* d);   /* one line, both ends moving by d */
+/* where a deck node is drawn and how it moves; false when it is not shown */
+bool deck_node_pd(uint32_t id, float p[3], float d[6]);
+uint32_t deck_elem(const cv_frd* f, uint32_t id);    /* the shown element of a deck element id, UINT32_MAX if none */
+void loads_refresh(void);            /* app_loads.c: the support and load glyphs of the step on screen */
 void app_node_disp6(uint32_t node, float d[6]);
 void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);
 bool app_field_is_vector(void);      /* the selected .frd field has 3 components */

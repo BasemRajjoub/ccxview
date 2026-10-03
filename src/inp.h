@@ -31,12 +31,45 @@ typedef struct {
     uint32_t  nn;
 } cv_surface;
 
-/* *BOUNDARY: node, first..last DOF (1-6 mechanical, 11 temperature) */
-typedef struct { uint32_t node; uint8_t dof_lo, dof_hi; } cv_bc;
-/* *CLOAD: node, DOF, magnitude (the last *STEP that sets it wins per node+dof) */
-typedef struct { uint32_t node; uint8_t dof; float value; } cv_cload;
-/* *DLOAD pressure: element, 0-based face, magnitude (positive = pushes on the face) */
-typedef struct { uint32_t elem; uint8_t face; float value; } cv_dload;
+/* What is applied to the model: every data line of every step, in deck order.
+   step: the *STEP the line stands in (0 = the first), -1 before any step. A card
+   with OP=NEW leaves a marker (node / elem 0, set -2) that drops what its kind
+   had in the steps before. cv_inp_applied folds the lines into what holds in one
+   step. */
+/* *BOUNDARY: node, first..last DOF (1-6 mechanical, 11 temperature), the value
+   (0: held, else a prescribed displacement, rotation or temperature) */
+typedef struct { uint32_t node; uint8_t dof_lo, dof_hi; int16_t step; float value; } cv_bc;
+/* *CLOAD: node, DOF 1-6, magnitude. *CFLUX: DOF 11, heat into the node. */
+typedef struct { uint32_t node; uint8_t dof; int16_t step; float value; } cv_cload;
+/* On an element face (0-based CalculiX face). P: *DLOAD / *DSLOAD pressure, positive
+   pushes on the face; on a plane element (CPS, CPE, CAX) the face is an edge.
+   EDGE: *DLOAD EDNORn, a load on edge n of a shell, normal to it in its plane.
+   FLUX: *DFLUX Sn, heat into the face. FILM: *FILM Fn, convection (value: the film
+   coefficient). RAD: *RADIATE Rn (value: the emissivity). */
+enum { CV_DL_P, CV_DL_EDGE, CV_DL_FLUX, CV_DL_FILM, CV_DL_RAD, CV_DL_N };
+typedef struct { uint32_t elem; uint8_t face, kind; int16_t step; float value; } cv_dload;
+/* On whole elements: an element set (set: index into sets) or one element (set -1).
+   GRAV: value x direction v[0..2]. CENTRIF: value = omega^2, a point v[0..2] on the
+   axis and its direction v[3..5]. FORCE: *DLOAD BX / BY / BZ, value along v[0..2].
+   NEWTON: gravity between the bodies. HEAT: *DFLUX BF, heat per volume. */
+enum { CV_BL_GRAV, CV_BL_CENTRIF, CV_BL_FORCE, CV_BL_NEWTON, CV_BL_HEAT, CV_BL_N };
+typedef struct { uint8_t kind; int16_t step; int set; uint32_t elem; float value; float v[6]; } cv_body;
+/* *TEMPERATURE: a temperature given to a node (a thermal load, not a support) */
+typedef struct { uint32_t node; int16_t step; float value; } cv_ntemp;
+/* *PRE-TENSION SECTION: a bolt cut at a surface (surf, index into surfs) or a beam
+   element (elem), its reference node, and the direction of the preload when the
+   deck gives one. The preload itself is a *CLOAD or *BOUNDARY on DOF 1 of ref. */
+typedef struct { int surf; uint32_t elem, ref; float dir[3]; bool has_dir; } cv_pretension;
+
+/* What holds in one step, folded from the lines above: one entry per node and DOF
+   (dof_lo == dof_hi), per element face and kind, per element set and kind. */
+typedef struct {
+    cv_bc*    bcs;    uint32_t nbcs;
+    cv_cload* cloads; uint32_t ncloads;
+    cv_dload* dloads; uint32_t ndloads;
+    cv_body*  body;   uint32_t nbody;
+    cv_ntemp* temps;  uint32_t ntemps;
+} cv_applied;
 
 /* Discrete elements: springs, dashpots, masses, gaps. Two-node ones are also
    mesh elements (FRD type 11, as CalculiX writes them); one-node ones live only
@@ -50,7 +83,7 @@ typedef struct { uint32_t id, n[2]; uint8_t kind, nn, dof; } cv_discrete;
    (kinematic couplings name a surface instead; its nodes are resolved when
    drawn). EQUATION: the nodes of its terms, ref = the first. TIE / CONTACT:
    two surfaces (surf[0] slave, surf[1] master), no nodes. */
-enum { CV_LINK_RIGID, CV_LINK_KINEMATIC, CV_LINK_DISTRIBUTING, CV_LINK_EQUATION, CV_LINK_TIE, CV_LINK_CONTACT };
+enum { CV_LINK_RIGID, CV_LINK_KINEMATIC, CV_LINK_DISTRIBUTING, CV_LINK_EQUATION, CV_LINK_TIE, CV_LINK_CONTACT };   /* *MPC: as EQUATION */
 typedef struct {
     char      name[64];
     uint8_t   kind;
@@ -77,6 +110,10 @@ typedef struct {
     cv_bc*      bcs;        uint32_t nbcs;      /* every *BOUNDARY line, all steps */
     cv_cload*   cloads;     uint32_t ncloads;
     cv_dload*   dloads;     uint32_t ndloads;
+    cv_body*    body;       uint32_t nbody;
+    cv_ntemp*   temps;      uint32_t ntemps;
+    cv_pretension* pret;    uint32_t npret;
+    int         cyc_n;      float cyc_axis[6];  /* *CYCLIC SYMMETRY MODEL: N= and the two points of its axis; 0 = none */
     cv_discrete* disc;      uint32_t ndisc;
     cv_link*    links;      int nlinks;
     char      (*mats)[64];  int nmats;
@@ -105,6 +142,12 @@ typedef bool (*cv_inp_reader)(void* user, const char* path, char** data, size_t*
 bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, void* user);
 void cv_inp_free(cv_inp* d);
 const cv_set* cv_inp_set(const cv_inp* d, const char* name, bool is_elem);   /* case-insensitive */
+/* inp_loads.c: what is applied in step `step` (0-based; outside 0 .. nsteps-1: the
+   last step). Supports given before the first step always hold; the lines of the
+   steps up to this one follow each other, a later value for the same place
+   replacing the earlier one, OP=NEW dropping all of its kind. false: out of memory. */
+bool cv_inp_applied(const cv_inp* d, int step, cv_applied* a);
+void cv_applied_free(cv_applied* a);
 
 /* Results CalculiX wrote in local systems (GLOBAL=NO with *TRANSFORM, *ORIENTATION
    or shell elements) turned back to global. The .frd does not say which system its
@@ -147,6 +190,9 @@ void cv_localsys_free(cv_localsys* L);
    point positions a cylindrical orientation needs. Returns CV_LOC_ bits; records
    whose system cannot be rebuilt become NaN. */
 int  cv_localsys_dat(const cv_inp* d, const cv_frd* f, cv_dat_block* b);
+
+/* the *TRANSFORM a node id stands in: index into d->transforms, -1 none */
+int cv_inp_node_transform(const cv_inp* d, uint32_t node);
 
 /* CalculiX element type name -> FRD type code (0 = not drawable), node count. */
 int cv_inp_elem_type(const char* name, int* nn);

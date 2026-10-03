@@ -23,11 +23,10 @@ duplicate the UI; xyont settles for a simple text editor for the .fbd. Park:
 at most a text box to run one cgx command on the loaded .fbd.
 
 ## #2 Keywords and results coverage
-*TRANSFORM is handled (results in local systems turned back to global).
-Still to do: *STEP tracking of loads and supports (today every step's are
-collected, last wins), *DSLOAD, *TEMPERATURE as a drawable load, and a
-documented list of the result fields ccxview understands (docs/keywords.md
-has the deck side).
+Supports and loads follow the step on screen, with a symbol per kind
+(docs/keywords.md, samples/symbols). Still to do: *SUBMODEL (mark the driven
+nodes), *MODEL CHANGE (hide removed elements per step), amplitudes, and a
+documented list of the result fields ccxview understands.
 
 ## Tensor glyphs (stress and strain as ellipsoids)
 One glyph per element centroid (per Gauss point when a .dat field is selected):

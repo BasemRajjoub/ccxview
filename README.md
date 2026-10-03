@@ -135,6 +135,7 @@ regenerate with `scripts/embed-fonts.py`).
 
 `samples/showcase/` is the plate with a hole preloaded in the browser build,
 `samples/elements/` one small solved deck with every element type and feature,
+`samples/symbols/` one tile per support, load, thermal load and constraint symbol,
 `samples/vessel/` a pressure vessel for the stress linearization. Design notes
 in [docs/spec.md](docs/spec.md); the `.inp` keywords the viewer reads in
 [docs/keywords.md](docs/keywords.md).

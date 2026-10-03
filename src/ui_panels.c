@@ -133,9 +133,9 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
         if (deck_has_bc() || deck_has_loads() || deck_has_discrete()) {   /* the deck's supports, loads, springs */
             nk_layout_row_dynamic(ctx, row, 2);
             if (deck_has_bc() || deck_has_loads()) {
-                tip(ctx, "*BOUNDARY: a cone per fixed dof, tip on the node (double base for a rotation),\ncross for a temperature");
+                tip(ctx, "Supports of the step on screen: a cone per held DOF (double base for a rotation), along the\nnode's *TRANSFORM axes; a prescribed displacement as an arrow with a bar across its tail,\na prescribed rotation as a turning arrow, a temperature as a cross");
                 nk_checkbox_label(ctx, "Supports", &G.show_bc);
-                tip(ctx, "*CLOAD forces as yellow arrows, moments as magenta double-headed arrows with a turning arc,\n*DLOAD pressures as arrows at the faces; length follows the magnitude within each kind");
+                tip(ctx, "Loads of the step on screen. Yellow: forces, pressures, edge loads (bar across the tail),\ngravity (block arrow), centrifugal (dashed axis, turning arc), bolt preload (ring with arrows).\nMagenta: moments. Red: heat (zigzag), film (zigzag and bar), radiation (rays), given temperature (diamond).\nLength follows the magnitude within each kind");
                 nk_checkbox_label(ctx, "Loads", &G.show_loads);
             }
             if (deck_has_discrete()) {

@@ -628,7 +628,8 @@ void cv_render_draw(const cv_draw* d) {
            true depth, so faces in front hide them; pulled a hair toward the eye
            so a glyph lying on a face wins against it */
         static const float bc_rgb[3] = { 0.15f, 0.85f, 0.85f }, ld_rgb[3] = { 1.0f, 0.78f, 0.10f },
-                           mom_rgb[3] = { 1.0f, 0.35f, 0.85f };      /* forces and pressures yellow, moments magenta */
+                           mom_rgb[3] = { 1.0f, 0.35f, 0.85f }, heat_rgb[3] = { 1.0f, 0.32f, 0.18f };
+        /* forces and pressures yellow, moments magenta, heat red */
         if (d->supports && A[CV_AUX_BCLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_BCLN].v, NO_IB, (int)A[CV_AUX_BCLN].n,
                        CV_COLOR_SOLID, bc_rgb, false, d, 1, false, 4 * PULL, 0);
@@ -638,6 +639,9 @@ void cv_render_draw(const cv_draw* d) {
         if (d->loads && A[CV_AUX_MOMLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_MOMLN].v, NO_IB, (int)A[CV_AUX_MOMLN].n,
                        CV_COLOR_SOLID, mom_rgb, false, d, 1, false, 4 * PULL, 0);
+        if (d->loads && A[CV_AUX_HEATLN].n)
+            draw_layer(R.pip_line_ni, A[CV_AUX_HEATLN].v, NO_IB, (int)A[CV_AUX_HEATLN].n,
+                       CV_COLOR_SOLID, heat_rgb, false, d, 1, false, 4 * PULL, 0);
         static const float vec_rgb[3] = { 0.95f, 0.95f, 0.95f };
         if (d->vectors && A[CV_AUX_VECLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_VECLN].v, NO_IB, (int)A[CV_AUX_VECLN].n,

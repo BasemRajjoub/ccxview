@@ -141,6 +141,7 @@ typedef struct { char ori[64]; } vlayer;
 typedef struct { char f[CV_OUT_N]; } outsys;
 
 enum { S_SKIP, S_NODE, S_ELEM, S_NSET, S_ELSET, S_SURF, S_HEADING, S_BOUNDARY, S_CLOAD, S_DLOAD, S_SPRINGDOF,
+       S_CFLUX, S_DFLUX, S_FILM, S_RADIATE, S_TEMP, S_PRETENSION, S_MPC, S_CYCLIC,
        S_EQUATION, S_DCOUP, S_TIE, S_CONTACT, S_TRANSFORM, S_ORIENT, S_OUTREQ, S_COMPOSITE };
 
 typedef struct {
@@ -163,6 +164,9 @@ typedef struct {
     CV_VEC(cv_bc) bcs;
     CV_VEC(cv_cload) cloads;
     CV_VEC(cv_dload) dloads;
+    CV_VEC(cv_body) body;
+    CV_VEC(cv_ntemp) temps;
+    CV_VEC(cv_pretension) pret;
     CV_VEC(cv_discrete) disc;
     CV_VEC(section) sdofs;              /* elset -> "dof" of *SPRING / *DASHPOT (mat holds the digit) */
     CV_VEC(vlink) links;
@@ -292,6 +296,26 @@ static void finish_element(P* p) {
 
 static void parse_text(P* p, const char* data, size_t size);
 
+static int16_t cur_step(const P* p) { return (int16_t)CV_MIN((int)p->steps.n - 1, 32767); }
+
+/* OP=NEW on a load card: a marker that drops what its kind had in the steps before */
+static void op_new(P* p, int st) {
+    int16_t s = cur_step(p);
+    bool ok = true;
+    if (st == S_BOUNDARY) { cv_bc b = { 0, 0, 0, s, 0 }; ok = cv_push(p->bcs, b); }
+    else if (st == S_CLOAD || st == S_CFLUX) { cv_cload c = { 0, (uint8_t)(st == S_CLOAD ? 1 : 11), s, 0 }; ok = cv_push(p->cloads, c); }
+    else if (st == S_TEMP) { cv_ntemp t = { 0, s, 0 }; ok = cv_push(p->temps, t); }
+    else {
+        cv_dload d = { 0, 0, (uint8_t)(st == S_DLOAD ? CV_DL_P : st == S_DFLUX ? CV_DL_FLUX : st == S_FILM ? CV_DL_FILM : CV_DL_RAD), s, 0 };
+        ok = cv_push(p->dloads, d);
+        if (ok && (st == S_DLOAD || st == S_DFLUX)) {
+            cv_body b = { (uint8_t)(st == S_DLOAD ? CV_BL_GRAV : CV_BL_HEAT), s, -2, 0, 0, { 0 } };
+            ok = cv_push(p->body, b);
+        }
+    }
+    if (!ok) p->oom = true;
+}
+
 static void do_keyword(P* p, const char* s, const char* e) {
     char kw[64];
     param prm[16];
@@ -363,7 +387,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         p->st = S_SURF;
         return;
     }
-    if (strstr(kw, "SECTION") && strcmp(kw, "SECTION PRINT") != 0) {
+    if (strstr(kw, "SECTION") && strcmp(kw, "SECTION PRINT") != 0 && strncmp(kw, "PRE-TENSION", 11) != 0) {
         const char* es = pget(prm, np, "ELSET");
         const char* ma = pget(prm, np, "MATERIAL");
         const char* oi = pget(prm, np, "ORIENTATION");
@@ -505,31 +529,75 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (es) { snprintf(p->cur_elset, sizeof p->cur_elset, "%s", es); upcase(p->cur_elset); p->st = S_SPRINGDOF; }
         return;
     }
-    /* loads and supports: drawn as glyphs. Every step's lines are kept. */
-    if (strcmp(kw, "BOUNDARY") == 0) { p->st = S_BOUNDARY; return; }
-    if (strcmp(kw, "CLOAD") == 0) { p->st = S_CLOAD; return; }
-    if (strcmp(kw, "DLOAD") == 0) { p->st = S_DLOAD; return; }
+    /* loads and supports: drawn as glyphs. Every line keeps the step it stands in. */
+    {
+        char kc[64]; int j = 0;                    /* CalculiX ignores the blanks in keywords */
+        for (const char* c = kw; *c && j < 63; c++) if (*c != ' ') kc[j++] = *c;
+        kc[j] = 0;
+        int st = !strcmp(kc, "BOUNDARY") ? S_BOUNDARY : !strcmp(kc, "CLOAD") ? S_CLOAD : !strcmp(kc, "CFLUX") ? S_CFLUX :
+                 !strcmp(kc, "DLOAD") || !strcmp(kc, "DSLOAD") ? S_DLOAD : !strcmp(kc, "DFLUX") ? S_DFLUX :
+                 !strcmp(kc, "FILM") ? S_FILM : !strcmp(kc, "RADIATE") ? S_RADIATE : !strcmp(kc, "TEMPERATURE") ? S_TEMP : 0;
+        if (st) {
+            const char* op = pget(prm, np, "OP");
+            if (op && toupper((unsigned char)op[0]) == 'N') op_new(p, st);
+            p->st = st;
+            return;
+        }
+        if (!strcmp(kc, "PRE-TENSIONSECTION")) {
+            const char *sf = pget(prm, np, "SURFACE"), *el = pget(prm, np, "ELEMENT"), *nd = pget(prm, np, "NODE");
+            cv_pretension t;
+            memset(&t, 0, sizeof t);
+            t.surf = sf ? find_surf(p, sf) : -1;
+            if ((sf && t.surf < 0) || (!sf && !(el && to_u32(el, &t.elem))) || !nd || !to_u32(nd, &t.ref)) { p->bad_lines++; return; }
+            if (!cv_push(p->pret, t)) { p->oom = true; return; }
+            p->st = S_PRETENSION;
+            return;
+        }
+        if (!strcmp(kc, "MPC")) { p->st = S_MPC; p->eq_left = 0; return; }
+        if (!strcmp(kc, "CYCLICSYMMETRYMODEL")) {
+            const char* n = pget(prm, np, "N");
+            uint32_t v;
+            if (n && to_u32(n, &v) && v > 0 && v < 100000) { p->d->cyc_n = (int)v; p->st = S_CYCLIC; }
+            return;
+        }
+    }
     /* anything else (steps, loads, output, ...) is not part of the mesh: skip */
     p->skipped_keywords++;
 }
 
 static void add_bc(P* p, uint32_t n, void* a) {
-    cv_bc b = { n, ((uint8_t*)a)[0], ((uint8_t*)a)[1] };
-    if (!cv_push(p->bcs, b)) p->oom = true;
+    cv_bc b = *(cv_bc*)a;
+    b.node = n;
+    if (n && !cv_push(p->bcs, b)) p->oom = true;
 }
 static void add_cload(P* p, uint32_t n, void* a) {
     cv_cload c = *(cv_cload*)a;
     c.node = n;
-    for (size_t i = 0; i < p->cloads.n; i++)                 /* a later step overrides */
-        if (p->cloads.a[i].node == n && p->cloads.a[i].dof == c.dof) { p->cloads.a[i].value = c.value; return; }
-    if (!cv_push(p->cloads, c)) p->oom = true;
+    if (n && !cv_push(p->cloads, c)) p->oom = true;
 }
 static void add_dload(P* p, uint32_t e, void* a) {
     cv_dload d = *(cv_dload*)a;
     d.elem = e;
-    for (size_t i = 0; i < p->dloads.n; i++)
-        if (p->dloads.a[i].elem == e && p->dloads.a[i].face == d.face) { p->dloads.a[i].value = d.value; return; }
-    if (!cv_push(p->dloads, d)) p->oom = true;
+    if (e && !cv_push(p->dloads, d)) p->oom = true;
+}
+static void add_temp(P* p, uint32_t n, void* a) {
+    cv_ntemp t = *(cv_ntemp*)a;
+    t.node = n;
+    if (n && !cv_push(p->temps, t)) p->oom = true;
+}
+
+/* a load on whole elements: an element set by name, or one element */
+static void add_body(P* p, const char* tok, cv_body b) {
+    char nm[64]; snprintf(nm, sizeof nm, "%s", tok); upcase(nm);
+    b.set = find_set(p, nm, true);
+    b.step = cur_step(p);
+    if (b.set < 0 && !to_u32(tok, &b.elem)) { p->bad_lines++; return; }
+    if (!cv_push(p->body, b)) p->oom = true;
+}
+
+/* the 0-based face of a label like P3, S2, F1NU, R4CR; a shell's SPOS / SNEG / P: 0 */
+static int label_face(const char* lab) {
+    return lab[1] >= '1' && lab[1] <= '6' ? lab[1] - '1' : 0;
 }
 
 static void do_data(P* p, const char* s, const char* e) {
@@ -541,33 +609,112 @@ static void do_data(P* p, const char* s, const char* e) {
             if (n < 2 || !to_u32(f[1], &lo) || lo < 1 || lo > 11) { p->bad_lines++; return; }
             hi = lo;
             if (n > 2 && f[2][0] && (!to_u32(f[2], &hi) || hi < lo || hi > 11)) { p->bad_lines++; return; }
-            uint8_t d[2] = { (uint8_t)lo, (uint8_t)hi };
-            if (!each_node(p, f[0], add_bc, d)) p->bad_lines++;
+            double v = 0;
+            if (n > 3 && f[3][0] && !to_f(f[3], &v)) { p->bad_lines++; return; }
+            cv_bc b = { 0, (uint8_t)lo, (uint8_t)hi, cur_step(p), (float)v };
+            if (!each_node(p, f[0], add_bc, &b)) p->bad_lines++;
             return;
         }
         case S_CLOAD: {                       /* node|set, dof, magnitude */
             int n = fields(s, e, f, 3);
             uint32_t dof; double v;
             if (n < 3 || !to_u32(f[1], &dof) || dof < 1 || dof > 6 || !to_f(f[2], &v)) { p->bad_lines++; return; }
-            cv_cload c = { 0, (uint8_t)dof, (float)v };
+            cv_cload c = { 0, (uint8_t)dof, cur_step(p), (float)v };
             if (!each_node(p, f[0], add_cload, &c)) p->bad_lines++;
             return;
         }
-        case S_DLOAD: {                       /* elem|set, Pn, magnitude; other labels (GRAV, ...) skipped */
+        case S_CFLUX: {                       /* node|set, 11 (or 0), heat */
             int n = fields(s, e, f, 3);
             double v;
             if (n < 3 || !to_f(f[2], &v)) { p->bad_lines++; return; }
+            cv_cload c = { 0, 11, cur_step(p), (float)v };
+            if (!each_node(p, f[0], add_cload, &c)) p->bad_lines++;
+            return;
+        }
+        case S_TEMP: {                        /* node|set, temperature */
+            int n = fields(s, e, f, 2);
+            double v;
+            if (n < 2 || !to_f(f[1], &v)) { p->bad_lines++; return; }
+            cv_ntemp t = { 0, cur_step(p), (float)v };
+            if (!each_node(p, f[0], add_temp, &t)) p->bad_lines++;
+            return;
+        }
+        case S_DFLUX: case S_FILM: case S_RADIATE: {   /* elem|set, Sn | Fn | Rn | BF, value (film, radiate: sink, value) */
+            int n = fields(s, e, f, 4);
+            bool two = p->st != S_DFLUX;
+            double v;
+            if (n < (two ? 4 : 3) || !to_f(f[two ? 3 : 2], &v)) { p->bad_lines++; return; }
             char lab[16]; snprintf(lab, sizeof lab, "%s", f[1]); upcase(lab);
-            int face = 0;
-            if (lab[0] == 'P' && lab[1] >= '1' && lab[1] <= '6' && !lab[2]) face = lab[1] - '0';
-            else if (!strcmp(lab, "P") || !strcmp(lab, "PPOS") || !strcmp(lab, "PNEG")) face = 1;   /* a shell's face */
-            if (!face) return;
-            cv_dload d = { 0, (uint8_t)(face - 1), (float)v };
+            if (p->st == S_DFLUX && !strcmp(lab, "BF")) {
+                cv_body b = { CV_BL_HEAT, 0, -1, 0, (float)v, { 0 } };
+                add_body(p, f[0], b);
+                return;
+            }
+            if (lab[0] != (p->st == S_DFLUX ? 'S' : p->st == S_FILM ? 'F' : 'R')) return;
+            cv_dload d = { 0, (uint8_t)label_face(lab), (uint8_t)(p->st == S_DFLUX ? CV_DL_FLUX : p->st == S_FILM ? CV_DL_FILM : CV_DL_RAD),
+                           cur_step(p), (float)v };
+            if (!each_elem(p, f[0], add_dload, &d)) p->bad_lines++;
+            return;
+        }
+        case S_PRETENSION: {                  /* the direction of the preload */
+            int n = fields(s, e, f, 3);
+            double v[3] = { 0, 0, 0 };
+            cv_pretension* t = &p->pret.a[p->pret.n - 1];
+            p->st = S_SKIP;
+            for (int k = 0; k < n && k < 3; k++) if (!to_f(f[k], &v[k])) return;
+            if (v[0] != 0 || v[1] != 0 || v[2] != 0) { t->has_dir = true; for (int k = 0; k < 3; k++) t->dir[k] = (float)v[k]; }
+            return;
+        }
+        case S_CYCLIC: {                      /* the two points of the axis */
+            int n = fields(s, e, f, 6);
+            double v;
+            p->st = S_SKIP;
+            for (int k = 0; k < 6; k++) p->d->cyc_axis[k] = k < n && to_f(f[k], &v) ? (float)v : 0;
+            return;
+        }
+        case S_MPC: {                         /* BEAM | PLANE | STRAIGHT | a user name, nodes ...; lines of nodes continue it */
+            int n = fields(s, e, f, 32), k = 0;
+            uint32_t v;
+            if (n > 0 && !to_u32(f[0], &v)) {
+                char nm[64]; snprintf(nm, sizeof nm, "MPC %.50s", f[0]); upcase(nm);
+                if (!new_link(p, CV_LINK_EQUATION, nm)) return;
+                p->eq_left = -1;              /* an MPC is open */
+                k = 1;
+            } else if (p->eq_left != -1) { p->bad_lines++; return; }
+            vlink* l = &p->links.a[p->links.n - 1];
+            for (; k < n; k++) {
+                if (!to_u32(f[k], &v) || !v) continue;
+                if (!l->l.ref) l->l.ref = v;
+                if (!cv_push(l->nodes, v)) { p->oom = true; return; }
+            }
+            return;
+        }
+        case S_DLOAD: {                       /* elem|set|surface, label, magnitude, ... */
+            int n = fields(s, e, f, 9);
+            double v = 0, w[6] = { 0 };
+            if (n < 2) { p->bad_lines++; return; }
+            char lab[16]; snprintf(lab, sizeof lab, "%s", f[1]); upcase(lab);
+            if (strcmp(lab, "NEWTON") != 0 && (n < 3 || !to_f(f[2], &v))) { p->bad_lines++; return; }
+            for (int k = 0; k < 6 && 3 + k < n; k++) to_f(f[3 + k], &w[k]);
+            cv_body b = { CV_BL_N, 0, -1, 0, (float)v, { (float)w[0], (float)w[1], (float)w[2], (float)w[3], (float)w[4], (float)w[5] } };
+            if (!strcmp(lab, "GRAV")) b.kind = CV_BL_GRAV;
+            else if (!strcmp(lab, "CENTRIF")) b.kind = CV_BL_CENTRIF;
+            else if (!strcmp(lab, "NEWTON")) b.kind = CV_BL_NEWTON;
+            else if (lab[0] == 'B' && lab[1] >= 'X' && lab[1] <= 'Z' && !lab[2]) {
+                b.kind = CV_BL_FORCE;
+                memset(b.v, 0, sizeof b.v);
+                b.v[lab[1] - 'X'] = 1;
+            }
+            if (b.kind != CV_BL_N) { add_body(p, f[0], b); return; }
+            cv_dload d = { 0, 0, CV_DL_P, cur_step(p), (float)v };
+            if (!strncmp(lab, "EDNOR", 5) && lab[5] >= '1' && lab[5] <= '4') { d.kind = CV_DL_EDGE; d.face = (uint8_t)(lab[5] - '1'); }
+            else if (lab[0] == 'P' && lab[1] >= '1' && lab[1] <= '6') d.face = (uint8_t)(lab[1] - '1');
+            else if (strcmp(lab, "P") != 0 && strcmp(lab, "PPOS") != 0 && strcmp(lab, "PNEG") != 0) return;   /* a shell's face */
             if (each_elem(p, f[0], add_dload, &d)) return;
-            int si = !strcmp(lab, "P") ? find_surf(p, f[0]) : -1;   /* SURFACE, P, value: its faces */
+            int si = !strcmp(lab, "P") ? find_surf(p, f[0]) : -1;   /* *DSLOAD: SURFACE, P, value: its faces */
             if (si < 0) { p->bad_lines++; return; }
             const vsurf* sf = &p->surfs.a[si];
-            for (size_t j = 0; j < sf->elem.n; j++) { d.face = sf->face.a[j]; add_dload(p, sf->elem.a[j], &d); }
+            for (size_t k = 0; k < sf->elem.n; k++) { d.face = sf->face.a[k]; add_dload(p, sf->elem.a[k], &d); }
             return;
         }
         case S_NODE: {
@@ -919,6 +1066,9 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     d->bcs = p.bcs.a;       d->nbcs = (uint32_t)p.bcs.n;       p.bcs.a = NULL;
     d->cloads = p.cloads.a; d->ncloads = (uint32_t)p.cloads.n; p.cloads.a = NULL;
     d->dloads = p.dloads.a; d->ndloads = (uint32_t)p.dloads.n; p.dloads.a = NULL;
+    d->body = p.body.a;     d->nbody = (uint32_t)p.body.n;     p.body.a = NULL;
+    d->temps = p.temps.a;   d->ntemps = (uint32_t)p.temps.n;   p.temps.a = NULL;
+    d->pret = p.pret.a;     d->npret = (uint32_t)p.pret.n;     p.pret.a = NULL;
     d->nmats = (int)p.mats.n;
     d->mats = malloc((size_t)CV_MAX(d->nmats, 1) * 64);
     if (!d->mats) goto oom;
@@ -1032,6 +1182,7 @@ oom:
     cv_free_vec(p.trs); cv_free_vec(p.node_tr); cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
     cv_free_vec(p.shells);
     cv_free_vec(p.bcs); cv_free_vec(p.cloads); cv_free_vec(p.dloads); cv_free_vec(p.disc); cv_free_vec(p.sdofs);
+    cv_free_vec(p.body); cv_free_vec(p.temps); cv_free_vec(p.pret);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
     cv_free_vec(p.links);
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
@@ -1052,7 +1203,7 @@ void cv_inp_free(cv_inp* d) {
     free(d->sets);
     for (int i = 0; i < d->nsurfs; i++) { free(d->surfs[i].elem); free(d->surfs[i].face); free(d->surfs[i].nodes); }
     free(d->surfs);
-    free(d->bcs); free(d->cloads); free(d->dloads); free(d->disc);
+    free(d->bcs); free(d->cloads); free(d->dloads); free(d->disc); free(d->body); free(d->temps); free(d->pret);
     for (int i = 0; i < d->nlinks; i++) free(d->links[i].nodes);
     free(d->links);
     free(d->mats);

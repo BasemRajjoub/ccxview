@@ -381,3 +381,8 @@ int cv_localsys_dat(const cv_inp* d, const cv_frd* f, cv_dat_block* b) {
     free(ko); free(ks);
     return r;
 }
+
+/* the *TRANSFORM of a node id: index into d->transforms, -1 none */
+int cv_inp_node_transform(const cv_inp* d, uint32_t node) {
+    return d->nnode_tr ? (int)find_idix(d->node_tr, d->nnode_tr, node) : -1;
+}

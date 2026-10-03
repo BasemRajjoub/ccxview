@@ -17,9 +17,19 @@ step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
 | `*SURFACE` | `TYPE=ELEMENT` (element faces) and `TYPE=NODE`; drawn under Groups > Surfaces |
 | `*SOLID SECTION`, `*SHELL SECTION`, `*BEAM SECTION`, ... | `MATERIAL=` per `ELSET=`: the material of each element, for the Material groups |
 | `*MATERIAL` | the material's name |
-| `*BOUNDARY` | supports: node, first and last DOF; drawn as cones (Layers > Supports) |
-| `*CLOAD` | point loads: node, DOF, magnitude (Layers > Loads). Forces (DOF 1-3) are yellow arrows; moments (DOF 4-6) are magenta double-headed arrows with an arc that turns the way the moment does. Each kind is sized against its own largest value |
-| `*DLOAD` | pressure on element faces (`P1`..`P6`, shell `P`); drawn as arrows on the faces |
+| `*BOUNDARY` | supports (Layers > Supports), cyan. A held DOF: a cone per axis with its tip on the node, a second base for a held rotation. A value other than 0: a prescribed displacement, an arrow with a bar across its tail; a prescribed rotation, a turning arrow. DOF 11: a temperature, a small cross |
+| `*CLOAD` | point loads (Layers > Loads). Forces (DOF 1-3): yellow arrows. Moments (DOF 4-6): magenta double-headed arrows with an arc that turns the way the moment does |
+| `*DLOAD` | `P1`..`P6`, shell `P`: pressure, an arrow on the face. On a plane element (`CPS`, `CPE`, `CAX`) the face is an edge: an arrow with a bar across its tail. `EDNOR1`..`4`: the same on a shell's edge. `GRAV`, `BX`/`BY`/`BZ`: a block arrow leaving the element set. `CENTRIF`: the axis as a dashed line with a turning arc. `NEWTON` is read and not drawn |
+| `*DSLOAD` | pressure on a `*SURFACE`: as `*DLOAD` on each of its faces |
+| `*PRE-TENSION SECTION` | a bolt: a ring round its `SURFACE=` (or at its beam `ELEMENT=`) with arrows along the preload, meeting at the cut when tightened. The preload is the `*CLOAD` or `*BOUNDARY` on DOF 1 of its `NODE=`, which is not drawn as a force of its own |
+| `*CFLUX`, `*DFLUX` | heat into a node or a face (`S1`..`S6`): a red arrow with a zigzag shaft, turned round when it leaves. `BF`: a zigzag block arrow on the element set |
+| `*FILM` | convection on a face: a red zigzag ending in a bar |
+| `*RADIATE` | radiation from a face: a red stem ending in three rays |
+| `*TEMPERATURE` | a temperature given to nodes: red diamonds |
+| `*STEP`, `OP=NEW` | every line above keeps its step. The symbols are those in force in the step on screen: a later value for the same node and DOF, or element face, replaces the earlier one; `OP=NEW` drops all of its kind from earlier steps; supports given before the first step stay |
+| `*TRANSFORM` | also for symbols: supports, forces and moments of a node in a transform point along its local axes |
+| `*MPC` | `BEAM`, `PLANE`, `STRAIGHT` and user MPCs: links between their nodes, as `*EQUATION` |
+| `*CYCLIC SYMMETRY MODEL` | `N=` and the axis preset the cyclic view (View > Cyclic symmetry) |
 | `*SPRING`, `*DASHPOT` | the DOF of a one-node spring or dashpot |
 | `*EQUATION` | multi-point constraints, drawn as links between the nodes |
 | `*RIGID BODY` | the reference node linked to its `NSET=` or `ELSET=` |
@@ -34,9 +44,9 @@ step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
 | `*INCLUDE` | followed, up to 8 levels; the included file may continue the block that was open |
 | `*HEADING` | skipped, its lines do not start a block |
 
-For supports and loads `*STEP` boundaries are not tracked: they are collected
-from every step, the last `*CLOAD` on a node and DOF wins. Output requests are
-tracked per step.
+Symbols of one kind are sized against the largest value of that kind in the
+step. `samples/symbols/` holds a deck with one small part per symbol
+(`scripts/gen_symbols.py`): open `symbols.frd` and step through it.
 
 ## Results in local systems
 
@@ -79,7 +89,7 @@ dropped and reported in the message bar.
 
 ## Not read
 
-Materials beyond the name, steps and their controls, amplitudes,
-temperatures and fluxes, output requests beyond `GLOBAL=`, contact
-properties. The results of all of these come back through the `.frd`
+Materials beyond the name, step controls, amplitudes (a load is drawn with the
+value of its line), output requests beyond `GLOBAL=`, contact properties,
+`*SUBMODEL`, `*MODEL CHANGE`, user loads (`P1NU`, ...). The results of all of these come back through the `.frd`
 and `.dat` files, which ccxview reads in full.
