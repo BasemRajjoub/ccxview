@@ -34,6 +34,7 @@ src/
   os.c/.h       file mapping, threads, mutex, clock
   frd.c/.h      .frd index pass + lazy field decode           (headless)
   mesh.c/.h     topology, groups, visibility, skin, edges, pick (headless)
+  cap.c/.h      the filled cut of the clip plane through the solids, prepared once per normal (headless)
   field.c/.h    scalar options, von Mises/magnitude/principal, ranges (headless)
   vmath.h       tiny vec3/mat4
   render.c/.h   sokol_gfx pipelines, buffers, colormaps

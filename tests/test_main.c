@@ -1403,12 +1403,15 @@ static void test_localsys_requests(void) {
 #include "t_calc.h"
 #include "t_units.h"
 #include "t_loads.h"
+#include "../src/cap.h"
+#include "t_cap.h"
 
 int main(void) {
     test_gpu_env();
     test_calc();
     test_units();
     test_loads();
+    test_cap();
     test_video();
     test_cfg();
     test_export();

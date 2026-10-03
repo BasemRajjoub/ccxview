@@ -1,7 +1,9 @@
 /* bench.c -- headless: map + parse + groups + skin + decode, timed.
    usage: bench [--quiet] file | bench --fuzz N file */
+#include <math.h>
 #include "../src/frd.h"
 #include "../src/mesh.h"
+#include "../src/cap.h"
 #include "../src/field.h"
 #include "../src/os.h"
 #include "../src/dat.h"
@@ -166,6 +168,26 @@ int main(int argc, char** argv) {
                f.n_steps, total_fields);
         for (int a = 0; ok && a < CV_AXIS_N; a++) printf("%-9s %d groups\n", cv_axis_name(a), g.axis[a].n);
         printf("skin      %zu triangles, %zu edges, %zu points\n", s.n_tri, s.n_edge, s.n_pt);
+        if (ok && f.n_elems) {                         /* the clip cut: prepared once, then moved */
+            float lo = INFINITY, hi = -INFINITY;
+            for (uint32_t i = 0; i < f.n_nodes; i++) { lo = fminf(lo, f.xyz[3 * (size_t)i]); hi = fmaxf(hi, f.xyz[3 * (size_t)i]); }
+            cv_cap_model cm = { .f = &f, .n = { 1, 0, 0 }, .mid = true };
+            cv_cap_prep cp;
+            double c0 = cv_now();
+            if (cv_cap_prepare(&cp, &cm)) {
+                double c1 = cv_now();
+                size_t tris = 0;
+                for (int i = 0; i < 20; i++) {
+                    cv_cap_out co = {0};
+                    cv_cap_cut(&cm, &cp, lo + (hi - lo) * (i + 0.5f) / 20, 0, NULL, NULL, &co);
+                    tris += co.pos.n / 9;
+                    cv_cap_out_free(&co);
+                }
+                printf("clip cut  prepare %.3f s, then %.4f s per position (%zu triangles each)\n", c1 - c0,
+                       (cv_now() - c1) / 20, tris / 20);
+                cv_cap_prep_free(&cp);
+            }
+        }
         printf("parse     %.3f s\ngroups+skin %.3f s\ndecode    %.3f s (%zu fields, %.1f M values)\n",
                t1 - t0, t2 - t1, t3 - t2, nfields, nvals / 1e6);
         if (f.n_steps) {
