@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # symbolize.sh -- the stack of a ccxview crash report as functions and file:line.
 #   scripts/symbolize.sh ccxview-crash.txt [BINARY]
-# BINARY is the ccxview.exe / ccxview that crashed, built with debug info (a local
-# build), or for a release the matching file from ccxview-symbols-<version>.zip
-# (ccxview.exe.debug, ccxview.debug). Default: build/win/ccxview.exe for a Windows
+# BINARY is the ccxview.exe / ccxview that crashed, built with debug info: a local
+# build of the same version (the released binaries are stripped). Default: build/win/ccxview.exe for a Windows
 # report, build/bin/ccxview for a Linux one. Needs binutils (addr2line, objdump);
 # x86_64-w64-mingw32-addr2line works too for Windows reports on Linux.
 # Frames of other modules (system DLLs, libc) are printed as they are.

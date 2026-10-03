@@ -149,7 +149,7 @@ MINGW ?= x86_64-w64-mingw32-gcc
 WINDRES ?= $(MINGW:gcc=windres)
 MINGW_LDFLAGS ?=
 ZIG ?= $(shell command -v zig 2>/dev/null)
-# Debug info, kept apart for the release (pack-binaries.sh) and read by scripts/symbolize.sh.
+# Debug info, stripped from the release (pack-binaries.sh) and read by scripts/symbolize.sh on a local build.
 # mingw gcc 8 and older die on -g with LTO (internal compiler error in dwarf2out): they
 # get -g1, functions and lines without variables, which is all a stack trace needs.
 ifeq ($(origin WIN_G),undefined)
