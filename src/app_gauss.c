@@ -155,7 +155,12 @@ void gp_refresh_geometry(void) {
 /* ---- nodal fields -----------------------------------------------------------------
    Without a .dat the layer still works: every visible solid element gets its usual
    integration points, and the value there is the element's nodal field interpolated
-   with its shape functions. */
+   with its shape functions.
+   An invariant (von Mises, a principal value, a magnitude) is taken of the
+   interpolated components, not interpolated itself: it is no linear function of
+   them. Through a shell in bending the stress runs from +s over 0 to -s, and von
+   Mises at the nodes reads s, 0, s; interpolating that gives s/3 at a point 0.577
+   of the way out, where the stress, and so von Mises, is 0.577 s. */
 
 static int default_nip(int t) {
     switch (t) {
@@ -179,6 +184,13 @@ void gp_build_nodal(void) {
     bool one = total > 8000000;          /* huge models: one point per element keeps it drawable */
     CV_VEC(float) gp = {0}, gd = {0}, gv = {0};
     const bool val = G.has_field && G.scalar;
+    /* the field's components, when the scalar shown is an invariant of them */
+    const float* comp = NULL;
+    int nc = 0;
+    if (val && G.field_src == 0 && G.comp < 0 && !(G.diff_mode && G.cmp_on)) {
+        int fi = find_field(G.step, G.field_name);
+        if (fi >= 0) { nc = G.frd.steps[G.step].fields[fi].ncomp; comp = nc > 1 && nc <= CV_MAX_COMP ? cache_get(G.step, fi) : NULL; }
+    }
     for (uint32_t e = 0; e < E; e++) {
         if (G.vis && !G.vis[e]) continue;
         const int t = G.frd.etype[e];
@@ -188,14 +200,21 @@ void gp_build_nodal(void) {
         for (int k = 0; k < nip; k++) {
             double xi[3], N[20];
             if (!cv_ip_param(t, nip, k, xi) || nn > 20 || !cv_shape(t, (int)nn, xi, N)) continue;
-            double x[3] = { 0, 0, 0 }, d[3] = { 0, 0, 0 }, v = 0;
+            double x[3] = { 0, 0, 0 }, d[3] = { 0, 0, 0 }, v = 0, c[CV_MAX_COMP] = { 0 };
             for (uint32_t i = 0; i < nn; i++) {
                 uint32_t nd = G.frd.conn[b + (uint32_t)cv_frd_node_pos(t, (int)nn, (int)i)];
                 for (int j = 0; j < 3; j++) {
                     x[j] += N[i] * G.frd.xyz[3 * nd + j];
                     if (G.disp) d[j] += N[i] * G.disp[3 * nd + j];
                 }
-                if (val) v += N[i] * G.scalar[nd];
+                if (comp) for (int j = 0; j < nc; j++) c[j] += N[i] * comp[(size_t)nd * nc + j];
+                else if (val) v += N[i] * G.scalar[nd];
+            }
+            if (comp) {
+                float cf[CV_MAX_COMP], out;
+                for (int j = 0; j < nc; j++) cf[j] = (float)c[j];
+                cv_field_scalar(cf, nc, 1, G.comp, &out);
+                v = out;
             }
             if (!cv_reserve(gp, gp.n + 3) || !cv_reserve(gd, gd.n + 3) || !cv_push(gv, val ? (float)v : NAN)) goto done;
             for (int j = 0; j < 3; j++) { gp.a[gp.n++] = (float)x[j]; gd.a[gd.n++] = (float)d[j]; }
