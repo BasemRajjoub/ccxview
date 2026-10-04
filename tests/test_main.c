@@ -1406,6 +1406,8 @@ static void test_localsys_requests(void) {
 #include "../src/cap.h"
 #include "t_cap.h"
 #include "t_glyph.h"
+#include "../src/traj.h"
+#include "t_traj.h"
 
 int main(void) {
     test_gpu_env();
@@ -1414,6 +1416,7 @@ int main(void) {
     test_loads();
     test_cap();
     test_glyph();
+    test_traj();
     test_video();
     test_cfg();
     test_export();

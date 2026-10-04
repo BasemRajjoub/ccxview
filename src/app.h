@@ -321,6 +321,9 @@ typedef struct {
     int       tensor_style;          /* CV_GLYPH_* (glyph.h) */
     bool      tensor_colored;        /* glyphs coloured by the selected scalar, else grey */
     float     tensor_scale;          /* the largest glyph, times the mean element size */
+    bool      show_traj;             /* principal stress trajectories (app_traj.c) */
+    int       traj_which;            /* 0 S1 (largest), 1 S3 (smallest), 2 both */
+    float     traj_spacing;          /* distance between trajectories, times the mean element size */
     float     bc_scale, load_scale;  /* supports / springs and load arrows, times sym_len */
     bool      sym_auto;              /* symbol size follows the model's size (else sym_size) */
     float     sym_size;              /* symbol size by hand, model units */
@@ -491,7 +494,11 @@ bool app_field_is_vector(void);      /* the selected .frd field has 3 components
 void app_vectors_changed(void);
 bool app_field_is_tensor(void);      /* app_tensor.c: the selected .frd field is a symmetric tensor */
 void app_tensors_changed(void);
-float app_tensor_cross_lim(void);    /* the principal cross's colour scale: +- this, 0 before any */
+void app_traj_changed(void);         /* trajectories toggled or set: traced again */
+float app_tensor_cross_lim(void);    /* the sign-coloured layers' scale: +- this, 0 when none is shown */
+/* the reference magnitude of the selected tensor field: the 98th percentile of the
+   largest principal magnitude over the shown elements' centres (0: none) */
+float app_tensor_ref(void);
 bool deck_sibling(const char* path, const char* ext, char* out, size_t n);
 
 /* app_fbd.c: cgx geometry */

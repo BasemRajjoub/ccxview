@@ -470,6 +470,7 @@ void refresh_field(void) {
     refresh_gauss();
     refresh_vectors();
     refresh_tensors();
+    refresh_traj();
     refresh_lin();
     refresh_path();
     refresh_hist();

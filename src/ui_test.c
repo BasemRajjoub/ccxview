@@ -145,7 +145,7 @@ static void check_always(struct nk_context* ctx) {
 }
 
 /* ---- the script's own state and checks ------------------------------------------- */
-static struct { int cmap, bands, faces_mode, units, cyc_axis, tensor_style; bool deform, markers, edges; float dist, scroll; cv_camera cam; } was;
+static struct { int cmap, bands, faces_mode, units, cyc_axis, tensor_style, traj_which; bool deform, markers, edges; float dist, scroll; cv_camera cam; } was;
 
 static void close_all(struct nk_context* ctx) {
     G.show_units = G.show_msgs = G.show_calc_help = G.show_conv = G.legend_edit = G.find_open = G.browser_open = false;
@@ -153,7 +153,7 @@ static void close_all(struct nk_context* ctx) {
 }
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
-    was.tensor_style = G.tensor_style;
+    was.tensor_style = G.tensor_style; was.traj_which = G.traj_which;
     was.deform = G.deform; was.markers = G.show_markers; was.edges = G.show_edges;
     was.cam = G.cam;
     struct nk_window* w = win_of(ctx, "Scene");
@@ -182,6 +182,8 @@ static void select_stress(struct nk_context* ctx) { app_select("STRESS", CV_COMP
 static bool tensor_picked(struct nk_context* ctx) { return G.tensor_style != was.tensor_style && G.show_tensor; }
 static void tensor_small(struct nk_context* ctx) { G.tensor_scale = 0.2f; }
 static bool tensor_resized(struct nk_context* ctx) { return G.tensor_scale > 0.5f; }
+static bool traj_picked(struct nk_context* ctx) { return G.traj_which != was.traj_which && G.show_traj; }
+static void traj_off(struct nk_context* ctx) { G.show_traj = false; G.traj_which = 0; app_traj_changed(); }
 static void tensor_off(struct nk_context* ctx) { G.show_tensor = false; app_tensors_changed(); }
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
@@ -290,6 +292,11 @@ static const step script[] = {
     AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(tensor_picked, "the style changes, the glyphs show"),
     DO(tensor_small), WAIT(2), AT_TIP("Scene", "#tensor size"), CLICK, EXPECT(tensor_resized, "the size slider answers"),
     DO(tensor_off),
+
+    CASE("sidebar: the trajectory list opens and picks"),
+    DO(sections_open), DO(select_stress), DO(traj_off), WAIT(3), DO(snapshot), AT_TIP("Scene", "#traj family"), WAIT(30), CLICK,
+    EXPECT(scene_popup, "the trajectory list opens"),
+    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(traj_picked, "the family changes, the trajectories show"), DO(traj_off),
 
     CASE("sidebar and toolbar tick boxes"),
     PANELS_ANSWER,

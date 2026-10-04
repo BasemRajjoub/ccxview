@@ -209,10 +209,13 @@ static const char* kVSI =
     VS_TAIL
     "}\n";
 
-/* The tensor glyph: a_m is (theta, phi) on the unit superquadric (glyph.h,
-   cv_superquad_point -- keep in step); the instance gives the centre and scalar,
-   the three semi-axes (direction times length) with the exponents alpha, beta and
-   the planar flag in their w, and how the glyph moves with the shape. */
+/* The tensor glyph: a_m is (theta, phi) on the unit sphere's grid. The instance
+   gives the centre and scalar, the base axes (direction times length) with the
+   superquadric exponents alpha, beta, cee in their w, the signed eigenvalue along
+   each axis and the kind (i_l.w: 0 superquadric, 1 Reynolds, 2 HWY; + 4 coloured
+   by the normal stress in each direction), and how the glyph moves.
+   Superquadric: glyph.h cv_superquad_point (keep in step). Reynolds: radius
+   |n.S.n| along n; HWY: the shear |S.n - (n.S.n) n|. */
 static const char* kVSG =
     GLSL_HDR
     VS_UNIFORMS
@@ -221,16 +224,30 @@ static const char* kVSG =
     "in vec4 i_e0;\n"
     "in vec4 i_e1;\n"
     "in vec4 i_e2;\n"
+    "in vec4 i_l;\n"
     "in vec3 i_disp;\n"
     "in vec3 i_disp2;\n"
     "float spw(float x, float e) { return x < 0.0 ? -pow(-x, e) : pow(x, e); }\n"
     "void main() {\n"
     "  float ct = cos(a_m.x), st = sin(a_m.x), cf = cos(a_m.y), sf = sin(a_m.y);\n"
-    "  float al = i_e0.w, be = i_e1.w;\n"
-    "  vec3 q = i_e2.w > 0.5 ? vec3(spw(ct, al) * spw(sf, be), spw(st, al) * spw(sf, be), spw(cf, be))\n"
-    "                        : vec3(spw(cf, be), -spw(st, al) * spw(sf, be), spw(ct, al) * spw(sf, be));\n"
+    "  int kind = int(i_l.w + 0.5);\n"
+    "  bool normal = kind >= 4;\n"
+    "  if (normal) kind -= 4;\n"
+    "  vec3 q, nd;\n"                          /* the point in base units, its direction in the eigenframe */
+    "  if (kind == 0) {\n"
+    "    float al = i_e0.w, be = i_e1.w, ce = i_e2.w, sm = spw(sf, be);\n"
+    "    q = vec3(spw(ct, al) * sm, spw(st, al) * sm, spw(cf, be));\n"
+    "    if (ce != be && sm != 0.0) q.y *= spw(sin(acos(clamp(spw(q.z, 1.0 / ce), -1.0, 1.0))), ce) / sm;\n"
+    "    nd = q * vec3(length(i_e0.xyz), length(i_e1.xyz), length(i_e2.xyz));\n"
+    "  } else {\n"
+    "    vec3 n = vec3(ct * sf, st * sf, cf);\n"
+    "    float qn = dot(i_l.xyz, n * n);\n"
+    "    q = n * (kind == 1 ? abs(qn) : sqrt(max(dot(i_l.xyz * i_l.xyz, n * n) - qn * qn, 0.0)));\n"
+    "    nd = n;\n"
+    "  }\n"
     "  vec3 p = i_c.xyz + i_disp * u_p.x + i_disp2 * u_q.y + q.x * i_e0.xyz + q.y * i_e1.xyz + q.z * i_e2.xyz;\n"
-    "  v_s = i_c.w;\n"
+    "  float nn = dot(nd, nd);\n"
+    "  v_s = normal ? (nn > 0.0 ? dot(i_l.xyz, nd * nd) / nn : 0.0) : i_c.w;\n"
     VS_TAIL
     "}\n";
 
@@ -556,7 +573,7 @@ void cv_render_init(void) {
     }
 
     {   /* tensor glyphs: the unit grid per vertex, CV_GLYPH_FLOATS per instance */
-        static const char* const attr[8] = { "a_m", "i_c", "i_e0", "i_e1", "i_e2", "i_disp", "i_disp2", NULL };
+        static const char* const attr[8] = { "a_m", "i_c", "i_e0", "i_e1", "i_e2", "i_l", "i_disp", "i_disp2" };
         R.shd_glyph = make_shader_vs(kVSG, attr, kFS);
         sg_pipeline_desc pg = {
             .shader = R.shd_glyph,
@@ -569,8 +586,9 @@ void cv_render_init(void) {
                     [2] = { .buffer_index = 1, .offset = 16, .format = SG_VERTEXFORMAT_FLOAT4 },
                     [3] = { .buffer_index = 1, .offset = 32, .format = SG_VERTEXFORMAT_FLOAT4 },
                     [4] = { .buffer_index = 1, .offset = 48, .format = SG_VERTEXFORMAT_FLOAT4 },
-                    [5] = { .buffer_index = 1, .offset = 64, .format = SG_VERTEXFORMAT_FLOAT3 },
-                    [6] = { .buffer_index = 1, .offset = 76, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [5] = { .buffer_index = 1, .offset = 64, .format = SG_VERTEXFORMAT_FLOAT4 },
+                    [6] = { .buffer_index = 1, .offset = 80, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [7] = { .buffer_index = 1, .offset = 92, .format = SG_VERTEXFORMAT_FLOAT3 },
                 },
             },
             .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
@@ -578,10 +596,10 @@ void cv_render_init(void) {
             .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
         };
         R.pip_glyph = sg_make_pipeline(&pg);
-        static float v[20 * 10 * 18];
-        R.gmesh_n[0] = unit_glyph(v, 20, 10);
+        static float v[28 * 14 * 18];
+        R.gmesh_n[0] = unit_glyph(v, 28, 14);   /* concave glyphs need the finer grid */
         R.gmesh[0] = make_buf(v, (size_t)R.gmesh_n[0] * 12, false);
-        R.gmesh_n[1] = unit_glyph(v, 8, 5);
+        R.gmesh_n[1] = unit_glyph(v, 12, 6);
         R.gmesh[1] = make_buf(v, (size_t)R.gmesh_n[1] * 12, false);
     }
 
@@ -752,13 +770,13 @@ void cv_render_glyphs(const float* inst, uint32_t n) {
     GLY.n = GLY.buf.id ? n : 0;
 }
 
-static void draw_glyphs(int mode, const float rgb[3], const cv_draw* d) {
+static void draw_glyphs(int mode, const float rgb[3], const cv_draw* d, sg_view cmap) {
     if (!GLY.n) return;
     int lod = GLY.n > 5000 ? 1 : 0;            /* great numbers: a coarser grid */
     sg_apply_pipeline(R.pip_glyph);
     sg_bindings b = {
         .vertex_buffers = { [0] = R.gmesh[lod], [1] = GLY.buf },
-        .views = { [0] = R.cmap_view, [1] = R.etex_view },
+        .views = { [0] = cmap, [1] = R.etex_view },
         .samplers = { [0] = R.smp_lin, [1] = R.smp_near },
     };
     sg_apply_bindings(&b);
@@ -879,18 +897,21 @@ void cv_render_draw(const cv_draw* d) {
             draw_inst(CV_INST_HEAT, CV_COLOR_SOLID, heat_rgb, d, px);
         }
         if (d->vectors) draw_inst(CV_INST_VEC, d->vectors_color, vec_rgb, d, px);
-        if (d->tensors) {                         /* glyphs coloured by the field, crosses by sign */
+        {   /* tensor glyphs, the cross and the trajectories. Coloured by sign: blue -lim, pale 0, red +lim */
             static const float glyph_rgb[3] = { 0.85f, 0.85f, 0.85f }, ten_rgb[3] = { 0.90f, 0.15f, 0.12f },
                                cmp_rgb[3] = { 0.15f, 0.35f, 0.95f };
-            draw_glyphs(d->tensors_color, glyph_rgb, d);
-            if (d->cross_lim > 0) {               /* each bar by its value: blue -lim .. pale 0 .. red +lim */
-                cv_draw c = *d;
-                c.rmin = -d->cross_lim; c.rmax = d->cross_lim; c.bands = 0; c.grey_out_of_range = false;
-                draw_inst_map(CV_INST_TENS, CV_COLOR_NODAL, ten_rgb, &c, px, R.div_view);
-                draw_inst_map(CV_INST_COMP, CV_COLOR_NODAL, cmp_rgb, &c, px, R.div_view);
-            } else {
-                draw_inst(CV_INST_TENS, CV_COLOR_SOLID, ten_rgb, d, px);
-                draw_inst(CV_INST_COMP, CV_COLOR_SOLID, cmp_rgb, d, px);
+            cv_draw c = *d;
+            c.rmin = -d->sign_lim; c.rmax = d->sign_lim; c.bands = 0; c.grey_out_of_range = false;
+            bool sg = d->sign_lim > 0;
+            if (d->tensors) {
+                if (d->glyph_signed && sg) draw_glyphs(CV_COLOR_NODAL, glyph_rgb, &c, R.div_view);
+                else draw_glyphs(d->glyph_signed ? CV_COLOR_SOLID : d->tensors_color, glyph_rgb, d, R.cmap_view);
+                draw_inst_map(CV_INST_TENS, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, ten_rgb, sg ? &c : d, px, R.div_view);
+                draw_inst_map(CV_INST_COMP, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, cmp_rgb, sg ? &c : d, px, R.div_view);
+            }
+            if (d->traj) {
+                draw_inst_map(CV_INST_TRAJ1, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, ten_rgb, sg ? &c : d, px, R.div_view);
+                draw_inst_map(CV_INST_TRAJ3, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, cmp_rgb, sg ? &c : d, px, R.div_view);
             }
         }
         if (d->links) draw_inst(CV_INST_LINK, CV_COLOR_SOLID, link_rgb, d, px);

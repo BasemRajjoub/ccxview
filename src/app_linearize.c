@@ -22,7 +22,7 @@ static int lin_field(void) {
 }
 
 /* natural coordinates of p in solid element e; N: its shape functions there */
-static bool elem_locate(uint32_t e, const double p[3], double N[20]) {
+bool elem_locate(uint32_t e, const double p[3], double N[20]) {
     int t = G.frd.etype[e];
     uint32_t b = G.frd.eoff[e], nn = G.frd.eoff[e + 1] - b;
     if (t < 1 || t > 6 || nn > 20) return false;

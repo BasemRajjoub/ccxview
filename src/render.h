@@ -46,8 +46,10 @@ typedef struct {
     bool  vectors;             /* arrows of a 3-component field at the nodes */
     bool  tensors;             /* glyphs of a stress / strain tensor (cv_render_glyphs, CV_INST_TENS / COMP) */
     int   tensors_color;       /* the glyphs: CV_COLOR_SOLID or CV_COLOR_NODAL */
-    float cross_lim;           /* > 0: the cross's bars coloured by their value on a fixed cool-warm
-                                  scale -cross_lim .. +cross_lim; 0: plain red / blue */
+    bool  glyph_signed;        /* the glyphs are coloured by the normal stress in each direction */
+    bool  traj;                /* principal stress trajectories (CV_INST_TRAJ1 / TRAJ3) */
+    float sign_lim;            /* > 0: the cross, the trajectories and signed glyphs coloured by value on a
+                                  fixed cool-warm scale -sign_lim .. +sign_lim; 0: plain red / blue / grey */
     bool  ghost;               /* the undeformed edges in grey behind the deformed shape */
     bool  markers;             /* min / max balls */
     bool  path;                /* the plotted line on the surface */
@@ -101,16 +103,19 @@ void cv_render_aux2(int which, const float* pos, const float* disp, const float*
    A body is never drawn thinner than about a pixel, so symbols stay visible from far
    away and a radius of nearly 0 gives a line of constant width. NULL / 0 clears. */
 /* CV_INST_TENS / COMP: the bars of the principal cross in tension / compression */
+/* CV_INST_TRAJ1 / TRAJ3: principal stress trajectories of S1 / S3 */
 enum { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_DISC, CV_INST_LINK, CV_INST_VEC,
-       CV_INST_TENS, CV_INST_COMP, CV_INST_N };
+       CV_INST_TENS, CV_INST_COMP, CV_INST_TRAJ1, CV_INST_TRAJ3, CV_INST_N };
 #define CV_INST_FLOATS 21
 void cv_render_inst(int which, const float* inst, uint32_t n);
 
-/* Tensor glyphs (glyph.h): a unit superquadric drawn once per instance, lit, its
-   scalar coloured like the faces. CV_GLYPH_FLOATS per instance:
-     centre[3], scalar, axis0[3] * len0, alpha, axis1[3] * len1, beta,
-     axis2[3] * len2, planar (0 / 1), disp[3], disp2[3]. NULL / 0 clears. */
-#define CV_GLYPH_FLOATS 22
+/* Tensor glyphs (glyph.h): one unit shape drawn per instance, lit, coloured by its
+   scalar like the faces or by the normal stress in each direction. CV_GLYPH_FLOATS
+   per instance:
+     centre[3], scalar, base x[3] * len, alpha, base y[3] * len, beta,
+     base z[3] * len, cee, eigenvalue along x, y, z, kind (CV_GSHAPE_*, + 4 coloured
+     by the normal stress), disp[3], disp2[3]. NULL / 0 clears. */
+#define CV_GLYPH_FLOATS 26
 void cv_render_glyphs(const float* inst, uint32_t n);
 
 void cv_render_draw(const cv_draw* d);

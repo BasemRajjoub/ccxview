@@ -11,7 +11,9 @@ ccxview model.frd --shot out.png            # render, save, quit
 ccxview model.frd --export mp4              # animation video
 ccxview model.frd --field DISP --vectors    # displacement arrows
 ccxview model.frd --gp                      # Gauss points
-ccxview model.frd --field STRESS --tensor ellipsoid   # stress glyphs (or superquadric, cross)
+ccxview model.frd --field STRESS --tensor ellipsoid   # stress glyphs: ellipsoid, superquadric, cross,
+                                                      #   schultz-kindlmann, reynolds, hwy
+ccxview model.frd --field STRESS --trajectories both  # principal stress trajectories: s1, s3, both
 ccxview model.frd --field DISP --history 17 # node 17 over all steps
 ccxview model.frd --calc "S1 - S3"          # a calculated field (Tresca)
 ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38 to 54
@@ -50,7 +52,7 @@ ccxview --version
 ## Where things are
 
 - **Layers** (left panel): faces, edges, outline, nodes, Gauss points, vectors,
-  tensor glyphs, supports, loads, springs.
+  tensor glyphs, stress trajectories, supports, loads, springs.
 - **Groups**: element types, materials, sets and surfaces of the deck.
 - **Fields**: the results of the step, their components and invariants,
   calculated fields.

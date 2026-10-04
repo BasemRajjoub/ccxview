@@ -326,11 +326,13 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
     }
 
     float bar_w = 22 * s, top = area.y + row * 0.5f, h = area.h - row;
-    float lim = G.show_tensor && G.tensor_colored && G.tensor_style == CV_GLYPH_CROSS ? app_tensor_cross_lim() : 0.f;
-    if (lim > 0 && h > 3 * row + 20) {            /* the principal cross's own scale, a strip below the bar */
+    float lim = app_tensor_cross_lim();          /* a layer coloured by sign is on */
+    if (lim > 0 && h > 2.9f * row + 30) {            /* the principal cross's own scale, a strip below the bar */
         float ky = top + h - 2.4f * row, kw = CV_MIN(area.w - 4 * s, 160 * s), sh = row * 0.55f;
         h -= 2.9f * row;
-        ink_text(cv, font, area.x, ky, area.w, "cross: principal", dim);
+        bool normal = G.show_tensor && cv_glyph_signed(G.tensor_style);
+        bool principal = (G.show_tensor && G.tensor_style == CV_GLYPH_CROSS) || G.show_traj;
+        ink_text(cv, font, area.x, ky, area.w, normal && principal ? "tensor: - / +" : normal ? "normal stress" : "principal", dim);
         ky += row;
         int n = 48;
         for (int i = 0; i < n; i++) {
@@ -594,7 +596,8 @@ void window_legend(struct nk_context* ctx, float s, float row) {
                 const struct nk_user_font* f = ctx->style.font;
                 lw = head_width(f, s);
                 float tw = lw - 2 * ctx->style.window.padding.x - 2 * ctx->style.text.padding.x - 4;
-                lh = CV_MIN(lh + (head_rows(f, tw) - 1) * (head_row(f, row, s) + ctx->style.window.spacing.y),
+                lh = CV_MIN(lh + (head_rows(f, tw) - 1) * (head_row(f, row, s) + ctx->style.window.spacing.y)
+                            + (app_tensor_cross_lim() > 0 ? 3 * row : 0),          /* the sign key below the bar */
                             G.vp_h - 20 * s);
             }
             /* top-right until dragged; then the corner it was dropped nearest (anchor.h) */

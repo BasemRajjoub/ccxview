@@ -18,6 +18,7 @@ typedef struct {
     bool        gp;             /* --gp: Gauss point layer on */
     bool        vectors;        /* --vectors: arrow layer on */
     int         tensor;         /* --tensor STYLE: glyph layer on with that CV_GLYPH_* style, -1 = keep */
+    int         traj;           /* --trajectories s1|s3|both: 0 s1, 1 s3, 2 both, -1 = keep */
     bool        conv;           /* --conv: open the convergence window */
     int         win_w, win_h;   /* --size WxH */
     const char* field;          /* --field NAME: start on that .frd field (first option) */
@@ -75,6 +76,8 @@ float*       to_csys(const cv_field_desc* d, const cv_frd* f, const float* vals)
 void         refresh_vectors(void);
 /* app_tensor.c: tensor glyphs */
 void         refresh_tensors(void);
+/* app_traj.c: principal stress trajectories (CV_INST_TRAJ1 / TRAJ3) */
+void         refresh_traj(void);
 
 /* app_path.c: path plot, history */
 void         refresh_path(void);
@@ -86,6 +89,10 @@ void         refresh_hist(void);
 void         refresh_lin(void);
 void         line_locate(const float A[3], const float B[3], int n, uint32_t* el, float* w);   /* elements + shape weights of n points on A..B */
 bool         line_interp(uint32_t e, const float* w, const float* v, int nc, float* out);
+#define elem_locate app_elem_locate
+/* natural coordinates of p in solid element e (types 1..6): true when inside, N its 20
+   shape-function weights there (node order of the element as line_interp expects) */
+bool         elem_locate(uint32_t e, const double p[3], double N[20]);
 
 /* app_cam.c: camera, symmetry, picking */
 void view_bounds(void);

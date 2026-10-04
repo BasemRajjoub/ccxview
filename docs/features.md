@@ -38,13 +38,18 @@ and the shape follow every node; the full list is in
 
 - Any result component as colour on faces, edges or nodes; per-element (flat)
   colouring; vectors and principal directions as 3D arrows.
-- Stress and strain tensors as a glyph per element: ellipsoids (semi-axes |s1|,
-  |s2|, |s3| along the principal directions), superquadrics (Kindlmann 2004:
-  edged where two principal values are close, so rods, discs and balls tell
-  apart from any side, which ellipsoids hide) coloured by the field, or the
-  principal cross (bars coloured by their value: blue compression, pale near
-  zero, red tension, with its own key under the legend). Sized from the elements
-  (View > Symbol sizes > tensors x), moving with the deformed shape.
+- Stress and strain tensors as a glyph per element, six styles:
+  ellipsoids (semi-axes |s1| |s2| |s3| along the principal directions);
+  superquadrics (Kindlmann 2004: edged where two values are close, so rods,
+  discs and balls tell apart from any side); the principal cross (a bar per
+  value, heads out for tension, in for compression); Schultz-Kindlmann
+  superquadrics (2010: any signs, mixed signs pinch the shape); Reynolds glyphs
+  (the normal stress on every plane) and HWY glyphs (Hashash, Yao, Wotring: the
+  shear stress on every plane). Coloured by the field, or by the sign (blue
+  compression, red tension, with a key under the legend). Sized from the
+  elements, moving with the deformed shape.
+- Principal stress trajectories: evenly spaced curves along S1 and / or S3
+  through the solid, the load paths, coloured by the principal value.
 - Gauss points as balls at the integration points, coloured by the field, or by
   the exact values of a `.dat` file.
 - Principal stresses, von Mises, magnitudes; cylindrical coordinate systems.
