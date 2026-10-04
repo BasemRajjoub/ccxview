@@ -10,6 +10,7 @@
    few above it are capped there, their colour still telling. */
 #include "app_int.h"
 #include "glyph.h"
+#include "gpu.h"
 #include <math.h>
 
 bool app_field_is_tensor(void) {
@@ -122,7 +123,10 @@ void refresh_tensors(void) {
     /* first pass: the elements drawn, the largest principal magnitude, the mean size */
     uint32_t n = G.frd.n_elems, shown = 0;
     for (uint32_t e = 0; e < n; e++) shown += !G.vis || G.vis[e];
-    uint32_t stride = shown / 40000 + 1;                        /* huge models: a sample (denser is clutter) */
+    /* huge models: a sample. More glyphs than this are clutter, not information, and
+       cost every frame: a software rasteriser (VMs, remote desktops) gets fewer */
+    uint32_t budget = cv_gpu_is_software() ? 4000 : 15000;
+    uint32_t stride = shown / budget + 1;
     typedef struct { uint32_t e; float c[3], s[6], d[6]; } item;
     CV_VEC(item) it = {0};
     CV_VEC(float) mag = {0};

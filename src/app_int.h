@@ -78,6 +78,7 @@ void         refresh_vectors(void);
 void         refresh_tensors(void);
 /* app_traj.c: principal stress trajectories (CV_INST_TRAJ1 / TRAJ3) */
 void         refresh_traj(void);
+void         app_traj_tick(void);       /* each frame: a trace put off during playback, once it stops */
 
 /* app_path.c: path plot, history */
 void         refresh_path(void);

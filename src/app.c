@@ -294,6 +294,7 @@ static void frame(void) {
         }
     }
 
+    app_traj_tick();
     ui_test_frame(g_nk);                 /* --ui-test: the script's next step, as events */
     g_nk = snk_new_frame();
     ui_frame(g_nk, sapp_width(), sapp_height());

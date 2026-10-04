@@ -1,6 +1,7 @@
 /* render.c -- sokol_gfx pipelines, buffers and colormaps (GL 4.1 core). */
 #include "render.h"
 #include "sokol_gfx.h"
+#include "gpu.h"
 #include <math.h>
 
 void cv_gl_enable_point_size(void);   /* sokol_impl.c: glEnable(GL_PROGRAM_POINT_SIZE) */
@@ -136,6 +137,7 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
     "out vec3 v_vpos;\n" \
     "out float v_s;\n" \
     "out float v_r;\n" \
+    "out vec3 v_n;\n" \
     "out vec3 v_wpos;\n"
 /* From the deformed point p to the clip position.
    "On top": depth squeezed into the front 2% of the range, so these points pass in
@@ -159,6 +161,7 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
     "  v_r = u_p.y * gl_Position.w / max(u_q.x, 1e-6);\n" \
     "  v_vpos = (u_mv * vec4(p, 1.0)).xyz;\n" \
     "  v_wpos = p;\n" \
+    "  v_n = vec3(0.0);\n" \
     "  gl_PointSize = u_p.y;\n" \
     ""
 
@@ -176,9 +179,10 @@ static const char* kVS =
     "}\n";
 
 /* The instanced symbol body: a_m is a vertex of the unit body (cos, sin round the
-   axis, t along it: 0 at a, 1 at b; cos = sin = 0 for the middle of an end disc);
-   the instance gives the two ends, their radii and how the body moves. The radius
-   is at least u_p.y pixels where it is not 0 (a cone keeps its tip). */
+   axis, t along it: 0 at a, 1 at b; -1 / 2 for the end discs at a / b); the
+   instance gives the two ends, their radii and how the body moves. The radius
+   is at least u_p.y pixels where it is not 0 (a cone keeps its tip). The normal
+   is the true one of the cone (or tube), so 12 sides shade round. */
 static const char* kVSI =
     GLSL_HDR
     VS_UNIFORMS
@@ -200,13 +204,17 @@ static const char* kVSI =
     "                         : (aw.y <= aw.z ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0));\n"
     "  vec3 u = normalize(cross(w, up));\n"
     "  vec3 v = cross(w, u);\n"
-    "  vec3 c = mix(A, B, a_m.z);\n"
-    "  float r = mix(i_r.x, i_r.y, a_m.z);\n"
+    "  float t = clamp(a_m.z, 0.0, 1.0);\n"
+    "  vec3 c = mix(A, B, t);\n"
+    "  float r = mix(i_r.x, i_r.y, t);\n"
     "  float wc = (u_mvp * vec4(c, 1.0)).w;\n"                       /* 1 in a parallel projection */
     "  if (r > 0.0 && wc > 0.0) r = max(r, u_p.y * 2.0 * wc / max(u_q.x, 1e-6));\n"
-    "  vec3 p = c + r * (a_m.x * u + a_m.y * v);\n"
+    "  vec3 rad = a_m.x * u + a_m.y * v;\n"
+    "  vec3 p = c + r * rad;\n"
     "  v_s = i_r.z;\n"
     VS_TAIL
+    "  vec3 nm = a_m.z < 0.0 ? -w : a_m.z > 1.0 ? w : rad * L - w * (i_r.y - i_r.x);\n"
+    "  v_n = mat3(u_mv) * nm;\n"
     "}\n";
 
 /* The tensor glyph: a_m is (theta, phi) on the unit sphere's grid. The instance
@@ -228,27 +236,48 @@ static const char* kVSG =
     "in vec3 i_disp;\n"
     "in vec3 i_disp2;\n"
     "float spw(float x, float e) { return x < 0.0 ? -pow(-x, e) : pow(x, e); }\n"
+    /* the point at (th, ph) in base units; nd: its direction in the eigenframe */
+    "vec3 surf(int kind, float th, float ph, out vec3 nd) {\n"
+    "  float ct = cos(th), st = sin(th), cf = cos(ph), sf = sin(ph);\n"
+    "  if (kind == 0) {\n"
+    "    float al = i_e0.w, be = i_e1.w, ce = i_e2.w, sm = spw(sf, be);\n"
+    "    vec3 q = vec3(spw(ct, al) * sm, spw(st, al) * sm, spw(cf, be));\n"
+    "    if (ce != be && sm != 0.0) q.y *= spw(sin(acos(clamp(spw(q.z, 1.0 / ce), -1.0, 1.0))), ce) / sm;\n"
+    "    nd = q * vec3(length(i_e0.xyz), length(i_e1.xyz), length(i_e2.xyz));\n"
+    "    return q;\n"
+    "  }\n"
+    "  vec3 n = vec3(ct * sf, st * sf, cf);\n"
+    "  float qn = dot(i_l.xyz, n * n);\n"
+    "  nd = n;\n"
+    "  return n * (kind == 1 ? abs(qn) : sqrt(max(dot(i_l.xyz * i_l.xyz, n * n) - qn * qn, 0.0)));\n"
+    "}\n"
+    "vec3 world(vec3 q) { return q.x * i_e0.xyz + q.y * i_e1.xyz + q.z * i_e2.xyz; }\n"
     "void main() {\n"
-    "  float ct = cos(a_m.x), st = sin(a_m.x), cf = cos(a_m.y), sf = sin(a_m.y);\n"
     "  int kind = int(i_l.w + 0.5);\n"
     "  bool normal = kind >= 4;\n"
     "  if (normal) kind -= 4;\n"
-    "  vec3 q, nd;\n"                          /* the point in base units, its direction in the eigenframe */
-    "  if (kind == 0) {\n"
-    "    float al = i_e0.w, be = i_e1.w, ce = i_e2.w, sm = spw(sf, be);\n"
-    "    q = vec3(spw(ct, al) * sm, spw(st, al) * sm, spw(cf, be));\n"
-    "    if (ce != be && sm != 0.0) q.y *= spw(sin(acos(clamp(spw(q.z, 1.0 / ce), -1.0, 1.0))), ce) / sm;\n"
-    "    nd = q * vec3(length(i_e0.xyz), length(i_e1.xyz), length(i_e2.xyz));\n"
-    "  } else {\n"
-    "    vec3 n = vec3(ct * sf, st * sf, cf);\n"
-    "    float qn = dot(i_l.xyz, n * n);\n"
-    "    q = n * (kind == 1 ? abs(qn) : sqrt(max(dot(i_l.xyz * i_l.xyz, n * n) - qn * qn, 0.0)));\n"
-    "    nd = n;\n"
-    "  }\n"
-    "  vec3 p = i_c.xyz + i_disp * u_p.x + i_disp2 * u_q.y + q.x * i_e0.xyz + q.y * i_e1.xyz + q.z * i_e2.xyz;\n"
+    "  vec3 nd, dn;\n"
+    "  vec3 o = world(surf(kind, a_m.x, a_m.y, nd));\n"
+    "  vec3 p = i_c.xyz + i_disp * u_p.x + i_disp2 * u_q.y + o;\n"
     "  float nn = dot(nd, nd);\n"
     "  v_s = normal ? (nn > 0.0 ? dot(i_l.xyz, nd * nd) / nn : 0.0) : i_c.w;\n"
     VS_TAIL
+    /* the surface normal: an ellipsoid's in closed form (the base axes scaled by
+       1 / length^2); else by differences along theta and phi, a little off the poles
+       (where theta does not move the point). Smooth shading at any grid. */
+    "  if (kind == 0 && i_e0.w == 1.0 && i_e1.w == 1.0 && i_e2.w == 1.0) {\n"
+    "    vec3 q = surf(0, a_m.x, a_m.y, dn);\n"
+    "    v_n = mat3(u_mv) * (q.x * i_e0.xyz / dot(i_e0.xyz, i_e0.xyz) + q.y * i_e1.xyz / dot(i_e1.xyz, i_e1.xyz)\n"
+    "                        + q.z * i_e2.xyz / dot(i_e2.xyz, i_e2.xyz));\n"
+    "    return;\n"
+    "  }\n"
+    "  const float e = 0.01;\n"
+    "  float ph = clamp(a_m.y, 3.0 * e, 3.14159265 - 3.0 * e);\n"
+    "  vec3 o0 = world(surf(kind, a_m.x, ph, dn));\n"
+    "  vec3 dt = world(surf(kind, a_m.x + e, ph, dn)) - o0;\n"
+    "  vec3 dp = world(surf(kind, a_m.x, ph + e, dn)) - o0;\n"
+    "  vec3 nm = cross(dt, dp);\n"
+    "  v_n = mat3(u_mv) * (dot(nm, nm) > 0.0 ? nm : o);\n"
     "}\n";
 
 static const char* kFS =
@@ -264,6 +293,7 @@ static const char* kFS =
     "in float v_s;\n"
     "in float v_r;\n"
     "in vec3 v_wpos;\n"
+    "in vec3 v_n;\n"
     "out vec4 frag;\n"
     "void main() {\n"
     "  if (dot(v_wpos, u_clip.xyz) > u_clip.w) discard;\n"
@@ -304,8 +334,11 @@ static const char* kFS =
     "    }\n"
     "  }\n"
     "  if (u_flags.y > 0.5) {\n"
-    "    vec3 n = normalize(cross(dFdx(v_vpos), dFdy(v_vpos)));\n"
+    /* symbols and glyphs bring their own normal: smooth, with a soft highlight */
+    "    bool sm = dot(v_n, v_n) > 0.0;\n"
+    "    vec3 n = sm ? normalize(v_n) : normalize(cross(dFdx(v_vpos), dFdy(v_vpos)));\n"
     "    c *= 0.30 + 0.70 * abs(n.z);\n"
+    "    if (sm) c += 0.18 * pow(abs(n.z), 28.0);\n"
     "  }\n"
     "#ifdef SPHERE\n"
     "  c *= 0.72 + 0.28 * nz;\n"               /* a touch of rim darkening: reads as a ball */
@@ -328,7 +361,7 @@ static struct {
     sg_pipeline pip_inst;             /* the instanced symbol bodies */
     sg_shader   shd_glyph;
     sg_pipeline pip_glyph;            /* the tensor glyphs */
-    sg_buffer   gmesh[2];  int gmesh_n[2];              /* the unit glyph: (theta, phi) grid, fine and coarse */
+    sg_buffer   gmesh[3];  int gmesh_n[3];              /* the unit glyph: (theta, phi) grids, fine to coarse */
     sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
     sg_image    div_img;   sg_view div_view;   /* cool-warm, fixed: the principal cross by value */
@@ -462,8 +495,8 @@ static int unit_body(float* v, int n, bool cap_b) {
         float c0 = cosf(t0), s0 = sinf(t0), c1 = cosf(t1), s1 = sinf(t1);
         MV(c0, s0, 0); MV(c1, s1, 0); MV(c1, s1, 1);
         MV(c0, s0, 0); MV(c1, s1, 1); MV(c0, s0, 1);
-        MV(0, 0, 0); MV(c1, s1, 0); MV(c0, s0, 0);
-        if (cap_b) { MV(0, 0, 1); MV(c0, s0, 1); MV(c1, s1, 1); }
+        MV(0, 0, -1); MV(c1, s1, -1); MV(c0, s0, -1);          /* -1 / 2: the end discs (their normal) */
+        if (cap_b) { MV(0, 0, 2); MV(c0, s0, 2); MV(c1, s1, 2); }
     }
 #undef MV
     return k / 3;
@@ -596,11 +629,14 @@ void cv_render_init(void) {
             .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
         };
         R.pip_glyph = sg_make_pipeline(&pg);
-        static float v[28 * 14 * 18];
-        R.gmesh_n[0] = unit_glyph(v, 28, 14);   /* concave glyphs need the finer grid */
-        R.gmesh[0] = make_buf(v, (size_t)R.gmesh_n[0] * 12, false);
-        R.gmesh_n[1] = unit_glyph(v, 12, 6);
-        R.gmesh[1] = make_buf(v, (size_t)R.gmesh_n[1] * 12, false);
+        static float v[32 * 16 * 18];
+        /* fine for a few thousand (pinched shapes need it), coarser as they multiply:
+           at most ~15M vertices a frame; the smooth normals hide the facets */
+        static const int grid[3][2] = { { 32, 16 }, { 18, 9 }, { 12, 6 } };
+        for (int i = 0; i < 3; i++) {
+            R.gmesh_n[i] = unit_glyph(v, grid[i][0], grid[i][1]);
+            R.gmesh[i] = make_buf(v, (size_t)R.gmesh_n[i] * 12, false);
+        }
     }
 
     R.smp_lin = sg_make_sampler(&(sg_sampler_desc){
@@ -772,7 +808,8 @@ void cv_render_glyphs(const float* inst, uint32_t n) {
 
 static void draw_glyphs(int mode, const float rgb[3], const cv_draw* d, sg_view cmap) {
     if (!GLY.n) return;
-    int lod = GLY.n > 5000 ? 1 : 0;            /* great numbers: a coarser grid */
+    int lod = GLY.n > 15000 ? 2 : GLY.n > 4000 ? 1 : 0;   /* great numbers: a coarser grid */
+    if (cv_gpu_is_software() && lod < 2) lod++;           /* a software rasteriser: one step coarser */
     sg_apply_pipeline(R.pip_glyph);
     sg_bindings b = {
         .vertex_buffers = { [0] = R.gmesh[lod], [1] = GLY.buf },

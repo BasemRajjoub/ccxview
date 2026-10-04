@@ -6,11 +6,15 @@
    lines follow the deformed shape and the animation. */
 #include "app_int.h"
 #include "traj.h"
+#include "gpu.h"
 #include <math.h>
 
 #define TRAJ_MAX_LINES  4000
 #define TRAJ_MAX_SEEDS  50000
-#define TRAJ_MAX_POINTS 400000    /* over both families: bounds the work on huge models */
+/* tube segments over both families: each costs every frame, so a software
+   rasteriser (VMs, remote desktops) gets fewer */
+#define TRAJ_MAX_SEGS    150000
+#define TRAJ_MAX_SEGS_SW 40000
 
 /* the sampler's state: the field, the element boxes and the last element hit */
 typedef struct {
@@ -60,15 +64,66 @@ static uint32_t scatter_stride(uint32_t n) {
     }
 }
 
+/* What the lines depend on. Switching the component shown, the colours or the
+   glyphs re-runs refresh_field but not this: the lines stay. */
+typedef struct { const float* v; const float *disp, *disp2; const uint8_t* vis; const void* skin; size_t ntri;
+                 int step, which; float spacing, ref; } traj_key;
+static traj_key last;
+static bool pending;              /* skipped during playback: traced when it stops */
+static double cost;               /* seconds the last trace took */
+
+void app_traj_tick(void) {
+    if (pending && !G.playing) refresh_traj();
+}
+
+/* A traced line as tubes. The integration steps are short (0.3 elements); runs of
+   them that stay straight within 3 degrees merge into one tube up to an element
+   long, so a line costs a few tubes per element crossed, not one per step.
+   Returns the tubes added. */
+static size_t emit_line(cv_fvec* in, const float* p, const float* d, const float* v, size_t n, float r, float hmax) {
+    size_t a = 0, segs = 0;
+    for (size_t j = 1; j < n; j++) {
+        bool keep = j == n - 1;
+        if (!keep) {
+            const float* pa = p + 3 * a, *pj = p + 3 * j, *pn = p + 3 * (j + 1);
+            float u[3], w[3], lu = 0, lw = 0, dt = 0;
+            for (int k = 0; k < 3; k++) { u[k] = pj[k] - pa[k]; w[k] = pn[k] - pj[k]; lu += u[k] * u[k]; lw += w[k] * w[k]; dt += u[k] * w[k]; }
+            keep = lu >= hmax * hmax || dt < 0.99863f * sqrtf(lu * lw);    /* cos 3 deg */
+        }
+        if (!keep) continue;
+        double vm = 0;
+        for (size_t k = a; k <= j; k++) vm += v[k];
+        deck_inst2(in, p + 3 * a, p + 3 * j, r, r, (float)(vm / (double)(j - a + 1)), d + 6 * a, d + 6 * j);
+        a = j;
+        segs++;
+    }
+    return segs;
+}
+
 void refresh_traj(void) {
+    pending = false;
+    traj_key k;
+    memset(&k, 0, sizeof k);                                      /* padding too: compared by memcmp */
+    const float* v = NULL;
+    const cv_field_desc* fd = NULL;
+    if (G.show_traj && G.has_field && app_field_is_tensor()) {
+        int fi = find_field(G.step, G.field_name);
+        fd = &G.frd.steps[G.step].fields[fi];
+        v = cache_get(G.step, fi);
+        k.v = v; k.disp = G.disp; k.disp2 = G.disp2; k.vis = G.vis; k.skin = G.skin.tri; k.ntri = G.skin.n_tri;
+        k.step = G.step; k.which = G.traj_which; k.spacing = G.traj_spacing; k.ref = app_tensor_ref();
+        if (v && !memcmp(&k, &last, sizeof k)) return;           /* drawn already */
+    }
     cv_render_inst(CV_INST_TRAJ1, NULL, 0);
     cv_render_inst(CV_INST_TRAJ3, NULL, 0);
-    if (!G.show_traj || !G.has_field || !app_field_is_tensor()) return;
-    int fi = find_field(G.step, G.field_name);
-    const cv_field_desc* fd = &G.frd.steps[G.step].fields[fi];
-    const float* v = cache_get(G.step, fi);
-    float ref = app_tensor_ref();
+    memset(&last, 0, sizeof last);
+    float ref = k.ref;
     if (!v || fd->ncomp < 6 || !(ref > 0)) return;
+    /* playing through the steps: a slow trace (huge model) waits for the stop rather
+       than stall every step */
+    if (G.playing && cost > 0.15) { pending = true; return; }
+    double t0 = cv_now();
+    last = k;
 
     /* the shown solid elements: boxes, centres, the mean size, the model box */
     CV_VEC(uint32_t) el = {0};
@@ -105,7 +160,8 @@ void refresh_traj(void) {
     opt.max_steps = (int)CV_MIN(20000.f, 3 * G.diag / opt.h);
     float sep = CV_MAX(G.traj_spacing, 0.2f) * h_elem, r = 0.05f * h_elem;
     uint32_t stride = scatter_stride(ne);
-    size_t budget = G.traj_which == 2 ? TRAJ_MAX_POINTS / 2 : TRAJ_MAX_POINTS;   /* per family */
+    size_t budget = cv_gpu_is_software() ? TRAJ_MAX_SEGS_SW : TRAJ_MAX_SEGS;
+    if (G.traj_which == 2) budget /= 2;                                          /* per family */
 
     for (int fam = 0; fam < 2; fam++) {
         if (G.traj_which != 2 && G.traj_which != fam) continue;
@@ -126,11 +182,9 @@ void refresh_traj(void) {
             size_t n = cv_traj_trace(p, &opt, traj_sample, &ctx, &occ, lines + 1, &pts, &disp, &val);
             if (n < 2) continue;
             lines++;
-            for (size_t j = 0; j + 1 < n; j++)
-                deck_inst2(&in, pts.a + 3 * j, pts.a + 3 * j + 3, r, r, 0.5f * (val.a[j] + val.a[j + 1]),
-                           disp.a + 6 * j, disp.a + 6 * j + 6);
-            if (n >= left) break;
-            left -= n;
+            size_t segs = emit_line(&in, pts.a, disp.a, val.a, n, r, h_elem);
+            if (segs >= left) break;
+            left -= segs;
         }
         cv_render_inst(fam ? CV_INST_TRAJ3 : CV_INST_TRAJ1, in.a, (uint32_t)(in.n / CV_INST_FLOATS));
         cv_free_vec(pts); cv_free_vec(disp); cv_free_vec(val); cv_free_vec(in);
@@ -139,4 +193,5 @@ void refresh_traj(void) {
 done:
     cv_bins_free(&bins);
     cv_free_vec(el); cv_free_vec(lo); cv_free_vec(hi); cv_free_vec(cen);
+    cost = cv_now() - t0;
 }
