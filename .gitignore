@@ -15,6 +15,7 @@ ccxview.ini
 !samples/elements/elements.frd
 !samples/symbols/symbols.frd
 !samples/vessel/vessel.frd
+!samples/cantilever/cantilever.frd
 samples/*/*.12d
 samples/*/spooles.out
 samples/*/ccx.log

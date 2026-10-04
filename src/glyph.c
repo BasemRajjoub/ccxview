@@ -37,6 +37,24 @@ void cv_superquad_point(float alpha, float beta, bool planar, float theta, float
     }
 }
 
+static int cmp_float(const void* a, const void* b) {
+    float x = *(const float*)a, y = *(const float*)b;
+    return (x > y) - (x < y);
+}
+
+float cv_glyph_ref(float* m, size_t n, float q) {
+    if (!n) return 0;
+    qsort(m, n, sizeof *m, cmp_float);
+    q = CV_MIN(CV_MAX(q, 0.f), 1.f);
+    return m[(size_t)(q * (float)(n - 1) + 0.5f)];
+}
+
+void cv_glyph_cap(cv_glyph* g, float max_len) {
+    if (!(g->len[0] > max_len)) return;
+    float f = max_len / g->len[0];
+    for (int i = 0; i < 3; i++) g->len[i] *= f;
+}
+
 bool cv_glyph_make(const float s[6], bool xz, int style, float k, float min_frac, cv_glyph* g) {
     float val[3], vec[3][3];
     if (!cv_principal_dirs(s, xz, val, vec)) return false;

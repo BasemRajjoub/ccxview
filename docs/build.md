@@ -64,6 +64,8 @@ the same version.
 - `samples/elements/`: one small solved deck with every element type and feature.
 - `samples/symbols/`: one tile per support, load, thermal load and constraint symbol.
 - `samples/vessel/`: a pressure vessel for the stress linearization.
+- `samples/cantilever/`: a cantilever under bending, torsion, both, and pressure,
+  four steps for the tensor glyphs (`scripts/solve_showcase.sh cantilever`).
 
 Regenerate and solve one with `scripts/solve_showcase.sh NAME` (needs `ccx`).
 

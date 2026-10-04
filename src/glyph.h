@@ -34,6 +34,13 @@ typedef struct {
    stress) a visible disc. false for NaN or a zero tensor. */
 bool cv_glyph_make(const float s[6], bool xz, int style, float k, float min_frac, cv_glyph* g);
 
+/* The magnitude glyphs are sized to: the q-quantile (0..1) of m[0..n), NaN-free,
+   so one singular peak (a clamped corner, a point load) does not shrink the rest
+   to dots. Sorts m. 0 for n = 0. */
+float cv_glyph_ref(float* m, size_t n, float q);
+/* A glyph whose longest semi-axis exceeds max_len shrunk to it, shape kept. */
+void  cv_glyph_cap(cv_glyph* g, float max_len);
+
 /* Kindlmann's exponents from magnitudes l0 >= l1 >= l2 >= 0 */
 void cv_superquad_shape(const float l[3], float gamma, float* alpha, float* beta, bool* planar);
 /* A point of the unit glyph at theta in [0, 2pi), phi in [0, pi]: what the

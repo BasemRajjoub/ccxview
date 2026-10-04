@@ -216,7 +216,7 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             }
             if (app_field_is_tensor()) {             /* stress, strain: a glyph per element */
                 nk_layout_row_dynamic(ctx, row, 2);
-                tip(ctx, "The tensor as a glyph at each element's centre, the largest one 'tensors x' elements wide");
+                tip(ctx, "The tensor as a glyph at each element's centre, the largest one 'size' elements wide");
                 if (nk_checkbox_label(ctx, "Tensors", &G.show_tensor)) app_tensors_changed();
                 tip(ctx, "ellipsoid: semi-axes |s1| |s2| |s3| along the principal directions\n"
                          "superquadric: the same axes, edged where two values are close, so rod,\n"
@@ -226,11 +226,28 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 int st = nk_combo(ctx, (const char**)cv_glyph_names, CV_GLYPH_N, G.tensor_style, (int)row,
                                   nk_vec2(150 * s, CV_GLYPH_N * row + 20 * s));
                 if (st != G.tensor_style) { G.tensor_style = st; G.show_tensor = true; app_tensors_changed(); }
-                if (G.show_tensor && G.tensor_style != CV_GLYPH_CROSS) {
-                    nk_layout_row_dynamic(ctx, row, 2);
-                    nk_label(ctx, "", NK_TEXT_LEFT);
-                    tip(ctx, "Colour the glyphs by the selected scalar, the element's mean (else grey)");
-                    nk_checkbox_label(ctx, "coloured", &G.tensor_colored);
+                if (G.show_tensor) {                 /* size: log slider, the number resets it */
+                    static const float ratio[3] = { 0.3f, 0.5f, 0.2f };
+                    const char* help = "Size of the largest glyph, times the mean element size";
+                    nk_layout_row(ctx, NK_DYNAMIC, row, 3, ratio);
+                    tip(ctx, help);
+                    nk_label(ctx, "size", NK_TEXT_LEFT);
+                    float t = log10f(CV_MIN(CV_MAX(G.tensor_scale, 0.1f), 10.f));
+                    tip(ctx, help);
+                    uii_test_mark(ctx, "#tensor size");
+                    bool ch = ui_slider_float(ctx, -1.f, &t, 1.f, 0.01f);
+                    if (ch) G.tensor_scale = powf(10.f, t);
+                    char b[32];
+                    snprintf(b, sizeof b, "%.2f", G.tensor_scale);
+                    tip(ctx, "Click: back to 1 (one element)");
+                    if (nk_button_label(ctx, b)) { G.tensor_scale = 1.f; ch = true; }
+                    if (ch) app_tensors_changed();
+                    if (G.tensor_style != CV_GLYPH_CROSS) {
+                        nk_layout_row_dynamic(ctx, row, 2);
+                        nk_label(ctx, "", NK_TEXT_LEFT);
+                        tip(ctx, "Colour the glyphs by the selected scalar, the element's mean (else grey)");
+                        nk_checkbox_label(ctx, "coloured", &G.tensor_colored);
+                    }
                 }
             }
         }

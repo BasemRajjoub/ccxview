@@ -53,6 +53,20 @@ static void test_glyph(void) {
         CHECK(cv_glyph_make(s, false, CV_GLYPH_SUPERQUADRIC, 1, 0.05f, &g));
         CHECK(g.planar);
     }
+    {   /* reference size: a quantile ignores the one singular peak; cap keeps the shape */
+        float m[100];
+        for (int i = 0; i < 100; i++) m[i] = (float)(99 - i);
+        m[7] = 1e6f;
+        CHECK_NEAR(cv_glyph_ref(m, 100, 0.98f), 98, 1e-6);   /* 92 went up to the peak */
+        CHECK_NEAR(cv_glyph_ref(m, 100, 1.f), 1e6, 1);
+        CHECK_EQ(cv_glyph_ref(m, 0, 0.5f), 0);
+        float s[6] = { 40, 20, 10, 0, 0, 0 };
+        CHECK(cv_glyph_make(s, false, CV_GLYPH_ELLIPSOID, 1, 0, &g));
+        cv_glyph_cap(&g, 8);
+        CHECK_NEAR(g.len[0], 8, 1e-5); CHECK_NEAR(g.len[1], 4, 1e-5); CHECK_NEAR(g.len[2], 2, 1e-5);
+        cv_glyph_cap(&g, 100);
+        CHECK_NEAR(g.len[0], 8, 1e-5);
+    }
     {   /* unit surface: alpha = beta = 1 is the unit sphere; the poles on the round axis */
         float q[3];
         for (int i = 0; i < 8; i++) {

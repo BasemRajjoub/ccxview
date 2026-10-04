@@ -3,8 +3,9 @@
    node values. Ellipsoids and superquadrics go to cv_render_glyphs, coloured by the
    element's value of the selected scalar (the legend applies); the principal cross
    goes to the symbol layers CV_INST_TENS / COMP, red for tension, blue for
-   compression. The largest glyph is tensor_scale times the mean element size
-   (times the spacing of a sample on huge models). */
+   compression. The glyph of the 98th-percentile magnitude is tensor_scale times
+   the mean element size (times the spacing of a sample on huge models); the
+   few above it are capped there, their colour still telling. */
 #include "app_int.h"
 #include "glyph.h"
 #include <math.h>
@@ -78,8 +79,8 @@ void refresh_tensors(void) {
     uint32_t stride = shown / 40000 + 1;                        /* huge models: a sample (denser is clutter) */
     typedef struct { uint32_t e; float c[3], s[6], d[6]; } item;
     CV_VEC(item) it = {0};
+    CV_VEC(float) mag = {0};
     double size_sum = 0;
-    float peak = 0;
     for (uint32_t e = 0, k = 0; e < n; e++) {
         if (G.vis && !G.vis[e]) continue;
         if (k++ % stride) continue;
@@ -89,10 +90,13 @@ void refresh_tensors(void) {
         cv_principal(x.s, xz, val);
         float m = CV_MAX(fabsf(val[0]), fabsf(val[2]));
         if (!(m > 0)) continue;
-        if (!cv_push(it, x)) break;
-        peak = CV_MAX(peak, m);
+        if (!cv_reserve(mag, it.n + 1) || !cv_push(it, x)) break;
+        mag.a[mag.n++] = m;
         size_sum += sz;
     }
+    /* sized to the 98th percentile: the few above it (singular corners) are capped */
+    float peak = cv_glyph_ref(mag.a, mag.n, 0.98f);
+    cv_free_vec(mag);
     if (!it.n || !(peak > 0)) { cv_free_vec(it); return; }
     float h = (float)(size_sum / (double)it.n) * cbrtf((float)stride);   /* a sample: the spacing of the glyphs drawn */
     float k = 0.5f * CV_MAX(G.tensor_scale, 0.01f) * h / peak;   /* model length per unit of the tensor */
@@ -102,11 +106,15 @@ void refresh_tensors(void) {
     for (size_t j = 0; j < it.n; j++) {
         const item* x = &it.a[j];
         cv_glyph g;
-        if (!cv_glyph_make(x->s, xz, style, k, 0.04f, &g)) continue;
+        if (!cv_glyph_make(x->s, xz, style, k, 0.12f, &g)) continue;   /* rods and discs keep some body */
+        float f = CV_MIN(1.f, k * peak / g.len[0]);               /* the cap, kept for the cross too */
+        cv_glyph_cap(&g, k * peak);
         if (style == CV_GLYPH_CROSS) {
-            for (int a = 0; a < 3; a++)
-                if (fabsf(g.val[a]) * k > 2 * r)                  /* a bar shorter than its heads says nothing */
-                    cross_bar(g.val[a] >= 0 ? &ten : &cmp, x->c, g.axis[a], fabsf(g.val[a]) * k, r, x->d, g.val[a] >= 0);
+            for (int a = 0; a < 3; a++) {
+                float hl = fabsf(g.val[a]) * k * f;
+                if (hl > 2 * r)                                   /* a bar shorter than its heads says nothing */
+                    cross_bar(g.val[a] >= 0 ? &ten : &cmp, x->c, g.axis[a], hl, r, x->d, g.val[a] >= 0);
+            }
             continue;
         }
         if (!cv_reserve(gl, gl.n + CV_GLYPH_FLOATS)) break;

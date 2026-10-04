@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# solve_showcase.sh [showcase|elements|symbols] -- regenerate samples/NAME/NAME.inp with
+# solve_showcase.sh [showcase|elements|symbols|cantilever] -- regenerate samples/NAME/NAME.inp with
 # scripts/gen_NAME.py and solve it with ccx (on PATH or in $CCX). Leaves NAME.frd /
 # .dat / .sta / .cvg beside it.
 set -e

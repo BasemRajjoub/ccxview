@@ -180,6 +180,8 @@ static bool bands_changed(struct nk_context* ctx) { return G.bands != was.bands;
 static bool faces_changed(struct nk_context* ctx) { return G.faces_mode != was.faces_mode; }
 static void select_stress(struct nk_context* ctx) { app_select("STRESS", CV_COMP_MISES); G.tensor_style = 0; }
 static bool tensor_picked(struct nk_context* ctx) { return G.tensor_style != was.tensor_style && G.show_tensor; }
+static void tensor_small(struct nk_context* ctx) { G.tensor_scale = 0.2f; }
+static bool tensor_resized(struct nk_context* ctx) { return G.tensor_scale > 0.5f; }
 static void tensor_off(struct nk_context* ctx) { G.show_tensor = false; app_tensors_changed(); }
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
@@ -285,7 +287,9 @@ static const step script[] = {
     CASE("sidebar: the tensor glyph list opens and picks"),
     DO(sections_open), DO(select_stress), WAIT(3), DO(snapshot), AT_TIP("Scene", "#tensor style"), WAIT(30), CLICK,
     EXPECT(scene_popup, "the glyph list opens"),
-    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(tensor_picked, "the style changes, the glyphs show"), DO(tensor_off),
+    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(tensor_picked, "the style changes, the glyphs show"),
+    DO(tensor_small), WAIT(2), AT_TIP("Scene", "#tensor size"), CLICK, EXPECT(tensor_resized, "the size slider answers"),
+    DO(tensor_off),
 
     CASE("sidebar and toolbar tick boxes"),
     PANELS_ANSWER,
