@@ -3,7 +3,8 @@
    node values. Ellipsoids and superquadrics go to cv_render_glyphs, coloured by the
    element's value of the selected scalar (the legend applies); the principal cross
    goes to the symbol layers CV_INST_TENS / COMP, red for tension, blue for
-   compression. The glyph of the 98th-percentile magnitude is tensor_scale times
+   compression: plain, or (coloured) each bar by its value on a cool-warm scale
+   to +-peak, pale near zero. The glyph of the 98th-percentile magnitude is tensor_scale times
    the mean element size (times the spacing of a sample on huge models); the
    few above it are capped there, their colour still telling. */
 #include "app_int.h"
@@ -53,18 +54,23 @@ static bool elem_tensor(uint32_t e, const float* v, float c[3], float s[6], floa
 }
 
 /* one bar of the cross: through c along dir, half-length h, heads out for tension, in for compression */
-static void cross_bar(cv_fvec* in, const float c[3], const float dir[3], float h, float r, const float d[6], bool tension) {
+static float cross_lim;                       /* the cross's colour scale: the reference magnitude */
+float app_tensor_cross_lim(void) { return cross_lim; }
+
+static void cross_bar(cv_fvec* in, const float c[3], const float dir[3], float h, float r, const float d[6], float val) {
+    bool tension = val >= 0;
     for (int sg = -1; sg <= 1; sg += 2) {
         float tip[3], neck[3];
         for (int k = 0; k < 3; k++) { tip[k] = c[k] + sg * dir[k] * h; neck[k] = c[k] + sg * dir[k] * 0.7f * h; }
-        deck_inst(in, c, neck, r, r, NAN, d);
-        if (tension) deck_inst(in, neck, tip, 2.5f * r, 0, NAN, d);
-        else deck_inst(in, tip, neck, 2.5f * r, 0, NAN, d);
+        deck_inst(in, c, neck, r, r, val, d);
+        if (tension) deck_inst(in, neck, tip, 2.5f * r, 0, val, d);
+        else deck_inst(in, tip, neck, 2.5f * r, 0, val, d);
     }
 }
 
 void refresh_tensors(void) {
     clear_layers();
+    cross_lim = 0;
     if (!G.show_tensor || !G.has_field || !app_field_is_tensor()) return;
     int fi = find_field(G.step, G.field_name);
     const cv_field_desc* fd = &G.frd.steps[G.step].fields[fi];
@@ -113,7 +119,7 @@ void refresh_tensors(void) {
             for (int a = 0; a < 3; a++) {
                 float hl = fabsf(g.val[a]) * k * f;
                 if (hl > 2 * r)                                   /* a bar shorter than its heads says nothing */
-                    cross_bar(g.val[a] >= 0 ? &ten : &cmp, x->c, g.axis[a], hl, r, x->d, g.val[a] >= 0);
+                    cross_bar(g.val[a] >= 0 ? &ten : &cmp, x->c, g.axis[a], hl, r, x->d, g.val[a]);
             }
             continue;
         }
@@ -127,6 +133,7 @@ void refresh_tensors(void) {
         memcpy(o + 16, x->d, 6 * sizeof(float));
         gl.n += CV_GLYPH_FLOATS;
     }
+    cross_lim = peak;
     cv_render_glyphs(gl.a, (uint32_t)(gl.n / CV_GLYPH_FLOATS));
     cv_render_inst(CV_INST_TENS, ten.a, (uint32_t)(ten.n / CV_INST_FLOATS));
     cv_render_inst(CV_INST_COMP, cmp.a, (uint32_t)(cmp.n / CV_INST_FLOATS));

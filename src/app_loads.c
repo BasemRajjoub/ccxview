@@ -33,13 +33,19 @@
    numbers each, drawn by the GPU from one stored body. T: the radius of a stroke. */
 typedef struct { cv_fvec in; float T; } layer;
 
-void deck_inst(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal, const float d[6]) {
+void deck_inst2(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal,
+                const float da[6], const float db[6]) {
     if (!cv_reserve(*v, v->n + CV_INST_FLOATS)) return;
     float* o = v->a + v->n;
     memcpy(o, a, 12); memcpy(o + 3, b, 12);
     o[6] = ra; o[7] = rb; o[8] = scal;
-    memcpy(o + 9, d, 24);
+    memcpy(o + 9, da, 24);
+    memcpy(o + 15, db, 24);
     v->n += CV_INST_FLOATS;
+}
+
+void deck_inst(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal, const float d[6]) {
+    deck_inst2(v, a, b, ra, rb, scal, d, d);
 }
 
 static float norm3(float v[3]) {
@@ -227,7 +233,8 @@ float deck_stroke(void) { return 0.045f * G.sym_len * CV_MIN(CV_MAX(G.sym_thick,
 void deck_lines_inst(int which, const cv_fvec* pos, const cv_fvec* disp, float r) {
     cv_fvec in = {0};
     size_t nseg = disp->n == 2 * pos->n ? pos->n / 6 : 0;
-    for (size_t i = 0; i < nseg; i++) deck_inst(&in, pos->a + 6 * i, pos->a + 6 * i + 3, r, r, 0, disp->a + 12 * i);
+    for (size_t i = 0; i < nseg; i++)       /* each end moves with its own vertex */
+        deck_inst2(&in, pos->a + 6 * i, pos->a + 6 * i + 3, r, r, 0, disp->a + 12 * i, disp->a + 12 * i + 6);
     cv_render_inst(which, in.a, (uint32_t)(in.n / CV_INST_FLOATS));
     cv_free_vec(in);
 }

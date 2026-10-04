@@ -46,6 +46,8 @@ typedef struct {
     bool  vectors;             /* arrows of a 3-component field at the nodes */
     bool  tensors;             /* glyphs of a stress / strain tensor (cv_render_glyphs, CV_INST_TENS / COMP) */
     int   tensors_color;       /* the glyphs: CV_COLOR_SOLID or CV_COLOR_NODAL */
+    float cross_lim;           /* > 0: the cross's bars coloured by their value on a fixed cool-warm
+                                  scale -cross_lim .. +cross_lim; 0: plain red / blue */
     bool  ghost;               /* the undeformed edges in grey behind the deformed shape */
     bool  markers;             /* min / max balls */
     bool  path;                /* the plotted line on the surface */
@@ -91,15 +93,17 @@ void cv_render_aux2(int which, const float* pos, const float* disp, const float*
 /* Symbols: supports, loads, springs, links and vector arrows. Each is made of round
    bodies between two points, a radius at either end: a tube (equal radii), a cone
    (one of them 0), a plate (a short tube). One such body is kept on the GPU and
-   drawn once per instance, so a symbol costs 15 numbers whatever its shape:
+   drawn once per instance, so a symbol costs 21 numbers whatever its shape:
      a[3], b[3], radius at a, radius at b, scalar (colour, when the layer is coloured
-     by the field), disp[3], disp2[3] (how the whole body moves with the shape).
+     by the field), disp[3], disp2[3] (how end a moves with the shape), dispb[3],
+     disp2b[3] (how end b moves: the same for a rigid symbol, the far node's own for
+     a line between two nodes -- a spider leg, a spring -- so it stretches with them).
    A body is never drawn thinner than about a pixel, so symbols stay visible from far
    away and a radius of nearly 0 gives a line of constant width. NULL / 0 clears. */
 /* CV_INST_TENS / COMP: the bars of the principal cross in tension / compression */
 enum { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_DISC, CV_INST_LINK, CV_INST_VEC,
        CV_INST_TENS, CV_INST_COMP, CV_INST_N };
-#define CV_INST_FLOATS 15
+#define CV_INST_FLOATS 21
 void cv_render_inst(int which, const float* inst, uint32_t n);
 
 /* Tensor glyphs (glyph.h): a unit superquadric drawn once per instance, lit, its

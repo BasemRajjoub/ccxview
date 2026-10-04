@@ -242,12 +242,12 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                     tip(ctx, "Click: back to 1 (one element)");
                     if (nk_button_label(ctx, b)) { G.tensor_scale = 1.f; ch = true; }
                     if (ch) app_tensors_changed();
-                    if (G.tensor_style != CV_GLYPH_CROSS) {
-                        nk_layout_row_dynamic(ctx, row, 2);
-                        nk_label(ctx, "", NK_TEXT_LEFT);
-                        tip(ctx, "Colour the glyphs by the selected scalar, the element's mean (else grey)");
-                        nk_checkbox_label(ctx, "coloured", &G.tensor_colored);
-                    }
+                    nk_layout_row_dynamic(ctx, row, 2);
+                    nk_label(ctx, "", NK_TEXT_LEFT);
+                    tip(ctx, G.tensor_style == CV_GLYPH_CROSS
+                        ? "Colour each bar by its principal value: blue compression, pale near zero,\nred tension, full colour at the size's reference value (else plain red / blue)"
+                        : "Colour the glyphs by the selected scalar, the element's mean (else grey)");
+                    nk_checkbox_label(ctx, "coloured", &G.tensor_colored);
                 }
             }
         }

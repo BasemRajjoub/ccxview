@@ -188,9 +188,11 @@ static const char* kVSI =
     "in vec3 i_r;\n"                          /* radius at a, at b, scalar */
     "in vec3 i_disp;\n"
     "in vec3 i_disp2;\n"
+    "in vec3 i_dispb;\n"
+    "in vec3 i_disp2b;\n"
     "void main() {\n"
-    "  vec3 mv = i_disp * u_p.x + i_disp2 * u_q.y;\n"
-    "  vec3 A = i_a + mv, B = i_b + mv, ax = B - A;\n"
+    "  vec3 A = i_a + i_disp * u_p.x + i_disp2 * u_q.y;\n"
+    "  vec3 B = i_b + i_dispb * u_p.x + i_disp2b * u_q.y, ax = B - A;\n"
     "  float L = length(ax);\n"
     "  vec3 w = L > 0.0 ? ax / L : vec3(0.0, 0.0, 1.0);\n"
     "  vec3 aw = abs(w);\n"
@@ -312,6 +314,7 @@ static struct {
     sg_buffer   gmesh[2];  int gmesh_n[2];              /* the unit glyph: (theta, phi) grid, fine and coarse */
     sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
+    sg_image    div_img;   sg_view div_view;   /* cool-warm, fixed: the principal cross by value */
     sg_image    etex_img;  sg_view etex_view;
     sg_buffer   ib_grp;               /* skin triangles ordered by group */
     uint32_t*   grp_first;            /* ngroups + 1 */
@@ -361,7 +364,7 @@ static void make_etex(const float* v, int w, int h) {
     R.etex_view = sg_make_view(&(sg_view_desc){ .texture.image = R.etex_img });
 }
 
-void cv_render_colormap(int cm, bool reverse, bool grey) {
+static void make_cmap(int cm, bool reverse, bool grey, sg_image* img, sg_view* view) {
     uint8_t px[256 * 4];
     for (int i = 0; i < 256; i++) {
         float c[3];
@@ -370,14 +373,16 @@ void cv_render_colormap(int cm, bool reverse, bool grey) {
         for (int k = 0; k < 3; k++) px[4 * i + k] = (uint8_t)(c[k] * 255.f + 0.5f);
         px[4 * i + 3] = 255;
     }
-    if (R.cmap_view.id) sg_destroy_view(R.cmap_view);
-    if (R.cmap_img.id) sg_destroy_image(R.cmap_img);
-    R.cmap_img = sg_make_image(&(sg_image_desc){
+    if (view->id) sg_destroy_view(*view);
+    if (img->id) sg_destroy_image(*img);
+    *img = sg_make_image(&(sg_image_desc){
         .width = 256, .height = 1, .pixel_format = SG_PIXELFORMAT_RGBA8,
         .data.mip_levels[0] = { px, sizeof px },
     });
-    R.cmap_view = sg_make_view(&(sg_view_desc){ .texture.image = R.cmap_img });
+    *view = sg_make_view(&(sg_view_desc){ .texture.image = *img });
 }
+
+void cv_render_colormap(int cm, bool reverse, bool grey) { make_cmap(cm, reverse, grey, &R.cmap_img, &R.cmap_view); }
 
 static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, const char* fs_src) {
     return sg_make_shader(&(sg_shader_desc){
@@ -386,7 +391,7 @@ static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, con
         .attrs = {
             [0] = { .glsl_name = attr[0] }, [1] = { .glsl_name = attr[1] }, [2] = { .glsl_name = attr[2] },
             [3] = { .glsl_name = attr[3] }, [4] = { .glsl_name = attr[4] }, [5] = { .glsl_name = attr[5] },
-            [6] = { .glsl_name = attr[6] },
+            [6] = { .glsl_name = attr[6] }, [7] = { .glsl_name = attr[7] },
         },
         .uniform_blocks[0] = {
             .stage = SG_SHADERSTAGE_VERTEX, .size = sizeof(vs_params),
@@ -426,7 +431,7 @@ static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, con
 }
 
 static sg_shader make_shader(const char* fs_src) {
-    static const char* const attr[7] = { "a_pos", "a_disp", "a_scal", "a_disp2", NULL, NULL, NULL };
+    static const char* const attr[8] = { "a_pos", "a_disp", "a_scal", "a_disp2", NULL, NULL, NULL, NULL };
     return make_shader_vs(kVS, attr, fs_src);
 }
 
@@ -520,7 +525,7 @@ void cv_render_init(void) {
     R.pip_tri_ni = sg_make_pipeline(&pd);
 
     {   /* instanced symbols: the unit body per vertex, 15 floats per instance */
-        static const char* const attr[7] = { "a_m", "i_a", "i_b", "i_r", "i_disp", "i_disp2", NULL };
+        static const char* const attr[8] = { "a_m", "i_a", "i_b", "i_r", "i_disp", "i_disp2", "i_dispb", "i_disp2b" };
         R.shd_inst = make_shader_vs(kVSI, attr, kFS);
         sg_pipeline_desc pi = {
             .shader = R.shd_inst,
@@ -534,6 +539,8 @@ void cv_render_init(void) {
                     [3] = { .buffer_index = 1, .offset = 24, .format = SG_VERTEXFORMAT_FLOAT3 },
                     [4] = { .buffer_index = 1, .offset = 36, .format = SG_VERTEXFORMAT_FLOAT3 },
                     [5] = { .buffer_index = 1, .offset = 48, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [6] = { .buffer_index = 1, .offset = 60, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [7] = { .buffer_index = 1, .offset = 72, .format = SG_VERTEXFORMAT_FLOAT3 },
                 },
             },
             .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
@@ -549,7 +556,7 @@ void cv_render_init(void) {
     }
 
     {   /* tensor glyphs: the unit grid per vertex, CV_GLYPH_FLOATS per instance */
-        static const char* const attr[7] = { "a_m", "i_c", "i_e0", "i_e1", "i_e2", "i_disp", "i_disp2" };
+        static const char* const attr[8] = { "a_m", "i_c", "i_e0", "i_e1", "i_e2", "i_disp", "i_disp2", NULL };
         R.shd_glyph = make_shader_vs(kVSG, attr, kFS);
         sg_pipeline_desc pg = {
             .shader = R.shd_glyph,
@@ -585,6 +592,7 @@ void cv_render_init(void) {
         .min_filter = SG_FILTER_NEAREST, .mag_filter = SG_FILTER_NEAREST,
         .wrap_u = SG_WRAP_CLAMP_TO_EDGE, .wrap_v = SG_WRAP_CLAMP_TO_EDGE });
     cv_render_colormap(CV_CMAP_FAST, false, false);
+    make_cmap(CV_CMAP_COOLWARM, false, false, &R.div_img, &R.div_view);
     float zero = 0;
     make_etex(&zero, 1, 1);
 }
@@ -758,19 +766,23 @@ static void draw_glyphs(int mode, const float rgb[3], const cv_draw* d) {
     sg_draw(0, R.gmesh_n[lod], (int)GLY.n);
 }
 
-/* a layer of symbols, lit; min_px: the least radius on screen */
-static void draw_inst(int which, int mode, const float rgb[3], const cv_draw* d, float min_px) {
+/* a layer of symbols, lit; min_px: the least radius on screen; cmap: the colour map texture */
+static void draw_inst_map(int which, int mode, const float rgb[3], const cv_draw* d, float min_px, sg_view cmap) {
     if (!I[which].n) return;
     int lod = I[which].n > 30000 ? 1 : 0;       /* great numbers: six sides, one end disc */
     sg_apply_pipeline(R.pip_inst);
     sg_bindings b = {
         .vertex_buffers = { [0] = R.body[lod], [1] = I[which].buf },
-        .views = { [0] = R.cmap_view, [1] = R.etex_view },
+        .views = { [0] = cmap, [1] = R.etex_view },
         .samplers = { [0] = R.smp_lin, [1] = R.smp_near },
     };
     sg_apply_bindings(&b);
     uniforms(d, true, true, mode, rgb, true, min_px, false, 0.f);
     sg_draw(0, R.body_n[lod], (int)I[which].n);
+}
+
+static void draw_inst(int which, int mode, const float rgb[3], const cv_draw* d, float min_px) {
+    draw_inst_map(which, mode, rgb, d, min_px, R.cmap_view);
 }
 
 void cv_render_draw(const cv_draw* d) {
@@ -871,8 +883,15 @@ void cv_render_draw(const cv_draw* d) {
             static const float glyph_rgb[3] = { 0.85f, 0.85f, 0.85f }, ten_rgb[3] = { 0.90f, 0.15f, 0.12f },
                                cmp_rgb[3] = { 0.15f, 0.35f, 0.95f };
             draw_glyphs(d->tensors_color, glyph_rgb, d);
-            draw_inst(CV_INST_TENS, CV_COLOR_SOLID, ten_rgb, d, px);
-            draw_inst(CV_INST_COMP, CV_COLOR_SOLID, cmp_rgb, d, px);
+            if (d->cross_lim > 0) {               /* each bar by its value: blue -lim .. pale 0 .. red +lim */
+                cv_draw c = *d;
+                c.rmin = -d->cross_lim; c.rmax = d->cross_lim; c.bands = 0; c.grey_out_of_range = false;
+                draw_inst_map(CV_INST_TENS, CV_COLOR_NODAL, ten_rgb, &c, px, R.div_view);
+                draw_inst_map(CV_INST_COMP, CV_COLOR_NODAL, cmp_rgb, &c, px, R.div_view);
+            } else {
+                draw_inst(CV_INST_TENS, CV_COLOR_SOLID, ten_rgb, d, px);
+                draw_inst(CV_INST_COMP, CV_COLOR_SOLID, cmp_rgb, d, px);
+            }
         }
         if (d->links) draw_inst(CV_INST_LINK, CV_COLOR_SOLID, link_rgb, d, px);
         if (d->discrete) draw_inst(CV_INST_DISC, CV_COLOR_SOLID, disc_rgb, d, px);

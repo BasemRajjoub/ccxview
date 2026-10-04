@@ -326,6 +326,28 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
     }
 
     float bar_w = 22 * s, top = area.y + row * 0.5f, h = area.h - row;
+    float lim = G.show_tensor && G.tensor_colored && G.tensor_style == CV_GLYPH_CROSS ? app_tensor_cross_lim() : 0.f;
+    if (lim > 0 && h > 3 * row + 20) {            /* the principal cross's own scale, a strip below the bar */
+        float ky = top + h - 2.4f * row, kw = CV_MIN(area.w - 4 * s, 160 * s), sh = row * 0.55f;
+        h -= 2.9f * row;
+        ink_text(cv, font, area.x, ky, area.w, "cross: principal", dim);
+        ky += row;
+        int n = 48;
+        for (int i = 0; i < n; i++) {
+            float c[3];
+            cv_colormap_rgb(CV_CMAP_COOLWARM, (i + 0.5f) / (float)n, c);
+            nk_fill_rect(cv, nk_rect(area.x + kw * i / n, ky, kw / n + 1, sh), 0,
+                         nk_rgb((int)(c[0] * 255), (int)(c[1] * 255), (int)(c[2] * 255)));
+        }
+        nk_stroke_rect(cv, nk_rect(area.x, ky, kw, sh), 0, 1, ink);
+        char a[32], b[40];
+        legend_num(a, sizeof a, lim);
+        snprintf(b, sizeof b, "-%s", a);
+        ink_text(cv, font, area.x, ky + sh + 1, kw * 0.5f, b, ink);
+        snprintf(b, sizeof b, "+%s", a);
+        float tw2 = font->width(font->userdata, font->height, b, (int)strlen(b));
+        ink_text(cv, font, area.x + kw - tw2, ky + sh + 1, tw2 + 2, b, ink);
+    }
     if (G.range_lock) {                           /* swatches for the out-of-range colours, above and below the bar */
         float sw = row * 0.8f, gap = 4 * s;
         h -= 2 * (sw + gap);

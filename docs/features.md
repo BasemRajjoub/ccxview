@@ -42,7 +42,8 @@ and the shape follow every node; the full list is in
   |s2|, |s3| along the principal directions), superquadrics (Kindlmann 2004:
   edged where two principal values are close, so rods, discs and balls tell
   apart from any side, which ellipsoids hide) coloured by the field, or the
-  principal cross (red tension, blue compression). Sized from the elements
+  principal cross (bars coloured by their value: blue compression, pale near
+  zero, red tension, with its own key under the legend). Sized from the elements
   (View > Symbol sizes > tensors x), moving with the deformed shape.
 - Gauss points as balls at the integration points, coloured by the field, or by
   the exact values of a `.dat` file.

@@ -478,6 +478,9 @@ uint32_t deck_elem(const cv_frd* f, uint32_t id);    /* the shown element of a d
 void app_symbol_size(void);          /* G.sym_len from the model or the hand-set size; redraws the symbols */
 /* a symbol body (render.h, cv_render_inst) appended to v: from a to b, a radius at either end */
 void deck_inst(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal, const float d[6]);
+/* the same with each end moving on its own: a line between two nodes stretches with them */
+void deck_inst2(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal,
+                const float da[6], const float db[6]);
 /* the lines of pos / disp (deck_seg pairs) as tubes of radius r, uploaded to instance layer `which` */
 void deck_lines_inst(int which, const cv_fvec* pos, const cv_fvec* disp, float r);
 float deck_stroke(void);             /* the radius of a symbol's stroke: G.sym_len and G.sym_thick */
@@ -488,6 +491,7 @@ bool app_field_is_vector(void);      /* the selected .frd field has 3 components
 void app_vectors_changed(void);
 bool app_field_is_tensor(void);      /* app_tensor.c: the selected .frd field is a symmetric tensor */
 void app_tensors_changed(void);
+float app_tensor_cross_lim(void);    /* the principal cross's colour scale: +- this, 0 before any */
 bool deck_sibling(const char* path, const char* ext, char* out, size_t n);
 
 /* app_fbd.c: cgx geometry */

@@ -333,6 +333,7 @@ static void frame(void) {
         d.supports = G.show_bc; d.loads = G.show_loads; d.discrete = G.show_disc; d.links = G.show_links;
         d.vectors = G.show_vec; d.vectors_color = G.vec_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         d.tensors = G.show_tensor; d.tensors_color = G.tensor_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        d.cross_lim = G.tensor_colored && G.tensor_style == CV_GLYPH_CROSS ? app_tensor_cross_lim() : 0.f;
         d.ghost = G.show_ghost && G.deform && G.disp;
         d.markers = G.show_markers; d.marker_size = 12.f * ui_scale();
         d.path = G.path_n > 0;
