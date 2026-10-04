@@ -27,17 +27,3 @@ Supports and loads follow the step on screen, with a symbol per kind
 (docs/keywords.md, samples/symbols). Still to do: *SUBMODEL (mark the driven
 nodes), *MODEL CHANGE (hide removed elements per step), amplitudes, and a
 documented list of the result fields ccxview understands.
-
-## Tensor glyphs (stress and strain as ellipsoids)
-One glyph per element centroid (per Gauss point when a .dat field is selected):
-an ellipsoid with semi-axes |s1|, |s2|, |s3| along the principal directions,
-coloured by the selected scalar, and a second style, the principal cross
-(three segments, red tension, blue compression). Drawn as ray-traced
-impostors like the node balls, so a million glyphs cost nothing; auto scale
-to about 1.5 element sizes with a slider; hidden by "hide when dense";
-follow the deformed shape through the displacement attribute. The
-eigenvectors are there (cv_principal_dirs in field.c, Jacobi, used by the
-principal arrows); still needed: an ellipsoid impostor shader in render.c,
-the glyph build next to the arrows in app_overlay.c, a Layers row,
-`--tensor ellipsoid|cross`, settings. About a day. Shells and beams give a
-disc (one zero axis), which is right.

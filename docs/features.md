@@ -38,6 +38,12 @@ and the shape follow every node; the full list is in
 
 - Any result component as colour on faces, edges or nodes; per-element (flat)
   colouring; vectors and principal directions as 3D arrows.
+- Stress and strain tensors as a glyph per element: ellipsoids (semi-axes |s1|,
+  |s2|, |s3| along the principal directions), superquadrics (Kindlmann 2004:
+  edged where two principal values are close, so rods, discs and balls tell
+  apart from any side, which ellipsoids hide) coloured by the field, or the
+  principal cross (red tension, blue compression). Sized from the elements
+  (View > Symbol sizes > tensors x), moving with the deformed shape.
 - Gauss points as balls at the integration points, coloured by the field, or by
   the exact values of a `.dat` file.
 - Principal stresses, von Mises, magnitudes; cylindrical coordinate systems.

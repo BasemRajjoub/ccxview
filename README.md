@@ -29,8 +29,8 @@ Measured on one desktop PC; `build/bench file.frd` prints the numbers for yours.
 ## What you get
 
 - **Results as you expect them.** Contours on faces, edges and nodes, deformed
-  shape, animation, vectors, principal stresses, Gauss points, probe, history
-  and path plots.
+  shape, animation, vectors, principal stresses, tensor glyphs, Gauss points,
+  probe, history and path plots.
 - **The deck on the model.** Supports, loads, thermal loads, bolts, springs and
   constraints of the step on screen, each with its own 3D symbol.
 - **True to the element.** Quadratic elements are drawn and cut through their

@@ -43,7 +43,7 @@ cv_app G;
 static struct nk_context* g_nk;
 static void app_log(const char* tag, uint32_t level, uint32_t item, const char* msg, uint32_t line,
                     const char* file, void* user);
-cv_opts O = { .faces = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30 };
+cv_opts O = { .faces = -1, .tensor = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30 };
 static struct nk_context* g_nk;
 
 /* ---- sokol callbacks --------------------------------------------------------------- */
@@ -99,6 +99,8 @@ static void init(void) {
     G.show_bc = G.show_loads = G.show_disc = G.show_links = true;
     G.vec_colored = true;
     G.vec_pct = 5.f;
+    G.tensor_colored = true;
+    G.tensor_scale = 1.f;
     G.bc_scale = G.load_scale = 1.f;
     G.sym_auto = true; G.sym_thick = 1.f;
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
@@ -135,6 +137,7 @@ static void init(void) {
     if (getenv("CCXVIEW_NO_NATIVE_DIALOG")) G.native_dlg_missing = true;
     if (O.gp) G.show_gp = true;
     if (O.vectors) G.show_vec = true;
+    if (O.tensor >= 0) { G.show_tensor = true; G.tensor_style = O.tensor; }
     if (O.bg_set) memcpy(G.bg, O.bg, sizeof G.bg);
     if (O.ui_test) ui_test_start(O.ui_test, event);
     if (O.gp_size > 0) G.gp_size = O.gp_size;
@@ -329,6 +332,7 @@ static void frame(void) {
         d.geo_size = G.geo_size * ui_scale();
         d.supports = G.show_bc; d.loads = G.show_loads; d.discrete = G.show_disc; d.links = G.show_links;
         d.vectors = G.show_vec; d.vectors_color = G.vec_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        d.tensors = G.show_tensor; d.tensors_color = G.tensor_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         d.ghost = G.show_ghost && G.deform && G.disp;
         d.markers = G.show_markers; d.marker_size = 12.f * ui_scale();
         d.path = G.path_n > 0;
@@ -891,6 +895,10 @@ sapp_desc sokol_main(int argc, char* argv[]) {
             }
         else if (!strcmp(argv[i], "--gp")) O.gp = true;
         else if (!strcmp(argv[i], "--vectors")) O.vectors = true;
+        else if (!strcmp(argv[i], "--tensor") && i + 1 < argc) {
+            O.tensor = cv_glyph_style(argv[++i]);
+            if (O.tensor < 0) fprintf(stderr, "ccxview: --tensor %s: ellipsoid, superquadric or cross\n", argv[i]);
+        }
         else if (!strcmp(argv[i], "--conv")) O.conv = true;
         else if (!strcmp(argv[i], "--size") && i + 1 < argc) {
             int w, h;

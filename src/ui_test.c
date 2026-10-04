@@ -145,7 +145,7 @@ static void check_always(struct nk_context* ctx) {
 }
 
 /* ---- the script's own state and checks ------------------------------------------- */
-static struct { int cmap, bands, faces_mode, units, cyc_axis; bool deform, markers, edges; float dist, scroll; cv_camera cam; } was;
+static struct { int cmap, bands, faces_mode, units, cyc_axis, tensor_style; bool deform, markers, edges; float dist, scroll; cv_camera cam; } was;
 
 static void close_all(struct nk_context* ctx) {
     G.show_units = G.show_msgs = G.show_calc_help = G.show_conv = G.legend_edit = G.find_open = G.browser_open = false;
@@ -153,6 +153,7 @@ static void close_all(struct nk_context* ctx) {
 }
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
+    was.tensor_style = G.tensor_style;
     was.deform = G.deform; was.markers = G.show_markers; was.edges = G.show_edges;
     was.cam = G.cam;
     struct nk_window* w = win_of(ctx, "Scene");
@@ -177,6 +178,9 @@ static bool units_popup(struct nk_context* ctx) { return popup_open(ctx, "Units"
 static bool cmap_changed(struct nk_context* ctx) { return G.cmap != was.cmap; }
 static bool bands_changed(struct nk_context* ctx) { return G.bands != was.bands; }
 static bool faces_changed(struct nk_context* ctx) { return G.faces_mode != was.faces_mode; }
+static void select_stress(struct nk_context* ctx) { app_select("STRESS", CV_COMP_MISES); G.tensor_style = 0; }
+static bool tensor_picked(struct nk_context* ctx) { return G.tensor_style != was.tensor_style && G.show_tensor; }
+static void tensor_off(struct nk_context* ctx) { G.show_tensor = false; app_tensors_changed(); }
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
 static bool edges_toggled(struct nk_context* ctx) { return G.show_edges != was.edges; }
@@ -277,6 +281,11 @@ static const step script[] = {
     CASE("sidebar: a list opens and picks"),
     DO(sections_open), DO(snapshot), AT_TIP("Scene", "#faces mode"), WAIT(30), CLICK, EXPECT(scene_popup, "the faces list opens"),
     AT_POPUP("Scene", 0.5f, 0.75f), CLICK, EXPECT(faces_changed, "the faces mode changes"),
+
+    CASE("sidebar: the tensor glyph list opens and picks"),
+    DO(sections_open), DO(select_stress), WAIT(3), DO(snapshot), AT_TIP("Scene", "#tensor style"), WAIT(30), CLICK,
+    EXPECT(scene_popup, "the glyph list opens"),
+    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(tensor_picked, "the style changes, the glyphs show"), DO(tensor_off),
 
     CASE("sidebar and toolbar tick boxes"),
     PANELS_ANSWER,

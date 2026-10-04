@@ -469,6 +469,7 @@ void refresh_field(void) {
     refresh_tri_values();
     refresh_gauss();
     refresh_vectors();
+    refresh_tensors();
     refresh_lin();
     refresh_path();
     refresh_hist();

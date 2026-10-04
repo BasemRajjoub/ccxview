@@ -5,6 +5,7 @@
 #include "frd.h"
 #include "mesh.h"
 #include "field.h"
+#include "glyph.h"
 #include "os.h"
 #include "render.h"
 #include "vmath.h"
@@ -316,6 +317,10 @@ typedef struct {
     bool      show_vec;              /* arrows of the current 3-component field */
     bool      vec_colored;
     float     vec_pct;               /* longest arrow, percent of the model diagonal */
+    bool      show_tensor;           /* glyphs of the current stress / strain field (app_tensor.c) */
+    int       tensor_style;          /* CV_GLYPH_* (glyph.h) */
+    bool      tensor_colored;        /* glyphs coloured by the selected scalar, else grey */
+    float     tensor_scale;          /* the largest glyph, times the mean element size */
     float     bc_scale, load_scale;  /* supports / springs and load arrows, times sym_len */
     bool      sym_auto;              /* symbol size follows the model's size (else sym_size) */
     float     sym_size;              /* symbol size by hand, model units */
@@ -481,6 +486,8 @@ void app_node_disp6(uint32_t node, float d[6]);
 void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);
 bool app_field_is_vector(void);      /* the selected .frd field has 3 components */
 void app_vectors_changed(void);
+bool app_field_is_tensor(void);      /* app_tensor.c: the selected .frd field is a symmetric tensor */
+void app_tensors_changed(void);
 bool deck_sibling(const char* path, const char* ext, char* out, size_t n);
 
 /* app_fbd.c: cgx geometry */

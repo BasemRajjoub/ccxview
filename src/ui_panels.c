@@ -214,6 +214,25 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 tip(ctx, "Colour the arrows by the selected scalar (else white)");
                 nk_checkbox_label(ctx, "coloured", &G.vec_colored);
             }
+            if (app_field_is_tensor()) {             /* stress, strain: a glyph per element */
+                nk_layout_row_dynamic(ctx, row, 2);
+                tip(ctx, "The tensor as a glyph at each element's centre, the largest one 'tensors x' elements wide");
+                if (nk_checkbox_label(ctx, "Tensors", &G.show_tensor)) app_tensors_changed();
+                tip(ctx, "ellipsoid: semi-axes |s1| |s2| |s3| along the principal directions\n"
+                         "superquadric: the same axes, edged where two values are close, so rod,\n"
+                         "  disc and ball tell apart from any side\n"
+                         "cross: a bar per principal value, red tension, blue compression");
+                uii_test_mark(ctx, "#tensor style");
+                int st = nk_combo(ctx, (const char**)cv_glyph_names, CV_GLYPH_N, G.tensor_style, (int)row,
+                                  nk_vec2(150 * s, CV_GLYPH_N * row + 20 * s));
+                if (st != G.tensor_style) { G.tensor_style = st; G.show_tensor = true; app_tensors_changed(); }
+                if (G.show_tensor && G.tensor_style != CV_GLYPH_CROSS) {
+                    nk_layout_row_dynamic(ctx, row, 2);
+                    nk_label(ctx, "", NK_TEXT_LEFT);
+                    tip(ctx, "Colour the glyphs by the selected scalar, the element's mean (else grey)");
+                    nk_checkbox_label(ctx, "coloured", &G.tensor_colored);
+                }
+            }
         }
         nk_tree_pop(ctx);
     }

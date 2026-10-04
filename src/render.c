@@ -207,6 +207,31 @@ static const char* kVSI =
     VS_TAIL
     "}\n";
 
+/* The tensor glyph: a_m is (theta, phi) on the unit superquadric (glyph.h,
+   cv_superquad_point -- keep in step); the instance gives the centre and scalar,
+   the three semi-axes (direction times length) with the exponents alpha, beta and
+   the planar flag in their w, and how the glyph moves with the shape. */
+static const char* kVSG =
+    GLSL_HDR
+    VS_UNIFORMS
+    "in vec3 a_m;\n"
+    "in vec4 i_c;\n"
+    "in vec4 i_e0;\n"
+    "in vec4 i_e1;\n"
+    "in vec4 i_e2;\n"
+    "in vec3 i_disp;\n"
+    "in vec3 i_disp2;\n"
+    "float spw(float x, float e) { return x < 0.0 ? -pow(-x, e) : pow(x, e); }\n"
+    "void main() {\n"
+    "  float ct = cos(a_m.x), st = sin(a_m.x), cf = cos(a_m.y), sf = sin(a_m.y);\n"
+    "  float al = i_e0.w, be = i_e1.w;\n"
+    "  vec3 q = i_e2.w > 0.5 ? vec3(spw(ct, al) * spw(sf, be), spw(st, al) * spw(sf, be), spw(cf, be))\n"
+    "                        : vec3(spw(cf, be), -spw(st, al) * spw(sf, be), spw(ct, al) * spw(sf, be));\n"
+    "  vec3 p = i_c.xyz + i_disp * u_p.x + i_disp2 * u_q.y + q.x * i_e0.xyz + q.y * i_e1.xyz + q.z * i_e2.xyz;\n"
+    "  v_s = i_c.w;\n"
+    VS_TAIL
+    "}\n";
+
 static const char* kFS =
     GLSL_HDR
     "uniform vec4 u_color;\n"                /* solid colour */
@@ -282,6 +307,9 @@ static struct {
     sg_pipeline pip_tri_ni, pip_line_ni, pip_pt_ni;   /* non-indexed: the aux vertex sets */
     sg_shader   shd_inst;
     sg_pipeline pip_inst;             /* the instanced symbol bodies */
+    sg_shader   shd_glyph;
+    sg_pipeline pip_glyph;            /* the tensor glyphs */
+    sg_buffer   gmesh[2];  int gmesh_n[2];              /* the unit glyph: (theta, phi) grid, fine and coarse */
     sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
     sg_image    etex_img;  sg_view etex_view;
@@ -358,6 +386,7 @@ static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, con
         .attrs = {
             [0] = { .glsl_name = attr[0] }, [1] = { .glsl_name = attr[1] }, [2] = { .glsl_name = attr[2] },
             [3] = { .glsl_name = attr[3] }, [4] = { .glsl_name = attr[4] }, [5] = { .glsl_name = attr[5] },
+            [6] = { .glsl_name = attr[6] },
         },
         .uniform_blocks[0] = {
             .stage = SG_SHADERSTAGE_VERTEX, .size = sizeof(vs_params),
@@ -397,7 +426,7 @@ static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, con
 }
 
 static sg_shader make_shader(const char* fs_src) {
-    static const char* const attr[6] = { "a_pos", "a_disp", "a_scal", "a_disp2", NULL, NULL };
+    static const char* const attr[7] = { "a_pos", "a_disp", "a_scal", "a_disp2", NULL, NULL, NULL };
     return make_shader_vs(kVS, attr, fs_src);
 }
 
@@ -415,6 +444,19 @@ static int unit_body(float* v, int n, bool cap_b) {
         if (cap_b) { MV(0, 0, 1); MV(c0, s0, 1); MV(c1, s1, 1); }
     }
 #undef MV
+    return k / 3;
+}
+
+/* the unit glyph as plain triangles over an nt x np grid of (theta, phi) */
+static int unit_glyph(float* v, int nt, int np) {
+    int k = 0;
+    for (int i = 0; i < nt; i++)
+        for (int j = 0; j < np; j++) {
+            float t0 = 6.2831853f * i / nt, t1 = 6.2831853f * (i + 1) / nt;
+            float f0 = 3.1415927f * j / np, f1 = 3.1415927f * (j + 1) / np;
+            const float q[6][2] = { { t0, f0 }, { t0, f1 }, { t1, f1 }, { t0, f0 }, { t1, f1 }, { t1, f0 } };
+            for (int c = 0; c < 6; c++) { v[k++] = q[c][0]; v[k++] = q[c][1]; v[k++] = 0; }
+        }
     return k / 3;
 }
 
@@ -478,7 +520,7 @@ void cv_render_init(void) {
     R.pip_tri_ni = sg_make_pipeline(&pd);
 
     {   /* instanced symbols: the unit body per vertex, 15 floats per instance */
-        static const char* const attr[6] = { "a_m", "i_a", "i_b", "i_r", "i_disp", "i_disp2" };
+        static const char* const attr[7] = { "a_m", "i_a", "i_b", "i_r", "i_disp", "i_disp2", NULL };
         R.shd_inst = make_shader_vs(kVSI, attr, kFS);
         sg_pipeline_desc pi = {
             .shader = R.shd_inst,
@@ -504,6 +546,36 @@ void cv_render_init(void) {
         R.body[0] = make_buf(v, (size_t)R.body_n[0] * 12, false);
         R.body_n[1] = unit_body(v, 6, false);
         R.body[1] = make_buf(v, (size_t)R.body_n[1] * 12, false);
+    }
+
+    {   /* tensor glyphs: the unit grid per vertex, CV_GLYPH_FLOATS per instance */
+        static const char* const attr[7] = { "a_m", "i_c", "i_e0", "i_e1", "i_e2", "i_disp", "i_disp2" };
+        R.shd_glyph = make_shader_vs(kVSG, attr, kFS);
+        sg_pipeline_desc pg = {
+            .shader = R.shd_glyph,
+            .layout = {
+                .buffers = { [0] = { .stride = 12 },
+                             [1] = { .stride = CV_GLYPH_FLOATS * 4, .step_func = SG_VERTEXSTEP_PER_INSTANCE } },
+                .attrs = {
+                    [0] = { .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [1] = { .buffer_index = 1, .offset = 0,  .format = SG_VERTEXFORMAT_FLOAT4 },
+                    [2] = { .buffer_index = 1, .offset = 16, .format = SG_VERTEXFORMAT_FLOAT4 },
+                    [3] = { .buffer_index = 1, .offset = 32, .format = SG_VERTEXFORMAT_FLOAT4 },
+                    [4] = { .buffer_index = 1, .offset = 48, .format = SG_VERTEXFORMAT_FLOAT4 },
+                    [5] = { .buffer_index = 1, .offset = 64, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [6] = { .buffer_index = 1, .offset = 76, .format = SG_VERTEXFORMAT_FLOAT3 },
+                },
+            },
+            .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+            .index_type = SG_INDEXTYPE_NONE,
+            .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
+        };
+        R.pip_glyph = sg_make_pipeline(&pg);
+        static float v[20 * 10 * 18];
+        R.gmesh_n[0] = unit_glyph(v, 20, 10);
+        R.gmesh[0] = make_buf(v, (size_t)R.gmesh_n[0] * 12, false);
+        R.gmesh_n[1] = unit_glyph(v, 8, 5);
+        R.gmesh[1] = make_buf(v, (size_t)R.gmesh_n[1] * 12, false);
     }
 
     R.smp_lin = sg_make_sampler(&(sg_sampler_desc){
@@ -662,6 +734,30 @@ void cv_render_inst(int which, const float* inst, uint32_t n) {
     I[which].n = I[which].buf.id ? n : 0;
 }
 
+static struct { sg_buffer buf; uint32_t n; } GLY;   /* the tensor glyphs */
+
+void cv_render_glyphs(const float* inst, uint32_t n) {
+    kill_buf(&GLY.buf);
+    GLY.n = 0;
+    if (!inst || n == 0) return;
+    GLY.buf = make_buf(inst, (size_t)n * CV_GLYPH_FLOATS * 4, false);
+    GLY.n = GLY.buf.id ? n : 0;
+}
+
+static void draw_glyphs(int mode, const float rgb[3], const cv_draw* d) {
+    if (!GLY.n) return;
+    int lod = GLY.n > 5000 ? 1 : 0;            /* great numbers: a coarser grid */
+    sg_apply_pipeline(R.pip_glyph);
+    sg_bindings b = {
+        .vertex_buffers = { [0] = R.gmesh[lod], [1] = GLY.buf },
+        .views = { [0] = R.cmap_view, [1] = R.etex_view },
+        .samplers = { [0] = R.smp_lin, [1] = R.smp_near },
+    };
+    sg_apply_bindings(&b);
+    uniforms(d, true, true, mode, rgb, true, 0.f, false, 0.f);
+    sg_draw(0, R.gmesh_n[lod], (int)GLY.n);
+}
+
 /* a layer of symbols, lit; min_px: the least radius on screen */
 static void draw_inst(int which, int mode, const float rgb[3], const cv_draw* d, float min_px) {
     if (!I[which].n) return;
@@ -771,6 +867,13 @@ void cv_render_draw(const cv_draw* d) {
             draw_inst(CV_INST_HEAT, CV_COLOR_SOLID, heat_rgb, d, px);
         }
         if (d->vectors) draw_inst(CV_INST_VEC, d->vectors_color, vec_rgb, d, px);
+        if (d->tensors) {                         /* glyphs coloured by the field, crosses by sign */
+            static const float glyph_rgb[3] = { 0.85f, 0.85f, 0.85f }, ten_rgb[3] = { 0.90f, 0.15f, 0.12f },
+                               cmp_rgb[3] = { 0.15f, 0.35f, 0.95f };
+            draw_glyphs(d->tensors_color, glyph_rgb, d);
+            draw_inst(CV_INST_TENS, CV_COLOR_SOLID, ten_rgb, d, px);
+            draw_inst(CV_INST_COMP, CV_COLOR_SOLID, cmp_rgb, d, px);
+        }
         if (d->links) draw_inst(CV_INST_LINK, CV_COLOR_SOLID, link_rgb, d, px);
         if (d->discrete) draw_inst(CV_INST_DISC, CV_COLOR_SOLID, disc_rgb, d, px);
     }
@@ -792,5 +895,6 @@ void cv_render_draw(const cv_draw* d) {
 
 static void clear_aux(void) {
     for (int i = 0; i < CV_INST_N; i++) cv_render_inst(i, NULL, 0);
+    cv_render_glyphs(NULL, 0);
     for (int i = 0; i < CV_AUX_N; i++) cv_render_aux(i, NULL, NULL, NULL, 0);
 }

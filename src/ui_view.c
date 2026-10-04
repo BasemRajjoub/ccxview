@@ -65,6 +65,12 @@ static void symbol_sizes(struct nk_context* ctx, float s, float row) {
             app_vectors_changed();
         }
     }
+    if (app_field_is_tensor() && G.show_tensor) {
+        if (scale_slider(ctx, row, "tensors x", "Largest tensor glyph, times the mean element size", &G.tensor_scale, 0.1f, 10.f)) {
+            if (G.tensor_scale < 0) G.tensor_scale = 1.f;
+            app_tensors_changed();
+        }
+    }
     scale_slider(ctx, row, "sets px", "Balls of a highlighted node set or surface, pixels", &G.hl_size, 2.f, 40.f);
     if (G.hl_size < 0) G.hl_size = 8.f;
     nk_tree_pop(ctx);

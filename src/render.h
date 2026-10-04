@@ -44,6 +44,8 @@ typedef struct {
     bool  discrete;            /* springs, dashpots, masses, gaps as symbols */
     bool  links;               /* coupling spiders: rigid body, kinematic, distributing, equation */
     bool  vectors;             /* arrows of a 3-component field at the nodes */
+    bool  tensors;             /* glyphs of a stress / strain tensor (cv_render_glyphs, CV_INST_TENS / COMP) */
+    int   tensors_color;       /* the glyphs: CV_COLOR_SOLID or CV_COLOR_NODAL */
     bool  ghost;               /* the undeformed edges in grey behind the deformed shape */
     bool  markers;             /* min / max balls */
     bool  path;                /* the plotted line on the surface */
@@ -94,9 +96,18 @@ void cv_render_aux2(int which, const float* pos, const float* disp, const float*
      by the field), disp[3], disp2[3] (how the whole body moves with the shape).
    A body is never drawn thinner than about a pixel, so symbols stay visible from far
    away and a radius of nearly 0 gives a line of constant width. NULL / 0 clears. */
-enum { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_DISC, CV_INST_LINK, CV_INST_VEC, CV_INST_N };
+/* CV_INST_TENS / COMP: the bars of the principal cross in tension / compression */
+enum { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_DISC, CV_INST_LINK, CV_INST_VEC,
+       CV_INST_TENS, CV_INST_COMP, CV_INST_N };
 #define CV_INST_FLOATS 15
 void cv_render_inst(int which, const float* inst, uint32_t n);
+
+/* Tensor glyphs (glyph.h): a unit superquadric drawn once per instance, lit, its
+   scalar coloured like the faces. CV_GLYPH_FLOATS per instance:
+     centre[3], scalar, axis0[3] * len0, alpha, axis1[3] * len1, beta,
+     axis2[3] * len2, planar (0 / 1), disp[3], disp2[3]. NULL / 0 clears. */
+#define CV_GLYPH_FLOATS 22
+void cv_render_glyphs(const float* inst, uint32_t n);
 
 void cv_render_draw(const cv_draw* d);
 

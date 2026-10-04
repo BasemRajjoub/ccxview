@@ -17,6 +17,7 @@ typedef struct {
     bool        eval_next;      /* the next open evaluates with cgx */
     bool        gp;             /* --gp: Gauss point layer on */
     bool        vectors;        /* --vectors: arrow layer on */
+    int         tensor;         /* --tensor STYLE: glyph layer on with that CV_GLYPH_* style, -1 = keep */
     bool        conv;           /* --conv: open the convergence window */
     int         win_w, win_h;   /* --size WxH */
     const char* field;          /* --field NAME: start on that .frd field (first option) */
@@ -72,6 +73,8 @@ float*       to_csys(const cv_field_desc* d, const cv_frd* f, const float* vals)
 
 /* app_overlay.c: vector arrows, clip caps */
 void         refresh_vectors(void);
+/* app_tensor.c: tensor glyphs */
+void         refresh_tensors(void);
 
 /* app_path.c: path plot, history */
 void         refresh_path(void);

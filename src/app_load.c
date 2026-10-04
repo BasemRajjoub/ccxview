@@ -532,6 +532,7 @@ void poll_job(void) {
             refresh_tri_colors();
             refresh_gauss();
             refresh_vectors();
+            refresh_tensors();
             app_refresh_range();                  /* the legend covers what is shown */
             deck_refresh_highlight();
             G.probe_on = false;
@@ -653,9 +654,10 @@ bool app_view_save(const char* path) {
     }
     cv_cfg_set_bool(&c, "cyc_on", G.cyc_on); cv_cfg_set_int(&c, "cyc_n", G.cyc_n);
     cv_cfg_set_int(&c, "cyc_show", G.cyc_show); cv_cfg_set_int(&c, "cyc_axis", G.cyc_axis);
-    const char* layer_keys[] = { "show_faces", "show_edges", "show_nodes", "show_gp", "show_vec", "show_markers", "show_ghost", "shading" };
-    const bool  layer_vals[] = { G.show_faces, G.show_edges, G.show_nodes, G.show_gp, G.show_vec, G.show_markers, G.show_ghost, G.shading };
+    const char* layer_keys[] = { "show_faces", "show_edges", "show_nodes", "show_gp", "show_vec", "show_tensor", "show_markers", "show_ghost", "shading" };
+    const bool  layer_vals[] = { G.show_faces, G.show_edges, G.show_nodes, G.show_gp, G.show_vec, G.show_tensor, G.show_markers, G.show_ghost, G.shading };
     for (size_t i = 0; i < CV_COUNT(layer_keys); i++) cv_cfg_set_bool(&c, layer_keys[i], layer_vals[i]);
+    cv_cfg_set_int(&c, "tensor_style", G.tensor_style);
     cv_cfg_set_int(&c, "faces_mode", G.faces_mode); cv_cfg_set_int(&c, "cmap", G.cmap); cv_cfg_set_int(&c, "bands", G.bands);
     bool ok = cv_cfg_save(&c);
     cv_cfg_free(&c);
@@ -703,6 +705,8 @@ bool app_view_load(const char* path) {
     G.show_faces = cv_cfg_get_bool(&c, "show_faces", G.show_faces); G.show_edges = cv_cfg_get_bool(&c, "show_edges", G.show_edges);
     G.show_nodes = cv_cfg_get_bool(&c, "show_nodes", G.show_nodes); G.show_gp = cv_cfg_get_bool(&c, "show_gp", G.show_gp);
     G.show_vec = cv_cfg_get_bool(&c, "show_vec", G.show_vec); G.show_markers = cv_cfg_get_bool(&c, "show_markers", G.show_markers);
+    G.show_tensor = cv_cfg_get_bool(&c, "show_tensor", G.show_tensor);
+    G.tensor_style = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "tensor_style", G.tensor_style), CV_GLYPH_N - 1));
     G.show_ghost = cv_cfg_get_bool(&c, "show_ghost", G.show_ghost); G.shading = cv_cfg_get_bool(&c, "shading", G.shading);
     G.faces_mode = cv_cfg_get_int(&c, "faces_mode", G.faces_mode) % FM_N;
     app_colormap(cv_cfg_get_int(&c, "cmap", G.cmap) % CV_CMAP_N);
