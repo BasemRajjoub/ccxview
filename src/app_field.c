@@ -7,6 +7,8 @@
 #include "calc.h"
 #include "gauss.h"
 #include "path.h"
+#include "app_fail.h"
+#include "app_mesh.h"
 #include <math.h>
 
 /* ---- messages -------------------------------------------------------------- */
@@ -431,10 +433,64 @@ bool app_calc_set(const char* expr) {
     return true;
 }
 
+/* ---- failure criteria over the stresses (app_fail.c) ---------------------------------- */
+
+static bool refresh_field_fail(void) {
+    char t[64], why[128], kind[64];
+    snprintf(t, sizeof t, "Failure %s", cv_fc_title(G.fail_crit));
+    bool ok = fail_eval_field(why, sizeof why);
+    snprintf(kind, sizeof kind, "%s%s", fail_out_name(G.fail_out), G.fail_out == CV_FO_ANGLE ? " [deg]" : "");
+    if (!ok) { set_label(t, NULL, why, NULL, 0); return false; }
+    if (why[0]) {                                     /* shown, but some materials are left out */
+        char k2[200];
+        snprintf(k2, sizeof k2, "%s %s", kind, why);
+        set_label(t, NULL, kind, NULL, 0);
+        snprintf(G.field_label, sizeof G.field_label, "%s %s", t, k2);
+        snprintf(G.legend_lines[2], sizeof G.legend_lines[2], "%s", why);
+    } else set_label(t, NULL, kind, NULL, 0);
+    return true;
+}
+
+void app_fail_set(int crit, int out) {
+    G.fail_crit = CV_MAX(0, CV_MIN(crit, CV_FC_N - 1));
+    G.fail_out = CV_MAX(0, CV_MIN(out, CV_FO_N - 1));
+    G.field_src = 3;
+    G.field_name[0] = 0;
+    G.comp = 0;
+    G.range_lock = false;
+    refresh_field();
+}
+
+/* ---- mesh quality (app_mesh.c) ------------------------------------------------------- */
+
+static bool refresh_field_mesh(void) {
+    char why[64], kind[64];
+    const char* u = mesh_unit(G.mesh_q);
+    bool ok = mesh_eval_field(why, sizeof why);
+    snprintf(kind, sizeof kind, "%s", ok ? cv_mq(G.mesh_q)->name : why);
+    set_label("Mesh", NULL, kind, NULL, 0);
+    if (ok && u[0]) {
+        snprintf(G.field_label, sizeof G.field_label, "Mesh %s [%s]", kind, u);
+        snprintf(G.legend_lines[2], sizeof G.legend_lines[2], "[%s]", u);
+    }
+    return ok;
+}
+
+void app_mesh_set(int q) {
+    G.mesh_q = CV_MAX(0, CV_MIN(q, CV_MQ_N - 1));
+    G.field_src = 4;
+    G.field_name[0] = 0;
+    G.comp = 0;
+    G.range_lock = false;
+    G.elem_mode = true;                              /* a property of the element: flat */
+    refresh_field();
+}
+
 void refresh_field(void) {
     if (G.field_src == 1) { refresh_field_dat(); return; }
-    int fi = G.field_src == 2 ? -1 : find_field(G.step, G.field_name);
-    G.has_field = G.field_src == 2 && refresh_field_calc();
+    int fi = G.field_src >= 2 ? -1 : find_field(G.step, G.field_name);
+    G.has_field = (G.field_src == 2 && refresh_field_calc()) || (G.field_src == 3 && refresh_field_fail())
+               || (G.field_src == 4 && refresh_field_mesh());
     if (fi >= 0) {
         const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
         const float* vals = cache_get(G.step, fi);
@@ -453,7 +509,7 @@ void refresh_field(void) {
         }
     }
     if (!G.has_field) {
-        if (G.field_src == 2) {}          /* the label says why */
+        if (G.field_src >= 2) {}          /* the label says why */
         else if (G.field_name[0]) {
             char t[96];
             snprintf(t, sizeof t, "%s (not in this step)", G.field_name);
@@ -561,7 +617,7 @@ void app_select_src(const char* field, int comp, int src) {
 }
 
 void app_select(const char* field, int comp) {
-    if (G.field_src == 2 && field[0]) G.field_src = 0;   /* a named field is a .frd one; "" keeps the formula */
+    if (G.field_src >= 2 && field[0]) G.field_src = 0;   /* a named field is a .frd one; "" keeps the formula */
     snprintf(G.field_name, sizeof G.field_name, "%s", field);
     G.comp = comp;
     G.range_lock = false;

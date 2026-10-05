@@ -137,12 +137,13 @@ typedef struct { cv_link l; CV_VEC(uint32_t) nodes; CV_VEC(uint32_t) elems; } vl
 typedef struct { char name[64]; cv_csys cs; bool bad; } vorient;
 /* a section's orientation, by name; the layers of a composite shell may each name one */
 typedef struct { char elset[64]; char ori[64]; bool mixed; uint32_t lay0, nlay; } osect;
-typedef struct { char ori[64]; } vlayer;
+typedef struct { char ori[64], mat[64]; float t; } vlayer;
 typedef struct { char f[CV_OUT_N]; } outsys;
 
 enum { S_SKIP, S_NODE, S_ELEM, S_NSET, S_ELSET, S_SURF, S_HEADING, S_BOUNDARY, S_CLOAD, S_DLOAD, S_SPRINGDOF,
        S_CFLUX, S_DFLUX, S_FILM, S_RADIATE, S_TEMP, S_PRETENSION, S_MPC, S_CYCLIC,
-       S_EQUATION, S_DCOUP, S_TIE, S_CONTACT, S_TRANSFORM, S_ORIENT, S_OUTREQ, S_COMPOSITE };
+       S_EQUATION, S_DCOUP, S_TIE, S_CONTACT, S_TRANSFORM, S_ORIENT, S_OUTREQ, S_COMPOSITE,
+       S_ELASTIC, S_PLASTIC };
 
 typedef struct {
     cv_inp* d;
@@ -161,6 +162,7 @@ typedef struct {
     CV_VEC(vsurf) surfs;
     CV_VEC(section) sects;
     CV_VEC(char*) mats;
+    CV_VEC(cv_matprop) mprop;           /* per *MATERIAL, as mats */
     CV_VEC(cv_bc) bcs;
     CV_VEC(cv_cload) cloads;
     CV_VEC(cv_dload) dloads;
@@ -181,6 +183,7 @@ typedef struct {
     bool nodefile, elfile;              /* this step already had a *NODE FILE / *EL FILE */
     char outsys_c;                      /* 'G' / 'L' of the open output request */
     int  blk_line;                      /* data lines read of the open *ORIENTATION / composite */
+    int  el_type, el_n;                 /* the open *ELASTIC: CV_EL_, values read */
     bool tr_cyl;
     int  eq_left;                       /* *EQUATION: terms still to read */
     int  cdisc;                         /* discrete kind of the open *ELEMENT block, -1 none */
@@ -415,8 +418,25 @@ static void do_keyword(P* p, const char* s, const char* e) {
             char* c = malloc(64);
             if (!c) { p->oom = true; return; }
             snprintf(c, 64, "%s", nm); upcase(c);
+            cv_matprop mp;
+            memset(&mp, 0, sizeof mp);
             if (!cv_push(p->mats, c)) { free(c); p->oom = true; }
+            else if (!cv_push(p->mprop, mp)) p->oom = true;
         }
+        return;
+    }
+    if (strcmp(kw, "ELASTIC") == 0 && p->mprop.n && !p->mprop.a[p->mprop.n - 1].el) {
+        const char* ty = pget(prm, np, "TYPE");
+        char t[32] = "ISO";
+        if (ty) { snprintf(t, sizeof t, "%s", ty); upcase(t); }
+        p->el_type = !strncmp(t, "ISO", 3) ? CV_EL_ISO : !strncmp(t, "ENGINEERING", 11) ? CV_EL_ENG
+                   : !strncmp(t, "ORTHO", 5) ? CV_EL_ORTHO : !strncmp(t, "ANISO", 5) ? CV_EL_ANISO : 0;
+        p->el_n = 0;
+        if (p->el_type) p->st = S_ELASTIC;     /* the first temperature only */
+        return;
+    }
+    if (strcmp(kw, "PLASTIC") == 0 && p->mprop.n && !(p->mprop.a[p->mprop.n - 1].sy > 0)) {
+        p->st = S_PLASTIC;
         return;
     }
     if (strcmp(kw, "HEADING") == 0) { p->st = S_HEADING; return; }
@@ -895,8 +915,32 @@ static void do_data(P* p, const char* s, const char* e) {
             else if (strcmp(nm, o->ori) != 0) o->mixed = true;
             vlayer l;
             memcpy(l.ori, nm, sizeof l.ori);
+            double t = 0;
+            l.t = n >= 1 && to_f(f[0], &t) ? (float)t : 0.f;
+            l.mat[0] = 0;
+            if (n >= 3) { snprintf(l.mat, sizeof l.mat, "%s", f[2]); upcase(l.mat); }
             if (!cv_push(p->layers, l)) p->oom = true;
             else o->nlay++;
+            return;
+        }
+        case S_ELASTIC: {                     /* the constants, then the temperature */
+            static const int want[] = { 0, 2, 9, 9, 21 };
+            cv_matprop* m = &p->mprop.a[p->mprop.n - 1];
+            int w = want[p->el_type], n = fields(s, e, f, 8);
+            for (int k = 0; k < n && p->el_n < w; k++) {
+                double v = 0;
+                if (!to_f(f[k], &v)) { p->st = S_SKIP; return; }
+                if (p->el_n < 9) m->c[p->el_n] = (float)v;
+                p->el_n++;
+            }
+            if (p->el_n >= w) { m->el = (uint8_t)p->el_type; p->st = S_SKIP; }
+            return;
+        }
+        case S_PLASTIC: {                     /* stress, plastic strain, temperature */
+            double v = 0;
+            int n = fields(s, e, f, 3);
+            if (n >= 1 && to_f(f[0], &v)) p->mprop.a[p->mprop.n - 1].sy = (float)v;
+            p->st = S_SKIP;
             return;
         }
         case S_OUTREQ: {                      /* the variables, any number per line */
@@ -1058,8 +1102,11 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
         for (size_t k = 0; k < p.mats.n; k++) have |= strcmp(p.mats.a[k], p.sects.a[i].mat) == 0;
         if (!have) {
             char* c = malloc(64);
+            cv_matprop mp;
+            memset(&mp, 0, sizeof mp);
             if (!c || !cv_push(p.mats, c)) { free(c); goto oom; }
             snprintf(c, 64, "%s", p.sects.a[i].mat);
+            if (!cv_push(p.mprop, mp)) goto oom;
         }
     }
     d->disc = p.disc.a;     d->ndisc = (uint32_t)p.disc.n;     p.disc.a = NULL;
@@ -1073,6 +1120,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     d->mats = malloc((size_t)CV_MAX(d->nmats, 1) * 64);
     if (!d->mats) goto oom;
     for (int k = 0; k < d->nmats; k++) snprintf(d->mats[k], 64, "%s", p.mats.a[k]);
+    d->mprop = p.mprop.a; p.mprop.a = NULL;
     for (size_t i = 0; i < p.sects.n; i++) {
         const cv_set* es = cv_inp_set(d, p.sects.a[i].elset, true);
         int mi = 0;
@@ -1143,7 +1191,9 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
         }
         d->comps = malloc(CV_MAX(u, 1) * sizeof *d->comps);
         d->layer_ori = malloc(CV_MAX(p.layers.n, 1) * sizeof *d->layer_ori);
-        if (!d->comps || !d->layer_ori) { cv_free_vec(ce); goto oom; }
+        d->layer_mat = malloc(CV_MAX(p.layers.n, 1) * sizeof *d->layer_mat);
+        d->layer_t = malloc(CV_MAX(p.layers.n, 1) * sizeof *d->layer_t);
+        if (!d->comps || !d->layer_ori || !d->layer_mat || !d->layer_t) { cv_free_vec(ce); goto oom; }
         for (size_t j = 0; j < u; j++) {
             const osect* o = &p.osects.a[ce.a[j].ix];
             d->comps[j] = (cv_layered){ ce.a[j].id, o->lay0, o->nlay };
@@ -1155,6 +1205,9 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
                 if (strcmp(p.oris.a[k].name, p.layers.a[i].ori) == 0) ix = p.oris.a[k].bad ? -1 : (int32_t)k;
             if (p.layers.a[i].ori[0] && ix == -2) ix = -1;     /* names one not defined */
             d->layer_ori[i] = ix;
+            d->layer_t[i] = p.layers.a[i].t;
+            d->layer_mat[i] = -1;
+            for (int k = 0; k < d->nmats; k++) if (strcmp(d->mats[k], p.layers.a[i].mat) == 0) d->layer_mat[i] = k;
         }
         cv_free_vec(ce);
     }
@@ -1167,7 +1220,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     d->shells = p.shells.a; d->nshells = (uint32_t)p.shells.n; p.shells.a = NULL;
 
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
-    cv_free_vec(p.mats); cv_free_vec(p.sects); cv_free_vec(p.sdofs);
+    cv_free_vec(p.mats); cv_free_vec(p.mprop); cv_free_vec(p.sects); cv_free_vec(p.sdofs);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
     cv_free_vec(p.links);
     for (size_t i = 0; i < p.sets.n; i++) cv_free_vec(p.sets.a[i].ids);
@@ -1186,7 +1239,7 @@ oom:
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
     cv_free_vec(p.links);
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
-    cv_free_vec(p.mats);
+    cv_free_vec(p.mats); cv_free_vec(p.mprop);
     for (size_t i = 0; i < p.sets.n; i++) cv_free_vec(p.sets.a[i].ids);
     cv_free_vec(p.sets);
     for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); }
@@ -1208,7 +1261,7 @@ void cv_inp_free(cv_inp* d) {
     free(d->links);
     free(d->mats);
     free(d->transforms); free(d->node_tr); free(d->orients); free(d->orient_names); free(d->elem_ori); free(d->outsys);
-    free(d->shells); free(d->comps); free(d->layer_ori);
+    free(d->shells); free(d->comps); free(d->layer_ori); free(d->layer_mat); free(d->layer_t); free(d->mprop);
     cv_msgs keep = d->msgs;
     memset(d, 0, sizeof *d);
     d->msgs = keep;

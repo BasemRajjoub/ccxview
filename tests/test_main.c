@@ -1408,6 +1408,8 @@ static void test_localsys_requests(void) {
 #include "t_glyph.h"
 #include "../src/traj.h"
 #include "t_traj.h"
+#include "t_failure.h"
+#include "t_quality.h"
 
 int main(void) {
     test_gpu_env();
@@ -1417,6 +1419,8 @@ int main(void) {
     test_cap();
     test_glyph();
     test_traj();
+    test_failure();
+    test_quality();
     test_video();
     test_cfg();
     test_export();

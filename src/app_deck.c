@@ -36,6 +36,9 @@ static struct {
     cv_localsys L;
     bool      L_tried;
     int       L_said;           /* CV_LOC_ bits already reported */
+    cv_elemmap M;               /* .frd element -> material and axes, built on first need */
+    const cv_frd* M_for;
+    bool      M_ok;
 } D;
 
 static void grid_free(void) {
@@ -55,6 +58,7 @@ void deck_clear(void) {
     free(D.emap);
     free(D.est_id); free(D.est_d);
     cv_localsys_free(&D.L);
+    cv_elemmap_free(&D.M);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
     free(D.set_on); free(D.surf_on); free(D.link_on); free(D.nvis);
@@ -191,6 +195,16 @@ bool deck_file_reader(void* user, const char* path, char** data, size_t* size) {
 
 /* "Material 2" becomes "Material 2 STEEL" when the deck names it
    (CalculiX numbers materials in the order the deck defines them). */
+const cv_elemmap* deck_elemmap(const cv_frd* f) {
+    if (!D.on || !f) return NULL;
+    if (D.M_for != f) {
+        cv_elemmap_free(&D.M);
+        D.M_ok = cv_elemmap_init(&D.M, &D.d, f);
+        D.M_for = f;
+    }
+    return D.M_ok ? &D.M : NULL;
+}
+
 const char* deck_material_name(uint32_t k) {
     if (!D.on || k == 0 || (int)k > D.d.nmats) return NULL;
     return D.d.mats[k - 1];

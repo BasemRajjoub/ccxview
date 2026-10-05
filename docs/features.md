@@ -62,6 +62,39 @@ and the shape follow every node; the full list is in
   `if(MISES > 200, 1, 0)`. Components, magnitudes, von Mises and principal
   values by name, node coordinates `X Y Z`, the step `TIME`, and the usual maths
   functions.
+- Failure criteria as a field, from the stresses in each element's material
+  axes (composite layers, `*ORIENTATION`, cylindrical systems): maximum stress,
+  Tsai-Hill, Tsai-Wu, Hashin, Puck (action plane), LaRC03 and LaRC05 for UD
+  plies; von Mises, Tresca and Mohr-Coulomb for isotropic materials; Auto, the
+  default, picks per material (LaRC05 for plies, von Mises for metals and
+  plastics, Mohr-Coulomb for brittle ones), and any other criterion judges the
+  materials of the other kind by theirs. Shown as
+  exposure, reserve factor, failure index, governing mode, fracture plane angle,
+  or fibre and matrix exposure apart; the probe names the mode. LaRC in-situ
+  strengths follow the ply's thickness and place in the laminate.
+- Mesh quality as a field, per element on the undeformed mesh: size (volume,
+  area, length), shortest and longest edge, aspect ratio, scaled Jacobian,
+  Jacobian ratio (through the mid-side nodes), equiangle skewness, smallest and
+  largest face angle, warpage, shape factor. The Mesh quality window sums up the
+  mesh (element types, nodes, materials, volume, extent) and gives each measure
+  its range, mean, spread, the usual limit (Abaqus, ANSYS, Verdict), how many
+  elements pass it and the worst element, one click away.
+- Overall mesh scores, each made the way its program makes it and explained in
+  the window: ccxview quality (0 to 1, the weakest of the measures, each scored
+  from its ideal to its limit), the HyperMesh quality index (penalties 0 at
+  good, 1 at fail, 10 at worst), ANSYS Element Quality (C V / sqrt(sum e^2)^3)
+  and the number of Abaqus Verify Mesh checks failed. The probe names the
+  measure that sets the ccxview score.
+- Strength materials: Xt, Xc, Yt, Yc, S12, S23, Puck inclinations, fracture
+  toughness, yield and ultimate strengths. Templates of well documented
+  materials (the WWFE plies, IM7/8552, T800S/M21, AS4/PEEK, structural,
+  stainless and quenched and tempered steels, aluminium and titanium alloys,
+  grey cast iron, PEEK, PA66, PC, POM, ABS, PP), each with its source; elastic
+  constants taken from the deck. Kept in the settings file, assigned per deck
+  material. A deck material with none assigned takes the nearest template on
+  its own, by its name (`S355`, `IM7/8552`, `PA66`, `steel`, `CFRP`...) or else
+  its `*ELASTIC` data, with the deck's E, nu and `*PLASTIC` yield stress, so the
+  field shows something from the start; the legend says which.
 
 ## The deck on the model
 

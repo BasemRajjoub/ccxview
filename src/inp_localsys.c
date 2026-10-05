@@ -55,43 +55,53 @@ static bool shell_axes(const cv_inp* d, uint32_t de, const cv_csys* cs, double Q
     return true;
 }
 
-typedef struct {
-    const cv_inp* d;
-    const uint32_t* disc;
-    const uint32_t* f2d;    /* per .frd element: the deck element (index), UINT32_MAX none */
-    uint32_t* lde;          /* per .frd element: the composite shell (deck index) a layer is of,
-                               UINT32_MAX not a layer, LAYER_LOST one that cannot be matched */
-    int32_t* lori;          /* per .frd element: the layer's orientation */
-} esys_ctx;
 #define LAYER_LOST (UINT32_MAX - 1)
+
+void cv_elemmap_free(cv_elemmap* m) {
+    free(m->f2d); free(m->comp); free(m->layer); free(m->lay_off); free(m->lay_elem); free(m->disc);
+    memset(m, 0, sizeof *m);
+}
 
 /* CalculiX writes each layer of a composite shell as an element of its own, numbered
    on from the largest element number (frd.c): after the deck's elements, in the order
    of the shells, their layers in order */
-static bool layer_map(esys_ctx* c, const cv_frd* f) {
-    const cv_inp* d = c->d;
-    c->lde = malloc(CV_MAX(f->n_elems, 1) * sizeof(uint32_t));
-    c->lori = malloc(CV_MAX(f->n_elems, 1) * sizeof(int32_t));
-    cv_idix* x = malloc(CV_MAX(f->n_elems, 1) * sizeof(cv_idix));
-    if (!c->lde || !c->lori || !x) { free(x); return false; }
-    uint32_t nx = 0, nl = 0;
+bool cv_elemmap_init(cv_elemmap* m, const cv_inp* d, const cv_frd* f) {
+    memset(m, 0, sizeof *m);
+    uint32_t E = CV_MAX(f->n_elems, 1), nl = 0;
+    for (uint32_t i = 0; i < d->ncomps; i++) nl += d->comps[i].nlay;
+    m->f2d = cv_frd_match_elems(f, &d->mesh, NULL);
+    m->comp = malloc(E * sizeof(uint32_t));
+    m->layer = calloc(E, sizeof(uint16_t));
+    m->lay_off = calloc(d->ncomps + 1, sizeof(uint32_t));
+    m->lay_elem = malloc(CV_MAX(nl, 1) * sizeof(uint32_t));
+    m->disc = malloc(CV_MAX(d->ndisc, 1) * sizeof(uint32_t));
+    cv_idix* x = malloc(E * sizeof(cv_idix));
+    if (!m->f2d || !m->comp || !m->layer || !m->lay_off || !m->lay_elem || !m->disc || !x) {
+        free(x); cv_elemmap_free(m); return false;
+    }
+    for (uint32_t i = 0; i < d->ndisc; i++) m->disc[i] = d->disc[i].id;
+    if (d->ndisc) qsort(m->disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32);
+    for (uint32_t i = 0; i < nl; i++) m->lay_elem[i] = UINT32_MAX;
+    for (uint32_t i = 0; i < d->ncomps; i++) m->lay_off[i + 1] = m->lay_off[i] + d->comps[i].nlay;
+    uint32_t nx = 0, nshown = 0;
     for (uint32_t e = 0; e < f->n_elems; e++) {
-        c->lde[e] = UINT32_MAX;
-        if (c->f2d[e] == UINT32_MAX) x[nx++] = (cv_idix){ f->elem_id[e], (int32_t)e };
+        m->comp[e] = UINT32_MAX;
+        if (m->f2d[e] == UINT32_MAX) x[nx++] = (cv_idix){ f->elem_id[e], (int32_t)e };
     }
     for (uint32_t i = 0; i < d->ncomps; i++)
-        if (cv_frd_elem_index(&d->mesh, d->comps[i].id) != UINT32_MAX) nl += d->comps[i].nlay;
-    if (nx && nx != nl) {                                  /* not this deck's layers */
-        for (uint32_t k = 0; k < nx; k++) c->lde[x[k].ix] = LAYER_LOST;
+        if (cv_frd_elem_index(&d->mesh, d->comps[i].id) != UINT32_MAX) nshown += d->comps[i].nlay;
+    if (nx && nx != nshown) {                              /* not this deck's layers */
+        m->lost = d->ncomps > 0;
+        for (uint32_t k = 0; d->ncomps && k < nx; k++) m->comp[x[k].ix] = LAYER_LOST;
     } else if (nx) {
         qsort(x, nx, sizeof(cv_idix), cmp_idix);
         uint32_t k = 0;
         for (uint32_t i = 0; i < d->ncomps; i++) {
-            uint32_t de = cv_frd_elem_index(&d->mesh, d->comps[i].id);
-            if (de == UINT32_MAX) continue;
+            if (cv_frd_elem_index(&d->mesh, d->comps[i].id) == UINT32_MAX) continue;
             for (uint32_t l = 0; l < d->comps[i].nlay; l++, k++) {
-                c->lde[x[k].ix] = de;
-                c->lori[x[k].ix] = d->layer_ori[d->comps[i].lay0 + l];
+                m->comp[x[k].ix] = i;
+                m->layer[x[k].ix] = (uint16_t)l;
+                m->lay_elem[m->lay_off[i] + l] = (uint32_t)x[k].ix;
             }
         }
     }
@@ -99,17 +109,44 @@ static bool layer_map(esys_ctx* c, const cv_frd* f) {
     return true;
 }
 
-/* the system element e (.frd index) writes local values in, at its node x:
-   0 none (global), 1 Q, 2 Q but it changes inside the element (cylindrical),
-   -1 cannot be rebuilt, -2 no element values (discrete) */
-static int elem_sys(const esys_ctx* c, const cv_frd* f, uint32_t e, const float* x, double Q[3][3]) {
-    const cv_inp* d = c->d;
-    uint32_t de = c->f2d[e], id = de != UINT32_MAX ? d->mesh.elem_id[de] : f->elem_id[e];
-    if (d->ndisc && bsearch(&id, c->disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32)) return -2;
-    if (c->lde && c->lde[e] != UINT32_MAX) {               /* a layer: the shell's system, its orientation */
-        int32_t o = c->lori[e];
-        if (c->lde[e] == LAYER_LOST || o == -1) return -1;
-        return shell_axes(d, c->lde[e], o >= 0 ? &d->orients[o] : NULL, Q) ? 1 : -1;
+int cv_elemmap_mat(const cv_elemmap* m, const cv_inp* d, uint32_t e, float* thick, int* layer) {
+    if (thick) *thick = 0;
+    if (layer) *layer = -1;
+    uint32_t c = m->comp[e];
+    if (c == LAYER_LOST) return -1;
+    if (c != UINT32_MAX) {
+        uint32_t k = d->comps[c].lay0 + m->layer[e];
+        if (thick) *thick = d->layer_t[k];
+        if (layer) *layer = m->layer[e];
+        return d->layer_mat[k];
+    }
+    uint32_t de = m->f2d[e];
+    return de != UINT32_MAX && d->mesh.emat ? (int)d->mesh.emat[de] - 1 : -1;
+}
+
+uint32_t cv_elemmap_dat(const cv_elemmap* m, const cv_inp* d, uint32_t id, int ip, int nip, int* lip) {
+    uint32_t lo = 0, hi = d->ncomps;
+    while (lo < hi) {
+        uint32_t k = lo + (hi - lo) / 2;
+        if (d->comps[k].id < id) lo = k + 1; else hi = k;
+    }
+    if (lo >= d->ncomps || d->comps[lo].id != id || !d->comps[lo].nlay) return UINT32_MAX;
+    int nlay = (int)d->comps[lo].nlay, per = nip / nlay;
+    if (per < 1 || ip < 1 || ip > per * nlay) return UINT32_MAX;
+    *lip = (ip - 1) % per + 1;
+    return m->lay_elem[m->lay_off[lo] + (uint32_t)((ip - 1) / per)];
+}
+
+int cv_elemmap_axes(const cv_elemmap* m, const cv_inp* d, const cv_frd* f, uint32_t e, const float* x, double Q[3][3]) {
+    uint32_t de = m->f2d ? m->f2d[e] : UINT32_MAX, id = de != UINT32_MAX ? d->mesh.elem_id[de] : f->elem_id[e];
+    if (d->ndisc && bsearch(&id, m->disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32)) return -2;
+    if (m->comp && m->comp[e] != UINT32_MAX) {             /* a layer: the shell's system, its orientation */
+        if (m->comp[e] == LAYER_LOST) return -1;
+        const cv_layered* c = &d->comps[m->comp[e]];
+        int32_t o = d->layer_ori[c->lay0 + m->layer[e]];
+        uint32_t se = cv_frd_elem_index(&d->mesh, c->id);
+        if (o == -1 || se == UINT32_MAX) return -1;
+        return shell_axes(d, se, o >= 0 ? &d->orients[o] : NULL, Q) ? 1 : -1;
     }
     int32_t o = d->nelem_ori ? find_idix(d->elem_ori, d->nelem_ori, id) : -2;
     if (o == -1) return -1;
@@ -117,7 +154,11 @@ static int elem_sys(const esys_ctx* c, const cv_frd* f, uint32_t e, const float*
     if (d->nshells && bsearch(&id, d->shells, d->nshells, sizeof(uint32_t), cv_cmp_u32)) {
         return de != UINT32_MAX && shell_axes(d, de, cs, Q) ? 1 : -1;
     }
-    if (!cs) return 0;
+    if (!cs) {
+        memset(Q, 0, 9 * sizeof(double));
+        Q[0][0] = Q[1][1] = Q[2][2] = 1;
+        return 0;
+    }
     cv_csys_axes(cs, x, Q);
     return cs->cyl ? 2 : 1;
 }
@@ -133,14 +174,12 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
     uint32_t nn = CV_MAX(f->n_nodes, 1);
     L->tr = malloc(nn * sizeof(int32_t));
     L->est = calloc(nn, 1);
-    uint32_t* disc = malloc(CV_MAX(d->ndisc, 1) * sizeof(uint32_t));
     /* deck elements by node list where the solver renumbered them */
     bool need = d->nnode_tr || d->nelem_ori || d->nshells;
-    uint32_t* f2d = need ? cv_frd_match_elems(f, &d->mesh, NULL) : NULL;
-    if (!L->tr || !L->est || !disc || (need && !f2d)) { free(disc); free(f2d); cv_localsys_free(L); return false; }
+    cv_elemmap c = { 0 };
+    if (!L->tr || !L->est || (need && !cv_elemmap_init(&c, d, f))) { cv_localsys_free(L); return false; }
+    const uint32_t* f2d = c.f2d;
     for (uint32_t i = 0; i < f->n_nodes; i++) L->tr[i] = -1;
-    for (uint32_t i = 0; i < d->ndisc; i++) disc[i] = d->disc[i].id;
-    if (d->ndisc) qsort(disc, d->ndisc, sizeof(uint32_t), cv_cmp_u32);
 
     /* transforms by node id; nodes CalculiX made (expanded shells and beams) take the
        transform of the nearest node of the deck element they came from */
@@ -171,13 +210,11 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
     /* element values: the systems of the elements around each node. Pass 1 takes the
        first one, pass 2 how far the others turn from it and their sum. */
     enum { SEEN = 1, BAD = 2, VARY = 4 };
-    if (!d->nelem_ori && !d->nshells) { free(disc); free(f2d); return true; }
+    if (!d->nelem_ori && !d->nshells) { cv_elemmap_free(&c); return true; }
     L->q = malloc((size_t)nn * 9 * sizeof(float));
     float* sum = calloc((size_t)nn * 9, sizeof(float));
     float* mincos = malloc(nn * sizeof(float));
-    if (!L->q || !sum || !mincos) { free(sum); free(mincos); free(disc); free(f2d); cv_localsys_free(L); return false; }
-    esys_ctx c = { d, disc, f2d, NULL, NULL };
-    if (d->ncomps && !layer_map(&c, f)) { free(c.lde); free(c.lori); free(sum); free(mincos); free(disc); free(f2d); cv_localsys_free(L); return false; }
+    if (!L->q || !sum || !mincos) { free(sum); free(mincos); cv_elemmap_free(&c); cv_localsys_free(L); return false; }
     const double cos_lim = cos(CV_LOC_SPAN * 3.14159265358979323846 / 180);
     for (int pass = 0; pass < 2; pass++)
         for (uint32_t e = 0; e < f->n_elems; e++) {
@@ -186,7 +223,7 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
             for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
                 uint32_t n = f->conn[j];
                 uint8_t* st = &L->est[n];
-                int k = elem_sys(&c, f, e, f->xyz + 3 * (size_t)n, Q);
+                int k = cv_elemmap_axes(&c, d, f, e, f->xyz + 3 * (size_t)n, Q);
                 if (k == -2) break;
                 if (k == -1) { *st |= BAD; continue; }
                 if (k == 0) { memset(Q, 0, sizeof Q); Q[0][0] = Q[1][1] = Q[2][2] = 1; }
@@ -242,7 +279,7 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
         }
         if (L->est[i] != CV_LOC_GLOBAL) L->any_ori = true;
     }
-    free(sum); free(mincos); free(disc); free(f2d); free(c.lde); free(c.lori);
+    free(sum); free(mincos); cv_elemmap_free(&c);
     return true;
 }
 

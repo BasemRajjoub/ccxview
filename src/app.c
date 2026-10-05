@@ -2,6 +2,8 @@
    state lives in app_field.c / app_cam.c / app_load.c. */
 #include "app_int.h"
 #include "cgx.h"
+#include "quality.h"
+#include "failure.h"
 #include "gpu.h"
 #include "web.h"
 #include "log.h"
@@ -110,6 +112,8 @@ static void init(void) {
     G.point_size = 3;
     G.cmap = CV_CMAP_FAST;
     G.bands = 12;
+    G.mesh_q = CV_MQ_CCX;
+    G.fail_crit = CV_FC_AUTO;
     G.center_zero = true;
     G.deform = true;
     G.deform_auto = true;
@@ -958,6 +962,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--version")) { printf("ccxview %s\n", CV_VERSION); exit(0); }
         else if (!strcmp(argv[i], "--field") && i + 1 < argc) O.field = argv[++i];
         else if (!strcmp(argv[i], "--calc") && i + 1 < argc) O.calc = argv[++i];
+        else if (!strcmp(argv[i], "--fail") && i + 1 < argc) O.fail = argv[++i];
+        else if (!strcmp(argv[i], "--mesh") && i + 1 < argc) O.mesh = argv[++i];
         else if (!strcmp(argv[i], "--target") && i + 1 < argc)
             O.target_set = sscanf(argv[++i], "%f,%f,%f", &O.target[0], &O.target[1], &O.target[2]) == 3;
         else if (!strcmp(argv[i], "--zoom") && i + 1 < argc) O.zoom = (float)atof(argv[++i]);

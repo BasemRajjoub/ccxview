@@ -305,6 +305,8 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_messages(ctx, s, row, fw, fh);
     window_calc_help(ctx, s, row, fw, fh);
     window_units(ctx, s, row, fw, fh);
+    window_failure(ctx, s, row, fw, fh);
+    window_mesh(ctx, s, row, fw, fh);
     window_convergence(ctx, s, row, fw, fh);
     window_legend_settings(ctx, s, row);
     window_overlay(ctx, s);

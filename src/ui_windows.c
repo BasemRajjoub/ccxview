@@ -11,6 +11,8 @@
 #include <math.h>
 #include "ui_int.h"
 #include "calc.h"
+#include "app_fail.h"
+#include "app_mesh.h"
 
 void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open = false;
@@ -64,7 +66,7 @@ const char* path_dirs[] = { "to a node", "along normal", "along X", "along Y", "
 
 void window_probe(struct nk_context* ctx, float s, float row) {
     if (!G.probe_on || !G.loaded) return;
-    float w = 260 * s, h = row * 9.8f;
+    float w = 260 * s, h = row * (G.field_src >= 3 ? 11.f : 9.8f);
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -85,6 +87,15 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     if (G.probe_ip) snprintf(buf, sizeof buf, "point %d: %s = %s", G.probe_ip, G.field_label, num);
     else snprintf(buf, sizeof buf, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
     nk_label(ctx, G.has_field ? buf : "no field", NK_TEXT_LEFT);
+    if (G.has_field && fail_probe_text(p->node, p->elem, buf, sizeof buf)) {
+        tip(ctx, "The governing failure mode (and fracture plane) at this node, or element per element");
+        nk_label(ctx, buf, NK_TEXT_LEFT);
+    }
+    if (G.has_field && mesh_probe_text(p->elem, buf, sizeof buf)) {
+        tip(ctx, "This element's aspect ratio, scaled Jacobian, Jacobian ratio, skewness and\n"
+                 "warpage; ! past the usual limit");
+        nk_label(ctx, buf, NK_TEXT_LEFT);
+    }
     nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "Node ids of this element, drawn in the view");
     nk_checkbox_label(ctx, "ids", &G.show_ids);

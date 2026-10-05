@@ -92,6 +92,12 @@ typedef struct {
     int       surf[2];      /* surface indices, -1 = none */
 } cv_link;
 
+/* A material's elastic constants and first yield stress as the deck gives them (the
+   first temperature). ISO: E, nu. ENG: E1 E2 E3 nu12 nu13 nu23 G12 G13 G23.
+   ORTHO / ANISO: the first nine stiffness terms. sy: *PLASTIC's first stress, 0 none. */
+enum { CV_EL_NONE, CV_EL_ISO, CV_EL_ENG, CV_EL_ORTHO, CV_EL_ANISO };
+typedef struct { uint8_t el; float c[9]; float sy; } cv_matprop;
+
 /* id -> index pairs, sorted by id */
 typedef struct { uint32_t id; int32_t ix; } cv_idix;
 /* a composite shell: its layers are layer_ori[lay0 .. lay0 + nlay) */
@@ -117,6 +123,7 @@ typedef struct {
     cv_discrete* disc;      uint32_t ndisc;
     cv_link*    links;      int nlinks;
     char      (*mats)[64];  int nmats;
+    cv_matprop* mprop;                          /* per material */
     cv_csys*    transforms; int ntransforms;
     cv_idix*    node_tr;    uint32_t nnode_tr;  /* node -> transform; a later *TRANSFORM wins */
     cv_csys*    orients;    int norients;
@@ -131,6 +138,8 @@ typedef struct {
     uint32_t*   shells;     uint32_t nshells;   /* ids of the shell elements (S3..S8R), sorted */
     cv_layered* comps;      uint32_t ncomps;    /* composite shells, by id */
     int32_t*    layer_ori;                      /* per layer: orientation, -2 none, -1 cannot be rebuilt */
+    int32_t*    layer_mat;                      /* per layer: material index, -1 none */
+    float*      layer_t;                        /* per layer: thickness, 0 not given */
     char        heading[128];
     cv_msgs     msgs;
 } cv_inp;
@@ -190,6 +199,35 @@ void cv_localsys_free(cv_localsys* L);
    point positions a cylindrical orientation needs. Returns CV_LOC_ bits; records
    whose system cannot be rebuilt become NaN. */
 int  cv_localsys_dat(const cv_inp* d, const cv_frd* f, cv_dat_block* b);
+
+/* What each .frd element is made of, and its material axes. CalculiX writes each
+   layer of a composite shell as an element of its own (numbered on from the largest
+   element number); those map back to their shell and layer here. Built once per
+   (deck, .frd) pair. */
+typedef struct {
+    uint32_t* f2d;          /* per .frd element: the deck element (index), UINT32_MAX none */
+    uint32_t* comp;         /* per .frd element: index into d->comps when a layer, else UINT32_MAX */
+    uint16_t* layer;        /* per .frd element: its layer, when one */
+    uint32_t* lay_off;      /* per d->comps, + 1: the shell's first entry in lay_elem */
+    uint32_t* lay_elem;     /* per layer of each shell: its .frd element, UINT32_MAX none */
+    uint32_t* disc;         /* ids of the discrete elements, sorted */
+    bool      lost;         /* the .frd's extra elements are not this deck's layers */
+} cv_elemmap;
+
+bool cv_elemmap_init(cv_elemmap* m, const cv_inp* d, const cv_frd* f);
+void cv_elemmap_free(cv_elemmap* m);
+/* the material of .frd element e: index into d->mats, -1 none; *thick the layer's
+   thickness (0 when not a layer or not given), *layer its layer (-1 none) */
+int  cv_elemmap_mat(const cv_elemmap* m, const cv_inp* d, uint32_t e, float* thick, int* layer);
+/* the axes .frd element e writes local (material) values in, at point x: rows e1 e2
+   e3 in global. 0 global (Q = I), 1 Q, 2 Q but it changes inside the element
+   (cylindrical), -1 cannot be rebuilt, -2 no element values (discrete) */
+int  cv_elemmap_axes(const cv_elemmap* m, const cv_inp* d, const cv_frd* f, uint32_t e,
+                     const float* x, double Q[3][3]);
+/* a .dat record of composite shell `id`, integration point ip (1-based) of nip
+   printed: the .frd element of its layer and *lip, the point within it. CalculiX
+   prints a composite shell's points layer by layer. UINT32_MAX: not a composite. */
+uint32_t cv_elemmap_dat(const cv_elemmap* m, const cv_inp* d, uint32_t id, int ip, int nip, int* lip);
 
 /* the *TRANSFORM a node id stands in: index into d->transforms, -1 none */
 int cv_inp_node_transform(const cv_inp* d, uint32_t node);

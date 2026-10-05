@@ -36,8 +36,11 @@ Measured on one desktop PC; `build/bench file.frd` prints the numbers for yours.
 - **True to the element.** Quadratic elements are drawn and cut through their
   mid-side nodes; shells and beams as CalculiX expands them.
 - **Engineering tools.** ASME VIII-2 stress linearization, calculated fields
-  from a formula (`S1 - S3`, `MISES / 235`), unit conversion, comparison of two
-  runs, cylindrical systems.
+  from a formula (`S1 - S3`, `MISES / 235`), composite and metal failure
+  criteria (Hashin, Puck, LaRC05, Tsai-Wu, von Mises, ...) with built-in
+  composite, metal and plastic presets, mesh quality
+  (aspect ratio, Jacobians, skew, warpage, ...), unit conversion,
+  comparison of two runs, cylindrical systems.
 - **Cut and copy.** Clip plane with a filled cut, crop box, mirror, cyclic
   symmetry, replicate.
 - **Export.** PNG, MP4, CSV, VTK, all scriptable from the command line.

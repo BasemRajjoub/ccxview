@@ -23,6 +23,8 @@ typedef struct {
     int         win_w, win_h;   /* --size WxH */
     const char* field;          /* --field NAME: start on that .frd field (first option) */
     const char* calc;           /* --calc FORMULA: start on that calculated field */
+    const char* fail;           /* --fail CRIT[:OUT]: start on that failure field */
+    const char* mesh;           /* --mesh MEASURE: start on that mesh quality field */
     float       target[3];      /* --target x,y,z: orbit centre */
     bool        target_set;
     float       zoom;           /* --zoom F: closer by F */

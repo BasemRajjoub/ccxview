@@ -120,7 +120,10 @@ typedef struct {
     bool      has_field;      /* current step has the selected field */
     unsigned  field_gen;      /* bumped when the values or displacements change */
     bool      elem_mode;
-    int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points), 2: calculated */
+    int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points), 2: calculated, 3: failure, 4: mesh quality */
+    int       fail_crit;      /* failure field: the criterion (CV_FC_*) and what it shows (CV_FO_*) */
+    int       fail_out;
+    int       mesh_q;         /* mesh quality field: the measure (CV_MQ_*) */
     char      calc_expr[256]; /* the calculated field's formula (calc.h), kept across files */
     char      calc_err[128];  /* why the last formula did not compile, "" when it did */
     struct cv_calc* calc;     /* calc_expr compiled for this file, NULL none */
@@ -301,6 +304,8 @@ typedef struct {
     bool      show_msgs;
     bool      show_calc_help;        /* the formula builder window */
     bool      show_units;            /* the units window */
+    bool      show_fail;             /* the strength materials window */
+    bool      show_mesh;             /* the mesh quality window */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
     float     bg[3];                 /* view background */
@@ -382,6 +387,8 @@ void app_select_src(const char* field, int comp, int src);
 /* Show the formula expr as the field (field_src 2). false: it does not compile,
    calc_err says why, and the field shown stays. */
 bool app_calc_set(const char* expr);
+void app_fail_set(int crit, int out);   /* show the failure field (field_src 3) */
+void app_mesh_set(int q);               /* show a mesh quality measure (field_src 4), per element */
 void app_set_elem_mode(bool on);
 void app_groups_changed(void);
 void app_fit(void);
@@ -458,6 +465,7 @@ bool* deck_set_flags(void);
 bool* deck_surf_flags(void);
 bool deck_file_reader(void* user, const char* path, char** data, size_t* size);
 const char* deck_material_name(uint32_t k);
+const cv_elemmap* deck_elemmap(const cv_frd* f);   /* material and axes per .frd element, NULL none */
 bool deck_any_elset_on(void);
 void deck_apply_mask(const cv_frd* f, uint8_t* vis);
 void deck_refresh_highlight(void);   /* highlights and the support / load glyphs */

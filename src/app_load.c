@@ -7,6 +7,8 @@
 #include "filedlg.h"
 #include "log.h"
 #include "cfg.h"
+#include "app_fail.h"
+#include "app_mesh.h"
 #include "sokol_app.h"
 #include <math.h>
 #include <strings.h>
@@ -182,6 +184,8 @@ void unload(void) {
     cv_calc_free(G.calc); G.calc = NULL;    /* its formula stays, for the next file */
     gp_clear();
     deck_clear();
+    fail_clear();
+    mesh_clear();
     cv_skin_free(&G.skin);
     cv_groups_free(&G.groups);
     cv_frd_free(&G.frd);
@@ -461,6 +465,32 @@ static void apply_load(cv_job* j) {
         char m[200];
         snprintf(m, sizeof m, "--calc: %s", G.calc_err);
         cv_msg_add(&G.msgs, 0, false, m);
+    }
+    if (O.fail && !G.reload_keep) {
+        static const char* const outs[CV_FO_N] = { "exposure", "rf", "fi", "mode", "angle", "fibre", "matrix" };
+        char crit[32];
+        const char* colon = strchr(O.fail, ':');
+        size_t n = colon ? (size_t)(colon - O.fail) : strlen(O.fail);
+        snprintf(crit, sizeof crit, "%.*s", (int)CV_MIN(n, sizeof crit - 1), O.fail);
+        int c = -1, o = colon ? -1 : CV_FO_EXPOSURE;
+        for (int k = 0; k < CV_FC_N; k++)
+            if (!strcasecmp(crit, cv_fc_name(k)) || !strcasecmp(crit, cv_fc_title(k))) c = k;
+        for (int k = 0; colon && k < CV_FO_N; k++)
+            if (!strcasecmp(colon + 1, outs[k])) o = k;
+        if (c < 0 || o < 0) {
+            char m[200];
+            snprintf(m, sizeof m, "--fail %s: criterion maxstress|tsaihill|tsaiwu|hashin|puck|larc03|larc05|"
+                     "mises|tresca|mohr|auto, output exposure|rf|fi|mode|angle|fibre|matrix", O.fail);
+            cv_msg_add(&G.msgs, 0, false, m);
+        } else app_fail_set(c, o);
+    }
+    if (O.mesh && !G.reload_keep) {
+        int q = cv_mq_find(O.mesh);
+        if (q < 0) {
+            char m[200];
+            snprintf(m, sizeof m, "--mesh %s: size|edgemin|edgemax|aspect|sjac|jratio|skew|anglemin|anglemax|warp|shape", O.mesh);
+            cv_msg_add(&G.msgs, 0, false, m);
+        } else app_mesh_set(q);
     }
     if (O.gauss && gp_loaded()) {
         for (int st = 0; st < G.frd.n_steps; st++) {

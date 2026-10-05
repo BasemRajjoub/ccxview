@@ -12,6 +12,8 @@
 #include "web.h"
 #include "cfg.h"
 #include "ui.h"
+#include "quality.h"
+#include "app_fail.h"
 
 static cv_cfg C;
 static bool   loaded;
@@ -51,6 +53,10 @@ static const setting S[] = {
     UNIT("strain", CV_Q_STRAIN), UNIT("velocity", CV_Q_VELO), UNIT("acceleration", CV_Q_ACC),
     UNIT("energy_density", CV_Q_ENERGY_D), UNIT("heat_flux", CV_Q_FLUX), UNIT("power", CV_Q_POWER),
     UNIT("energy", CV_Q_ENERGY), UNIT("mass_flow", CV_Q_MASSFLOW), UNIT("volume", CV_Q_VOLUME), UNIT("mass", CV_Q_MASS),
+    SEC("Failure field: criterion (0 max stress .. 6 LaRC05, 7 von Mises, 8 Tresca, 9 Mohr), shown (0 exposure, 1 RF, 2 FI, 3 mode, 4 angle, 5 fibre, 6 matrix)"),
+    I(fail_crit, 0, CV_FC_N - 1), I(fail_out, 0, CV_FO_N - 1),
+    SEC("Mesh quality field: 0 size, 1 shortest edge, 2 longest edge, 3 aspect ratio, 4 scaled Jacobian, 5 Jacobian ratio, 6 skewness, 7 smallest angle, 8 largest angle, 9 warpage, 10 shape factor"),
+    I(mesh_q, 0, CV_MQ_N - 1),
     SEC("Legend and axes gizmo: view corner (tl tr bl br), gap x, gap y; auto = default place"),
     { "legend_pos", 'a', &G.legend_pos, 0, 0 }, { "gizmo_pos", 'a', &G.gizmo_pos, 0, 0 },
     SEC("Camera"),
@@ -138,6 +144,7 @@ void settings_load(void) {
     ui_set_font_size(cv_cfg_get_float(&C, "ui_font", ui_get_font_size()));
     ui_set_pixel_font(cv_cfg_get_bool(&C, "ui_pixel_font", false));
     ui_set_theme(cv_cfg_get(&C, "ui_theme", NULL));
+    fail_cfg_load(&C);
 }
 
 /* --opt key=value: any settings key, applied on top of the file */
@@ -224,7 +231,7 @@ static void sb_add(sbuf* b, const char* fmt, ...) {
 static bool known_key(const char* key) {
     if (find(key)) return true;
     for (size_t i = 0; i < sizeof OTHER / sizeof OTHER[0]; i++) if (!strcmp(OTHER[i], key)) return true;
-    return !strncmp(key, "recent", 6);
+    return !strncmp(key, "recent", 6) || fail_cfg_key(key);
 }
 
 /* a key's line, if it has a value to fill in */
@@ -245,6 +252,10 @@ static void write_layout(void) {
         if (S[i].kind == '#') sb_add(&b, "\n# ---- %s\n", S[i].key);
         else sb_key(&b, S[i].key);
     }
+    sb_add(&b, "\n# ---- Strength materials (fmatN = name|kind=ud key=value ..., MPa, N/mm, deg)\n"
+               "#      and which deck material uses which (fassignN = DECKMAT=name, * for any)\n");
+    for (int i = 0; i < C.n; i++) if (!strncmp(C.a[i].key, "fmat", 4) && fail_cfg_key(C.a[i].key)) sb_add(&b, "%s = _\n", C.a[i].key);
+    for (int i = 0; i < C.n; i++) if (!strncmp(C.a[i].key, "fassign", 7) && fail_cfg_key(C.a[i].key)) sb_add(&b, "%s = _\n", C.a[i].key);
     sb_add(&b, "\n# ---- Files, the most recent first\n");
     sb_key(&b, "last_dir");
     for (int i = 0; i < CV_CFG_RECENT; i++) { char k[16]; snprintf(k, sizeof k, "recent%d", i); sb_key(&b, k); }
@@ -269,6 +280,7 @@ void settings_save(int win_w, int win_h) {
     cv_cfg_set_bool(&C, "ui_pixel_font", ui_get_pixel_font());
     cv_cfg_set(&C, "ui_theme", ui_get_theme());
     if (win_w > 0 && win_h > 0) { cv_cfg_set_int(&C, "window_w", win_w); cv_cfg_set_int(&C, "window_h", win_h); }
+    fail_cfg_save(&C);
     write_layout();
     if (cv_cfg_save(&C)) CV_SETTINGS_SAVED(C.path);
 }
