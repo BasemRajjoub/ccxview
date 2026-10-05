@@ -35,8 +35,12 @@ bool cv_is_dir(const char* path);
 bool cv_abs_path(const char* path, char* out, size_t n);   /* absolute, normalised; false if it cannot be resolved */
 char cv_path_sep(void);
 
-/* Process stats for the title bar. CPU: percent of ONE core since the previous
-   call (can exceed 100 with worker threads). RSS: resident bytes, 0 if unknown. */
+/* Process stats for the title bar, as the system's own monitor shows them.
+   CPU: percent of the whole machine (all cores) since the previous call, 0-100,
+   as Task Manager shows it (top and Activity Monitor show it times the cores).
+   RAM: the memory the process itself holds, not what it shares with others:
+   private working set on Windows (Task Manager), RssAnon on Linux, the
+   physical footprint on macOS (Activity Monitor); 0 if unknown. */
 float    cv_cpu_percent(void);
 uint64_t cv_rss_bytes(void);
 uint64_t cv_file_size(const char* path);

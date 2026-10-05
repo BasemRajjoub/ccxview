@@ -159,7 +159,31 @@ static void fmt_bytes(char* out, size_t n, uint64_t b) {
     else snprintf(out, n, "%.0f KB", b / 1024.0);
 }
 
-/* Title bar: file (size) | FPS | CPU | RAM, twice a second. */
+/* Numbers in the title keep their width: figure spaces (U+2007, as wide as a
+   digit) in front, so "CPU 9.4%" and "CPU 10.2%" take the same room and the
+   title does not jitter. */
+#define CV_FIGSP "\xE2\x80\x87"
+static void pad_num(char* out, size_t n, int width, const char* num) {
+    size_t k = 0;
+    out[0] = 0;
+    for (int i = (int)strlen(num); i < width && k + 4 < n; i++) k += (size_t)snprintf(out + k, n - k, CV_FIGSP);
+    snprintf(out + k, n - k, "%s", num);
+}
+
+static void fmt_ram(char* out, size_t n, uint64_t b) {     /* "  39.3 MB", "1.25 GB": five places */
+    char num[16];
+    if (b >= 1000ull << 20) { snprintf(num, sizeof num, "%.2f", b / 1073741824.0); pad_num(out, n - 3, 5, num); strcat(out, " GB"); }
+    else { snprintf(num, sizeof num, "%.1f", b / 1048576.0); pad_num(out, n - 3, 5, num); strcat(out, " MB"); }
+}
+
+/* cut at most max bytes, never inside a UTF-8 sequence */
+static void cut_utf8(char* s, size_t max) {
+    if (strlen(s) <= max) return;
+    while (max > 0 && ((unsigned char)s[max] & 0xC0) == 0x80) max--;
+    s[max] = 0;
+}
+
+/* Title bar: file (size) | FPS | CPU | GPU | RAM, twice a second. */
 #define CV_TITLE_MAX 120
 static void update_title(void) {
     double now = cv_now();
@@ -169,41 +193,52 @@ static void update_title(void) {
     float fps = (float)(G.title_frames / (now - G.title_t));
     G.title_t = now;
     G.title_frames = 0;
-    char ram[32], fsz[32], title[1400], gpu[160], gpu_short[48];
-    fmt_bytes(ram, sizeof ram, cv_rss_bytes());
-    float cpu = cv_cpu_percent();
-    /* GPU: our frames' share of the GPU's time, the whole GPU's load where the
-       system reports it, and what renders */
+    char num[32], fsz[32], title[1400], stats[400], stats_short[300], fpss[40], cpus[40], ram[48], gpu[160], gpu_short[64];
+    snprintf(num, sizeof num, "%.0f", fps);
+    pad_num(fpss, sizeof fpss, 3, num);
+    snprintf(num, sizeof num, "%.1f", cv_cpu_percent());
+    pad_num(cpus, sizeof cpus, 5, num);
+    fmt_ram(ram, sizeof ram, cv_rss_bytes());
+    /* GPU: on Windows this process's share, as Task Manager shows it; on Linux
+       the whole GPU's load ("total"); elsewhere no figure, only what renders */
     {
-        float busy = cv_gpu_busy_percent(), load = cv_gpu_load_percent();
-        int k = snprintf(gpu, sizeof gpu, "GPU ");
-        if (busy >= 0) k += snprintf(gpu + k, sizeof gpu - (size_t)k, "%.0f%%", busy);
-        else k += snprintf(gpu + k, sizeof gpu - (size_t)k, "-");
-        if (load >= 0) k += snprintf(gpu + k, sizeof gpu - (size_t)k, " (sys %.0f%%)", load);
+        bool whole = false;
+        float pct = cv_gpu_percent(&whole);
+        int k = snprintf(gpu, sizeof gpu, "GPU");
+        if (pct >= 0) {
+            char p[24];
+            snprintf(num, sizeof num, "%.0f", pct);
+            pad_num(p, sizeof p, 3, num);
+            k += snprintf(gpu + k, sizeof gpu - (size_t)k, "%s %s%%", whole ? " total" : "", p);
+        }
         snprintf(gpu_short, sizeof gpu_short, "%s", gpu);
         if (cv_gpu_name()[0]) snprintf(gpu + k, sizeof gpu - (size_t)k, " %s%s", cv_gpu_name(), cv_gpu_is_software() ? " (software)" : "");
     }
+    snprintf(stats, sizeof stats, "%s FPS  |  CPU %s%%  |  %s  |  RAM %s", fpss, cpus, gpu, ram);
+    snprintf(stats_short, sizeof stats_short, "%s FPS  |  CPU %s%%  |  %s  |  RAM %s", fpss, cpus, gpu_short, ram);
     /* sokol keeps at most 127 bytes of title, and on Windows shows nothing at
        all when that is full: drop the GPU name, then cut the file name */
     for (int pass = 0; pass < 2; pass++) {
-        const char* g = pass ? gpu_short : gpu;
+        const char* st = pass ? stats_short : stats;
         if (G.loaded) {
-            const char* b = cv_basename(G.path);
             fmt_bytes(fsz, sizeof fsz, G.file_bytes);
-            snprintf(title, sizeof title, "ccxview " CV_VERSION " - %s (%s)  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s",
-                     b, fsz, fps, cpu, g, ram);
+            snprintf(title, sizeof title, "ccxview " CV_VERSION " - %s (%s)  |  %s", cv_basename(G.path), fsz, st);
         } else {
-            snprintf(title, sizeof title, "ccxview " CV_VERSION "  |  %.0f FPS  |  CPU %.1f%%  |  %s  |  RAM %s", fps, cpu, g, ram);
+            snprintf(title, sizeof title, "ccxview " CV_VERSION "  |  %s", st);
         }
         if (strlen(title) <= CV_TITLE_MAX) break;
     }
     if (strlen(title) > CV_TITLE_MAX) {                     /* a very long file name: keep its start */
-        char tail[256];
+        char tail[400];
         const char* bar = strstr(title, ")  |  ");
         snprintf(tail, sizeof tail, "%s", bar ? bar : "");
         size_t keep = strlen(tail) + 3 < CV_TITLE_MAX ? CV_TITLE_MAX - strlen(tail) - 3 : 0;
-        if (bar && keep > 10) snprintf(title + keep, sizeof title - keep, "...%s", tail);
-        title[CV_TITLE_MAX] = 0;
+        if (bar && keep > 10) {
+            cut_utf8(title, keep);
+            strcat(title, "...");
+            strcat(title, tail);
+        }
+        cut_utf8(title, CV_TITLE_MAX);
     }
     sapp_set_window_title(title);
     snprintf(g_last_title, sizeof g_last_title, "%s", title);
@@ -361,7 +396,6 @@ static void frame(void) {
         d.vp_x = G.vp_x; d.vp_y = G.vp_y; d.vp_w = G.vp_w; d.vp_h = G.vp_h;
     }
     app_marks_sync();
-    cv_gpu_frame_begin();
     sg_begin_pass(&(sg_pass){
         .action = {
             .colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { G.bg[0], G.bg[1], G.bg[2], 1 } },
@@ -413,7 +447,6 @@ static void frame(void) {
         if (ui_test_result() >= 0) sapp_request_quit();
     }
     sg_commit();
-    cv_gpu_frame_end();
 }
 
 /* Export: the 3D view as drawn (legend and axes included, panels excluded),

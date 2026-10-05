@@ -138,6 +138,7 @@ bool cv_exe_dir(char* out, size_t n) {
     return true;
 }
 
+DWORD WINAPI GetActiveProcessorCount(WORD);     /* Win7+, hidden by older _WIN32_WINNT */
 float cv_cpu_percent(void) {
     static ULONGLONG prev_cpu, prev_wall;
     FILETIME c, e, k, u, now;
@@ -146,19 +147,34 @@ float cv_cpu_percent(void) {
     ULONGLONG cpu = (((ULONGLONG)k.dwHighDateTime << 32) | k.dwLowDateTime) +
                     (((ULONGLONG)u.dwHighDateTime << 32) | u.dwLowDateTime);
     ULONGLONG wall = ((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime;
-    float pct = (prev_wall && wall > prev_wall) ? (float)(cpu - prev_cpu) / (float)(wall - prev_wall) * 100.f : 0.f;
+    static DWORD cores;
+    if (!cores) cores = GetActiveProcessorCount(0xFFFF);
+    if (!cores) cores = 1;
+    float pct = (prev_wall && wall > prev_wall) ? (float)(cpu - prev_cpu) / (float)(wall - prev_wall) * 100.f / (float)cores : 0.f;
     prev_cpu = cpu; prev_wall = wall;
-    return pct;
+    return CV_MIN(pct, 100.f);
 }
 
-/* K32GetProcessMemoryInfo lives in kernel32 (Win7+): no psapi.lib needed. */
-typedef struct { DWORD cb, PageFaultCount; SIZE_T PeakWorkingSetSize, WorkingSetSize, a, b, c, d, e, f; } cv_pmc;
+/* K32GetProcessMemoryInfo lives in kernel32 (Win7+): no psapi.lib needed.
+   PROCESS_MEMORY_COUNTERS_EX2 (Windows 10 1809+) adds the private working set,
+   Task Manager's "Memory" column; older systems fall back to the working set. */
+typedef struct {
+    DWORD cb, PageFaultCount;
+    SIZE_T PeakWorkingSetSize, WorkingSetSize, QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage,
+           QuotaPeakNonPagedPoolUsage, QuotaNonPagedPoolUsage, PagefileUsage, PeakPagefileUsage,
+           PrivateUsage, PrivateWorkingSetSize;
+    ULONG64 SharedCommitUsage;
+} cv_pmc;
 BOOL WINAPI K32GetProcessMemoryInfo(HANDLE, void*, DWORD);
 uint64_t cv_rss_bytes(void) {
     cv_pmc m;
     memset(&m, 0, sizeof m);
     m.cb = sizeof m;
-    return K32GetProcessMemoryInfo(GetCurrentProcess(), &m, sizeof m) ? (uint64_t)m.WorkingSetSize : 0;
+    if (K32GetProcessMemoryInfo(GetCurrentProcess(), &m, sizeof m) && m.PrivateWorkingSetSize)
+        return (uint64_t)m.PrivateWorkingSetSize;
+    memset(&m, 0, sizeof m);
+    m.cb = (DWORD)offsetof(cv_pmc, PrivateUsage);
+    return K32GetProcessMemoryInfo(GetCurrentProcess(), &m, m.cb) ? (uint64_t)m.WorkingSetSize : 0;
 }
 
 uint64_t cv_file_size(const char* path) {
@@ -339,24 +355,42 @@ float cv_cpu_percent(void) {
     getrusage(RUSAGE_SELF, &ru);       /* all threads of the process */
     double cpu = ru.ru_utime.tv_sec + ru.ru_utime.tv_usec * 1e-6 + ru.ru_stime.tv_sec + ru.ru_stime.tv_usec * 1e-6;
     double wall = cv_now();
-    float pct = (prev_cpu >= 0 && wall > prev_wall) ? (float)((cpu - prev_cpu) / (wall - prev_wall) * 100.0) : 0.f;
+    static long cores;
+    if (!cores) cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (cores < 1) cores = 1;
+    float pct = (prev_cpu >= 0 && wall > prev_wall) ? (float)((cpu - prev_cpu) / (wall - prev_wall) * 100.0 / (double)cores) : 0.f;
     prev_cpu = cpu; prev_wall = wall;
-    return pct;
+    return CV_MIN(pct, 100.f);
 }
 
 uint64_t cv_rss_bytes(void) {
 #if defined(__APPLE__)
+    task_vm_info_data_t vm;                         /* what Activity Monitor calls Memory */
+    mach_msg_type_number_t n = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vm, &n) == KERN_SUCCESS && vm.phys_footprint)
+        return (uint64_t)vm.phys_footprint;
     struct mach_task_basic_info info;
-    mach_msg_type_number_t n = MACH_TASK_BASIC_INFO_COUNT;
+    n = MACH_TASK_BASIC_INFO_COUNT;
     if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &n) != KERN_SUCCESS) return 0;
     return (uint64_t)info.resident_size;
 #else
-    FILE* f = fopen("/proc/self/statm", "r");       /* size resident ... in pages */
+    /* RssAnon (Linux 4.5+): resident memory of our own, without the mapped
+       libraries and files every process shares */
+    FILE* f = fopen("/proc/self/status", "r");
+    if (f) {
+        char line[256];
+        unsigned long long kb = 0;
+        bool found = false;
+        while (!found && fgets(line, sizeof line, f)) found = sscanf(line, "RssAnon: %llu", &kb) == 1;
+        fclose(f);
+        if (found) return kb * 1024;
+    }
+    f = fopen("/proc/self/statm", "r");             /* size resident shared ... in pages */
     if (!f) return 0;
-    unsigned long long size = 0, res = 0;
-    int k = fscanf(f, "%llu %llu", &size, &res);
+    unsigned long long size = 0, res = 0, shared = 0;
+    int k = fscanf(f, "%llu %llu %llu", &size, &res, &shared);
     fclose(f);
-    return k == 2 ? res * (uint64_t)sysconf(_SC_PAGESIZE) : 0;
+    return k == 3 && res > shared ? (res - shared) * (uint64_t)sysconf(_SC_PAGESIZE) : 0;
 #endif
 }
 

@@ -917,7 +917,7 @@ static void test_gpu_env(void) {
     CHECK(getenv("LIBGL_ALWAYS_SOFTWARE") && strcmp(getenv("LIBGL_ALWAYS_SOFTWARE"), "1") == 0);
     CHECK(getenv("GALLIUM_DRIVER") && strcmp(getenv("GALLIUM_DRIVER"), "llvmpipe") == 0);
 #endif
-    CHECK(cv_gpu_busy_percent() < 0 && cv_gpu_load_percent() < 0);   /* nothing initialised: unknown */
+    CHECK(cv_gpu_percent(NULL) < 0);                                 /* nothing initialised: unknown */
 }
 
 /* results in local systems: what the deck says CalculiX wrote, turned back */
