@@ -18,6 +18,6 @@ If ccxview crashes it writes ccxview-crash.txt (in the folder it was started
 from, else in the temp folder) and says where. Please attach that file to an
 issue at https://github.com/BasemRajjoub/ccxview/issues.
 
-licenses/ holds the licence of ccxview (GPL-2.0-or-later), of the fonts
+licenses/ holds the licence of ccxview (GPL-3.0-or-later), of the fonts
 compiled into it: Inter and Noto Sans Math (SIL Open Font License 1.1) and
 Lucide (ISC), and of the libraries TinyExpr (zlib) and miniz (MIT).

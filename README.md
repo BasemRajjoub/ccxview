@@ -56,5 +56,5 @@ ccxview model.frd --calc "S1 - S3" --export mp4
 - [Building, testing, releasing, timings](docs/build.md)
 - [Design notes](docs/spec.md)
 
-GPL-2.0-or-later. Vendored libraries and fonts keep their own licences:
+GPL-3.0-or-later. Vendored libraries and fonts keep their own licences:
 [vendor/README.md](vendor/README.md).
