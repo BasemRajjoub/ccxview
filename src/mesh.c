@@ -163,6 +163,28 @@ void cv_crop_mask(const cv_frd* f, const float lo[3], const float hi[3], uint8_t
     }
 }
 
+void cv_plane_nodes(const cv_frd* f, const float* disp, float f1, const float* disp2, float f2,
+                    const float n[3], float d, uint8_t* beyond) {
+    for (uint32_t i = 0; i < f->n_nodes; i++) {
+        float s = 0;
+        for (int k = 0; k < 3; k++) {
+            float p = f->xyz[3 * i + k];
+            if (disp) p += f1 * disp[3 * i + k];
+            if (disp2) p += f2 * disp2[3 * i + k];
+            s += n[k] * p;
+        }
+        beyond[i] = s > d;
+    }
+}
+
+void cv_node_mask(const cv_frd* f, const uint8_t* beyond, uint8_t* vis) {
+    for (uint32_t e = 0; e < f->n_elems; e++) {
+        if (!vis[e]) continue;
+        for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++)
+            if (beyond[f->conn[j]]) { vis[e] = 0; break; }
+    }
+}
+
 /* ---- skin -------------------------------------------------------------------- */
 
 typedef struct { uint32_t k[4]; uint32_t code; } fkey;   /* sorted corners, e*8+face */

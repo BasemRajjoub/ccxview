@@ -30,6 +30,13 @@ const char* cv_axis_name(int axis);
    outside [lo, hi]. ANDs with what is already in vis. */
 void cv_crop_mask(const cv_frd* f, const float lo[3], const float hi[3], uint8_t* vis);
 
+/* Plane: beyond[i] = 1 for every node whose shown place (xyz + f1 disp + f2 disp2;
+   disp, disp2 3 per node or NULL) has n . p > d. Then cv_node_mask clears vis[e]
+   for every element with such a node (ANDs with vis). */
+void cv_plane_nodes(const cv_frd* f, const float* disp, float f1, const float* disp2, float f2,
+                    const float n[3], float d, uint8_t* beyond);
+void cv_node_mask(const cv_frd* f, const uint8_t* beyond, uint8_t* vis);
+
 /* ---- skin ------------------------------------------------------------------
    Exterior faces of the visible solids (+ every visible shell face) as
    triangles over their nodes (cv_skin_build_opt), the unique edges of those faces (+ beams), and

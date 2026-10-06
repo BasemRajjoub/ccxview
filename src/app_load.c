@@ -147,6 +147,7 @@ static void worker_skin(void* p) {
     cv_job* j = p;
     double t0 = cv_now();
     if (j->crop) cv_crop_mask(j->frd, j->crop_lo, j->crop_hi, j->vis);
+    if (j->eye_node) cv_node_mask(j->frd, j->eye_node, j->vis);
     j->ok = cv_skin_build_opt(&j->skin, j->frd, j->vis, j->crease, j->mid);
     if (!j->ok) snprintf(j->err, sizeof j->err, "out of memory building the surface");
     job_finish(j, t0);
@@ -313,6 +314,7 @@ static void apply_load(cv_job* j) {
     G.file_bytes = G.map.size;
     G.field_src = 0;
     free(G.vis); G.vis = NULL;
+    G.eye_hide_on = false;
     G.crop_on = false;
     for (int k = 0; k < 3; k++) { G.crop_lo[k] = 0.f; G.crop_hi[k] = 1.f; }
     init_group_colors();
@@ -407,7 +409,7 @@ static void apply_load(cv_job* j) {
     else app_view(CV_VIEW_ISO);
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
     if (O.fly) app_set_flight(true);
-    if (O.fly_clip) { G.fly_clip = true; if (O.fly_clip > 0) G.fly_clip_depth = O.fly_clip; }
+    if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
     if (O.compare) app_compare_open(O.compare);
     for (int q = 0; q < 2; q++) {        /* --path / --linearize A,B or A,normal|x|y|z */
@@ -528,6 +530,9 @@ static void start_skin_job(void) {
         G.job.crop_lo[k] = G.crop_lo[k] <= 0.f ? lo[k] - pad : lo[k] + ext * G.crop_lo[k];
         G.job.crop_hi[k] = G.crop_hi[k] >= 1.f ? hi[k] + pad : lo[k] + ext * G.crop_hi[k];
     }
+    free(G.job.eye_node); G.job.eye_node = NULL;   /* the nodes beyond the eye's plane, flagged here: */
+    if (G.eye_hide_on && (G.job.eye_node = malloc(CV_MAX(G.frd.n_nodes, 1))))   /* the displacement may change meanwhile */
+        cv_plane_nodes(&G.frd, G.disp, G.eye_f1, G.disp2, G.eye_f2, G.eye_n, G.eye_d, G.job.eye_node);
     G.job.frd = &G.frd;
     G.job.crease = G.outline_angle;
     G.job.mid = G.mid_faces;
@@ -538,6 +543,21 @@ static void start_skin_job(void) {
 void app_groups_changed(void) {
     if (!G.loaded) return;
     if (app_busy()) { G.skin_dirty = true; return; }
+    G.job.eye_only = false;
+    start_skin_job();
+}
+
+/* a new skin when the plane moved enough to matter (and none is being built): the
+   hidden set follows the eye at the pace the skin can be built */
+void app_eye_hide(bool on, const float n[3], float d, float f1, float f2) {
+    if (!G.loaded) return;
+    if (!on) { if (G.eye_hide_on) { G.eye_hide_on = false; app_groups_changed(); } return; }
+    if (app_busy()) return;
+    if (G.eye_hide_on && fabsf(d - G.eye_d) < 2e-3f * G.diag && f1 == G.eye_f1 && f2 == G.eye_f2 &&
+        n[0] * G.eye_n[0] + n[1] * G.eye_n[1] + n[2] * G.eye_n[2] > 0.9998f) return;
+    G.eye_hide_on = true;
+    memcpy(G.eye_n, n, sizeof G.eye_n); G.eye_d = d; G.eye_f1 = f1; G.eye_f2 = f2;
+    G.job.eye_only = true;
     start_skin_job();
 }
 
@@ -565,13 +585,16 @@ void poll_job(void) {
             refresh_vectors();
             refresh_tensors();
             refresh_traj();
-            app_refresh_range();                  /* the legend covers what is shown */
+            if (!j->eye_only) {                   /* flying through: the legend and the probe hold */
+                app_refresh_range();              /* the legend covers what is shown */
+                G.probe_on = false;
+            }
             deck_refresh_highlight();
-            G.probe_on = false;
         } else {
             cv_msg_add(&G.msgs, 0, false, j->err);
         }
-        if (G.skin_dirty) start_skin_job();
+        free(j->eye_node); j->eye_node = NULL;
+        if (G.skin_dirty) { j->eye_only = false; start_skin_job(); }
     }
 }
 

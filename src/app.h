@@ -48,6 +48,7 @@ enum { CV_CACHE_N = 8 };
 
 /* Background work: loading a file, or rebuilding the skin after a group change. */
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
+enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 
 typedef struct {
     int       kind;
@@ -61,6 +62,8 @@ typedef struct {
     uint8_t*  vis;
     bool      crop;
     float     crop_lo[3], crop_hi[3];   /* world coordinates */
+    uint8_t*  eye_node;       /* per node, NULL: none; elements with a node set are hidden (the eye's plane) */
+    bool      eye_only;       /* only the eye's plane moved: keep the legend and the probe */
     float     crease;         /* feature edges: degrees between faces that make a crease */
     bool      mid;            /* quadratic faces through their mid-side nodes */
     /* outputs */
@@ -277,8 +280,10 @@ typedef struct {
     float     nav_box[4];            /* box zoom: x0, y0, x1, y1 in window pixels */
     bool      flight;                /* free flight: WASD + mouse look */
     float     fly_speed;             /* model diagonals per second */
-    bool      fly_clip;              /* in flight, cut away what lies just in front of the eye */
+    int       fly_clip;              /* CV_EYE_*: in flight, what the eye does to the model just ahead of it */
     float     fly_clip_depth;        /* ... this far ahead, in model diagonals */
+    bool      eye_hide_on;           /* the skin was built with the elements at the eye hidden */
+    float     eye_n[3], eye_d, eye_f1, eye_f2;   /* ... at this plane and deformation */
     int       vp_x, vp_y, vp_w, vp_h;   /* 3D area in window pixels */
 
     /* displacement animation (within one step) */
@@ -436,6 +441,9 @@ bool app_view_undo(int dir);                     /* -1: back, +1: forward */
 void app_colormap(int cm);
 void app_set_faces_mode(int fm);
 void app_set_flight(bool on);
+/* hide whole elements with a node beyond the eye's plane n . p > d (deformed by f1, f2);
+   on = false shows them again. Rebuilds the skin in the background when the plane moved. */
+void app_eye_hide(bool on, const float n[3], float d, float f1, float f2);
 void app_group_colors_changed(void);
 void app_refresh_range(void);
 bool app_busy(void);

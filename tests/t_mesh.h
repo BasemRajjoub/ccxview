@@ -51,6 +51,27 @@ static bool tm_has_fedge(const tm_mesh* m, const cv_skin* s, const float* p, con
     return false;
 }
 
+/* three bricks along x: a plane hides the elements with any node beyond it,
+   where the nodes are shown (displaced) */
+static void test_plane_mask(void) {
+    static tm_mesh m;
+    tm_init(&m);
+    for (int i = 0; i < 3; i++) tm_brick(&m, (float)i, 0, 0, 1);
+    const float n[3] = { -1, 0, 0 };                 /* hide x < 1.5 */
+    uint8_t vis[3] = { 1, 1, 1 };
+    static uint8_t beyond[64];
+    cv_plane_nodes(&m.f, NULL, 0, NULL, 0, n, -1.5f, beyond); cv_node_mask(&m.f, beyond, vis);
+    CHECK(!vis[0] && !vis[1] && vis[2]);             /* the middle one crosses: hidden whole */
+    vis[0] = vis[1] = vis[2] = 1; vis[2] = 0;
+    cv_plane_nodes(&m.f, NULL, 0, NULL, 0, n, -0.5f, beyond); cv_node_mask(&m.f, beyond, vis);
+    CHECK(!vis[0] && vis[1] && !vis[2]);             /* ANDs: the one hidden before stays hidden */
+    static float disp[3 * 64];                       /* everything moved +1 in x (x 2): hide x < 2.5 */
+    for (uint32_t i = 0; i < m.f.n_nodes; i++) disp[3 * i] = 0.5f;
+    vis[0] = vis[1] = vis[2] = 1;
+    cv_plane_nodes(&m.f, disp, 2.f, NULL, 0, n, -2.5f, beyond); cv_node_mask(&m.f, beyond, vis);
+    CHECK(!vis[0] && !vis[1] && vis[2]);
+}
+
 static void test_feature_edges(void) {
     static tm_mesh m;
     cv_skin s;

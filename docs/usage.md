@@ -24,6 +24,7 @@ ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
+ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --opt key=value           # any setting of ccxview.ini for this run
 ccxview model.frd --software                # CPU rendering
 ccxview --check model.frd                   # headless parse for CI
@@ -49,7 +50,7 @@ ccxview --version
 | click / double-click | probe / zoom to element |
 | F, R, 1..6 | fit, reset, look from ±X ±Y ±Z |
 | space, ← → | play, step |
-| G | free flight (WASD, Esc to leave); View > Camera: "Clip at eye" cuts what lies just ahead, to fly through walls |
+| G | free flight (WASD, Esc to leave); View > Camera: the "eye" list cuts what lies just ahead, or hides whole elements there, to fly through walls |
 | H | view only, for screenshots |
 | click the legend's unit / right-click the legend | units / legend settings |
 | Ctrl+O / Ctrl+E / Ctrl+F | open / export PNG / find |

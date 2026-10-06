@@ -400,7 +400,15 @@ static void frame(void) {
         d.ghost = G.show_ghost && G.deform && G.disp;
         d.markers = G.show_markers; d.marker_size = 12.f * ui_scale();
         d.path = G.path_n > 0;
-        bool eye_clip = G.flight && G.fly_clip;
+        bool eye_clip = G.flight && G.fly_clip == CV_EYE_CUT, eye_hide = G.flight && G.fly_clip == CV_EYE_HIDE;
+        if (eye_hide) {
+            v3 eye, fwd, right, up;
+            cam_basis(&G.cam, &eye, &fwd, &right, &up);
+            const float e[3] = { eye.x, eye.y, eye.z }, f[3] = { fwd.x, fwd.y, fwd.z };
+            float n[3], dd;
+            cv_cap_eye_plane(e, f, G.fly_clip_depth * G.diag, n, &dd);
+            app_eye_hide(true, n, dd, d.def_scale, d.def_scale2);
+        } else app_eye_hide(false, NULL, 0, 0, 0);
         d.clip = G.clip_on || eye_clip;
         if (eye_clip) {                        /* flying: the eye cuts, the axis plane waits */
             v3 eye, fwd, right, up;
@@ -954,10 +962,10 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) O.shot_frames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--browse")) O.browse = true;
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
-        else if (!strcmp(argv[i], "--fly-clip")) {
-            O.fly = true; O.fly_clip = -1;
+        else if (!strcmp(argv[i], "--fly-clip") || !strcmp(argv[i], "--fly-hide")) {
+            O.fly = true; O.fly_clip = argv[i][6] == 'c' ? CV_EYE_CUT : CV_EYE_HIDE;
             char* end;
-            if (i + 1 < argc) { float v = strtof(argv[i + 1], &end); if (end != argv[i + 1] && !*end && v > 0) { O.fly_clip = v; i++; } }
+            if (i + 1 < argc) { float v = strtof(argv[i + 1], &end); if (end != argv[i + 1] && !*end && v > 0) { O.fly_depth = v; i++; } }
         }
         else if (!strcmp(argv[i], "--gauss")) O.gauss = true;
         else if (!strcmp(argv[i], "--cgx")) O.cgx = true;

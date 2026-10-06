@@ -1428,6 +1428,7 @@ int main(void) {
     test_path();
     test_anchor();
     test_feature_edges();
+    test_plane_mask();
     test_mid_faces();
     test_sta();
     test_fbd();

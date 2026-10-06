@@ -186,8 +186,9 @@ void section_view(struct nk_context* ctx, float s, float row) {
         if (G.flight) {
             nk_property_float(ctx, "#speed", 0.005f, &G.fly_speed, 10.f, 0.05f, 0.005f);
             nk_layout_row_dynamic(ctx, row, 2);
-            tip(ctx, "Cut away what lies just in front of the eye, the cut filled:\nfly into the model and see inside it (the axis clip waits meanwhile)");
-            nk_checkbox_label(ctx, "Clip at eye", &G.fly_clip);
+            static const char* eye_modes[] = { "eye: no cut", "eye: cuts", "eye: hides elements" };
+            tip(ctx, "What lies just in front of the eye: cut away (the cut filled), or whole elements\nhidden; fly into the model and see inside it (the axis clip waits meanwhile)");
+            G.fly_clip = nk_combo(ctx, eye_modes, 3, G.fly_clip, (int)row, nk_vec2(170 * s, 3 * row + 20 * s));
             if (G.fly_clip) {
                 tip(ctx, "How far ahead of the eye the cut lies, in model diagonals");
                 nk_property_float(ctx, "#depth", 0.f, &G.fly_clip_depth, 0.2f, 0.001f, 0.0002f);

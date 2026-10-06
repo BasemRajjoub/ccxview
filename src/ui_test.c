@@ -222,14 +222,15 @@ static bool grab_follows(struct nk_context* ctx) {
 /* flying, with only View > Camera open and the sidebar at its top: the flight's rows in sight */
 static int fly_tree[CV_TREE_N];
 static void fly_on(struct nk_context* ctx) {
-    app_set_flight(true); G.fly_clip = false;
+    app_set_flight(true); G.fly_clip = CV_EYE_OFF;
     memcpy(fly_tree, G.tree, sizeof fly_tree);
     for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_CAMERA;
     struct nk_window* w = win_of(ctx, "Scene");
     if (w) w->scrollbar.y = 0;
 }
-static void fly_off(struct nk_context* ctx) { app_set_flight(false); G.fly_clip = false; memcpy(G.tree, fly_tree, sizeof fly_tree); }
-static bool fly_clip_on(struct nk_context* ctx) { return G.fly_clip; }
+static void fly_off(struct nk_context* ctx) { app_set_flight(false); G.fly_clip = CV_EYE_OFF; memcpy(G.tree, fly_tree, sizeof fly_tree); }
+static bool fly_cuts(struct nk_context* ctx) { return G.fly_clip == CV_EYE_CUT; }
+static bool fly_hides(struct nk_context* ctx) { return G.fly_clip == CV_EYE_HIDE; }
 static void fly_depth_low(struct nk_context* ctx) { G.fly_clip_depth = 0.f; }
 static bool fly_depth_up(struct nk_context* ctx) { return G.fly_clip_depth > 0.f; }
 static bool scene_still(struct nk_context* ctx) { return !scene_scrolled(ctx); }
@@ -242,7 +243,7 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 #define TIP_MARKERS "Balls at the field's minimum"
 #define TIP_EDGES   "Edges of the exterior faces"
 #define TIP_UNITS   "Input units (what the model was built in) and"
-#define TIP_FLYCLIP "Cut away what lies just in front of the eye"
+#define TIP_FLYCLIP "What lies just in front of the eye"
 #define TIP_FLYDEPTH "How far ahead of the eye the cut lies"
 
 #define CASE(name)          { OP_CASE, name }
@@ -335,10 +336,13 @@ static const step script[] = {
     RRELEASE, DO(snapshot), AT_VIEW(0.05f, 0.05f), DO(grab), RPRESS, AT_VIEW(0.2f, 0.2f), RRELEASE,
     EXPECT(turned, "a drag off the model pans too"),
 
-    CASE("free flight: the clip at eye box toggles, its depth answers"),
-    DO(fly_on), WAIT(3), AT_TIP("Scene", TIP_FLYCLIP), CLICK, EXPECT(fly_clip_on, "clip at eye turns on"),
+    CASE("free flight: the eye list opens and picks, its depth answers"),
+    DO(fly_on), WAIT(3), AT_TIP("Scene", TIP_FLYCLIP), WAIT(30), CLICK, EXPECT(scene_popup, "the eye list opens"),
+    AT_POPUP("Scene", 0.5f, 0.5f), CLICK, EXPECT(fly_cuts, "the eye cuts"),
     DO(fly_depth_low), WAIT(2), AT_TIP_X("Scene", TIP_FLYDEPTH, 0.95f), CLICK, EXPECT(fly_depth_up, "the depth answers"),
-    DO(fly_off), PANELS_ANSWER,
+    AT_TIP("Scene", TIP_FLYCLIP), CLICK, EXPECT(scene_popup, "the eye list opens again"),
+    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(fly_hides, "the eye hides elements"), WAIT(10),
+    DO(fly_off), WAIT(10), PANELS_ANSWER,
 
     CASE("units: opened from the status bar, a list in it, closed"),
     AT_TIP("Status", TIP_UNITS), CLICK, EXPECT(units_shown, "the Units window opens"),
