@@ -113,6 +113,78 @@ static void explain(struct nk_context* ctx, float s, float row, int t) {
     nk_tree_pop(ctx);
 }
 
+/* the share past any limit judged against the user's warning level */
+static const char* verdict(const mesh_info* info, struct nk_color* col) {
+    double pct = info->elems ? 100.0 * info->poor_any / info->elems : 0;
+    if (!info->poor_any) { *col = P.text; return "good: no element past a limit"; }
+    if (pct <= G.mesh_warn_pct) { *col = P.warn; return "warning: a few elements past a limit"; }
+    *col = nk_rgb(235, 80, 70); return "poor: too many elements past a limit";
+}
+
+static const char* limit_text(int q, int t, char* out, size_t n) {
+    double lim = cv_mq_limit(q, t);
+    const cv_mq_info* in = cv_mq(q);
+    char b[32];
+    if (lim != lim) { snprintf(out, n, "-"); return out; }
+    num(b, sizeof b, lim);
+    snprintf(out, n, "%s %s", in->high_bad ? (in->incl ? ">=" : ">") : (in->incl ? "<=" : "<"), b);
+    return out;
+}
+
+/* the window as text, for a report: the mesh, the verdict, a row per measure */
+static void copy_report(const mesh_stat* st, const mesh_info* info, int main_t) {
+    CV_VEC(char) txt = {0};
+    char line[400], a[32], b[32], c[32], d[32];
+    struct nk_color col;
+    #define OUT(...) do { int k_ = snprintf(line, sizeof line, __VA_ARGS__); \
+        if (k_ > 0 && cv_reserve(txt, txt.n + (size_t)k_ + 1)) { memcpy(txt.a + txt.n, line, (size_t)k_); txt.n += (size_t)k_; } } while (0)
+    OUT("Mesh quality: %s\n", G.path);
+    OUT("elements %u, nodes %u, materials %u\n", info->elems, info->used_nodes, info->mats);
+    for (int k = 1; k < 16; k++) if (info->per_type[k]) OUT("  %s %u\n", cv_frd_type_name(k), info->per_type[k]);
+    OUT("%u elements (%.2f %%) past at least one limit; %s (warning up to %g %%)\n\n", info->poor_any,
+        info->elems ? 100.0 * info->poor_any / info->elems : 0, verdict(info, &col), G.mesh_warn_pct);
+    OUT("%-22s %12s %12s %12s %12s %16s %10s\n", "measure", "min", "mean", "max", "limit", "poor", "worst");
+    for (int i = 0; i < CV_MQ_N; i++) {
+        int q = order(i);
+        const mesh_stat* m = &st[q];
+        if (!m->n) continue;
+        num(a, sizeof a, m->min); num(b, sizeof b, m->mean); num(c, sizeof c, m->max);
+        char poor[32];
+        snprintf(poor, sizeof poor, "%u (%.1f%%)", m->poor, 100.0 * m->poor / m->n);
+        OUT("%-22s %12s %12s %12s %12s %16s %10u\n", cv_mq(q)->name, a, b, c, limit_text(q, main_t, d, sizeof d), poor,
+            m->worst != UINT32_MAX ? G.frd.elem_id[m->worst] : 0);
+    }
+    #undef OUT
+    if (cv_reserve(txt, txt.n + 1)) { txt.a[txt.n] = 0; sapp_set_clipboard_string(txt.a); }
+    cv_free_vec(txt);
+}
+
+/* the user's limits: one row per measure that has one, 0 / "usual" for the usual */
+static void limits_editor(struct nk_context* ctx, float s, float row, int main_t) {
+    static const int qs[] = { CV_MQ_ASPECT, CV_MQ_SJAC, CV_MQ_JRATIO, CV_MQ_SKEW, CV_MQ_ANGLE_MIN, CV_MQ_ANGLE_MAX, CV_MQ_WARP, CV_MQ_SHAPE };
+    static const double lo[] = { 1.01, -1, 1e-4, 0.01, 0.1, 90.1, 0.1, 1e-6 }, hi[] = { 1000, 0.999, 0.999, 1, 89.9, 179.9, 90, 0.999 };
+    const float cols[] = { 0.3f, 0.45f, 0.25f };
+    for (size_t i = 0; i < CV_COUNT(qs); i++) {
+        int q = qs[i];
+        double usual = cv_mq_usual_limit(q, main_t);
+        if (usual != usual) continue;
+        nk_layout_row(ctx, NK_DYNAMIC, row, 3, cols);
+        nk_label(ctx, cv_mq(q)->name, NK_TEXT_LEFT);
+        double v = G.mq_lim[q] != 0 ? G.mq_lim[q] : usual, was = v;
+        tip(ctx, "The limit for every element type; past it an element counts as poor");
+        nk_property_double(ctx, "#", lo[i], &v, hi[i], (hi[i] - lo[i]) / 200, (float)((hi[i] - lo[i]) / 1000));
+        if (v != was) G.mq_lim[q] = (float)v;
+        char t[48];
+        snprintf(t, sizeof t, G.mq_lim[q] != 0 ? "usual" : "(usual)");
+        tip(ctx, "Back to the usual limit for each element type");
+        if (nk_button_label(ctx, t)) G.mq_lim[q] = 0;
+    }
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "Up to this share of elements past a limit the mesh is a warning, more is poor");
+    nk_property_float(ctx, "#warning up to %", 0.f, &G.mesh_warn_pct, 100.f, 0.5f, 0.05f);
+    (void)s;
+}
+
 void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open;
     static mesh_stat st[CV_MQ_N];
@@ -123,6 +195,7 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
     if (!G.show_mesh || !G.loaded) { was_open = false; return; }
     if (!was_open) { nk_window_show(ctx, "Mesh quality", NK_SHOWN); key_gen = 0; }
     was_open = true;
+    mesh_limits_check();
     if (key_gen != mesh_gen() || key_len != mesh_len_scale()) {     /* worked out again only when it changed */
         ok = mesh_stats(st, &info);
         key_gen = mesh_gen();
@@ -179,8 +252,21 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
         nk_label(ctx, t, NK_TEXT_LEFT);
         snprintf(t, sizeof t, "%u elements (%.2f %%) past at least one limit", info.poor_any,
                  info.elems ? 100.0 * info.poor_any / info.elems : 0);
-        tip(ctx, "Elements past the usual limit of any measure below");
+        tip(ctx, "Elements past the limit of any measure below");
         nk_label_colored(ctx, t, NK_TEXT_LEFT, info.poor_any ? P.warn : P.text);
+        {
+            struct nk_color col;
+            const char* v = verdict(&info, &col);
+            const float vc[] = { 0.6f, 0.2f, 0.2f };
+            nk_layout_row(ctx, NK_DYNAMIC, row, 3, vc);
+            tip(ctx, "Good with no element past a limit; a warning up to the share set under \"limits\", poor above");
+            nk_label_colored(ctx, v, NK_TEXT_LEFT, col);
+            tip(ctx, "Set your own limits per measure and the warning share");
+            if (nk_button_label(ctx, G.mesh_limits_open ? "limits ^" : "limits...")) G.mesh_limits_open = !G.mesh_limits_open;
+            tip(ctx, "This window as text to the clipboard, for a report");
+            if (nk_button_label(ctx, "copy report")) copy_report(st, &info, main_t);
+            if (G.mesh_limits_open) limits_editor(ctx, s, row, main_t);
+        }
         uii_hsep(ctx, s);
 
         /* each measure */
@@ -190,7 +276,7 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
         static const char* head_tips[] = {
             "Click one to show it on the model, per element",
             "The least value over the elements it applies to", "The mean", "The largest value",
-            "The usual limit, for the commonest element type here", "Elements past their type's limit",
+            "The limit (yours in the accent colour, else the usual one for the commonest element type here)", "Elements past their type's limit",
             "The worst element: click to find it", "How the elements spread from min to max\n(log scale; poor end in the warning colour)" };
         for (int k = 0; k < 8; k++) { tip(ctx, head_tips[k]); nk_label_colored(ctx, heads[k], k ? NK_TEXT_RIGHT : NK_TEXT_LEFT, P.dim); }
         for (int i = 0; i < CV_MQ_N; i++) {
@@ -211,9 +297,8 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
             num(a, sizeof a, m->mean); nk_label(ctx, a, NK_TEXT_RIGHT);
             num(a, sizeof a, m->max); nk_label(ctx, a, NK_TEXT_RIGHT);
             double lim = cv_mq_limit(q, main_t);
-            if (lim == lim) { num(b, sizeof b, lim); snprintf(a, sizeof a, "%s %s", in->high_bad ? (in->incl ? ">=" : ">") : (in->incl ? "<=" : "<"), b); }
-            else snprintf(a, sizeof a, "-");
-            nk_label_colored(ctx, a, NK_TEXT_RIGHT, P.dim);
+            limit_text(q, main_t, a, sizeof a);
+            nk_label_colored(ctx, a, NK_TEXT_RIGHT, q < CV_MQ_SCORE0 && G.mq_lim[q] != 0 ? P.accent : P.dim);   /* the user's own: accent */
             if (m->poor) snprintf(a, sizeof a, "%u (%.1f%%)", m->poor, 100.0 * m->poor / m->n);
             else snprintf(a, sizeof a, "%s", lim == lim ? "0" : "-");
             nk_label_colored(ctx, a, NK_TEXT_RIGHT, m->poor ? P.warn : P.text);

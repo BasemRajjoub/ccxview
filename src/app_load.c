@@ -409,6 +409,7 @@ static void apply_load(cv_job* j) {
     else app_view(CV_VIEW_ISO);
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
     if (O.fly) app_set_flight(true);
+    if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
     if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
     if (O.compare) app_compare_open(O.compare);

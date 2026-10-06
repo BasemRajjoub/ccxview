@@ -56,8 +56,11 @@ const cv_mq_info* cv_mq(int q);
 int    cv_mq_find(const char* key);         /* by key or name, case blind; -1 none */
 int    cv_mq_dim(int frd_type);             /* 3 solid, 2 shell / plane, 1 beam, 0 unknown */
 
-/* the usual limit past which an element counts as poor; NaN: none */
+/* the limit past which an element counts as poor: the user's (cv_mq_set_limit) or
+   the usual one; NaN: none for this type. The scores are made against it. */
 double cv_mq_limit(int q, int frd_type);
+double cv_mq_usual_limit(int q, int frd_type);
+void   cv_mq_set_limit(int q, double v);        /* every element type; 0: the usual again */
 bool   cv_mq_poor(int q, int frd_type, double v);
 
 /* how the overall scores are made, for a measure q of an element of type t:

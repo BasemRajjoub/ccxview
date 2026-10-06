@@ -36,6 +36,7 @@ typedef struct {
     const char* find;           /* --find ID or eID: probe it after load */
     float       box[4];         /* --box x0,y0,x1,y1: max in that box of the view (fractions), after load */
     bool        box_set;
+    bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */
     const char* view_file;      /* --view FILE: a saved view state, applied after load */
     bool        watch;          /* --watch: reload when the file changes */
     const char* compare;        /* --compare FILE */

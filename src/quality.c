@@ -95,7 +95,16 @@ int cv_mq_dim(int t) {
 
 static const int kCorners[] = { 0, 8, 6, 4, 3, 4, 2 };
 
+static double user_lim[CV_MQ_N];                     /* 0: the usual */
+
+void cv_mq_set_limit(int q, double v) { if (q >= 0 && q < CV_MQ_N) user_lim[q] = v; }
+
 double cv_mq_limit(int q, int t) {
+    double l = cv_mq_usual_limit(q, t);
+    return l == l && user_lim[q] != 0 ? user_lim[q] : l;     /* where a measure applies at all */
+}
+
+double cv_mq_usual_limit(int q, int t) {
     int k = kind(t);
     bool simplex = k == K_TRI || k == K_TET;
     switch (q) {

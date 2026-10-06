@@ -14,6 +14,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include "ui_int.h"
+#include "app_mesh.h"
 
 enum { OP_END, OP_CASE, OP_AT_TIP, OP_AT_WIN, OP_AT_POPUP, OP_AT_CLOSE, OP_AT_TITLE, OP_AT_VIEW, OP_AT_MODEL, OP_CLICK, OP_PRESS, OP_RELEASE,
        OP_WHEEL, OP_WAIT, OP_DO, OP_EXPECT };
@@ -166,6 +167,10 @@ static void open_convergence(struct nk_context* ctx) { G.show_conv = true; }
 static void open_legend_settings(struct nk_context* ctx) { G.legend_edit = true; }
 static void open_find(struct nk_context* ctx) { G.find_open = true; }
 static void open_browser(struct nk_context* ctx) { G.browser_open = true; }
+static void open_mesh(struct nk_context* ctx) { G.show_mesh = true; }
+static bool mesh_gone(struct nk_context* ctx) { return !G.show_mesh; }
+static bool mesh_limit_set(struct nk_context* ctx) { return G.mq_lim[CV_MQ_ASPECT] != 0; }
+static void mesh_limits_usual(struct nk_context* ctx) { memset(G.mq_lim, 0, sizeof G.mq_lim); G.show_mesh = false; }
 static void sections_open(struct nk_context* ctx) {
     G.tree[CV_TREE_LAYERS] = G.tree[CV_TREE_VIEW] = G.tree[CV_TREE_CAMERA] = G.tree[CV_TREE_COLOURS] = 1;
     G.tree[CV_TREE_CYCLIC] = G.tree[CV_TREE_DISPLAY] = 1;
@@ -386,6 +391,12 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Legend settings", open_legend_settings, legend_settings_gone),
     CLOSED_THEN_PANELS("Find", open_find, find_gone),
     CLOSED_THEN_PANELS("Open file", open_browser, browser_gone),
+    CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
+
+    CASE("mesh quality: the limits open, a limit answers"),
+    DO(open_mesh), WAIT(5), AT_TIP("Mesh quality", "Set your own limits"), CLICK, WAIT(2),
+    AT_TIP_X("Mesh quality", "The limit for every element type", 0.95f), CLICK, EXPECT(mesh_limit_set, "the aspect limit changes"),
+    DO(mesh_limits_usual), WAIT(3), PANELS_ANSWER,
 
     CASE("a window closed by the program (OK, Escape), the panels still answer"),
     DO(open_formula), WAIT(3), AT_TITLE("Formula"), CLICK, DO(close_all), WAIT(1), PANELS_ANSWER,

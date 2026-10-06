@@ -127,6 +127,8 @@ typedef struct {
     int       fail_crit;      /* failure field: the criterion (CV_FC_*) and what it shows (CV_FO_*) */
     int       fail_out;
     int       mesh_q;         /* mesh quality field: the measure (CV_MQ_*) */
+    float     mq_lim[16];     /* the user's quality limits by CV_MQ_* (quality.h), 0: the usual */
+    float     mesh_warn_pct;  /* mesh verdict: up to this % of elements past a limit is a warning, more is poor */
     char      calc_expr[256]; /* the calculated field's formula (calc.h), kept across files */
     char      calc_err[128];  /* why the last formula did not compile, "" when it did */
     struct cv_calc* calc;     /* calc_expr compiled for this file, NULL none */
@@ -317,6 +319,7 @@ typedef struct {
     bool      show_units;            /* the units window */
     bool      show_fail;             /* the strength materials window */
     bool      show_mesh;             /* the mesh quality window */
+    bool      mesh_limits_open;      /* ... with the user's limits shown */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
     float     bg[3];                 /* view background */

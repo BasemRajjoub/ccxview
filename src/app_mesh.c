@@ -39,7 +39,25 @@ static void worker(void* p) {
     }
 }
 
+typedef char mq_lim_fits[CV_MQ_N <= sizeof G.mq_lim / sizeof G.mq_lim[0] ? 1 : -1];
+
+/* the user's limits into quality.c; true when they changed */
+static bool sync_limits(void) {
+    static float was[CV_MQ_N];
+    bool changed = false;
+    for (int q = 0; q < CV_MQ_N; q++)
+        if (G.mq_lim[q] != was[q]) { was[q] = G.mq_lim[q]; cv_mq_set_limit(q, G.mq_lim[q]); changed = true; }
+    return changed;
+}
+
+void mesh_limits_check(void) {
+    if (!sync_limits() || !M.q) return;
+    mesh_clear();                                    /* the scores were made against the old limits */
+    if (G.field_src == 4) app_mesh_set(G.mesh_q);
+}
+
 static bool compute(void) {
+    sync_limits();
     const cv_frd* f = &G.frd;
     if (M.q && M.f == f && M.n == f->n_elems) return true;
     mesh_clear();

@@ -115,6 +115,7 @@ static void init(void) {
     G.cmap = CV_CMAP_FAST;
     G.bands = 12;
     G.mesh_q = CV_MQ_CCX;
+    G.mesh_warn_pct = 1.f;
     G.fail_crit = CV_FC_AUTO;
     G.center_zero = true;
     G.deform = true;
@@ -977,6 +978,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) O.shot_frames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--browse")) O.browse = true;
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
+        else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--box") && i + 1 < argc)
             O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;
         else if (!strcmp(argv[i], "--fly-clip") || !strcmp(argv[i], "--fly-hide")) {

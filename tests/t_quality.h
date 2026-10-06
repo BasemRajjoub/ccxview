@@ -25,6 +25,12 @@ static void test_quality(void) {
     CHECK(cv_mq_poor(CV_MQ_ASPECT, 1, 11) && !cv_mq_poor(CV_MQ_ASPECT, 1, 9));
     CHECK(cv_mq_poor(CV_MQ_SJAC, 3, 0.4) && !cv_mq_poor(CV_MQ_SJAC, 9, 0.4));
     CHECK(!cv_mq_poor(CV_MQ_WARP, 3, 50));               /* tets have no quad faces */
+    cv_mq_set_limit(CV_MQ_ASPECT, 5);                   /* the user's limit, for every type */
+    CHECK(cv_mq_poor(CV_MQ_ASPECT, 1, 6) && cv_mq_poor(CV_MQ_ASPECT, 3, 6) && !cv_mq_poor(CV_MQ_ASPECT, 1, 4));
+    CHECK_NEAR(cv_mq_usual_limit(CV_MQ_ASPECT, 1), 10, 0);
+    CHECK(cv_mq_limit(CV_MQ_ASPECT, 11) != cv_mq_limit(CV_MQ_ASPECT, 11));   /* beams still have none */
+    cv_mq_set_limit(CV_MQ_ASPECT, 0);
+    CHECK(!cv_mq_poor(CV_MQ_ASPECT, 1, 6));             /* back to the usual 10 */
 
     /* the [-1,1]^3 cube, linear and quadratic */
     for (int t = 1; t <= 4; t += 3) {
