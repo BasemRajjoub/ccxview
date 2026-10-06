@@ -78,7 +78,9 @@ and the shape follow every node; the full list is in
   largest face angle, warpage, shape factor. The Mesh quality window sums up the
   mesh (element types, nodes, materials, volume, extent) and gives each measure
   its range, mean, spread, the usual limit (Abaqus, ANSYS, Verdict), how many
-  elements pass it and the worst element, one click away.
+  elements pass it and the worst element, one click away. Your own limits per
+  measure, a verdict (good, warning up to a share you set, poor) and the whole
+  table to the clipboard for a report.
 - Overall mesh scores, each made the way its program makes it and explained in
   the window: ccxview quality (0 to 1, the weakest of the measures, each scored
   from its ideal to its limit), the HyperMesh quality index (penalties 0 at
@@ -111,7 +113,12 @@ and what is drawn for it; `samples/symbols/` shows them all.
 - Animation: mode shapes, steady-state phases, deformation cycles, step
   playback. Undeformed ghost, min / max markers.
 - Probe a node or element, find by id, history of a node over all steps, path
-  plots between nodes or through the wall.
+  plots between nodes or through the wall. Details of the probe: position,
+  displacement, every component of the field, the element's material, sets
+  and nodes.
+- Box selection as in CAD (Ctrl+Shift+drag): left to right the elements wholly
+  inside, right to left every element touched; highlighted, with the field's
+  max and min over them.
 - ASME VIII-2 stress linearization along a line through the wall: membrane,
   membrane + bending, peak and total at both ends and their largest value on the
   line; bending from the components normal to the line as 5-A.4.1.2 asks, or
@@ -119,6 +126,8 @@ and what is drawn for it; `samples/symbols/` shows them all.
 - Compare two runs (A minus B).
 - Clip plane with the cut filled, crop box, mirror symmetry, cyclic symmetry,
   replicate (rows of copies of a periodic model).
+- Free flight (G) through the model; the eye can cut what lies just ahead of it
+  (the cut filled) or hide whole elements there, to see inside.
 - Convergence plot from `.sta` / `.cvg`.
 - Groups by element type, material and set; named sets and surfaces from the
   deck, highlighted on the model.

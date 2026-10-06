@@ -30,7 +30,8 @@ Measured on one desktop PC; `build/bench file.frd` prints the numbers for yours.
 
 - **Results as you expect them.** Contours on faces, edges and nodes, deformed
   shape, animation, vectors, principal stresses, tensor glyphs, stress
-  trajectories, Gauss points, probe, history and path plots.
+  trajectories, Gauss points, probe with full node and element details,
+  CAD-style box selection with its max and min, history and path plots.
 - **The deck on the model.** Supports, loads, thermal loads, bolts, springs and
   constraints of the step on screen, each with its own 3D symbol.
 - **True to the element.** Quadratic elements are drawn and cut through their
@@ -39,10 +40,12 @@ Measured on one desktop PC; `build/bench file.frd` prints the numbers for yours.
   from a formula (`S1 - S3`, `MISES / 235`), composite and metal failure
   criteria (Hashin, Puck, LaRC05, Tsai-Wu, von Mises, ...) with built-in
   composite, metal and plastic presets, mesh quality
-  (aspect ratio, Jacobians, skew, warpage, ...), unit conversion,
+  (aspect ratio, Jacobians, skew, warpage, ...) with your own limits and a
+  report, unit conversion,
   comparison of two runs, cylindrical systems.
 - **Cut and copy.** Clip plane with a filled cut, crop box, mirror, cyclic
-  symmetry, replicate.
+  symmetry, replicate. Fly through the model: the eye cuts its way in, or
+  hides the elements in front of it.
 - **Export.** PNG, MP4, CSV, VTK, all scriptable from the command line.
 
 ```sh
