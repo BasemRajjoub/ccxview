@@ -219,6 +219,19 @@ static bool grab_follows(struct nk_context* ctx) {
     float sx, sy;
     return app_project(grabbed, &sx, &sy) && fabsf(sx - T.mx) < 3 && fabsf(sy - T.my) < 3;
 }
+/* flying, with only View > Camera open and the sidebar at its top: the flight's rows in sight */
+static int fly_tree[CV_TREE_N];
+static void fly_on(struct nk_context* ctx) {
+    app_set_flight(true); G.fly_clip = false;
+    memcpy(fly_tree, G.tree, sizeof fly_tree);
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_CAMERA;
+    struct nk_window* w = win_of(ctx, "Scene");
+    if (w) w->scrollbar.y = 0;
+}
+static void fly_off(struct nk_context* ctx) { app_set_flight(false); G.fly_clip = false; memcpy(G.tree, fly_tree, sizeof fly_tree); }
+static bool fly_clip_on(struct nk_context* ctx) { return G.fly_clip; }
+static void fly_depth_low(struct nk_context* ctx) { G.fly_clip_depth = 0.f; }
+static bool fly_depth_up(struct nk_context* ctx) { return G.fly_clip_depth > 0.f; }
 static bool scene_still(struct nk_context* ctx) { return !scene_scrolled(ctx); }
 static bool tip_cmap(struct nk_context* ctx) { return !strncmp(uii_tip_shown(), "Colour map", 10); }
 static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
@@ -229,12 +242,16 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 #define TIP_MARKERS "Balls at the field's minimum"
 #define TIP_EDGES   "Edges of the exterior faces"
 #define TIP_UNITS   "Input units (what the model was built in) and"
+#define TIP_FLYCLIP "Cut away what lies just in front of the eye"
+#define TIP_FLYDEPTH "How far ahead of the eye the cut lies"
 
 #define CASE(name)          { OP_CASE, name }
 #define AT_TIP(win, text)   { OP_AT_TIP, win, text }
 /* the same, and the next step (a click) in that very frame: the mouse was not seen
    hovering there first, as after a fast move */
 #define JUMP_TIP(win, text) { OP_AT_TIP, win, text, .n = 1 }
+/* at a fraction fx across the widget: the arrows at a property's ends */
+#define AT_TIP_X(win, text, fx) { OP_AT_TIP, win, text, fx }
 #define AT_WIN(win, fx, fy) { OP_AT_WIN, win, NULL, fx, fy }
 #define AT_POPUP(win, fx, fy) { OP_AT_POPUP, win, NULL, fx, fy }
 #define AT_CLOSE(win)       { OP_AT_CLOSE, win }
@@ -317,6 +334,11 @@ static const step script[] = {
     RPRESS, AT_VIEW(0.45f, 0.6f), AT_VIEW(0.6f, 0.35f), EXPECT(grab_follows, "the grabbed point follows the cursor"),
     RRELEASE, DO(snapshot), AT_VIEW(0.05f, 0.05f), DO(grab), RPRESS, AT_VIEW(0.2f, 0.2f), RRELEASE,
     EXPECT(turned, "a drag off the model pans too"),
+
+    CASE("free flight: the clip at eye box toggles, its depth answers"),
+    DO(fly_on), WAIT(3), AT_TIP("Scene", TIP_FLYCLIP), CLICK, EXPECT(fly_clip_on, "clip at eye turns on"),
+    DO(fly_depth_low), WAIT(2), AT_TIP_X("Scene", TIP_FLYDEPTH, 0.95f), CLICK, EXPECT(fly_depth_up, "the depth answers"),
+    DO(fly_off), PANELS_ANSWER,
 
     CASE("units: opened from the status bar, a list in it, closed"),
     AT_TIP("Status", TIP_UNITS), CLICK, EXPECT(units_shown, "the Units window opens"),
@@ -404,7 +426,7 @@ static bool target(struct nk_context* ctx, const step* s, float* x, float* y) {
         const mark* m = find_mark(s->a, s->b);
         struct nk_window* w = m ? win_of(ctx, m->win) : NULL;
         if (!w) { fail("no widget with the tooltip '%s' in '%s'", s->b, s->a ? s->a : "any window"); return false; }
-        *x = m->r.x + m->r.w * 0.5f; *y = m->r.y + m->r.h * 0.5f;
+        *x = m->r.x + m->r.w * (s->x > 0 ? s->x : 0.5f); *y = m->r.y + m->r.h * 0.5f;
         if (!NK_INBOX(*x, *y, w->bounds.x, w->bounds.y, w->bounds.w, w->bounds.h)) {
             fail("the widget '%s' is scrolled out of '%s'", s->b, m->win);
             return false;

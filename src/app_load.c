@@ -407,6 +407,7 @@ static void apply_load(cv_job* j) {
     else app_view(CV_VIEW_ISO);
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
     if (O.fly) app_set_flight(true);
+    if (O.fly_clip) { G.fly_clip = true; if (O.fly_clip > 0) G.fly_clip_depth = O.fly_clip; }
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
     if (O.compare) app_compare_open(O.compare);
     for (int q = 0; q < 2; q++) {        /* --path / --linearize A,B or A,normal|x|y|z */

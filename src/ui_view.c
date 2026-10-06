@@ -185,6 +185,14 @@ void section_view(struct nk_context* ctx, float s, float row) {
         if (nk_checkbox_label(ctx, "Free flight (G)", &fl)) app_set_flight(fl);
         if (G.flight) {
             nk_property_float(ctx, "#speed", 0.005f, &G.fly_speed, 10.f, 0.05f, 0.005f);
+            nk_layout_row_dynamic(ctx, row, 2);
+            tip(ctx, "Cut away what lies just in front of the eye, the cut filled:\nfly into the model and see inside it (the axis clip waits meanwhile)");
+            nk_checkbox_label(ctx, "Clip at eye", &G.fly_clip);
+            if (G.fly_clip) {
+                tip(ctx, "How far ahead of the eye the cut lies, in model diagonals");
+                nk_property_float(ctx, "#depth", 0.f, &G.fly_clip_depth, 0.2f, 0.001f, 0.0002f);
+            } else nk_spacing(ctx, 1);
+            nk_layout_row_dynamic(ctx, row, 1);
             nk_label_colored(ctx, "WASD move  E/Space up  Q down", NK_TEXT_LEFT, P.dim);
             nk_label_colored(ctx, "Shift fast  drag look  wheel speed", NK_TEXT_LEFT, P.dim);
             nk_label_colored(ctx, "Esc or G: back to orbit", NK_TEXT_LEFT, P.dim);

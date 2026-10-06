@@ -10,6 +10,7 @@ typedef struct {
     float       crop[6];        /* --crop x0,x1,y0,y1,z0,z1 (fractions) */
     bool        crop_set;
     bool        fly;            /* --fly: start in free flight */
+    float       fly_clip;       /* --fly-clip [DEPTH]: ... cutting at the eye; 0 off, < 0 the saved depth */
     bool        gauss;          /* --gauss: start on the first .dat field */
     bool        cgx;            /* --cgx: evaluate a cgx script on open */
     bool        mirror[3];      /* --mirror xyz */

@@ -115,4 +115,16 @@ static void test_cap(void) {
         cv_cap_out_free(&o);
         cv_cap_prep_free(&p);
     }
+
+    {   /* the eye's plane: a point nearer than depth along the view is cut, one beyond is kept */
+        const float eye[3] = { 1, 2, 3 }, fwd[3] = { 0, 0, -2 };
+        float n[3], d;
+        cv_cap_eye_plane(eye, fwd, 0.5f, n, &d);
+        const float near_p[3] = { 5, -4, 2.8f }, far_p[3] = { -5, 4, 2.4f }, behind[3] = { 1, 2, 4 };
+        CHECK(n[0] * near_p[0] + n[1] * near_p[1] + n[2] * near_p[2] > d);
+        CHECK(n[0] * behind[0] + n[1] * behind[1] + n[2] * behind[2] > d);
+        CHECK(n[0] * far_p[0] + n[1] * far_p[1] + n[2] * far_p[2] < d);
+        CHECK_NEAR(n[0] * n[0] + n[1] * n[1] + n[2] * n[2], 1.0, 1e-6);
+        CHECK_NEAR(n[2] * 2.5f, d, 1e-6);               /* the plane passes 0.5 ahead of the eye */
+    }
 }

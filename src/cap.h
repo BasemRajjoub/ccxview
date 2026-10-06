@@ -48,6 +48,10 @@ void cv_cap_cut(const cv_cap_model* m, const cv_cap_prep* p, float d, float eps,
                 const float* node_val, const float* elem_val, cv_cap_out* out);
 void cv_cap_out_free(cv_cap_out* o);
 
+/* The plane that cuts away what lies between an eye and `depth` ahead of it along
+   the view direction fwd (need not be unit): n . p > d is the part to discard. */
+void cv_cap_eye_plane(const float eye[3], const float fwd[3], float depth, float n[3], float* d);
+
 /* The cells, for the tests: the tetrahedra a solid of .frd `type` is cut as (indices
    into its points; the count is returned, at most `max` are written), and its points
    beyond the nodes filled in from q[0 .. nodes) (w numbers per point) by the shape

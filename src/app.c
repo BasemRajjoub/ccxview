@@ -1,6 +1,7 @@
 /* app.c -- sokol_app entry: frame loop, input, title bar, command line. The
    state lives in app_field.c / app_cam.c / app_load.c. */
 #include "app_int.h"
+#include "cap.h"
 #include "cgx.h"
 #include "quality.h"
 #include "failure.h"
@@ -90,6 +91,7 @@ static void init(void) {
     G.anim_period = 2.f;
     G.anim_factor = 1.f;
     G.fly_speed = 0.25f;
+    G.fly_clip_depth = 0.005f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
     G.lin_asme = true;
     G.path_to = UINT32_MAX;
@@ -284,6 +286,23 @@ static void tick_flight(void) {
     G.cam.target = v3_add(G.cam.target, v3_scale(v3_norm(v), sp));   /* the eye moves with it */
 }
 
+/* The caps of the clip plane. Walking only slides the eye's plane (a cut of the
+   prepared projection); turning the head changes its normal, and a new normal
+   projects every node again. Where that costs more than a frame, the caps wait
+   while the head turns and come back when it rests; the cut itself never waits. */
+static void eye_caps(bool eye_clip, const cv_draw* d) {
+    static float last_n[3], built_n[3];
+    static double turned, cost;
+    double now = cv_now();
+    if (memcmp(d->clip_n, last_n, sizeof last_n)) { memcpy(last_n, d->clip_n, sizeof last_n); turned = now; }
+    bool on = d->clip && !(eye_clip && cost > 0.012 && now - turned < 0.15);
+    bool rebuild = on && memcmp(d->clip_n, built_n, sizeof built_n);
+    double t0 = cv_now();
+    app_clip_caps(on, d->clip_n, d->clip_d, d->def_scale, d->def_scale2);
+    if (rebuild) { cost = cv_now() - t0; memcpy(built_n, d->clip_n, sizeof built_n); }   /* what a new normal costs */
+    if (!on) memset(built_n, 0, sizeof built_n);        /* off frees the projection: the next one is a rebuild */
+}
+
 /* Displacement animation: the deformation swings within the current step. */
 static void tick_anim(void) {
     G.anim_factor2 = 0.f;
@@ -381,15 +400,21 @@ static void frame(void) {
         d.ghost = G.show_ghost && G.deform && G.disp;
         d.markers = G.show_markers; d.marker_size = 12.f * ui_scale();
         d.path = G.path_n > 0;
-        d.clip = G.clip_on;
-        if (G.clip_on) {                       /* plane normal along an axis, through clip_pos of the model box */
+        bool eye_clip = G.flight && G.fly_clip;
+        d.clip = G.clip_on || eye_clip;
+        if (eye_clip) {                        /* flying: the eye cuts, the axis plane waits */
+            v3 eye, fwd, right, up;
+            cam_basis(&G.cam, &eye, &fwd, &right, &up);
+            const float e[3] = { eye.x, eye.y, eye.z }, f[3] = { fwd.x, fwd.y, fwd.z };
+            cv_cap_eye_plane(e, f, G.fly_clip_depth * G.diag, d.clip_n, &d.clip_d);
+        } else if (G.clip_on) {                /* plane normal along an axis, through clip_pos of the model box */
             const float lo[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, hi[3] = { G.bmax.x, G.bmax.y, G.bmax.z };
             int k = G.clip_axis % 3;
             float sgn = G.clip_flip ? -1.f : 1.f;
             d.clip_n[0] = d.clip_n[1] = d.clip_n[2] = 0; d.clip_n[k] = sgn;
             d.clip_d = sgn * (lo[k] + (hi[k] - lo[k]) * G.clip_pos);
         }
-        app_clip_caps(d.clip, d.clip_n, d.clip_d, d.def_scale, d.def_scale2);
+        eye_caps(eye_clip, &d);
         d.hl_size = G.hl_size * ui_scale();
         d.gauss_on_top = G.gp_on_top;
         d.gauss_points_color = G.gp_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
@@ -929,6 +954,11 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) O.shot_frames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--browse")) O.browse = true;
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
+        else if (!strcmp(argv[i], "--fly-clip")) {
+            O.fly = true; O.fly_clip = -1;
+            char* end;
+            if (i + 1 < argc) { float v = strtof(argv[i + 1], &end); if (end != argv[i + 1] && !*end && v > 0) { O.fly_clip = v; i++; } }
+        }
         else if (!strcmp(argv[i], "--gauss")) O.gauss = true;
         else if (!strcmp(argv[i], "--cgx")) O.cgx = true;
         else if (!strcmp(argv[i], "--mirror") && i + 1 < argc)

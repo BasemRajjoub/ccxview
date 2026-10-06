@@ -118,6 +118,13 @@ void cv_cap_prep_free(cv_cap_prep* p) {
 }
 void cv_cap_out_free(cv_cap_out* o) { cv_free_vec(o->pos); cv_free_vec(o->disp); cv_free_vec(o->val); }
 
+void cv_cap_eye_plane(const float eye[3], const float fwd[3], float depth, float n[3], float* d) {
+    float l = sqrtf(fwd[0] * fwd[0] + fwd[1] * fwd[1] + fwd[2] * fwd[2]);
+    if (l <= 0) l = 1;
+    for (int k = 0; k < 3; k++) n[k] = -fwd[k] / l;
+    *d = n[0] * eye[0] + n[1] * eye[1] + n[2] * eye[2] - depth;   /* -(f . eye + depth) */
+}
+
 /* the points of one element: 3 position, 3 displacement, value, distance to the plane */
 enum { PW = 8, PX = 0, PU = 3, PS = 6, PD = 7 };
 

@@ -277,6 +277,8 @@ typedef struct {
     float     nav_box[4];            /* box zoom: x0, y0, x1, y1 in window pixels */
     bool      flight;                /* free flight: WASD + mouse look */
     float     fly_speed;             /* model diagonals per second */
+    bool      fly_clip;              /* in flight, cut away what lies just in front of the eye */
+    float     fly_clip_depth;        /* ... this far ahead, in model diagonals */
     int       vp_x, vp_y, vp_w, vp_h;   /* 3D area in window pixels */
 
     /* displacement animation (within one step) */

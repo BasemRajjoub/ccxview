@@ -62,6 +62,7 @@ static const setting S[] = {
     SEC("Camera"),
     B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor), B(wheel_invert), B(show_pivot),
     { "cam_ortho", 'b', &G.cam.ortho, 0, 0 }, F(fly_speed, 0.005f, 10),
+    B(fly_clip), F(fly_clip_depth, 0, 0.2f),
     SEC("Display"),
     B(shading), B(hide_axes), B(clip_cap),
     { "bgr", 'f', &G.bg[0], 0, 1 }, { "bgg", 'f', &G.bg[1], 0, 1 }, { "bgb", 'f', &G.bg[2], 0, 1 },
