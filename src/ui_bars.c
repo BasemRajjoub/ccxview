@@ -56,7 +56,7 @@ void cmap_combo(struct nk_context* ctx, float s, float row) {
    looks (colormap, bands, range) below. Camera controls live in the View tree. */
 void panel_toolbar(struct nk_context* ctx, float s, float row) {
     /* line 1: deformation */
-    nk_layout_row_begin(ctx, NK_STATIC, row, 9);
+    nk_layout_row_begin(ctx, NK_STATIC, row, 10);
     nk_layout_row_push(ctx, 80 * s);
     tip(ctx, "Draw the shape displaced by DISP x scale");
     nk_checkbox_label(ctx, "Deform", &G.deform);
@@ -69,6 +69,9 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     nk_layout_row_push(ctx, 50 * s);
     tip(ctx, "Scale so the largest displacement is ~10% of the model; never below 1");
     if (nk_button_label(ctx, "auto")) { G.deform_auto = true; G.deform_scale = G.auto_scale; }
+    nk_layout_row_push(ctx, 40 * s);
+    tip(ctx, "True scale: the displacement as computed (scale 1)");
+    if (nk_button_label(ctx, "1:1")) { G.deform_auto = false; G.deform_scale = 1.f; G.deform = true; }
     nk_layout_row_push(ctx, 24 * s);
     uii_vsep(ctx);
     nk_layout_row_push(ctx, 90 * s);

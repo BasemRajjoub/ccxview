@@ -185,6 +185,8 @@ static bool tensor_resized(struct nk_context* ctx) { return G.tensor_scale > 0.5
 static bool traj_picked(struct nk_context* ctx) { return G.traj_which != was.traj_which && G.show_traj; }
 static void traj_off(struct nk_context* ctx) { G.show_traj = false; G.traj_which = 0; app_traj_changed(); }
 static void tensor_off(struct nk_context* ctx) { G.show_tensor = false; app_tensors_changed(); }
+static void scale_big(struct nk_context* ctx) { G.deform_scale = 50.f; G.deform_auto = true; }
+static bool scale_true(struct nk_context* ctx) { return G.deform_scale == 1.f && !G.deform_auto && G.deform; }
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
 static bool edges_toggled(struct nk_context* ctx) { return G.show_edges != was.edges; }
@@ -240,6 +242,7 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 #define TIP_CMAP    "Colour map for the field"
 #define TIP_BANDS   "Contour bands"
 #define TIP_DEFORM  "Draw the shape displaced"
+#define TIP_TRUE    "True scale: the displacement as computed"
 #define TIP_MARKERS "Balls at the field's minimum"
 #define TIP_EDGES   "Edges of the exterior faces"
 #define TIP_UNITS   "Input units (what the model was built in) and"
@@ -293,6 +296,9 @@ static const step script[] = {
     CASE("toolbar: the bands list opens and picks"),
     DO(snapshot), AT_TIP("Toolbar", TIP_BANDS), WAIT(30), CLICK, EXPECT(toolbar_popup, "the list opens"),
     AT_POPUP("Toolbar", 0.5f, 0.2f), CLICK, EXPECT(bands_changed, "the bands change"),
+
+    CASE("toolbar: the 1:1 button sets the true scale"),
+    DO(scale_big), WAIT(2), AT_TIP("Toolbar", TIP_TRUE), CLICK, EXPECT(scale_true, "the scale is 1, auto off"),
 
     CASE("toolbar: one list after the other, no pause"),
     DO(snapshot), AT_TIP("Toolbar", TIP_CMAP), CLICK, EXPECT(toolbar_popup, "the colour map list opens"),
