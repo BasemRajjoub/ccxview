@@ -486,6 +486,17 @@ void app_mesh_set(int q) {
     refresh_field();
 }
 
+int app_field_comps(uint32_t node, char names[][12], float* vals, int max) {
+    if (!G.loaded || G.field_src != 0 || node >= G.frd.n_nodes) return 0;
+    int fi = find_field(G.step, G.field_name);
+    const float* v = fi >= 0 ? cache_get(G.step, fi) : NULL;
+    if (!v) return 0;
+    const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
+    int n = CV_MIN(d->ncomp, max);
+    for (int c = 0; c < n; c++) { memcpy(names[c], d->comp[c], 12); vals[c] = v[(size_t)node * d->ncomp + c]; }
+    return n;
+}
+
 void refresh_field(void) {
     if (G.field_src == 1) { refresh_field_dat(); return; }
     int fi = G.field_src >= 2 ? -1 : find_field(G.step, G.field_name);

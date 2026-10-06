@@ -72,6 +72,24 @@ static void test_plane_mask(void) {
     CHECK(!vis[0] && !vis[1] && vis[2]);
 }
 
+/* three bricks along x, the nodes with x <= 1.5 in the box: the first brick lies
+   wholly inside (window), the second crosses its edge (crossing too) */
+static void test_box_elems(void) {
+    static tm_mesh m;
+    tm_init(&m);
+    for (int i = 0; i < 3; i++) tm_brick(&m, (float)i, 0, 0, 1);
+    static uint8_t inside[64];
+    for (uint32_t i = 0; i < m.f.n_nodes; i++) inside[i] = m.xyz[3 * i] <= 1.5f;
+    uint32_t sel[3];
+    CHECK_EQ(cv_box_elems(&m.f, NULL, inside, false, sel), 1u);
+    CHECK_EQ(sel[0], 0u);
+    CHECK_EQ(cv_box_elems(&m.f, NULL, inside, true, sel), 2u);
+    CHECK(sel[0] == 0 && sel[1] == 1);
+    const uint8_t vis[3] = { 0, 1, 1 };                 /* a hidden element is never picked */
+    CHECK_EQ(cv_box_elems(&m.f, vis, inside, true, sel), 1u);
+    CHECK_EQ(sel[0], 1u);
+}
+
 static void test_feature_edges(void) {
     static tm_mesh m;
     cv_skin s;

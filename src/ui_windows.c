@@ -66,48 +66,54 @@ const char* path_dirs[] = { "to a node", "along normal", "along X", "along Y", "
 
 void window_probe(struct nk_context* ctx, float s, float row) {
     if (!G.probe_on || !G.loaded) return;
-    float w = 260 * s, h = row * ((G.field_src >= 3 ? 11.f : 9.8f) + (G.boxq.on && G.boxq.gen == G.field_gen ? 1.2f : 0.f));
+    const cv_pick* p = &G.probe;
+    /* the lines first: the window is as wide as the longest */
+    enum { NPL = 7 };
+    char ln[NPL][160], num[32];
+    const char* tips[NPL] = { 0 };
+    int n = 0;
+    snprintf(ln[n++], 160, "element %u  (%s)", G.frd.elem_id[p->elem], cv_frd_type_name(G.frd.etype[p->elem]));
+    snprintf(ln[n++], 160, "material %u   group %u", G.frd.emat[p->elem], G.frd.egrp[p->elem]);
+    const float* x = G.frd.xyz + 3 * p->node;
+    snprintf(ln[n++], 160, "node %u  (%.4g, %.4g, %.4g)", G.frd.node_id[p->node], x[0], x[1], x[2]);
+    fmt_num(num, sizeof num, G.probe_value);
+    if (!G.has_field) snprintf(ln[n++], 160, "no field");
+    else if (G.probe_ip) snprintf(ln[n++], 160, "point %d: %s = %s", G.probe_ip, G.field_label, num);
+    else snprintf(ln[n++], 160, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
+    if (G.has_field && fail_probe_text(p->node, p->elem, ln[n], 160))
+        tips[n++] = "The governing failure mode (and fracture plane) at this node, or element per element";
+    if (G.has_field && mesh_probe_text(p->elem, ln[n], 160))
+        tips[n++] = "This element's aspect ratio, scaled Jacobian, Jacobian ratio, skewness and\nwarpage; ! past the usual limit";
+    if (G.boxq.on && G.boxq.gen == G.field_gen) {                /* the box this probe came from */
+        char a[32], b[32];
+        fmt_num(a, sizeof a, G.boxq.vmax); fmt_num(b, sizeof b, G.boxq.vmin);
+        snprintf(ln[n], 160, "box: max %s  min %s  (%u %s)", a, b, G.boxq.n, G.boxq.elem ? "elements" : "nodes");
+        tips[n++] = "The field's max (probed) and min over the selected elements\n"
+                    "(their nodes; per element, the elements). Details: where they are";
+    }
+    const struct nk_user_font* fnt = ctx->style.font;
+    float tw = 0;
+    for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
+    float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
+    float h = row * (n + 5.8f);
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
         return;
     }
     nk_window_set_bounds(ctx, "Probe", r);
-    const cv_pick* p = &G.probe;
-    char buf[160], num[32];
     nk_layout_row_dynamic(ctx, row, 1);
-    snprintf(buf, sizeof buf, "element %u  (%s)", G.frd.elem_id[p->elem], cv_frd_type_name(G.frd.etype[p->elem]));
-    nk_label(ctx, buf, NK_TEXT_LEFT);
-    snprintf(buf, sizeof buf, "material %u   group %u", G.frd.emat[p->elem], G.frd.egrp[p->elem]);
-    nk_label(ctx, buf, NK_TEXT_LEFT);
-    const float* x = G.frd.xyz + 3 * p->node;
-    snprintf(buf, sizeof buf, "node %u  (%.4g, %.4g, %.4g)", G.frd.node_id[p->node], x[0], x[1], x[2]);
-    nk_label(ctx, buf, NK_TEXT_LEFT);
-    fmt_num(num, sizeof num, G.probe_value);
-    if (G.probe_ip) snprintf(buf, sizeof buf, "point %d: %s = %s", G.probe_ip, G.field_label, num);
-    else snprintf(buf, sizeof buf, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
-    nk_label(ctx, G.has_field ? buf : "no field", NK_TEXT_LEFT);
-    if (G.has_field && fail_probe_text(p->node, p->elem, buf, sizeof buf)) {
-        tip(ctx, "The governing failure mode (and fracture plane) at this node, or element per element");
-        nk_label(ctx, buf, NK_TEXT_LEFT);
+    for (int i = 0; i < n; i++) {
+        if (tips[i]) tip(ctx, tips[i]);
+        nk_label(ctx, ln[i], NK_TEXT_LEFT);
     }
-    if (G.has_field && mesh_probe_text(p->elem, buf, sizeof buf)) {
-        tip(ctx, "This element's aspect ratio, scaled Jacobian, Jacobian ratio, skewness and\n"
-                 "warpage; ! past the usual limit");
-        nk_label(ctx, buf, NK_TEXT_LEFT);
-    }
-    if (G.boxq.on && G.boxq.gen == G.field_gen) {                /* the box this probe came from */
-        char a[32], b[32];
-        fmt_num(a, sizeof a, G.boxq.vmax); fmt_num(b, sizeof b, G.boxq.vmin);
-        snprintf(buf, sizeof buf, "box: max %s  min %s  (%u %s)", a, b, G.boxq.n, G.boxq.elem ? "elements" : "nodes");
-        tip(ctx, "The field's max (probed) and min among the shown nodes (element centres)\n"
-                 "inside the box; nodes behind the front faces count too");
-        nk_label(ctx, buf, NK_TEXT_LEFT);
-    }
-    nk_layout_row_dynamic(ctx, row, 2);
+    nk_layout_row_dynamic(ctx, row, 3);
     tip(ctx, "Node ids of this element, drawn in the view");
     nk_checkbox_label(ctx, "ids", &G.show_ids);
-    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.path_arm = false; }
+    tip(ctx, "Everything about this node and element in a window of its own:\n"
+             "displacement, every component of the field, sets, nodes, the box selection");
+    if (nk_button_label(ctx, "details...")) G.show_details = !G.show_details;
+    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.path_arm = false; app_sel_clear(); }
     static int pick_dir;
     nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "Where the path from this node goes: to a node you click next, or straight into the\n"
@@ -153,7 +159,9 @@ void window_nav(struct nk_context* ctx, float s) {
         if (box) {
             float x0 = CV_MIN(G.nav_box[0], G.nav_box[2]), y0 = CV_MIN(G.nav_box[1], G.nav_box[3]);
             struct nk_rect r = nk_rect(x0, y0, fabsf(G.nav_box[2] - G.nav_box[0]), fabsf(G.nav_box[3] - G.nav_box[1]));
-            struct nk_color c = G.box_pick ? nk_rgba(255, 190, 60, 255) : nk_rgba(120, 180, 255, 255);   /* max in a box: amber */
+            /* a selection: window (left to right) blue, crossing (right to left) green; a box zoom grey */
+            struct nk_color c = !G.box_pick ? nk_rgba(220, 220, 220, 255)
+                              : G.nav_box[2] < G.nav_box[0] ? nk_rgba(90, 210, 110, 255) : nk_rgba(100, 160, 255, 255);
             nk_fill_rect(cv, r, 0, nk_rgba(c.r, c.g, c.b, 40));
             nk_stroke_rect(cv, r, 0, 1.5f * s, nk_rgba(c.r, c.g, c.b, 220));
         } else if (app_project(G.nav_pt, &sx, &sy)) {

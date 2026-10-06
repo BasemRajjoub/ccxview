@@ -203,6 +203,7 @@ void unload(void) {
     G.loaded = false;
     G.has_field = false;
     G.probe_on = false;
+    app_sel_clear();
     G.playing = false;
     G.skin_dirty = false;
     G.field_name[0] = G.field_label[0] = 0;
@@ -410,6 +411,7 @@ static void apply_load(cv_job* j) {
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
     if (O.fly) app_set_flight(true);
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
+    if (O.details) G.show_details = true;
     if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
     if (O.compare) app_compare_open(O.compare);
@@ -589,6 +591,7 @@ void poll_job(void) {
             if (!j->eye_only) {                   /* flying through: the legend and the probe hold */
                 app_refresh_range();              /* the legend covers what is shown */
                 G.probe_on = false;
+                app_sel_clear();                  /* it may hold elements now hidden */
             }
             deck_refresh_highlight();
         } else {

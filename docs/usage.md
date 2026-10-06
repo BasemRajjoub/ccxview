@@ -25,7 +25,8 @@ ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
-ccxview model.frd --box 0.5,0.2,0.9,0.8     # max and min in that box of the view (fractions)
+ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
+ccxview model.frd --find 120 --details      # probe node 120, its Details window open
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
 ccxview model.frd --opt key=value           # any setting of ccxview.ini for this run
 ccxview model.frd --software                # CPU rendering
@@ -44,7 +45,7 @@ ccxview --version
 | left drag / right or middle drag / wheel | orbit / pan / zoom, about the point under the cursor (View panel: up axis Y or Z, turntable or free rotation, cursor pivot on/off, rotation centre mark) |
 | X / Y / Z held + drag | orbit about that world axis only |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
-| Ctrl+Shift+drag | max in a box: the probe goes to the field's max among the shown nodes in it, the min beside it (also a button in Colours & legend) |
+| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green); they are toned and outlined, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre) |
 | N | look normal to the face under the cursor |

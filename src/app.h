@@ -313,6 +313,9 @@ typedef struct {
     bool      box_arm;               /* the next left drag in the view draws that box */
     bool      box_pick;              /* the box being drawn is one (not a box zoom) */
     struct { bool on; uint32_t max_at, min_at, n; float vmax, vmin; bool elem; unsigned gen; } boxq;   /* gen: G.field_gen it holds for */
+    uint32_t* sel;                   /* the selected elements (indices), sel_n of them */
+    uint32_t  sel_n;
+    bool      sel_crossing;          /* ... by a crossing box (else a window) */
 
     bool      show_msgs;
     bool      show_calc_help;        /* the formula builder window */
@@ -320,6 +323,7 @@ typedef struct {
     bool      show_fail;             /* the strength materials window */
     bool      show_mesh;             /* the mesh quality window */
     bool      mesh_limits_open;      /* ... with the user's limits shown */
+    bool      show_details;          /* the Details window of the probed node and element */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
     float     bg[3];                 /* view background */
@@ -421,10 +425,18 @@ int  app_export_progress(int* done, int* total);  /* a frame export running? fil
 void app_export_cancel(void);            /* stop a frame export; a video keeps what it has */
 bool app_export_data(bool vtk);          /* nodes + field as CSV, or mesh + field as VTK, beside the model */
 bool app_project(v3 p, float* sx, float* sy);   /* world -> window pixels; false when behind the eye */
-/* the field's max and min among the shown nodes (elements: centres) projected into the
-   window box; probes the max. false: nothing shown with a value lies in it */
-bool app_box_extremes(float x0, float y0, float x1, float y1);
+/* app_select.c -- box selection, CAD style: dragged left to right a window (the shown
+   elements wholly inside), right to left a crossing (any node inside); by projection,
+   so elements behind the front faces count. The field's max and min over the
+   selection (its nodes, or its elements per element) go to G.boxq, the probe to the
+   max, the selection's outer faces outlined. false: nothing selected */
+bool app_box_select(float x_start, float y_start, float x_end, float y_end);
+void app_sel_clear(void);
+void app_sel_refresh(void);                     /* the outline again: the shape changed */
 void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
+/* the shown .frd field's stored components at a node (global, as the file has them);
+   names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
+int app_field_comps(uint32_t node, char names[][12], float* vals, int max);
 void app_goto_node(uint32_t node);       /* centre the camera on a node, probe it */
 bool app_find(uint32_t id, bool element);/* by file id: probe + centre; false if absent */
 void app_reload(void);                   /* open the same file again, keeping camera, step and field */

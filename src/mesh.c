@@ -185,6 +185,17 @@ void cv_node_mask(const cv_frd* f, const uint8_t* beyond, uint8_t* vis) {
     }
 }
 
+uint32_t cv_box_elems(const cv_frd* f, const uint8_t* vis, const uint8_t* inside, bool crossing, uint32_t* out) {
+    uint32_t n = 0;
+    for (uint32_t e = 0; e < f->n_elems; e++) {
+        if (vis && !vis[e]) continue;
+        uint32_t b = f->eoff[e], m = f->eoff[e + 1] - b, in = 0;
+        for (uint32_t j = 0; j < m; j++) in += inside[f->conn[b + j]] != 0;
+        if (m && (crossing ? in > 0 : in == m)) out[n++] = e;
+    }
+    return n;
+}
+
 /* ---- skin -------------------------------------------------------------------- */
 
 typedef struct { uint32_t k[4]; uint32_t code; } fkey;   /* sorted corners, e*8+face */

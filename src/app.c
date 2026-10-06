@@ -348,8 +348,9 @@ static void frame(void) {
         O.box_set = false;
         G.nav_box[0] = G.vp_x + O.box[0] * G.vp_w; G.nav_box[1] = G.vp_y + O.box[1] * G.vp_h;
         G.nav_box[2] = G.vp_x + O.box[2] * G.vp_w; G.nav_box[3] = G.vp_y + O.box[3] * G.vp_h;
-        if (app_box_extremes(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]))
-            fprintf(stderr, "box: max %g min %g over %u\n", G.boxq.vmax, G.boxq.vmin, G.boxq.n);
+        if (app_box_select(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]))
+            fprintf(stderr, "box: %u elements (%s), max %g min %g over %u\n", G.sel_n, G.sel_crossing ? "crossing" : "window",
+                    G.boxq.vmax, G.boxq.vmin, G.boxq.n);
     }
 
     if (G.playing && G.loaded && G.frd.n_steps > 1) {
@@ -809,9 +810,9 @@ static void event(const sapp_event* ev) {
             if (drag.down && drag.mode == CV_NAV_BOX && drag.moved) {
                 if (G.box_pick) {
                     G.box_arm = false;
-                    if (!app_box_extremes(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]))
-                        cv_msg_add(&G.msgs, 0, false, G.has_field ? "max in a box: no shown node with a value in the box"
-                                                                  : "max in a box: no field shown");
+                    if (!app_box_select(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]))
+                        cv_msg_add(&G.msgs, 0, false, G.nav_box[2] < G.nav_box[0] ? "box: no shown element has a node in it"
+                                                                                  : "box: no shown element lies wholly in it (drag right to left to take the ones it crosses)");
                 } else {
                     app_view_push();
                     app_box_zoom(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]);
@@ -979,6 +980,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--browse")) O.browse = true;
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
+        else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--box") && i + 1 < argc)
             O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;
         else if (!strcmp(argv[i], "--fly-clip") || !strcmp(argv[i], "--fly-hide")) {

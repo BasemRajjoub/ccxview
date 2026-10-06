@@ -193,6 +193,11 @@ static void tensor_off(struct nk_context* ctx) { G.show_tensor = false; app_tens
 static void scale_big(struct nk_context* ctx) { G.deform_scale = 50.f; G.deform_auto = true; }
 static bool scale_true(struct nk_context* ctx) { return G.deform_scale == 1.f && !G.deform_auto && G.deform; }
 static bool box_armed(struct nk_context* ctx) { return G.box_arm; }
+static void arm_box(struct nk_context* ctx) { G.box_arm = true; }
+static bool box_crossing(struct nk_context* ctx) { return G.sel_n > 0 && G.sel_crossing && G.probe_on; }
+static bool box_window(struct nk_context* ctx) { return G.sel_n > 0 && !G.sel_crossing; }
+static void open_details(struct nk_context* ctx) { app_probe_at(0, false); G.show_details = true; }
+static bool details_gone(struct nk_context* ctx) { return !G.show_details; }
 /* a box round the whole view: its max is the field's max, the probe on it */
 static bool box_found(struct nk_context* ctx) {
     return !G.box_arm && G.boxq.on && G.probe_on && G.boxq.vmax == G.data_max && G.boxq.vmin <= G.boxq.vmax &&
@@ -316,6 +321,12 @@ static const step script[] = {
     DO(open_legend_settings), WAIT(3), AT_TIP("Legend settings", TIP_BOX), CLICK, EXPECT(box_armed, "the next drag is a box"),
     DO(close_all), WAIT(2), AT_VIEW(0.01f, 0.01f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.99f, 0.99f), RELEASE, WAIT(2),
     EXPECT(box_found, "the probe sits on the field's max, the box line holds max and min"),
+    EXPECT(box_window, "left to right: a window selection"),
+
+    CASE("box selection: right to left is a crossing"),
+    DO(arm_box), AT_VIEW(0.6f, 0.6f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.4f, 0.4f), RELEASE, WAIT(2),
+    EXPECT(box_crossing, "a crossing selection, the probe on its max"),
+    AT_VIEW(0.02f, 0.5f), CLICK, PANELS_ANSWER,
 
     CASE("toolbar: one list after the other, no pause"),
     DO(snapshot), AT_TIP("Toolbar", TIP_CMAP), CLICK, EXPECT(toolbar_popup, "the colour map list opens"),
@@ -392,6 +403,7 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Find", open_find, find_gone),
     CLOSED_THEN_PANELS("Open file", open_browser, browser_gone),
     CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
+    CLOSED_THEN_PANELS("Details", open_details, details_gone),
 
     CASE("mesh quality: the limits open, a limit answers"),
     DO(open_mesh), WAIT(5), AT_TIP("Mesh quality", "Set your own limits"), CLICK, WAIT(2),

@@ -284,7 +284,7 @@ static const char* kFS =
     GLSL_HDR
     "uniform vec4 u_color;\n"                /* solid colour */
     "uniform vec4 u_rng;\n"                  /* min, max, bands, mode */
-    "uniform vec4 u_flags;\n"                /* x: grey out of range (light above, dark below), y: shade, z: on top */
+    "uniform vec4 u_flags;\n"                /* x: grey out of range (light above, dark below), y: shade, z: on top, w: selected (tinted) */
     "uniform vec4 u_pz;\n"                   /* projection: z_clip = x*z + y, w_clip = z*z + w */
     "uniform vec4 u_clip;\n"                 /* clip plane normal, d; w = 1e30 when off */
     "uniform sampler2D u_cmap;\n"
@@ -333,6 +333,7 @@ static const char* kFS =
     "      if (u_flags.x > 0.5 && t0 < -1e-4) c = vec3(0.48);\n"       /* CV_OOR_BELOW */
     "    }\n"
     "  }\n"
+    "  if (u_flags.w > 0.5) c = mix(c, vec3(1.0, 0.92, 0.2), 0.45);\n"   /* the box selection: its own colours, toned */
     "  if (u_flags.y > 0.5) {\n"
     /* symbols and glyphs bring their own normal: smooth, with a soft highlight */
     "    bool sm = dot(v_n, v_n) > 0.0;\n"
@@ -347,6 +348,7 @@ static const char* kFS =
     "}\n";
 
 typedef struct { float mvp[16]; float mv[16]; float p[4]; float q[4]; } vs_params;
+static float g_tint;                         /* the next layers are the selection: toned (u_flags.w) */
 typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; } fs_params;
 
 /* ---- state ------------------------------------------------------------------- */
@@ -735,7 +737,7 @@ static void uniforms(const cv_draw* d, bool has_disp, bool has_disp2, int mode, 
     fs_params fs = {
         .color = { rgb[0], rgb[1], rgb[2], 1 },
         .rng = { d->rmin, d->rmax, (float)d->bands, (float)mode },
-        .flags = { d->grey_out_of_range ? 1.f : 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, 0 },
+        .flags = { d->grey_out_of_range ? 1.f : 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
         .pz = { d->proj[10], d->proj[14], d->proj[11], d->proj[15] },
         .clip = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 1e30f },
     };
@@ -869,6 +871,12 @@ void cv_render_draw(const cv_draw* d) {
         int m = d->faces_color == CV_COLOR_NODAL || d->faces_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         draw_layer(R.pip_tri_ni, A[CV_AUX_CAPTRI].v, NO_IB, (int)A[CV_AUX_CAPTRI].n, m, d->face_rgb, d->shade, d, 1, false, 0.f, 0);
     }
+    if (d->faces && A[CV_AUX_SELTRI].n) {    /* the box selection's faces again, a hair in front, toned */
+        int m = d->faces_color == CV_COLOR_NODAL || d->faces_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        g_tint = 1.f;
+        draw_layer(R.pip_tri_ni, A[CV_AUX_SELTRI].v, NO_IB, (int)A[CV_AUX_SELTRI].n, m, d->face_rgb, d->shade, d, 1, false, PULL, 0);
+        g_tint = 0.f;
+    }
     if (d->ghost && d->def_scale != 0.f) {   /* the shape before deformation, faint */
         static const float ghost_rgb[3] = { 0.55f, 0.55f, 0.55f };
         cv_draw g = *d;
@@ -879,6 +887,10 @@ void cv_render_draw(const cv_draw* d) {
     if (d->edges) {
         int m = d->edges_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : d->edges_color;
         draw_layer(R.pip_line, mesh, R.ib_edge, (int)(R.n_edge * 2), m, d->edge_rgb, false, d, 1, false, PULL, 0);
+    }
+    if (A[CV_AUX_SELLN].n) {   /* the box selection: its outer face edges, bright */
+        static const float sel_rgb[3] = { 1.0f, 0.92f, 0.15f };
+        draw_layer(R.pip_line_ni, A[CV_AUX_SELLN].v, NO_IB, (int)A[CV_AUX_SELLN].n, CV_COLOR_SOLID, sel_rgb, false, d, 1, false, PULL, 0);
     }
     if (d->outline) {   /* after the edges and darker, so it reads over coloured ones; GL core lines have no width */
         const float rgb[3] = { d->edge_rgb[0] * 0.4f, d->edge_rgb[1] * 0.4f, d->edge_rgb[2] * 0.4f };

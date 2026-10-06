@@ -37,6 +37,11 @@ void cv_plane_nodes(const cv_frd* f, const float* disp, float f1, const float* d
                     const float n[3], float d, uint8_t* beyond);
 void cv_node_mask(const cv_frd* f, const uint8_t* beyond, uint8_t* vis);
 
+/* Box selection, CAD style: from inside[i] (node i in the box), the shown elements
+   (vis NULL: all) with every node inside (window) or any (crossing), appended to
+   out as element indices; returns how many. */
+uint32_t cv_box_elems(const cv_frd* f, const uint8_t* vis, const uint8_t* inside, bool crossing, uint32_t* out);
+
 /* ---- skin ------------------------------------------------------------------
    Exterior faces of the visible solids (+ every visible shell face) as
    triangles over their nodes (cv_skin_build_opt), the unique edges of those faces (+ beams), and
