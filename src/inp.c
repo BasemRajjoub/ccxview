@@ -87,13 +87,21 @@ static bool to_u32(const char* s, uint32_t* v) {
 
 static bool to_f(const char* s, double* v) { return cv_parse_num(s, s + strlen(s), v); }
 
-/* KEY=VALUE parameters of a keyword line (key upper-cased) */
+/* drop the blanks: CalculiX ignores them in keywords and parameter names
+   (REF NODE = REFNODE, *RIGID BODY = *RIGIDBODY) */
+static void squeeze(char* s) {
+    char* o = s;
+    for (; *s; s++) if (*s != ' ' && *s != '\t') *o++ = *s;
+    *o = 0;
+}
+
+/* KEY=VALUE parameters of a keyword line (keyword and keys upper-cased, without blanks) */
 typedef struct { char key[32]; char val[512]; } param;
 
 static int keyword(const char* s, const char* e, char* kw, size_t kwn, param* p, int max) {
     const char* c = memchr(s, ',', (size_t)(e - s));
     trim_to(kw, kwn, s + 1, c ? c : e);             /* skip the '*' */
-    upcase(kw);
+    upcase(kw); squeeze(kw);
     int n = 0;
     while (c && n < max) {
         const char* s2 = c + 1;
@@ -101,7 +109,7 @@ static int keyword(const char* s, const char* e, char* kw, size_t kwn, param* p,
         const char* fe = c ? c : e;
         const char* eq = memchr(s2, '=', (size_t)(fe - s2));
         trim_to(p[n].key, sizeof p[n].key, s2, eq ? eq : fe);
-        upcase(p[n].key);
+        upcase(p[n].key); squeeze(p[n].key);
         if (eq) trim_to(p[n].val, sizeof p[n].val, eq + 1, fe); else p[n].val[0] = 0;
         if (p[n].key[0]) n++;
     }
@@ -390,7 +398,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         p->st = S_SURF;
         return;
     }
-    if (strstr(kw, "SECTION") && strcmp(kw, "SECTION PRINT") != 0 && strncmp(kw, "PRE-TENSION", 11) != 0) {
+    if (strstr(kw, "SECTION") && strcmp(kw, "SECTIONPRINT") != 0 && strncmp(kw, "PRE-TENSION", 11) != 0) {
         const char* es = pget(prm, np, "ELSET");
         const char* ma = pget(prm, np, "MATERIAL");
         const char* oi = pget(prm, np, "ORIENTATION");
@@ -474,9 +482,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         return;
     }
     {   /* output requests; CalculiX ignores the blanks in keywords */
-        char k2[64]; int j = 0;
-        for (const char* c = kw; *c && j < 63; c++) if (*c != ' ') k2[j++] = *c;
-        k2[j] = 0;
+        const char* k2 = kw;
         int kind = !strcmp(k2, "NODEFILE") || !strcmp(k2, "NODEOUTPUT") ? 1 :
                    !strcmp(k2, "ELFILE") || !strcmp(k2, "ELEMENTOUTPUT") ? 2 :
                    !strcmp(k2, "CONTACTFILE") || !strcmp(k2, "CONTACTOUTPUT") ? 3 : 0;
@@ -497,8 +503,8 @@ static void do_keyword(P* p, const char* s, const char* e) {
             return;
         }
     }
-    if (strcmp(kw, "RIGID BODY") == 0) {
-        const char *rn = pget(prm, np, "REF NODE"), *ns = pget(prm, np, "NSET"), *es = pget(prm, np, "ELSET");
+    if (strcmp(kw, "RIGIDBODY") == 0) {
+        const char *rn = pget(prm, np, "REFNODE"), *ns = pget(prm, np, "NSET"), *es = pget(prm, np, "ELSET");
         vlink* v = new_link(p, CV_LINK_RIGID, ns ? ns : es);
         if (!v) return;
         uint32_t r;
@@ -509,7 +515,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         return;
     }
     if (strcmp(kw, "COUPLING") == 0) {                 /* *KINEMATIC / *DISTRIBUTING follow: dofs, ignored */
-        const char *rn = pget(prm, np, "REF NODE"), *sf = pget(prm, np, "SURFACE"), *cn = pget(prm, np, "CONSTRAINT NAME");
+        const char *rn = pget(prm, np, "REFNODE"), *sf = pget(prm, np, "SURFACE"), *cn = pget(prm, np, "CONSTRAINTNAME");
         vlink* v = new_link(p, CV_LINK_KINEMATIC, cn ? cn : sf);
         if (!v) return;
         uint32_t r;
@@ -518,7 +524,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (sf && v->l.surf[0] < 0) p->bad_lines++;
         return;
     }
-    if (strcmp(kw, "DISTRIBUTING COUPLING") == 0) {   /* ELSET of one DCOUP3D element: its node is the ref */
+    if (strcmp(kw, "DISTRIBUTINGCOUPLING") == 0) {   /* ELSET of one DCOUP3D element: its node is the ref */
         const char* es = pget(prm, np, "ELSET");
         vlink* v = new_link(p, CV_LINK_DISTRIBUTING, es);
         if (!v) return;
@@ -539,7 +545,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (v) p->st = S_TIE;
         return;
     }
-    if (strcmp(kw, "CONTACT PAIR") == 0) {
+    if (strcmp(kw, "CONTACTPAIR") == 0) {
         vlink* v = new_link(p, CV_LINK_CONTACT, pget(prm, np, "INTERACTION"));
         if (v) p->st = S_CONTACT;
         return;
@@ -551,9 +557,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
     }
     /* loads and supports: drawn as glyphs. Every line keeps the step it stands in. */
     {
-        char kc[64]; int j = 0;                    /* CalculiX ignores the blanks in keywords */
-        for (const char* c = kw; *c && j < 63; c++) if (*c != ' ') kc[j++] = *c;
-        kc[j] = 0;
+        const char* kc = kw;
         int st = !strcmp(kc, "BOUNDARY") ? S_BOUNDARY : !strcmp(kc, "CLOAD") ? S_CLOAD : !strcmp(kc, "CFLUX") ? S_CFLUX :
                  !strcmp(kc, "DLOAD") || !strcmp(kc, "DSLOAD") ? S_DLOAD : !strcmp(kc, "DFLUX") ? S_DFLUX :
                  !strcmp(kc, "FILM") ? S_FILM : !strcmp(kc, "RADIATE") ? S_RADIATE : !strcmp(kc, "TEMPERATURE") ? S_TEMP : 0;

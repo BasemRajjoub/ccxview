@@ -711,8 +711,8 @@ static void test_inp(void) {
         "*NODE\n40, 5, 5, 5\n41, 5, 5, 6\n"
         "*RIGID BODY, NSET=NGEN, REF NODE=40, ROT NODE=41\n"
         "*SURFACE, NAME=SCPL\nESMALL, S1\n"
-        "*COUPLING, REF NODE=40, SURFACE=SCPL, CONSTRAINT NAME=CPL1\n*KINEMATIC\n1, 3\n"
-        "*DISTRIBUTING COUPLING, ELSET=EDC\n1, 1.\n2, 1.\n3, 1.\n"
+        "*COUPLING,REFNODE=40,SURFACE=SCPL,CONSTRAINTNAME=CPL1\n*KINEMATIC\n1, 3\n"   /* blanks are optional (#21) */
+        "*DISTRIBUTINGCOUPLING, ELSET=EDC\n1, 1.\n2, 1.\n3, 1.\n"
         "*EQUATION\n3\n5, 1, 1., 6, 1, -1.,\n7, 2, 0.5\n"
         "*TIE, NAME=T1\nSCPL, STOP\n"
         "*CONTACT PAIR, INTERACTION=I1, TYPE=NODE TO SURFACE\nSTOP, SCPL\n"
@@ -756,7 +756,7 @@ static void test_inp(void) {
     CHECK_EQ(d.nlinks, 6);
     if (d.nlinks == 6) {
         CHECK_EQ(d.links[0].kind, CV_LINK_RIGID); CHECK_EQ(d.links[0].ref, 40); CHECK_EQ(d.links[0].n, 5);
-        CHECK_EQ(d.links[1].kind, CV_LINK_KINEMATIC); CHECK_EQ(d.links[1].surf[0], 1); CHECK(strcmp(d.links[1].name, "CPL1") == 0);
+        CHECK_EQ(d.links[1].kind, CV_LINK_KINEMATIC); CHECK_EQ(d.links[1].ref, 40); CHECK_EQ(d.links[1].surf[0], 1); CHECK(strcmp(d.links[1].name, "CPL1") == 0);
         CHECK_EQ(d.links[2].kind, CV_LINK_DISTRIBUTING); CHECK_EQ(d.links[2].ref, 21); CHECK_EQ(d.links[2].n, 3);
         CHECK_EQ(d.links[3].kind, CV_LINK_EQUATION); CHECK_EQ(d.links[3].n, 3); CHECK_EQ(d.links[3].nodes[2], 7);
         CHECK_EQ(d.links[4].kind, CV_LINK_TIE); CHECK_EQ(d.links[4].surf[0], 1); CHECK_EQ(d.links[4].surf[1], 0);
