@@ -449,6 +449,53 @@ bool app_project(v3 p, float* sx, float* sy) {
     return true;
 }
 
+static void shown_pos(uint32_t n, float sc, float sc2, float p[3]) {
+    for (int k = 0; k < 3; k++)
+        p[k] = G.frd.xyz[3 * n + k] + (G.disp ? sc * G.disp[3 * n + k] : 0) + (G.disp2 ? sc2 * G.disp2[3 * n + k] : 0);
+}
+
+bool app_box_extremes(float x0, float y0, float x1, float y1) {
+    G.boxq.on = false;
+    if (!G.loaded || !G.has_field || G.field_src == 1) return false;
+    bool elem = G.elem_mode;
+    const float* val = elem ? G.elem_val : G.scalar;
+    if (!val) return false;
+    float lx = CV_MIN(x0, x1), hx = CV_MAX(x0, x1), ly = CV_MIN(y0, y1), hy = CV_MAX(y0, y1);
+    float mvp[16], mv[16];
+    cam_matrices(mvp, mv, NULL);
+    float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
+    uint32_t n = elem ? G.frd.n_elems : (uint32_t)G.skin.n_pt, cnt = 0, imax = UINT32_MAX, imin = UINT32_MAX;
+    for (uint32_t k = 0; k < n; k++) {
+        uint32_t i = elem ? k : G.skin.pt[k];
+        if (elem && G.vis && !G.vis[i]) continue;
+        float v = val[i];
+        if (v != v) continue;
+        float p[3] = { 0, 0, 0 };
+        if (elem) {                                      /* the element's centre */
+            uint32_t b = G.frd.eoff[i], m = G.frd.eoff[i + 1] - b;
+            for (uint32_t j = 0; j < m; j++) {
+                float q[3];
+                shown_pos(G.frd.conn[b + j], sc, sc2, q);
+                for (int c = 0; c < 3; c++) p[c] += q[c] / (float)m;
+            }
+        } else shown_pos(i, sc, sc2, p);
+        float c[4];
+        for (int r = 0; r < 4; r++) c[r] = mvp[r] * p[0] + mvp[4 + r] * p[1] + mvp[8 + r] * p[2] + mvp[12 + r];
+        if (c[3] <= 1e-9f) continue;
+        float sx = G.vp_x + (c[0] / c[3] * 0.5f + 0.5f) * G.vp_w, sy = G.vp_y + (0.5f - c[1] / c[3] * 0.5f) * G.vp_h;
+        if (sx < lx || sx > hx || sy < ly || sy > hy) continue;
+        cnt++;
+        if (imax == UINT32_MAX || v > val[imax]) imax = i;
+        if (imin == UINT32_MAX || v < val[imin]) imin = i;
+    }
+    if (!cnt) return false;
+    G.boxq.on = true; G.boxq.elem = elem; G.boxq.n = cnt; G.boxq.gen = G.field_gen;
+    G.boxq.max_at = imax; G.boxq.min_at = imin; G.boxq.vmax = val[imax]; G.boxq.vmin = val[imin];
+    app_probe_at(imax, elem);
+    G.boxq.on = true;                                    /* the probe keeps it */
+    return true;
+}
+
 void app_goto_node(uint32_t n) {
     if (!G.loaded || n >= G.frd.n_nodes) return;
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
@@ -458,24 +505,25 @@ void app_goto_node(uint32_t n) {
 }
 
 /* a node or element by its id in the file: probe it and look at it */
-bool app_find(uint32_t id, bool element) {
-    if (!G.loaded) return false;
-    uint32_t e = UINT32_MAX, n = UINT32_MAX;
-    if (element) {
-        e = cv_frd_elem_index(&G.frd, id);
-        if (e == UINT32_MAX) return false;
-        n = G.frd.conn[G.frd.eoff[e]];
-    } else {
-        n = cv_frd_node_index(&G.frd, id);
-        if (n == UINT32_MAX) return false;
-        for (uint32_t k = 0; k < G.frd.n_elems && e == UINT32_MAX; k++)     /* any element holding it */
-            for (uint32_t j = G.frd.eoff[k]; j < G.frd.eoff[k + 1]; j++) if (G.frd.conn[j] == n) { e = k; break; }
-    }
+void app_probe_at(uint32_t i, bool element) {
+    uint32_t e = element ? i : UINT32_MAX, n = element ? G.frd.conn[G.frd.eoff[i]] : i;
+    for (int pass = 0; pass < 2 && e == UINT32_MAX; pass++)           /* a shown element holding the node, else any */
+        for (uint32_t k = 0; k < G.frd.n_elems && e == UINT32_MAX; k++)
+            if (pass || !G.vis || G.vis[k])
+                for (uint32_t j = G.frd.eoff[k]; j < G.frd.eoff[k + 1]; j++) if (G.frd.conn[j] == n) { e = k; break; }
     G.probe.hit = true; G.probe.elem = e == UINT32_MAX ? 0 : e; G.probe.node = n; G.probe.t = 0; G.probe.tri = UINT32_MAX;
     G.probe_on = e != UINT32_MAX;
     G.probe_ip = 0;
+    G.boxq.on = false;
     G.probe_value = !G.has_field ? NAN : G.elem_mode ? (e != UINT32_MAX ? G.elem_val[e] : NAN) : G.scalar[n];
-    if (element && e != UINT32_MAX) app_fit_element(e); else app_goto_node(n);
+}
+
+bool app_find(uint32_t id, bool element) {
+    if (!G.loaded) return false;
+    uint32_t i = element ? cv_frd_elem_index(&G.frd, id) : cv_frd_node_index(&G.frd, id);
+    if (i == UINT32_MAX) return false;
+    app_probe_at(i, element);
+    if (element) app_fit_element(i); else app_goto_node(i);
     return true;
 }
 
@@ -715,6 +763,7 @@ void do_pick(float px, float py) {
         }
     }
     G.probe_on = G.probe.hit;
+    G.boxq.on = false;
     G.probe_ip = 0;
     if (G.probe.hit && G.path_arm) app_path_end(G.probe.node);
     if (G.probe.hit) {

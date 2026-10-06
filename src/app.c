@@ -343,6 +343,13 @@ static void frame(void) {
     update_title();
     tick_anim();
     tick_flight();
+    if (O.box_set && G.loaded && !app_busy() && G.vp_w > 0) {     /* --box: once the view has its size */
+        O.box_set = false;
+        G.nav_box[0] = G.vp_x + O.box[0] * G.vp_w; G.nav_box[1] = G.vp_y + O.box[1] * G.vp_h;
+        G.nav_box[2] = G.vp_x + O.box[2] * G.vp_w; G.nav_box[3] = G.vp_y + O.box[3] * G.vp_h;
+        if (app_box_extremes(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]))
+            fprintf(stderr, "box: max %g min %g over %u\n", G.boxq.vmax, G.boxq.vmin, G.boxq.n);
+    }
 
     if (G.playing && G.loaded && G.frd.n_steps > 1) {
         double now = cv_now();
@@ -774,8 +781,9 @@ static void event(const sapp_event* ev) {
                 drag.down = true; drag.moved = false; drag.button = ev->mouse_button;
                 drag.x0 = drag.x = ev->mouse_x; drag.y0 = drag.y = ev->mouse_y;
                 drag.cam0 = G.cam;
+                G.box_pick = left && !G.flight && ((ctrl && shift) || G.box_arm);   /* max in a box, not a zoom */
                 drag.mode = G.flight ? (left ? CV_NAV_LOOK : CV_NAV_PAN)
-                          : left ? (ctrl ? CV_NAV_BOX : alt ? CV_NAV_ROLL : shift ? CV_NAV_PAN : CV_NAV_ROTATE)
+                          : left ? (ctrl || G.box_pick ? CV_NAV_BOX : alt ? CV_NAV_ROLL : shift ? CV_NAV_PAN : CV_NAV_ROTATE)
                           : ctrl ? CV_NAV_ZOOM : CV_NAV_PAN;
                 /* rotate about the part of the model that was grabbed; off the model, about the target */
                 bool on = false;
@@ -798,8 +806,15 @@ static void event(const sapp_event* ev) {
                 app_center_at(ev->mouse_x, ev->mouse_y);
             }
             if (drag.down && drag.mode == CV_NAV_BOX && drag.moved) {
-                app_view_push();
-                app_box_zoom(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]);
+                if (G.box_pick) {
+                    G.box_arm = false;
+                    if (!app_box_extremes(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]))
+                        cv_msg_add(&G.msgs, 0, false, G.has_field ? "max in a box: no shown node with a value in the box"
+                                                                  : "max in a box: no field shown");
+                } else {
+                    app_view_push();
+                    app_box_zoom(G.nav_box[0], G.nav_box[1], G.nav_box[2], G.nav_box[3]);
+                }
             }
             drag.down = false;
             G.nav_live = false;
@@ -962,6 +977,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) O.shot_frames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--browse")) O.browse = true;
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
+        else if (!strcmp(argv[i], "--box") && i + 1 < argc)
+            O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;
         else if (!strcmp(argv[i], "--fly-clip") || !strcmp(argv[i], "--fly-hide")) {
             O.fly = true; O.fly_clip = argv[i][6] == 'c' ? CV_EYE_CUT : CV_EYE_HIDE;
             char* end;

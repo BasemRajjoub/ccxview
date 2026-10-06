@@ -168,6 +168,7 @@ void app_path_start(uint32_t node) {
 
 void app_pick_cancel(void) {
     if (G.path_arm) { G.path_arm = false; G.path_a = UINT32_MAX; }
+    G.box_arm = false;
 }
 
 /* the nearest node that has skin edges: a mid-edge node of a quadratic

@@ -307,6 +307,10 @@ typedef struct {
     bool      probe_on;
     cv_pick   probe;
     float     probe_value;
+    /* max in a box: the field's extremes among the shown nodes (elements) inside a dragged box */
+    bool      box_arm;               /* the next left drag in the view draws that box */
+    bool      box_pick;              /* the box being drawn is one (not a box zoom) */
+    struct { bool on; uint32_t max_at, min_at, n; float vmax, vmin; bool elem; unsigned gen; } boxq;   /* gen: G.field_gen it holds for */
 
     bool      show_msgs;
     bool      show_calc_help;        /* the formula builder window */
@@ -414,6 +418,10 @@ int  app_export_progress(int* done, int* total);  /* a frame export running? fil
 void app_export_cancel(void);            /* stop a frame export; a video keeps what it has */
 bool app_export_data(bool vtk);          /* nodes + field as CSV, or mesh + field as VTK, beside the model */
 bool app_project(v3 p, float* sx, float* sy);   /* world -> window pixels; false when behind the eye */
+/* the field's max and min among the shown nodes (elements: centres) projected into the
+   window box; probes the max. false: nothing shown with a value lies in it */
+bool app_box_extremes(float x0, float y0, float x1, float y1);
+void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
 void app_goto_node(uint32_t node);       /* centre the camera on a node, probe it */
 bool app_find(uint32_t id, bool element);/* by file id: probe + centre; false if absent */
 void app_reload(void);                   /* open the same file again, keeping camera, step and field */

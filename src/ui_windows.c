@@ -66,7 +66,7 @@ const char* path_dirs[] = { "to a node", "along normal", "along X", "along Y", "
 
 void window_probe(struct nk_context* ctx, float s, float row) {
     if (!G.probe_on || !G.loaded) return;
-    float w = 260 * s, h = row * (G.field_src >= 3 ? 11.f : 9.8f);
+    float w = 260 * s, h = row * ((G.field_src >= 3 ? 11.f : 9.8f) + (G.boxq.on && G.boxq.gen == G.field_gen ? 1.2f : 0.f));
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -94,6 +94,14 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     if (G.has_field && mesh_probe_text(p->elem, buf, sizeof buf)) {
         tip(ctx, "This element's aspect ratio, scaled Jacobian, Jacobian ratio, skewness and\n"
                  "warpage; ! past the usual limit");
+        nk_label(ctx, buf, NK_TEXT_LEFT);
+    }
+    if (G.boxq.on && G.boxq.gen == G.field_gen) {                /* the box this probe came from */
+        char a[32], b[32];
+        fmt_num(a, sizeof a, G.boxq.vmax); fmt_num(b, sizeof b, G.boxq.vmin);
+        snprintf(buf, sizeof buf, "box: max %s  min %s  (%u %s)", a, b, G.boxq.n, G.boxq.elem ? "elements" : "nodes");
+        tip(ctx, "The field's max (probed) and min among the shown nodes (element centres)\n"
+                 "inside the box; nodes behind the front faces count too");
         nk_label(ctx, buf, NK_TEXT_LEFT);
     }
     nk_layout_row_dynamic(ctx, row, 2);
@@ -145,8 +153,9 @@ void window_nav(struct nk_context* ctx, float s) {
         if (box) {
             float x0 = CV_MIN(G.nav_box[0], G.nav_box[2]), y0 = CV_MIN(G.nav_box[1], G.nav_box[3]);
             struct nk_rect r = nk_rect(x0, y0, fabsf(G.nav_box[2] - G.nav_box[0]), fabsf(G.nav_box[3] - G.nav_box[1]));
-            nk_fill_rect(cv, r, 0, nk_rgba(120, 180, 255, 40));
-            nk_stroke_rect(cv, r, 0, 1.5f * s, nk_rgba(120, 180, 255, 220));
+            struct nk_color c = G.box_pick ? nk_rgba(255, 190, 60, 255) : nk_rgba(120, 180, 255, 255);   /* max in a box: amber */
+            nk_fill_rect(cv, r, 0, nk_rgba(c.r, c.g, c.b, 40));
+            nk_stroke_rect(cv, r, 0, 1.5f * s, nk_rgba(c.r, c.g, c.b, 220));
         } else if (app_project(G.nav_pt, &sx, &sy)) {
             float t = 2.f * s;
             if (G.nav_mode == CV_NAV_ROTATE || G.nav_mode == CV_NAV_ROLL) {

@@ -690,6 +690,7 @@ void panel_scene(struct nk_context* ctx, float s, float row) {
     nk_label_colored(ctx, "drag: orbit   shift/right/middle: pan", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "hold X/Y/Z + drag: about that axis", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "ctrl drag: box zoom   ctrl right: zoom", NK_TEXT_LEFT, P.dim);
+    nk_label_colored(ctx, "ctrl shift drag: max in a box", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "alt drag: roll   middle click, C: centre", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "N: normal to face   ctrl Z/Y: view back/fwd", NK_TEXT_LEFT, P.dim);
     nk_label_colored(ctx, "ctrl arrows: turn 15 (shift 90)   alt: roll", NK_TEXT_LEFT, P.dim);

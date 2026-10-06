@@ -187,6 +187,12 @@ static void traj_off(struct nk_context* ctx) { G.show_traj = false; G.traj_which
 static void tensor_off(struct nk_context* ctx) { G.show_tensor = false; app_tensors_changed(); }
 static void scale_big(struct nk_context* ctx) { G.deform_scale = 50.f; G.deform_auto = true; }
 static bool scale_true(struct nk_context* ctx) { return G.deform_scale == 1.f && !G.deform_auto && G.deform; }
+static bool box_armed(struct nk_context* ctx) { return G.box_arm; }
+/* a box round the whole view: its max is the field's max, the probe on it */
+static bool box_found(struct nk_context* ctx) {
+    return !G.box_arm && G.boxq.on && G.probe_on && G.boxq.vmax == G.data_max && G.boxq.vmin <= G.boxq.vmax &&
+           G.probe_value == G.boxq.vmax;
+}
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
 static bool edges_toggled(struct nk_context* ctx) { return G.show_edges != was.edges; }
@@ -243,6 +249,7 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 #define TIP_BANDS   "Contour bands"
 #define TIP_DEFORM  "Draw the shape displaced"
 #define TIP_TRUE    "True scale: the displacement as computed"
+#define TIP_BOX     "Drag a box in the view next"
 #define TIP_MARKERS "Balls at the field's minimum"
 #define TIP_EDGES   "Edges of the exterior faces"
 #define TIP_UNITS   "Input units (what the model was built in) and"
@@ -299,6 +306,11 @@ static const step script[] = {
 
     CASE("toolbar: the 1:1 button sets the true scale"),
     DO(scale_big), WAIT(2), AT_TIP("Toolbar", TIP_TRUE), CLICK, EXPECT(scale_true, "the scale is 1, auto off"),
+
+    CASE("max in a box: armed by its button, a drag over the view probes the max"),
+    DO(open_legend_settings), WAIT(3), AT_TIP("Legend settings", TIP_BOX), CLICK, EXPECT(box_armed, "the next drag is a box"),
+    DO(close_all), WAIT(2), AT_VIEW(0.01f, 0.01f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.99f, 0.99f), RELEASE, WAIT(2),
+    EXPECT(box_found, "the probe sits on the field's max, the box line holds max and min"),
 
     CASE("toolbar: one list after the other, no pause"),
     DO(snapshot), AT_TIP("Toolbar", TIP_CMAP), CLICK, EXPECT(toolbar_popup, "the colour map list opens"),
