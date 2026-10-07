@@ -9,6 +9,27 @@ the .frd was proposed; objection: a .frd still being written by the solver
 cannot be edited. Plan: a sidecar file `name.ccxview` beside the .frd (ini,
 same reader as the settings), loaded when the .frd opens, saved on change.
 
+## From PrePoMax, agreed 7 Oct 2026 (in this order)
+
+1. Deformation scale presets: a list beside the scale box: true, auto, auto x0.25,
+   x0.5, x2, x5, user.
+2. Colour maps not yet in the list: Cividis, Plasma, Black body, Kindlmann,
+   Rainbow desaturated, Warm, Cool (tables for make_cmap).
+3. Legend background and border (none by default; white for pictures on a page).
+4. Transparent background in the PNG (a checkbox in the export; the swapchain
+   cleared to alpha 0 and the PNG written with alpha). White background preset
+   exists already.
+5. Measurements as labels (the label system): distance between two nodes with
+   dx dy dz, angle through three nodes, circle radius and centre through three;
+   deformed and undeformed values.
+6. Integrals of a field as history: surface integral over a set of faces (total
+   force from a pressure or a reaction), volume integral and volume average over
+   an element set. The volume average is the homogenised value of an RVE
+   (<s> = 1/V sum s_e V_e, <e> likewise), so a set's homogenised stress and strain
+   per step come out of the same code; a CSV of them.
+
+Dropped: animation once, solid undeformed ghost, set area / volume / mass summary.
+
 ## Movable labels
 Drag a label on the model to where it reads best. Hit test on the laid-out
 boxes (screen space, kept per frame); the press wins over the camera as a
