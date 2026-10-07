@@ -129,6 +129,7 @@ void cv_render_glyphs(const float* inst, uint32_t n);
    The atlas is the font's alpha (R8); boxes first, then glyphs. NULL / 0 clears. */
 void cv_render_label_atlas(const unsigned char* a8, int w, int h);
 void cv_render_labels(const float* box, uint32_t nb, const float* gly, uint32_t ng);
+void cv_render_label_depth(const cv_draw* d);   /* before the frame's pass, while labels are on: the faces' depth for their test */
 
 void cv_render_draw(const cv_draw* d);
 

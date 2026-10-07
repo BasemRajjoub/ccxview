@@ -220,13 +220,15 @@ static const char* kVSI =
 /* Labels: a quad per glyph or box, anchored to a model point, sized in pixels, so it
    never scales with the zoom; its depth is the anchor's pulled toward the eye, so the
    model hides labels on its far side. u_p: deform scales, viewport w, h.
-   u_q: x the pull in view units per unit of clip w (parallel: in view units), y on top,
+   u_q: x the pull in view units per unit of clip w (parallel: in view units), y on top
+   (then the point is tested against the model's depth: hidden points get no label),
    z proj[10], w proj[11] (-1 perspective, 0 parallel). */
 static const char* kVSL =
     GLSL_HDR
     "uniform mat4 u_mvp;\n"
     "uniform vec4 u_p;\n"
     "uniform vec4 u_q;\n"
+    "uniform highp sampler2DShadow u_depth;\n"
     "in vec2 a_q;\n"
     "in vec3 i_pos;\n"
     "in vec3 i_disp;\n"
@@ -239,6 +241,18 @@ static const char* kVSL =
     "void main() {\n"
     "  vec3 p = i_pos + i_disp * u_p.x + i_disp2 * u_p.y;\n"
     "  vec4 c = u_mvp * vec4(p, 1.0);\n"
+    /* the point a few label heights nearer the eye, compared with the depth drawn at the
+       point's pixel: behind the surface there, the whole label leaves the screen */
+    "  float pl0 = min(u_q.x * c.w, 0.5 * max(c.w, 0.0));\n"
+    "  vec4 r = c;\n"
+    "  if (u_q.w != 0.0) { r.z += u_q.z * pl0; r.w -= pl0; } else r.z += u_q.z * u_q.x;\n"
+    "  if (u_q.y > 0.5 && c.w > 0.0) {\n"
+    "    vec2 uv = c.xy / c.w * 0.5 + 0.5;\n"
+    "    float zr = r.z / r.w * 0.5 + 0.5;\n"
+    "    if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 && textureLod(u_depth, vec3(uv, zr), 0.0) < 0.5) {\n"
+    "      gl_Position = vec4(2.0, 2.0, 2.0, 1.0); v_uv = vec2(0.0); return;\n"
+    "    }\n"
+    "  }\n"
     "  vec2 px = i_off + a_q * i_size;\n"
     "  c.xy += vec2(px.x * 2.0 / u_p.z, -px.y * 2.0 / u_p.w) * c.w;\n"
     /* toward the eye by a few label heights in view units (as VS_TAIL does for the symbols), so
@@ -414,6 +428,11 @@ static struct {
     sg_pipeline pip_label;            /* labels: a unit quad per instance */
     sg_buffer   label_quad;
     sg_image    label_img;  sg_view label_view;   /* the font atlas, alpha */
+    /* the model's depth alone, drawn before the frame while labels are on: a label whose
+       point lies behind the surface at its pixel is not drawn (cv_render_label_depth) */
+    sg_pipeline pip_depth;
+    sg_image    dpt_img;    sg_view dpt_att, dpt_tex;  int dpt_w, dpt_h;
+    sg_sampler  smp_cmp;              /* the comparison: a point's depth against the surface's */
     sg_buffer   gmesh[3];  int gmesh_n[3];              /* the unit glyph: (theta, phi) grids, fine to coarse */
     sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
@@ -670,9 +689,22 @@ void cv_render_init(void) {
                                    [2] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_q" } } },
             .uniform_blocks[1] = { .stage = SG_SHADERSTAGE_FRAGMENT, .size = 16,
                 .glsl_uniforms = { [0] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_color" } } },
-            .views = { [0].texture = { .stage = SG_SHADERSTAGE_FRAGMENT, .image_type = SG_IMAGETYPE_2D, .sample_type = SG_IMAGESAMPLETYPE_FLOAT } },
-            .samplers = { [0] = { .stage = SG_SHADERSTAGE_FRAGMENT, .sampler_type = SG_SAMPLERTYPE_FILTERING } },
-            .texture_sampler_pairs = { [0] = { .stage = SG_SHADERSTAGE_FRAGMENT, .view_slot = 0, .sampler_slot = 0, .glsl_name = "u_atlas" } },
+            .views = { [0].texture = { .stage = SG_SHADERSTAGE_FRAGMENT, .image_type = SG_IMAGETYPE_2D, .sample_type = SG_IMAGESAMPLETYPE_FLOAT },
+                       [1].texture = { .stage = SG_SHADERSTAGE_VERTEX, .image_type = SG_IMAGETYPE_2D, .sample_type = SG_IMAGESAMPLETYPE_DEPTH } },
+            .samplers = { [0] = { .stage = SG_SHADERSTAGE_FRAGMENT, .sampler_type = SG_SAMPLERTYPE_FILTERING },
+                          [1] = { .stage = SG_SHADERSTAGE_VERTEX, .sampler_type = SG_SAMPLERTYPE_COMPARISON } },
+            .texture_sampler_pairs = { [0] = { .stage = SG_SHADERSTAGE_FRAGMENT, .view_slot = 0, .sampler_slot = 0, .glsl_name = "u_atlas" },
+                                       [1] = { .stage = SG_SHADERSTAGE_VERTEX, .view_slot = 1, .sampler_slot = 1, .glsl_name = "u_depth" } },
+        });
+        R.smp_cmp = sg_make_sampler(&(sg_sampler_desc){ .min_filter = SG_FILTER_NEAREST, .mag_filter = SG_FILTER_NEAREST,
+                                                       .wrap_u = SG_WRAP_CLAMP_TO_EDGE, .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+                                                       .compare = SG_COMPAREFUNC_LESS_EQUAL });
+        /* the faces' depth alone: the mesh shader into a depth-only pass */
+        R.pip_depth = sg_make_pipeline(&(sg_pipeline_desc){
+            .shader = R.shd, .layout = layout, .index_type = SG_INDEXTYPE_UINT32, .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+            .colors[0].pixel_format = SG_PIXELFORMAT_NONE,   /* depth only: no colour attachment */
+            .depth = { .pixel_format = SG_PIXELFORMAT_DEPTH, .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
+            .sample_count = 1,
         });
         R.pip_label = sg_make_pipeline(&(sg_pipeline_desc){
             .shader = R.shd_label,
@@ -756,7 +788,10 @@ void cv_render_clear_model(void) {
     cv_render_labels(NULL, 0, NULL, 0);
 }
 
+static void depth_free(void);
+
 void cv_render_shutdown(void) {
+    depth_free();
     cv_render_clear_model();
 }
 
@@ -898,9 +933,35 @@ void cv_render_labels(const float* box, uint32_t nb, const float* gly, uint32_t 
     if (gly && ng) { LB.gly = make_buf(gly, (size_t)ng * CV_LABEL_FLOATS * 4, false); LB.ng = ng; }
 }
 
+static void depth_free(void) {
+    if (R.dpt_tex.id) sg_destroy_view(R.dpt_tex);
+    if (R.dpt_att.id) sg_destroy_view(R.dpt_att);
+    if (R.dpt_img.id) sg_destroy_image(R.dpt_img);
+    R.dpt_tex.id = R.dpt_att.id = R.dpt_img.id = 0; R.dpt_w = R.dpt_h = 0;
+}
+
+void cv_render_label_depth(const cv_draw* d) {
+    if (d->vp_w <= 0 || d->vp_h <= 0 || (!LB.nb && !LB.ng)) return;
+    if (R.dpt_w != d->vp_w || R.dpt_h != d->vp_h) {
+        depth_free();
+        R.dpt_img = sg_make_image(&(sg_image_desc){ .usage.depth_stencil_attachment = true, .width = d->vp_w, .height = d->vp_h,
+                                                    .pixel_format = SG_PIXELFORMAT_DEPTH, .sample_count = 1 });
+        R.dpt_att = sg_make_view(&(sg_view_desc){ .depth_stencil_attachment.image = R.dpt_img });
+        R.dpt_tex = sg_make_view(&(sg_view_desc){ .texture.image = R.dpt_img });
+        R.dpt_w = d->vp_w; R.dpt_h = d->vp_h;
+    }
+    sg_begin_pass(&(sg_pass){ .action.depth = { .load_action = SG_LOADACTION_CLEAR, .clear_value = 1.f },
+                              .attachments.depth_stencil = R.dpt_att });
+    if (d->faces && R.n_tri) {
+        vset mesh = { R.pos, R.disp, R.scal, R.disp2 };
+        draw_layer(R.pip_depth, mesh, R.ib_tri, (int)(R.n_tri * 3), CV_COLOR_SOLID, d->face_rgb, false, d, 1, false, 0.f, 0);
+    }
+    sg_end_pass();
+}
+
 /* the two label layers: the boxes, then the glyphs over them */
 static void draw_labels(const cv_draw* d) {
-    if (!R.label_view.id || (!LB.nb && !LB.ng)) return;
+    if (!R.label_view.id || !R.dpt_tex.id || (!LB.nb && !LB.ng)) return;
     typedef struct { float mvp[16]; float p[4]; float q[4]; } vs_label;
     vs_label vs;
     memcpy(vs.mvp, d->mvp, sizeof vs.mvp);
@@ -908,13 +969,16 @@ static void draw_labels(const cv_draw* d) {
     /* by the labels' reach, so a face tilted up to 45 degrees cannot cut into them; pixels to
        view units per clip w are 2 / (P11 * vp_h) */
     float per_px = 2.f / CV_MAX(d->proj[5] * (float)d->vp_h, 1e-6f);
-    vs.q[0] = CV_MAX(d->label_px, 1.f) * per_px; vs.q[1] = d->labels_on_top ? 1.f : 0.f; vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
+    /* in front: the pull is only the visibility test's tolerance, two pixels (the depth was
+       drawn with this very projection); depth tested: the labels' reach, so a face cannot cut in */
+    vs.q[0] = (d->labels_on_top ? 2.f : CV_MAX(d->label_px, 1.f)) * per_px;
+    vs.q[1] = d->labels_on_top ? 1.f : 0.f; vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
     sg_apply_pipeline(R.pip_label);
     for (int pass = 0; pass < 2; pass++) {
         uint32_t n = pass ? LB.ng : LB.nb;
         if (!n) continue;
         sg_bindings b = { .vertex_buffers = { [0] = R.label_quad, [1] = pass ? LB.gly : LB.box },
-                          .views = { [0] = R.label_view }, .samplers = { [0] = R.smp_lin } };
+                          .views = { [0] = R.label_view, [1] = R.dpt_tex }, .samplers = { [0] = R.smp_lin, [1] = R.smp_cmp } };
         sg_apply_bindings(&b);
         sg_apply_uniforms(0, &SG_RANGE(vs));
         float col[4];

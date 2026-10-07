@@ -457,6 +457,10 @@ static void frame(void) {
         d.vp_x = G.vp_x; d.vp_y = G.vp_y; d.vp_w = G.vp_w; d.vp_h = G.vp_h;
     }
     app_marks_sync();
+    if (G.loaded) {
+        app_label_frame(&d);
+        if (d.labels) cv_render_label_depth(&d);  /* its own pass, before the frame's */
+    }
     sg_begin_pass(&(sg_pass){
         .action = {
             .colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { G.bg[0], G.bg[1], G.bg[2], 1 } },
@@ -464,7 +468,6 @@ static void frame(void) {
         .swapchain = sglue_swapchain(),
     });
     if (G.loaded) {
-        app_label_frame(&d);
         cv_render_draw(&d);
         int nc = app_copies();
         d.labels = false;                      /* labels belong to the file's nodes: not on the copies */
