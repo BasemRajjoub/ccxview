@@ -32,7 +32,7 @@
    thinner than a pixel. All in world
    units of G.sym_len; every vertex carries its node's displacement, so the symbols
    ride with the deformed shape. */
-#include "app.h"
+#include "app_int.h"
 #include "inp.h"
 #include <math.h>
 
@@ -461,6 +461,8 @@ void loads_refresh(void) {
     for (int k = 0; k < 4; k++) all[k]->T = deck_stroke();
     const cv_inp* dk = G.loaded ? deck_get() : NULL;
     const cv_applied* a = applied(dk);
+    label_sink_begin(G.label_kind);
+    char lt[48];                                   /* a label's text */
     float L = CV_MAX(G.bc_scale, 0.01f) * G.sym_len, LL = 1.5f * CV_MAX(G.load_scale, 0.01f) * G.sym_len;
     if (a) {
         float p[3], d[6], Q[3][3], dir[3];
@@ -494,6 +496,8 @@ void loads_refresh(void) {
                 float len = LL * rel(b->value, dof > 3 ? rmax : umax);
                 if (dof > 3) moment(&bc, p, dir, len, d);
                 else { arrow(&bc, p, dir, len, d); tail_bar(&bc, p, dir, len, d); }
+                static const char* dn[6] = { "UX", "UY", "UZ", "URX", "URY", "URZ" };
+                if (G.label_kind == CV_LABEL_SUPPORTS) { snprintf(lt, sizeof lt, "%s= %g", dn[dof - 1], b->value); label_sink_add(p, d, lt); }
             }
         }
         if (nm) qsort(m, nm, sizeof *m, bc_mask_cmp);
@@ -505,6 +509,12 @@ void loads_refresh(void) {
             node_axes(dk, node, p, Q);
             if (bits & 64) cross(&bc, p, 0.25f * L, d);
             support(&bc, p, d, bits, L, Q);
+            if (G.label_kind == CV_LABEL_SUPPORTS) {   /* the held DOFs by name */
+                static const char* dn[7] = { "UX", "UY", "UZ", "URX", "URY", "URZ", "T" };
+                size_t o = 0; lt[0] = 0;
+                for (int k = 0; k < 7 && o < sizeof lt - 5; k++) if (bits & (1u << k)) o += (size_t)snprintf(lt + o, sizeof lt - o, "%s%s", o ? " " : "", dn[k]);
+                label_sink_add(p, d, lt);
+            }
         }
         free(m);
         free(th.k); memset(&th, 0, sizeof th);
@@ -519,12 +529,14 @@ void loads_refresh(void) {
                 float len = LL * rel(c->value, qmax);
                 if (c->value > 0) heat_arrow(&ht, p, dir, len, d);
                 else { float t[3], o[3] = { -dir[0], -dir[1], -dir[2] }; along(p, o, len, t); heat_arrow(&ht, t, o, len, d); }
+                if (G.label_kind == CV_LABEL_LOADS) { snprintf(lt, sizeof lt, "Q %g", c->value); label_sink_add(p, d, lt); }
                 continue;
             }
             node_axes(dk, c->node, p, Q);
             for (int k = 0; k < 3; k++) dir[k] = Q[(c->dof - 1) % 3][k] * (c->value < 0 ? -1.f : 1.f);
             if (c->dof > 3) moment(&mo, p, dir, LL * rel(c->value, mmax), d);
             else if (thin_take(&th, p, 0.4f * LL, 100u + c->dof * 2u + (c->value < 0))) arrow(&ld, p, dir, LL * rel(c->value, fmax), d);
+            if (G.label_kind == CV_LABEL_LOADS) { snprintf(lt, sizeof lt, "%s %g", c->dof > 3 ? "M" : "F", c->value); label_sink_add(p, d, lt); }
         }
 
         /* on faces and edges */
@@ -536,6 +548,10 @@ void loads_refresh(void) {
             bool edge = q->kind == CV_DL_EDGE || (ty >= 7 && ty <= 10 && !shell);
             if (q->value == 0 || !face_at(q->elem, q->face, edge, cen, out, cd)) continue;
             if (!thin_take(&th, cen, 0.4f * LL, 200u + (uint32_t)q->kind)) continue;
+            if (G.label_kind == CV_LABEL_LOADS) {
+                static const char* ln[CV_DL_N] = { "p", "p", "q", "h", "rad" };   /* pressure, edge, flux, film, radiation */
+                snprintf(lt, sizeof lt, "%s %g", q->kind < CV_DL_N ? ln[q->kind] : "?", q->value); label_sink_add(cen, cd, lt);
+            }
             float len = LL * rel(q->value, dmax[q->kind]);
             float sgn = q->value < 0 ? 1.f : -1.f;              /* positive: into the face */
             for (int k = 0; k < 3; k++) in[k] = out[k] * sgn;
@@ -577,6 +593,7 @@ void loads_refresh(void) {
             if (norm3(dir) <= 0) continue;
             box_exit(lo, hi, dir, from);
             block_arrow(b->kind == CV_BL_HEAT ? &ht : &ld, from, dir, len, cd, b->kind == CV_BL_HEAT);
+            if (G.label_kind == CV_LABEL_LOADS) { snprintf(lt, sizeof lt, "%s %g", b->kind == CV_BL_HEAT ? "Q" : "g", b->value); label_sink_add(from, cd, lt); }
         }
         free(th.k);
 
@@ -598,6 +615,7 @@ void loads_refresh(void) {
             for (int k = 0; k < 3; k++) back[k] = -ax[k];
             frame(ax, u, w);
             arc(l, cen, ax, r, 0, 6.2831853f, cd, NULL);
+            if (G.label_kind == CV_LABEL_LOADS) { snprintf(lt, sizeof lt, held && v == 0 ? "bolt locked" : "bolt %g", v); label_sink_add(cen, cd, lt); }
             for (int q = 0; q < 4; q++) {
                 float at[3], tip[3];
                 const float* e = q & 1 ? w : u;

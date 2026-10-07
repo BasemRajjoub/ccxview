@@ -78,7 +78,7 @@ static void pack(anchors* s, const float p[3], const float d[6], uint32_t ref, c
     if (len) { memcpy(s->txt.a + s->txt.n, text, len); s->txt.n += len; }
     s->n++;
 }
-static inline void anchor_add(const float p[3], const float d[6], const char* text) { pack(&A.a, p, d, UINT32_MAX, text); }   /* the named kinds */
+static void anchor_add(const float p[3], const float d[6], const char* text) { pack(&A.a, p, d, UINT32_MAX, text); }
 static void anchor_ref(const float p[3], const float d[6], uint32_t ref) { pack(&A.a, p, d, ref, NULL); }
 
 static void anchor_node(uint32_t i) {
@@ -114,6 +114,113 @@ static bool face_centre(uint32_t e, int face, float p[3], float d[6]) {
         for (int q = 0; q < 6; q++) d[q] += dj[q] / m;
     }
     return true;
+}
+
+/* ---- the sink: loads and supports, recorded by app_loads.c as it builds the symbols ---- */
+static struct { bool on; anchors a; } S;
+void label_sink_begin(int kind) { S.on = kind == CV_LABEL_LOADS || kind == CV_LABEL_SUPPORTS; S.a.anc.n = S.a.txt.n = S.a.toff.n = S.a.ref.n = 0; S.a.n = 0; }
+void label_sink_add(const float p[3], const float d[6], const char* text) { if (S.on) pack(&S.a, p, d, UINT32_MAX, text); }
+
+/* per element its first exterior face (0xFF none), from the skin */
+static uint8_t* first_faces(void) {
+    uint8_t* ff = malloc(CV_MAX(G.frd.n_elems, 1));
+    if (!ff) return NULL;
+    memset(ff, 0xFF, CV_MAX(G.frd.n_elems, 1));
+    for (size_t k = 0; k < G.skin.n_face; k++) {
+        uint32_t e = G.skin.face[k] >> 3;
+        if (e < G.frd.n_elems && ff[e] == 0xFF) ff[e] = (uint8_t)(G.skin.face[k] & 7);
+    }
+    return ff;
+}
+
+/* the mean of some points with their displacements, as one anchor */
+typedef struct { float c[3], cd[6]; uint32_t n; } mean;
+static void mean_add(mean* m, const float p[3], const float d[6]) {
+    for (int q = 0; q < 3; q++) m->c[q] += p[q];
+    for (int q = 0; q < 6; q++) m->cd[q] += d[q];
+    m->n++;
+}
+static void mean_anchor(mean* m, const char* text) {
+    if (!m->n) return;
+    for (int q = 0; q < 3; q++) m->c[q] /= m->n;
+    for (int q = 0; q < 6; q++) m->cd[q] /= m->n;
+    anchor_add(m->c, m->cd, text);
+}
+
+static void build_named(int kind) {
+    const cv_frd* f = &G.frd;
+    const cv_inp* dk = deck_get();
+    char t[64];
+    float p[3], d[6];
+    switch (kind) {
+    case CV_LABEL_SETS: {                         /* the ticked sets and surfaces: the name at their centre */
+        if (!dk) break;
+        A.on_top = true;
+        uint8_t* ff = first_faces();
+        bool* son = deck_set_flags(); bool* fon = deck_surf_flags();
+        for (int s = 0; ff && s < dk->nsets; s++) {
+            if (!son[s]) continue;
+            const cv_set* st = &dk->sets[s];
+            mean m = {{0}, {0}, 0};
+            for (uint32_t i = 0; i < st->n; i++) {
+                if (st->is_elem) {
+                    uint32_t e = deck_elem(f, st->ids[i]);
+                    if (e == UINT32_MAX || ff[e] == 0xFF || !face_centre(e, ff[e], p, d)) continue;
+                } else if (!deck_node_pd(st->ids[i], p, d)) continue;
+                mean_add(&m, p, d);
+            }
+            mean_anchor(&m, st->name);
+        }
+        for (int s = 0; s < dk->nsurfs; s++) {
+            if (!fon[s]) continue;
+            const cv_surface* sf = &dk->surfs[s];
+            mean m = {{0}, {0}, 0};
+            for (uint32_t j = 0; j < sf->n; j++) {
+                uint32_t e = deck_elem(f, sf->elem[j]);
+                if (e == UINT32_MAX || !face_centre(e, sf->face[j], p, d)) continue;
+                mean_add(&m, p, d);
+            }
+            for (uint32_t j = 0; j < sf->nn; j++) if (deck_node_pd(sf->nodes[j], p, d)) mean_add(&m, p, d);
+            mean_anchor(&m, sf->name);
+        }
+        free(ff);
+        break;
+    }
+    case CV_LABEL_LINKS: {                        /* couplings and rigid bodies: the name at the reference node */
+        if (!dk) break;
+        A.on_top = true;
+        static const char* kn[] = { "rigid body", "coupling", "distributing", "equation", "tie", "contact" };
+        for (int k = 0; k < dk->nlinks; k++) {
+            const cv_link* l = &dk->links[k];
+            if (!l->ref || !deck_node_pd(l->ref, p, d)) continue;
+            anchor_add(p, d, l->name[0] ? l->name : kn[l->kind < 6 ? l->kind : 0]);
+        }
+        break;
+    }
+    case CV_LABEL_MATERIALS: {                    /* the name at the centre of each material's surface */
+        A.on_top = true;
+        const cv_axis* ax = &G.groups.axis[CV_AXIS_MAT];
+        mean* m = calloc(CV_MAX(ax->n, 1), sizeof *m);
+        if (!m) break;
+        for (size_t k = 0; k < G.skin.n_face; k++) {
+            uint32_t e = G.skin.face[k] >> 3;
+            if (e >= f->n_elems || !face_centre(e, (int)(G.skin.face[k] & 7), p, d)) continue;
+            mean_add(&m[ax->of_elem[e]], p, d);
+        }
+        for (int mi = 0; mi < ax->n; mi++) {
+            const char* nm = deck_material_name(ax->value[mi]);
+            if (nm) snprintf(t, sizeof t, "%s", nm); else snprintf(t, sizeof t, "material %u", ax->value[mi]);
+            mean_anchor(&m[mi], t);
+        }
+        free(m);
+        break;
+    }
+    case CV_LABEL_LOADS: case CV_LABEL_SUPPORTS:  /* at the symbols: what loads_refresh recorded */
+        loads_refresh();
+        for (uint32_t i = 0; i < S.a.n; i++) anchor_add(S.a.anc.a + 9 * i, S.a.anc.a + 9 * i + 3, S.a.txt.a + S.a.toff.a[i]);
+        break;
+    default: break;
+    }
 }
 
 static void build_anchors(void) {
@@ -176,12 +283,13 @@ static void build_anchors(void) {
         free(done);
         break;
     }
-    default: break;                               /* the named kinds: sets, links, loads, supports, materials */
+    default: build_named(kind); break;
     }
     free(nmark); free(emark);
 }
 
 void app_label_changed(void) { G.label_gen++; }
+
 
 /* ---- per frame: thin, lay out, upload when the camera or the anchors changed --------- */
 

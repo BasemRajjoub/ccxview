@@ -718,6 +718,7 @@ void deck_refresh_highlight(void) {
     app_aux_upload(CV_AUX_HLPT, &pp, &pd, NULL);
     app_aux_upload(CV_AUX_HLTRI, &tp, &td, NULL);
     app_sel_refresh();                              /* the box selection's outline moves with the shape too */
+    if (G.label_kind == CV_LABEL_LOADS || G.label_kind == CV_LABEL_SUPPORTS) app_label_changed();   /* their labels follow the step */
     cv_free_vec(pp); cv_free_vec(pd); cv_free_vec(tp); cv_free_vec(td);
 }
 
