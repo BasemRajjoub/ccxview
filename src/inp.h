@@ -88,6 +88,7 @@ typedef struct {
     char      name[64];
     uint8_t   kind;
     uint32_t  ref;          /* node id, 0 = none */
+    uint32_t  rot;          /* RIGID: the ROT NODE id (its DOFs 1-3 are the body's rotations), 0 = none */
     uint32_t* nodes;  uint32_t n;
     int       surf[2];      /* surface indices, -1 = none */
 } cv_link;

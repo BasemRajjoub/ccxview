@@ -505,10 +505,12 @@ static void do_keyword(P* p, const char* s, const char* e) {
     }
     if (strcmp(kw, "RIGIDBODY") == 0) {
         const char *rn = pget(prm, np, "REFNODE"), *ns = pget(prm, np, "NSET"), *es = pget(prm, np, "ELSET");
+        const char* ro = pget(prm, np, "ROTNODE");
         vlink* v = new_link(p, CV_LINK_RIGID, ns ? ns : es);
         if (!v) return;
         uint32_t r;
         if (rn && to_u32(rn, &r)) v->l.ref = r;
+        if (ro && to_u32(ro, &r)) v->l.rot = r;
         void* ix = (void*)(intptr_t)(p->links.n - 1);
         if (ns && !each_node(p, ns, link_add_node, ix)) p->bad_lines++;
         if (es && !each_elem(p, es, link_add_elem, ix)) p->bad_lines++;

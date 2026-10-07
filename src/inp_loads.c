@@ -91,6 +91,16 @@ bool cv_inp_applied(const cv_inp* d, int step, cv_applied* a) {
          ((uint64_t)(r->set >= 0 ? (uint32_t)r->set : r->elem) << 16) | ((uint64_t)(r->set >= 0) << 15) | ((uint64_t)r->kind << 8) |
          (r->kind == CV_BL_FORCE ? (r->v[0] != 0 ? 1u : r->v[1] != 0 ? 2u : 3u) : 0u));
     FOLD(cv_ntemp, d->temps, d->ntemps, a->temps, a->ntemps, !r->node, false, (uint64_t)r->node);
+    /* a rigid body's ROT NODE: its DOFs 1-3 turn the body, so a force there is a
+       moment and a held DOF a held rotation */
+    for (int k = 0; k < d->nlinks; k++) {
+        uint32_t rot = d->links[k].kind == CV_LINK_RIGID ? d->links[k].rot : 0;
+        if (!rot) continue;
+        for (uint32_t i = 0; i < a->nbcs; i++)
+            if (a->bcs[i].node == rot && a->bcs[i].dof_lo <= 3) { a->bcs[i].dof_lo += 3; a->bcs[i].dof_hi += 3; }
+        for (uint32_t i = 0; i < a->ncloads; i++)
+            if (a->cloads[i].node == rot && a->cloads[i].dof <= 3) a->cloads[i].dof += 3;
+    }
     return true;
 oom:
     free(one);

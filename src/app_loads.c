@@ -12,7 +12,11 @@
                        gravity, body force: a block arrow leaving the body
                        centrifugal: the axis as a dashed line, a turning arc at its end
                        bolt preload: two arrows meeting in a ring on the section
-     moments (magenta) a double-headed arrow, an arc turning with it round the shaft
+     bolt held (cyan)  its preload DOF held (*BOUNDARY, FIXED: locked as tightened): the
+                       ring with clamp bars across the section; tightened by a given
+                       displacement: the ring with displacement arrows (bar on the tail)
+     moments (magenta) a double-headed arrow, and round the middle of its shaft a large
+                       curved arrow turning the right-hand way (read without the rule)
      thermal (red)     heat into a node or a face: an arrow with a zigzag shaft
                        film (convection): a zigzag ending in a bar, the fluid
                        radiation: a stem ending in three rays
@@ -113,7 +117,8 @@ static void turning(layer* l, const float c[3], const float dir[3], float r, con
     cone(l, t, u, 1.1f * h, fmaxf(0.45f * h, 2.5f * l->T), d);
 }
 
-/* a moment about dir at p: the double-headed arrow, and the turning arc round its shaft */
+/* a moment about dir at p: the double-headed arrow, and the curved arrow round the
+   middle of its shaft, wide and a stroke thicker: the part a reader sees first */
 static void moment(layer* l, const float p[3], const float dir[3], float len, const float d[6]) {
     float c[3], t[3], b[3];
     along(p, dir, -len, t);
@@ -122,8 +127,11 @@ static void moment(layer* l, const float p[3], const float dir[3], float len, co
     head(l, p, dir, len, d);
     along(p, dir, -0.27f * len, c);                 /* the second head, behind the first */
     head(l, c, dir, len, d);
-    along(p, dir, -0.8f * len, c);                  /* near the tail, clear of the heads */
-    turning(l, c, dir, 0.3f * len, d);
+    along(p, dir, -0.72f * len, c);                 /* the shaft's middle, below the heads */
+    float T = l->T;
+    l->T = 1.4f * T;
+    turning(l, c, dir, 0.42f * len, d);
+    l->T = T;
 }
 
 /* a bar across the tail of an arrow that arrives at tip along dir */
@@ -543,26 +551,37 @@ void loads_refresh(void) {
         for (uint32_t i = 0; i < dk->npret; i++) {
             const cv_pretension* t = &dk->pret[i];
             float cen[3], ax[3], cd[6], back[3], u[3], w[3], rad = 0, v = 0;
-            bool given = false;
-            for (uint32_t j = 0; j < a->ncloads; j++) if (a->cloads[j].node == t->ref) { v = a->cloads[j].value; given = true; }
-            for (uint32_t j = 0; j < a->nbcs && !given; j++) if (a->bcs[j].node == t->ref) given = true;
-            if (!given || !bolt_at(dk, t, cen, ax, cd, &rad)) continue;
+            bool force = false, held = false;               /* preloaded by a force; its DOF held (locked) */
+            for (uint32_t j = 0; j < a->ncloads; j++) if (a->cloads[j].node == t->ref) { v = a->cloads[j].value; force = true; }
+            for (uint32_t j = 0; j < a->nbcs && !force; j++) if (a->bcs[j].node == t->ref) { v = a->bcs[j].value; held = true; }
+            if ((!force && !held) || !bolt_at(dk, t, cen, ax, cd, &rad)) continue;
             /* a ring round the section, outside the body, and on it pairs of arrows along
-               the axis: meeting at the cut when tightened, parting when loosened */
-            float len = LL * rel(v, tmax), r = rad > 0 ? 1.12f * rad : 0.45f * len;
+               the axis: meeting at the cut when tightened, parting when loosened. Held:
+               the support colour; locked (no value) with clamp bars across the section */
+            layer* l = force ? &ld : &bc;
+            float len = force ? LL * rel(v, tmax) : LL, r = rad > 0 ? 1.12f * rad : 0.45f * len;
             for (int k = 0; k < 3; k++) back[k] = -ax[k];
             frame(ax, u, w);
-            arc(&ld, cen, ax, r, 0, 6.2831853f, cd, NULL);
+            arc(l, cen, ax, r, 0, 6.2831853f, cd, NULL);
             for (int q = 0; q < 4; q++) {
                 float at[3], tip[3];
                 const float* e = q & 1 ? w : u;
                 along(cen, e, q & 2 ? -r : r, at);
+                if (held && v == 0) {                       /* locked: a clamp bar across the cut */
+                    float a0[3], a1[3];
+                    along(at, ax, 0.35f * len, a0); along(at, back, 0.35f * len, a1);
+                    float T = l->T; l->T = 2.2f * T; seg(l, a0, a1, cd); l->T = T;
+                    continue;
+                }
                 if (v < 0) {
-                    along(at, ax, len, tip); arrow(&ld, tip, ax, len, cd);
-                    along(at, back, len, tip); arrow(&ld, tip, back, len, cd);
+                    along(at, ax, len, tip); arrow(l, tip, ax, len, cd);
+                    if (held) tail_bar(l, tip, ax, len, cd);
+                    along(at, back, len, tip); arrow(l, tip, back, len, cd);
+                    if (held) tail_bar(l, tip, back, len, cd);
                 } else {
-                    arrow(&ld, at, ax, len, cd);
-                    arrow(&ld, at, back, len, cd);
+                    arrow(l, at, ax, len, cd);
+                    arrow(l, at, back, len, cd);
+                    if (held) { tail_bar(l, at, ax, len, cd); tail_bar(l, at, back, len, cd); }
                 }
             }
         }

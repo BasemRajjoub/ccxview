@@ -685,6 +685,35 @@ static bool mem_reader(void* user, const char* path, char** data, size_t* size) 
     return false;
 }
 
+/* a rigid body's ROT NODE: its DOFs 1-3 are rotations, so its load is a moment and
+   what holds it a held rotation; the REF NODE's stay translations (#17) */
+static void test_rot_node(void) {
+    const char* deck =
+        "*NODE\n1, 0, 0, 0\n2, 1, 0, 0\n3, 0, 1, 0\n4, 0, 0, 1\n40, 0, 0, 0\n41, 0, 0, 0\n"
+        "*ELEMENT, TYPE=C3D4, ELSET=E\n1, 1, 2, 3, 4\n"
+        "*NSET, NSET=N\n1, 2\n"
+        "*Rigid body, Nset=N, Ref node=40, Rot node=41\n"
+        "*STEP\n*STATIC\n*BOUNDARY\n41, 1, 1\n40, 1, 3\n*CLOAD\n41, 2, 1.0E7\n40, 3, 5.0\n*END STEP\n";
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), mem_reader, NULL));
+    CHECK_EQ(d.nlinks, 1);
+    if (d.nlinks == 1) { CHECK_EQ(d.links[0].ref, 40); CHECK_EQ(d.links[0].rot, 41); }
+    cv_applied ap;
+    CHECK(cv_inp_applied(&d, 0, &ap));
+    int mom = 0, force = 0, rot_held = 0, held = 0;
+    for (uint32_t i = 0; i < ap.ncloads; i++) {
+        if (ap.cloads[i].node == 41) mom += ap.cloads[i].dof == 5;
+        if (ap.cloads[i].node == 40) force += ap.cloads[i].dof == 3;
+    }
+    for (uint32_t i = 0; i < ap.nbcs; i++) {
+        if (ap.bcs[i].node == 41) rot_held += ap.bcs[i].dof_lo == 4;
+        if (ap.bcs[i].node == 40) held += ap.bcs[i].dof_lo <= 3;
+    }
+    CHECK_EQ(mom, 1); CHECK_EQ(force, 1); CHECK_EQ(rot_held, 1); CHECK_EQ(held, 3);
+    cv_applied_free(&ap);
+    cv_inp_free(&d);
+}
+
 static void test_inp(void) {
     /* 20-node hex spanning two lines (deck order), a C3D8 in ELSET via param,
        node data continued from an include, sets referencing sets, a surface */
@@ -1439,6 +1468,7 @@ int main(void) {
     test_sta();
     test_fbd();
     test_inp();
+    test_rot_node();
     test_localsys();
     test_csys_math();
     test_localsys_layers();
