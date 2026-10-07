@@ -357,7 +357,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         float tw2 = font->width(font->userdata, font->height, b, (int)strlen(b));
         ink_text(cv, font, area.x + kw - tw2, ky + sh + 1, tw2 + 2, b, ink);
     }
-    if (G.range_lock && G.oor_grey) {             /* swatches for the grey out-of-range colours, above and below the bar */
+    if (G.range_lock && (G.oor_mode[0] == 1 || G.oor_mode[0] == 2 || G.oor_mode[1] == 1 || G.oor_mode[1] == 2)) {   /* swatches for the out-of-range colours, above and below the bar */
         float sw = row * 0.8f, gap = 4 * s;
         h -= 2 * (sw + gap);
         if (h < 20) return;
@@ -365,9 +365,11 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         const float gv[2] = { CV_OOR_ABOVE, CV_OOR_BELOW };
         const char* lab[2] = { "above", "below" };
         for (int k = 0; k < 2; k++) {
-            if (!(G.oor_grey >> k & 1)) continue;        /* that side takes the map's end colour: no swatch */
-            int g = (int)(gv[k] * 255);
-            nk_fill_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, nk_rgb(g, g, g));
+            int m = G.oor_mode[k];
+            if (m != 1 && m != 2) continue;              /* the map's end colour or hidden: no swatch */
+            struct nk_color sc = m == 1 ? nk_rgb((int)(gv[k] * 255), (int)(gv[k] * 255), (int)(gv[k] * 255))
+                                        : nk_rgb_f(G.oor_rgb[k][0], G.oor_rgb[k][1], G.oor_rgb[k][2]);
+            nk_fill_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, sc);
             nk_stroke_rect(cv, nk_rect(area.x, yy[k], bar_w, sw), 0, 1, ink);
             ink_text(cv, font, area.x + bar_w + 7 * s, yy[k] + (sw - font->height) * 0.5f, area.w - bar_w - 7 * s, lab[k], dim);
         }
@@ -495,14 +497,39 @@ void legend_controls(struct nk_context* ctx, float s, float row) {
             nk_property_float(ctx, "#min", -1e30f, &G.rmin, 1e30f, step, step * 0.1f);
             nk_property_float(ctx, "#max", -1e30f, &G.rmax, 1e30f, step, step * 0.1f);
             nk_layout_row_dynamic(ctx, row, 1);
-            /* how values outside the locked range are coloured: grey (light above, dark below)
-               stands out; the map's end colours let them blend in */
-            static const char* oor[] = { "outside: grey", "outside: map's end colours", "outside: grey above only", "outside: grey below only" };
-            static const int oor_mask[] = { 3, 0, 1, 2 };
-            int cur = G.oor_grey == 3 ? 0 : G.oor_grey == 0 ? 1 : G.oor_grey == 1 ? 2 : 3;
-            tip(ctx, "Values outside the locked range: grey to stand out, or the colour map's end colours to blend in");
-            cur = nk_combo(ctx, oor, 4, cur, (int)row, nk_vec2(220 * s, 4 * row + 20 * s));
-            G.oor_grey = oor_mask[cur];
+            /* values past either end: grey (light above, dark below) stands out, the map's end
+               colour lets them blend in, a colour of the user's, or hidden */
+            static const char* oor[2][4] = { { "above: grey", "above: the map's top colour", "above: a colour", "above: hidden" },
+                                             { "below: grey", "below: the map's bottom colour", "below: a colour", "below: hidden" } };
+            static const int to_mode[4] = { 1, 0, 2, 3 }, to_item[4] = { 1, 0, 2, 3 };
+            static const char* tips[2] = { "Values above the locked range: grey to stand out, the map's top colour to blend in, a colour, or not drawn",
+                                           "Values below the locked range: grey to stand out, the map's bottom colour to blend in, a colour, or not drawn" };
+            static bool pick[2];
+            for (int k = 0; k < 2; k++) {
+                nk_layout_row_template_begin(ctx, row);
+                nk_layout_row_template_push_dynamic(ctx);
+                nk_layout_row_template_push_static(ctx, row * 1.4f);
+                nk_layout_row_template_end(ctx);
+                tip(ctx, tips[k]);
+                G.oor_mode[k] = to_mode[nk_combo(ctx, oor[k], 4, to_item[G.oor_mode[k]], (int)row, nk_vec2(220 * s, 4 * row + 20 * s))];
+                struct nk_rect bb = nk_widget_bounds(ctx);
+                float* rgb = G.oor_rgb[k];
+                if (nk_button_color(ctx, nk_rgb_f(rgb[0], rgb[1], rgb[2]))) { pick[k] = !pick[k]; G.oor_mode[k] = 2; }
+                if (pick[k]) {
+                    struct nk_rect clip = ctx->current->layout->clip;
+                    float pw = 230 * s, ph = 170 * s + row + 4 * ctx->style.window.spacing.y;
+                    struct nk_rect pr = nk_rect(bb.x + bb.w - pw - clip.x, bb.y + bb.h - clip.y, pw, ph);
+                    if (nk_popup_begin(ctx, NK_POPUP_STATIC, k ? "oorpickb" : "oorpicka", NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR, pr)) {
+                        nk_layout_row_dynamic(ctx, 170 * s, 1);
+                        struct nk_colorf cf = nk_color_picker(ctx, (struct nk_colorf){ rgb[0], rgb[1], rgb[2], 1 }, NK_RGB);
+                        rgb[0] = cf.r; rgb[1] = cf.g; rgb[2] = cf.b;
+                        nk_layout_row_dynamic(ctx, row, 1);
+                        if (nk_button_label(ctx, "done")) { pick[k] = false; nk_popup_close(ctx); }
+                        nk_popup_end(ctx);
+                    } else pick[k] = false;
+                }
+            }
+            nk_layout_row_dynamic(ctx, row, 1);
         }
         tip(ctx, "A signed field gets a range symmetric about zero, so the middle colour means 0 (unlocks the range)");
         if (nk_checkbox_label(ctx, "centre on zero", &G.center_zero)) { G.range_lock = false; app_refresh_range(); }

@@ -95,7 +95,8 @@ static void init(void) {
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
     G.sel_elems = true;
-    G.label_px = 13.f; G.minmax_n = 1; G.oor_grey = 3; G.label_spacing = 10.f; G.label_front = true;
+    G.label_px = 13.f; G.minmax_n = 1; G.oor_mode[0] = G.oor_mode[1] = 1;
+    G.oor_rgb[0][0] = 0.9f; G.oor_rgb[0][1] = 0.1f; G.oor_rgb[0][2] = 0.1f; G.oor_rgb[1][0] = 0.1f; G.oor_rgb[1][1] = 0.2f; G.oor_rgb[1][2] = 0.9f; G.label_spacing = 10.f; G.label_front = true;
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
@@ -385,7 +386,13 @@ static void frame(void) {
         d.rmin = G.rmin; d.rmax = G.rmax;
         if (!(d.rmax > d.rmin)) { d.rmin -= 0.5f; d.rmax += 0.5f; }  /* constant field */
         d.bands = G.bands;
-        d.grey_out_of_range = G.range_lock ? G.oor_grey : 0;
+        for (int k = 0; k < 2; k++) {            /* values outside a locked range */
+            int m = G.range_lock ? G.oor_mode[k] : 0;
+            float g = k ? CV_OOR_BELOW : CV_OOR_ABOVE;
+            const float* c = m == 2 ? G.oor_rgb[k] : NULL;
+            d.oor[k][0] = c ? c[0] : g; d.oor[k][1] = c ? c[1] : g; d.oor[k][2] = c ? c[2] : g;
+            d.oor[k][3] = m == 3 ? 3.f : m ? 1.f : 0.f;
+        }
         /* a .dat field lives on the Gauss points only: the faces stay plain */
         int fm = (!G.has_field || G.field_src == 1) ? CV_COLOR_SOLID
                : G.elem_mode ? CV_COLOR_ELEM : CV_COLOR_NODAL;

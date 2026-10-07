@@ -347,7 +347,9 @@ static const char* kFS =
     GLSL_HDR
     "uniform vec4 u_color;\n"                /* solid colour */
     "uniform vec4 u_rng;\n"                  /* min, max, bands, mode */
-    "uniform vec4 u_flags;\n"                /* x: grey out of range (light above, dark below), y: shade, z: on top, w: selected (tinted) */
+    "uniform vec4 u_flags;\n"                /* x: unused, y: shade, z: on top, w: selected (tinted) */
+    "uniform vec4 u_oora;\n"                 /* values above the locked range: rgb, w: 0 the map's end, 1 the rgb, 3 hidden */
+    "uniform vec4 u_oorb;\n"                 /* below */
     "uniform vec4 u_pz;\n"                   /* projection: z_clip = x*z + y, w_clip = z*z + w */
     "uniform vec4 u_clip;\n"                 /* clip plane normal, d; w = 1e30 when off */
     "uniform sampler2D u_cmap;\n"
@@ -392,8 +394,8 @@ static const char* kFS =
     /* keep in step with cv_band_center() in field.h */
     "      if (u_rng.z > 0.5) { float b = u_rng.z; t = (min(floor(t * b), b - 1.0) + 0.5) / b; }\n"
     "      c = textureLod(u_cmap, vec2(t, 0.5), 0.0).rgb;\n"
-    "      if ((int(u_flags.x) & 1) != 0 && t0 > 1.0001) c = vec3(0.85);\n"   /* CV_OOR_ABOVE */
-    "      if ((int(u_flags.x) & 2) != 0 && t0 < -1e-4) c = vec3(0.48);\n"    /* CV_OOR_BELOW */
+    "      if (t0 > 1.0001) { if (u_oora.w > 2.5) discard; if (u_oora.w > 0.5) c = u_oora.rgb; }\n"
+    "      if (t0 < -1e-4) { if (u_oorb.w > 2.5) discard; if (u_oorb.w > 0.5) c = u_oorb.rgb; }\n"
     "    }\n"
     "  }\n"
     "  if (u_flags.w > 0.5) c = mix(c, vec3(1.0, 0.9, 0.2), 0.5);\n"   /* the box selection: its colours toned toward yellow */
@@ -412,7 +414,7 @@ static const char* kFS =
 
 typedef struct { float mvp[16]; float mv[16]; float p[4]; float q[4]; } vs_params;
 static float g_tint;                         /* the next layers are the selection: toned toward yellow (u_flags.w) */
-typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; } fs_params;
+typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; float oora[4]; float oorb[4]; } fs_params;
 
 /* ---- state ------------------------------------------------------------------- */
 
@@ -534,6 +536,8 @@ static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, con
                 [2] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_flags" },
                 [3] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_pz" },
                 [4] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_clip" },
+                [5] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_oora" },
+                [6] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_oorb" },
             },
         },
         .views = {
@@ -868,9 +872,11 @@ static void uniforms(const cv_draw* d, bool has_disp, bool has_disp2, int mode, 
     fs_params fs = {
         .color = { rgb[0], rgb[1], rgb[2], 1 },
         .rng = { d->rmin, d->rmax, (float)d->bands, (float)mode },
-        .flags = { (float)d->grey_out_of_range, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
+        .flags = { 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
         .pz = { d->proj[10], d->proj[14], d->proj[11], d->proj[15] },
         .clip = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 1e30f },
+        .oora = { d->oor[0][0], d->oor[0][1], d->oor[0][2], d->oor[0][3] },
+        .oorb = { d->oor[1][0], d->oor[1][1], d->oor[1][2], d->oor[1][3] },
     };
     sg_apply_uniforms(1, &SG_RANGE(fs));
 }
@@ -1167,7 +1173,7 @@ void cv_render_draw(const cv_draw* d) {
             static const float glyph_rgb[3] = { 0.85f, 0.85f, 0.85f }, ten_rgb[3] = { 0.90f, 0.15f, 0.12f },
                                cmp_rgb[3] = { 0.15f, 0.35f, 0.95f };
             cv_draw c = *d;
-            c.rmin = -d->sign_lim; c.rmax = d->sign_lim; c.bands = 0; c.grey_out_of_range = 0;
+            c.rmin = -d->sign_lim; c.rmax = d->sign_lim; c.bands = 0; memset(c.oor, 0, sizeof c.oor);
             bool sg = d->sign_lim > 0;
             if (d->tensors) {
                 if (d->glyph_signed && sg) draw_glyphs(CV_COLOR_NODAL, glyph_rgb, &c, R.div_view);

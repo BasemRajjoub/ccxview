@@ -292,7 +292,7 @@ static bool formula_gone(struct nk_context* ctx) { return !G.show_calc_help; }
 static bool convergence_gone(struct nk_context* ctx) { return !G.show_conv; }
 static bool legend_settings_shown(struct nk_context* ctx) { return G.legend_edit && win_of(ctx, "Legend settings"); }
 static bool legend_settings_gone(struct nk_context* ctx) { return !G.legend_edit; }
-static void range_locked(struct nk_context* ctx) { G.range_lock = true; G.oor_grey = 3; }
+static void range_locked(struct nk_context* ctx) { G.range_lock = true; }
 static bool oor_list_open(struct nk_context* ctx) { return popup_open(ctx, "Legend settings"); }
 static bool oor_list_gone(struct nk_context* ctx) { return !popup_open(ctx, "Legend settings"); }
 static void range_free(struct nk_context* ctx) { G.range_lock = false; app_refresh_range(); }
@@ -500,7 +500,7 @@ static const step script[] = {
 
     CASE("legend: a right click opens its settings, a list in them opens"),
     AT_WIN("Legend", 0.5f, 0.6f), RCLICK, WAIT(2), EXPECT(legend_settings_shown, "the legend settings open"),
-    DO(range_locked), WAIT(2), AT_TIP("Legend settings", "Values outside the locked range"), CLICK, WAIT(2),
+    DO(range_locked), WAIT(2), AT_TIP("Legend settings", "Values above the locked range"), CLICK, WAIT(2),
     EXPECT(oor_list_open, "the out-of-range list opens"), AT_VIEW(0.5f, 0.6f), CLICK, WAIT(2), EXPECT(oor_list_gone, "a click outside closes it"), DO(range_free),
     AT_CLOSE("Legend settings"), CLICK, WAIT(2), EXPECT(legend_settings_gone, "the legend settings close"),
     PANELS_ANSWER,
