@@ -26,7 +26,7 @@ static int bench_labels(uint32_t N) {
         memcpy(xyz + 3 * i, r, sizeof r);
     }
     double t0 = cv_now();
-    uint32_t n = cv_label_thin(p, N, 48, 16, 0, 0, 1600, 1000, out, N);
+    uint32_t n = cv_label_thin(p, N, 0, 48, 16, 0, 0, 1600, 1000, out, N);
     double t1 = cv_now();
     uint32_t m = cv_label_coarse(xyz, N, 0.02f, out);
     double t2 = cv_now();

@@ -15,7 +15,7 @@ static const struct { const char *key, *name; } kinds[CV_LABEL_N] = {
     { "none", "none" }, { "node", "node id" }, { "elem", "element id" }, { "value", "node value" },
     { "evalue", "element value" }, { "sets", "set and surface names" }, { "links", "couplings, rigid bodies" },
     { "loads", "loads" }, { "supports", "supports" }, { "materials", "materials" },
-    { "gpvalue", "Gauss point value" }, { "gpid", "Gauss point id" },
+    { "gpvalue", "Gauss point value" }, { "gpid", "Gauss point id" }, { "minmax", "min / max" },
 };
 const char* app_label_name(int k) { return k >= 0 && k < CV_LABEL_N ? kinds[k].name : "?"; }
 const char* app_label_key(int k) { return k >= 0 && k < CV_LABEL_N ? kinds[k].key : "none"; }
@@ -81,7 +81,8 @@ typedef struct {
 } anchors;
 
 enum { SRC_TEXT, SRC_NODE, SRC_ELEM, SRC_GAUSS };
-static struct { anchors a; unsigned gen, serial; int kinds, asked; bool sel_only, probe_only, probe_on; uint32_t probe_elem; } A;
+static struct { anchors a; unsigned gen, serial; int kinds, asked; bool sel_only, probe_only, probe_on; uint32_t probe_elem;
+                uint32_t pin0, pin1; } A;        /* anchors pin0 .. pin1: the extremes, always drawn */
 /* kinds: the ones built (a value field per element: the element value stands for the node
    value); asked: G.label_kinds then; probe_*: the probe these were built for */
 
@@ -411,6 +412,22 @@ static void build_anchors(void) {
             anchor_ref(g.pos + 3 * k, d6, NULL, SRC_GAUSS, k, 1.2f * r);
         }
     }
+    /* the field's extremes: "max: 256.7", "max 2: 250.1" ... at their node or element */
+    A.pin0 = A.pin1 = A.a.n;
+    if (on(CV_LABEL_MINMAX) && G.has_field && (nodal || (elemv && G.field_src != 1)))
+        for (uint32_t i = 0; i < 2 * G.ext_n; i++) {
+            bool hi = i >= G.ext_n;
+            uint32_t rank = hi ? i - G.ext_n : i, at = hi ? G.ext_hi[rank] : G.ext_lo[rank];
+            char t[48], val[32];
+            float p[3], d[6], r = G.diag;
+            if (nodal) { memcpy(p, f->xyz + 3 * at, sizeof p); app_node_disp6(at, d); }
+            else r = CV_MAX(1.2f * elem_anchor(at, p, d), G.diag);
+            app_legend_fmt(val, sizeof val, nodal ? G.scalar[at] : G.elem_val[at]);
+            if (rank) snprintf(t, sizeof t, "%s %u: %s", hi ? "max" : "min", rank + 1, val);
+            else snprintf(t, sizeof t, "%s: %s", hi ? "max" : "min", val);
+            pack(&A.a, p, d, NULL, SRC_TEXT, UINT32_MAX, r, t);
+            A.pin1 = A.a.n;
+        }
     /* the named kinds */
     for (int k = CV_LABEL_SETS; k <= CV_LABEL_MATERIALS; k++) if (on(k)) build_named(k);
     free(nmark); free(emark);
@@ -435,21 +452,22 @@ static float widest_label(void) {
         snprintf(val, sizeof val, "%s", best);
     }
     if (on(CV_LABEL_NODE) || on(CV_LABEL_VALUE)) {
-        snprintf(id, sizeof id, on(CV_LABEL_NODE) ? "%u" : "", big_n);
+        if (on(CV_LABEL_NODE)) snprintf(id, sizeof id, "%u", big_n); else id[0] = 0;
         snprintf(t, sizeof t, "%s%s%s", id, on(CV_LABEL_NODE) && on(CV_LABEL_VALUE) ? ": " : "", on(CV_LABEL_VALUE) ? val : "");
         w = CV_MAX(w, cv_label_width(&F.m, t));
         if (A.probe_only) { snprintf(t, sizeof t, "el %u", big_e); w = CV_MAX(w, cv_label_width(&F.m, t)); }
     }
     if (on(CV_LABEL_ELEM) || on(CV_LABEL_EVALUE)) {
-        snprintf(id, sizeof id, on(CV_LABEL_ELEM) ? "%u" : "", big_e);
+        if (on(CV_LABEL_ELEM)) snprintf(id, sizeof id, "%u", big_e); else id[0] = 0;
         snprintf(t, sizeof t, "%s%s%s", id, on(CV_LABEL_ELEM) && on(CV_LABEL_EVALUE) ? ": " : "", on(CV_LABEL_EVALUE) ? val : "");
         w = CV_MAX(w, cv_label_width(&F.m, t));
     }
     if (on(CV_LABEL_GPID) || on(CV_LABEL_GPVALUE)) {
-        snprintf(id, sizeof id, on(CV_LABEL_GPID) ? "%u:27" : "", big_e);
+        if (on(CV_LABEL_GPID)) snprintf(id, sizeof id, "%u:27", big_e); else id[0] = 0;
         snprintf(t, sizeof t, "%s%s%s", id, on(CV_LABEL_GPID) && on(CV_LABEL_GPVALUE) ? ": " : "", on(CV_LABEL_GPVALUE) ? val : "");
         w = CV_MAX(w, cv_label_width(&F.m, t));
     }
+    if (on(CV_LABEL_MINMAX)) { snprintf(t, sizeof t, "max %d: %s", G.minmax_n, val); w = CV_MAX(w, cv_label_width(&F.m, t)); }
     for (uint32_t i = 0; i < A.a.n; i++)             /* the named ones: the texts themselves */
         if (A.a.toff.a[i] != UINT32_MAX) w = CV_MAX(w, cv_label_width(&F.m, A.a.txt.a + A.a.toff.a[i]));
     return w;
@@ -477,7 +495,7 @@ void app_label_frame(cv_draw* d) {
     static float last_mvp[16], last_px, last_sp, last_f1, last_f2, last_clip[4]; static unsigned last_gen; static int last_kind, last_w, last_h;
     if (!G.loaded || !G.label_kinds) {
         if (A.a.n || last_kind) {
-            A.a.n = 0; A.asked = -1;                  /* the same kind again rebuilds */
+            A.a.n = 0; A.pin0 = A.pin1 = 0; A.asked = -1;                  /* the same kind again rebuilds */
             free(C.keep); C.keep = NULL; C.n = 0;
             cv_render_labels(NULL, 0, NULL, 0); G.label_note[0] = 0; last_kind = 0;
         }
@@ -505,18 +523,23 @@ void app_label_frame(cv_draw* d) {
         coarse_check(spacing * app_pixel_size(G.cam.target));
         if (C.keep) { ids = C.keep; n_ids = C.n; }
     }
-    cv_label_pt* pts = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *pts);
-    uint32_t* chosen = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *chosen);
-    if (!pts || !chosen) { free(pts); free(chosen); return; }   /* tried again next frame */
+    uint32_t n_pin = A.pin1 - A.pin0, n_ext = ids ? n_pin : 0;    /* the coarse subset may miss the extremes: they come too */
+    cv_label_pt* pts = malloc((size_t)CV_MAX(n_ids + n_ext, 1) * sizeof *pts);
+    cv_label_pt* pin = malloc((size_t)CV_MAX(n_pin, 1) * sizeof *pin);
+    uint32_t* chosen = malloc((size_t)CV_MAX(n_ids + n_ext, 1) * sizeof *chosen);
+    if (!pts || !pin || !chosen) { free(pts); free(pin); free(chosen); return; }   /* tried again next frame */
     memcpy(last_mvp, d->mvp, sizeof last_mvp); memcpy(last_clip, clip, sizeof last_clip); last_px = px; last_sp = G.label_spacing; last_gen = G.label_gen;
     last_kind = G.label_kinds; last_w = d->vp_w; last_h = d->vp_h; last_f1 = d->def_scale; last_f2 = d->def_scale2;
     const float* M = d->mvp;
     v3 eye, fwd, right, up;                      /* to cull the nodes facing away: toward the eye, or against the view */
     cam_basis(&G.cam, &eye, &fwd, &right, &up);
     bool persp = !G.cam.ortho;
-    uint32_t np = 0;
-    for (uint32_t k = 0; k < n_ids; k++) {
-        uint32_t i = ids ? ids[k] : k;
+    uint32_t np = 0, npin = 0;
+    for (uint32_t k = 0; k < n_ids + n_ext; k++) {
+        uint32_t i = k >= n_ids ? A.pin0 + k - n_ids : ids ? ids[k] : k;
+        if (ids && k < n_ids && i >= A.pin0 && i < A.pin1) continue;   /* counted with the extremes */
+        bool pinned = i >= A.pin0 && i < A.pin1;
+        cv_label_pt* o = pinned ? &pin[npin] : &pts[np];
         const float* a = A.a.anc.a + 9 * i;
         float p[3], c[4];
         for (int q = 0; q < 3; q++) p[q] = a[q] + d->def_scale * a[3 + q] + d->def_scale2 * a[6 + q];
@@ -529,28 +552,49 @@ void app_label_frame(cv_draw* d) {
         }
         for (int r = 0; r < 4; r++) c[r] = M[r] * p[0] + M[4 + r] * p[1] + M[8 + r] * p[2] + M[12 + r];
         if (c[3] <= 1e-9f) continue;                                      /* behind the eye */
-        pts[np].sx = d->vp_x + (c[0] / c[3] * 0.5f + 0.5f) * d->vp_w;
-        pts[np].sy = d->vp_y + (0.5f - c[1] / c[3] * 0.5f) * d->vp_h;
-        pts[np].depth = c[2] / c[3] * 0.5f + 0.5f;
-        pts[np].id = i;
-        np++;
+        o->sx = d->vp_x + (c[0] / c[3] * 0.5f + 0.5f) * d->vp_w;
+        o->sy = d->vp_y + (0.5f - c[1] / c[3] * 0.5f) * d->vp_h;
+        o->depth = c[2] / c[3] * 0.5f + 0.5f;
+        o->id = i;
+        if (pinned) npin++; else np++;
+    }
+    if (npin) {                                   /* the pinned in front: thinning takes them first, in rank order */
+        memmove(pts + npin, pts, np * sizeof *pts);
+        memcpy(pts, pin, npin * sizeof *pin);
+        np += npin;
     }
     uint32_t max_out = 20000;                     /* more than fits any screen: a cap for spacing 0 */
-    uint32_t n = cv_label_thin(pts, np, bx, by, (float)d->vp_x, (float)d->vp_y, (float)d->vp_w, (float)d->vp_h, chosen, max_out);
+    uint32_t n = cv_label_thin(pts, np, npin, bx, by, (float)d->vp_x, (float)d->vp_y, (float)d->vp_w, (float)d->vp_h, chosen, max_out);
     /* lay the chosen out: text a little right of and above the point */
     cv_fvec gly = {0}, box = {0};
     float dx = 4 * ui_scale(), dy = -(F.m.height + 3 * ui_scale());
     char t[64];
     float reach = F.m.height;                      /* the farthest a label's box reaches from its point, px */
+    /* pinned labels at one spot (the extremes of a symmetric part, seen along the axis)
+       stack: each one that would cover an earlier one goes a row lower */
+    float pin_w = gap > 0 ? bx - gap : widest_label() + 2 * pad, pin_h = F.m.height + 2 * pad;
+    struct { float x, y; int row; } st[200];
+    uint32_t ns = 0;
     for (uint32_t k = 0; k < n; k++) {
         uint32_t i = chosen[k];
-        float w = cv_label_layout(&F.m, A.a.anc.a + 9 * i, anchor_text(i, t, sizeof t), dx, dy, true, 2 * ui_scale(), A.a.pull.a[i], &gly, &box);
-        float rx = dx + w + 2 * ui_scale(), ry = -dy + 2 * ui_scale();
+        float ddy = dy;
+        if (i >= A.pin0 && i < A.pin1 && ns < 200) {
+            const cv_label_pt* p = NULL;
+            for (uint32_t j = 0; j < npin && !p; j++) if (pin[j].id == i) p = &pin[j];
+            int row = 0;
+            for (uint32_t j = 0; p && j < ns; j++)
+                if (fabsf(p->sx - st[j].x) < pin_w && fabsf(p->sy - st[j].y) < pin_h * (st[j].row + 1)) row = CV_MAX(row, st[j].row + 1);
+            if (p) { st[ns].x = p->sx; st[ns].y = p->sy; st[ns].row = row; ns++; }
+            ddy += row * (pin_h + 1 * ui_scale());
+            if (row) cv_label_leader(&F.m, A.a.anc.a + 9 * i, dx + pad, 0, ddy - pad, A.a.pull.a[i], &box);   /* down to the dropped label */
+        }
+        float w = cv_label_layout(&F.m, A.a.anc.a + 9 * i, anchor_text(i, t, sizeof t), dx, ddy, true, pad, A.a.pull.a[i], &gly, &box);
+        float rx = dx + w + pad, ry = CV_MAX(-dy, ddy + pin_h) + pad;
         reach = CV_MAX(reach, sqrtf(rx * rx + ry * ry));
     }
     d->label_px = reach;                           /* the depth pull: a label clears the face its point lies on */
     cv_render_labels(box.a, (uint32_t)(box.n / CV_LABEL_FLOATS), gly.a, (uint32_t)(gly.n / CV_LABEL_FLOATS));
-    cv_free_vec(gly); cv_free_vec(box); free(pts); free(chosen);
+    cv_free_vec(gly); cv_free_vec(box); free(pts); free(pin); free(chosen);
     {   /* "labels: node id, loads; shown 420 of 18 000" */
         char what[40] = "";
         size_t o = 0;

@@ -23,16 +23,25 @@ typedef struct { const cv_label_glyph* g; int first, n; float height; float whit
 float cv_label_layout(const cv_label_metrics* m, const float anchor[9], const char* text,
                       float dx, float dy, bool box, float pad, float pull, cv_fvec* gly, cv_fvec* boxes);
 float cv_label_width(const cv_label_metrics* m, const char* text);
+/* a leader: a 1 px wide box from (x, y0) to (x, y1) px off the anchor's point, to boxes */
+void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x, float y0, float y1, float pull, cv_fvec* boxes);
 
 /* thinning: pts projected to window px with a depth (nearer = smaller, 0 .. 1); those
    inside the viewport, nearest first, no two closer than dx px across and dy px down (the
    labels' box: their widest plus a gap, their height plus the gap; 0: every one inside).
-   Chosen ids to out (at most max_out), returns how many. pts is reordered. */
+   The first n_pin points are pinned: taken whatever overlaps them, first and in their
+   order, and the rest keep clear of them. Chosen ids to out (at most max_out), returns
+   how many. pts is reordered. */
 typedef struct { float sx, sy, depth; uint32_t id; } cv_label_pt;
-uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float dx, float dy, float vx, float vy, float vw, float vh,
+uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, uint32_t n_pin, float dx, float dy, float vx, float vy, float vw, float vh,
                        uint32_t* out, uint32_t max_out);
 
 /* a coarse pass for huge sets: of the points in one 3D cell of size cell, the first
    met is kept; xyz 3 per point; kept indices to out, returns how many */
 uint32_t cv_label_coarse(const float* xyz, uint32_t n, float cell, uint32_t* out);
+
+/* the k smallest and the k largest of n values (v[ids[i]], or v[i] without ids), NaN and
+   infinities left out: their indices to lo (smallest first) and hi (largest first), both k
+   long; returns how many each holds (less than k when there are fewer values) */
+uint32_t cv_label_extremes(const float* v, const uint32_t* ids, uint32_t n, uint32_t k, uint32_t* lo, uint32_t* hi);
 #endif

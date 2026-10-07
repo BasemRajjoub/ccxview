@@ -4,6 +4,7 @@
    clip caps), app_path.c (path plot, history), app_linearize.c (stress
    linearization). */
 #include "app_int.h"
+#include "label.h"
 #include "calc.h"
 #include "gauss.h"
 #include "path.h"
@@ -268,13 +269,41 @@ static bool extreme_pos(uint32_t at, float p[3], float d[3]) {
     return true;
 }
 
+/* the minmax_n smallest, then the largest, as balls */
 void refresh_markers(void) {
-    float pos[6], disp[6], val[2];
-    int n = 0;
-    const uint32_t at[2] = { G.min_at, G.max_at };
-    for (int i = 0; G.has_field && i < 2; i++)
-        if (extreme_pos(at[i], pos + 3 * n, disp + 3 * n)) { val[n] = i ? G.data_max : G.data_min; n++; }
-    cv_render_aux(CV_AUX_MARK, n ? pos : NULL, disp, val, (uint32_t)n);
+    uint32_t cap = 2 * G.ext_n, n = 0;
+    float* pos = malloc(CV_MAX(cap, 1) * 3 * sizeof *pos);
+    float* disp = malloc(CV_MAX(cap, 1) * 3 * sizeof *disp);
+    float* val = malloc(CV_MAX(cap, 1) * sizeof *val);
+    const float* v = G.elem_mode ? G.elem_val : G.scalar;
+    if (pos && disp && val && G.has_field && v)
+        for (uint32_t i = 0; i < cap; i++) {
+            uint32_t at = i < G.ext_n ? G.ext_lo[i] : G.ext_hi[i - G.ext_n];
+            if (extreme_pos(at, pos + 3 * n, disp + 3 * n)) val[n++] = v[at];
+        }
+    cv_render_aux(CV_AUX_MARK, n ? pos : NULL, disp, val, n);
+    free(pos); free(disp); free(val);
+}
+
+/* the minmax_n extremes among the shown values (the range's subset) */
+static void refresh_extremes(const float* v, const uint32_t* ids, size_t n) {
+    uint32_t k = (uint32_t)CV_MAX(1, CV_MIN(G.minmax_n, 100));
+    uint32_t* lo = realloc(G.ext_lo, k * sizeof *lo);
+    if (lo) G.ext_lo = lo;
+    uint32_t* hi = realloc(G.ext_hi, k * sizeof *hi);
+    if (hi) G.ext_hi = hi;
+    G.ext_n = 0;
+    if (!lo || !hi || G.field_src == 1) return;   /* Gauss point fields: no balls */
+    uint32_t* sub = NULL;
+    if (G.elem_mode && G.vis) {                     /* hidden elements are out of the range */
+        sub = malloc(CV_MAX(n, 1) * sizeof *sub);
+        if (!sub) return;
+        size_t m = 0;
+        for (size_t j = 0; j < n; j++) { uint32_t i = ids ? ids[j] : (uint32_t)j; if (G.vis[i]) sub[m++] = i; }
+        ids = sub; n = m;
+    }
+    G.ext_n = cv_label_extremes(v, ids, (uint32_t)n, k, G.ext_lo, G.ext_hi);
+    free(sub);
 }
 
 /* The legend's range and the min / max markers cover what is drawn: the nodes
@@ -304,9 +333,11 @@ void app_refresh_range(void) {
         if (x > G.data_max) { G.data_max = x; G.max_at = i; }
     }
     if (G.min_at == UINT32_MAX) { G.data_min = 0; G.data_max = 1; }   /* nothing but NaN */
+    refresh_extremes(v, ids, n);
     CV_ASSERT(G.min_at == UINT32_MAX || G.min_at < (G.field_src == 1 ? n : G.elem_mode ? G.frd.n_elems : G.frd.n_nodes));
     CV_ASSERT(G.data_min <= G.data_max);
     refresh_markers();
+    if (app_label_on(CV_LABEL_MINMAX)) app_label_changed();
     if (!G.range_lock) {
         G.rmin = G.data_min; G.rmax = G.data_max;
         if (G.center_zero) cv_center_zero(&G.rmin, &G.rmax);

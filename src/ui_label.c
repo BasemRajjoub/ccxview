@@ -53,6 +53,7 @@ void section_label(struct nk_context* ctx, float s, float row) {
         "Materials: the name at the centre of each material's surface",
         "The field's value at every Gauss point drawn (the Gauss points layer is turned on)",
         "Every Gauss point drawn: element id : point number (the Gauss points layer is turned on)",
+        "The field's smallest and largest values at their node or element, as many of each as the count below\n(the Min / max balls are turned on)",
     };
     if (!nk_tree_state_push(ctx, NK_TREE_NODE, "Labels", (enum nk_collapse_states*)&G.tree[CV_TREE_LABELS])) return;
     nk_layout_row_dynamic(ctx, row, 1);
@@ -61,13 +62,20 @@ void section_label(struct nk_context* ctx, float s, float row) {
         tip(ctx, tips[k]);
         if (nk_checkbox_label(ctx, app_label_name(k), &on)) {
             G.label_kinds = on ? G.label_kinds | 1 << k : G.label_kinds & ~(1 << k);
-            if (on && k >= CV_LABEL_GPVALUE && !G.show_gp) { G.show_gp = true; app_gauss_changed(); }   /* the points they label */
+            if (on && (k == CV_LABEL_GPVALUE || k == CV_LABEL_GPID) && !G.show_gp) { G.show_gp = true; app_gauss_changed(); }   /* the points they label */
+            if (on && k == CV_LABEL_MINMAX) G.show_markers = true;
             app_label_changed();
         }
     }
     if (G.label_kinds) {
         const char* shown = strstr(G.label_note, "; ");
         if (shown) nk_label_colored(ctx, shown + 2, NK_TEXT_LEFT, P.dim);   /* "shown 420 of 18 000" */
+        if (app_label_on(CV_LABEL_MINMAX)) {
+            int n = G.minmax_n;
+            tip(ctx, "How many of the smallest and of the largest values get a ball and a label");
+            nk_property_int(ctx, "#min / max count", 1, &n, 100, 1, 0.2f);
+            if (n != G.minmax_n) { G.minmax_n = n; app_refresh_range(); }
+        }
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Text height in pixels");
         nk_property_float(ctx, "#size", 6.f, &G.label_px, 48.f, 1.f, 0.2f);

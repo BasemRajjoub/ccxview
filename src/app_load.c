@@ -418,8 +418,12 @@ static void apply_load(cv_job* j) {
     if (O.about) G.show_about = true;
     if (O.labels && !G.reload_keep) {
         int m = app_label_parse(O.labels);
-        if (!m) cv_msg_add(&G.msgs, 0, false, "--labels: unknown kind (node, elem, value, evalue, sets, links, loads, supports, materials, gpvalue, gpid)");
-        else G.label_kinds = m;
+        if (!m) cv_msg_add(&G.msgs, 0, false, "--labels: unknown kind (node, elem, value, evalue, sets, links, loads, supports, materials, gpvalue, gpid, minmax)");
+        else {
+            G.label_kinds = m;
+            if (m & 1 << CV_LABEL_MINMAX) G.show_markers = true;
+            if (m & (1 << CV_LABEL_GPVALUE | 1 << CV_LABEL_GPID)) G.show_gp = true;
+        }
     }
     app_label_changed();
     if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }

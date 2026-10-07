@@ -51,7 +51,7 @@ enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
-       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_GPVALUE, CV_LABEL_GPID, CV_LABEL_N };
+       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_GPVALUE, CV_LABEL_GPID, CV_LABEL_MINMAX, CV_LABEL_N };
 
 typedef struct {
     int       kind;
@@ -157,6 +157,10 @@ typedef struct {
     bool      harmonic;       /* the step holds DISP + DISPI: animate as DISP cos wt - DISPI sin wt */
     float     data_min, data_max;
     uint32_t  min_at, max_at;        /* node (or element) holding the extreme, UINT32_MAX none */
+    int       minmax_n;              /* how many of each end the balls and the min / max labels show (1 .. 100) */
+    uint32_t* ext_lo;                /* the minmax_n smallest (first first) and largest: nodes (elements) */
+    uint32_t* ext_hi;
+    uint32_t  ext_n;                 /* how many each holds */
     size_t    nan_count;             /* values without data */
     bool      show_markers;          /* min / max balls */
     bool      show_ghost;            /* undeformed edges behind the deformed shape */

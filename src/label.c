@@ -33,6 +33,11 @@ static void quad(cv_fvec* v, const float anchor[9], float x, float y, float w, f
     v->n += CV_LABEL_FLOATS;
 }
 
+void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x, float y0, float y1, float pull, cv_fvec* boxes) {
+    float top = y0 < y1 ? y0 : y1, h = fabsf(y1 - y0);
+    quad(boxes, anchor, x - 0.5f, top, 1.f, h, m->white_u, m->white_v, m->white_u, m->white_v, pull);
+}
+
 float cv_label_width(const cv_label_metrics* m, const char* text) {
     float w = 0;
     for (const char* s = text; *s;) { const cv_label_glyph* g = glyph(m, next_cp(&s)); if (g) w += g->xadvance; }
@@ -86,19 +91,21 @@ static uint32_t cell_slot(const grid* g, uint64_t key) {
     return h;
 }
 
-uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float dxs, float dys, float vx, float vy, float vw, float vh,
+uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, uint32_t n_pin, float dxs, float dys, float vx, float vy, float vw, float vh,
                        uint32_t* out, uint32_t max_out) {
     float spacing = dxs > dys ? dxs : dys;       /* the grid cell: the larger reach */
-    /* inside the viewport and the depth range: the rest to the back of the array */
-    uint32_t m = 0;
+    /* inside the viewport and the depth range: the rest to the back of the array; the
+       pinned stay in front, in their order */
+    uint32_t m = 0, mp = 0;
     for (uint32_t i = 0; i < n; i++) {
         const cv_label_pt* p = &pts[i];
         if (p->depth < 0.f || p->depth > 1.f || p->sx < vx || p->sx >= vx + vw || p->sy < vy || p->sy >= vy + vh) continue;
         pts[m++] = *p;
+        if (i < n_pin) mp = m;
     }
     if (!m) return 0;
     cv_label_pt* tmp = malloc(m * sizeof *tmp);
-    if (tmp) { sort_by_depth(pts, m, tmp); free(tmp); }
+    if (tmp) { sort_by_depth(pts + mp, m - mp, tmp); free(tmp); }
     if (spacing <= 0.f) {
         uint32_t k = m < max_out ? m : max_out;
         for (uint32_t i = 0; i < k; i++) out[i] = pts[i].id;
@@ -126,7 +133,7 @@ uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float dxs, float dys, float
                     if (fabsf(dx) < dxs && fabsf(dy) < dys) { clash = true; break; }   /* the boxes would overlap */
                 }
             }
-        if (clash) continue;
+        if (clash && i >= mp) continue;              /* a pinned one goes in whatever it overlaps */
         uint64_t key = ((uint64_t)(cx + 0x80000000ll) << 32 | (uint32_t)(cy + 0x80000000ll)) | 1;
         uint32_t h = cell_slot(&g, key);
         if (!g.cell[h]) { g.cell[h] = key; g.head[h] = UINT32_MAX; }
@@ -159,4 +166,31 @@ uint32_t cv_label_coarse(const float* xyz, uint32_t n, float cell, uint32_t* out
     }
     free(seen);
     return k;
+}
+
+/* a bounded sorted list: x goes in at its rank when it beats the last (ascending when
+   asc, else descending); the usual value fails the first test, so a pass is O(n) */
+static void rank_in(float* key, uint32_t* idx, uint32_t* m, uint32_t k, float x, uint32_t i, bool asc) {
+    if (*m == k && (asc ? x >= key[k - 1] : x <= key[k - 1])) return;
+    uint32_t at = *m < k ? *m : k - 1;
+    while (at > 0 && (asc ? x < key[at - 1] : x > key[at - 1])) { key[at] = key[at - 1]; idx[at] = idx[at - 1]; at--; }
+    key[at] = x; idx[at] = i;
+    if (*m < k) (*m)++;
+}
+
+uint32_t cv_label_extremes(const float* v, const uint32_t* ids, uint32_t n, uint32_t k, uint32_t* lo, uint32_t* hi) {
+    if (!k) return 0;
+    float* kl = malloc(2 * k * sizeof *kl);
+    if (!kl) return 0;
+    float* kh = kl + k;
+    uint32_t ml = 0, mh = 0;
+    for (uint32_t j = 0; j < n; j++) {
+        uint32_t i = ids ? ids[j] : j;
+        float x = v[i];
+        if (x != x || isinf(x)) continue;
+        rank_in(kl, lo, &ml, k, x, i, true);
+        rank_in(kh, hi, &mh, k, x, i, false);
+    }
+    free(kl);
+    return ml;
 }

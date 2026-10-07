@@ -31,6 +31,11 @@ static void test_label(void) {
     CHECK_NEAR(b[11], 24, 0); CHECK_NEAR(b[12], 16, 0);         /* 20 + 4 wide, 12 + 4 high */
     CHECK_NEAR(b[13], 0.99f, 0); CHECK_NEAR(b[15], 0.99f, 0);   /* the white pixel */
     CHECK_NEAR(b[17], 0.5f, 0); CHECK_NEAR(a[17], 0.5f, 0);     /* the pull, on box and glyphs alike */
+    box.n = 0;
+    cv_label_leader(&m, anchor, 4, 30, 0, 0.5f, &box);           /* a 1 px line from the point down 30 px */
+    CHECK_EQ(box.n, (size_t)CV_LABEL_FLOATS);
+    CHECK_NEAR(box.a[9], 3.5f, 0); CHECK_NEAR(box.a[10], 0.f, 0); CHECK_NEAR(box.a[11], 1.f, 0); CHECK_NEAR(box.a[12], 30.f, 0);
+    CHECK_NEAR(box.a[13], 0.99f, 0); CHECK_NEAR(box.a[17], 0.5f, 0);
     CHECK_NEAR(cv_label_width(&m, "ABC"), 30, 0);
 
     /* layout: codepoints outside the table draw as ? */
@@ -52,15 +57,22 @@ static void test_label(void) {
         { 200, 200, 2.f, 6 },       /* beyond the far plane */
     };
     uint32_t out[8];
-    uint32_t n = cv_label_thin(p, 7, 20, 20, 0, 0, 800, 600, out, 8);
+    uint32_t n = cv_label_thin(p, 7, 0, 20, 20, 0, 0, 800, 600, out, 8);
     CHECK_EQ(n, 2);
     CHECK_EQ(out[0], 1); CHECK_EQ(out[1], 3);                   /* nearest first */
     /* thin: spacing 0 keeps every one inside */
-    n = cv_label_thin(p, 7, 0, 0, 0, 0, 800, 600, out, 8);
+    n = cv_label_thin(p, 7, 0, 0, 0, 0, 0, 800, 600, out, 8);
     CHECK_EQ(n, 4);
     /* thin: max_out caps */
-    n = cv_label_thin(p, 7, 0, 0, 0, 0, 800, 600, out, 1);
+    n = cv_label_thin(p, 7, 0, 0, 0, 0, 0, 800, 600, out, 1);
     CHECK_EQ(n, 1);
+    /* thin: pinned points are taken first, in their order, whatever they overlap; the
+       rest keep clear of them (3 and 4 overlap pinned 0 and 1; far 5 is kept) */
+    cv_label_pt q[] = { { 100, 100, 0.9f, 0 }, { 102, 100, 0.95f, 1 }, { -5, 5, 0.5f, 2 }, { 105, 102, 0.2f, 3 },
+                        { 112, 100, 0.1f, 4 }, { 400, 400, 0.9f, 5 } };
+    n = cv_label_thin(q, 6, 3, 20, 20, 0, 0, 800, 600, out, 8);
+    CHECK_EQ(n, 3);
+    CHECK_EQ(out[0], 0); CHECK_EQ(out[1], 1); CHECK_EQ(out[2], 5);
 
     /* coarse: one per cell, the first met */
     const float xyz[] = { 0, 0, 0,  0.2f, 0.1f, 0,  5, 0, 0,  0.3f, 0, 0.4f };
@@ -81,12 +93,27 @@ static void test_label(void) {
             big[i] = (cv_label_pt){ x * 1600, y * 1000, z, i };
         }
         double t0 = cv_now();
-        n = cv_label_thin(big, N, 48, 16, 0, 0, 1600, 1000, o, N);
+        n = cv_label_thin(big, N, 0, 48, 16, 0, 0, 1600, 1000, o, N);
         double ms = (cv_now() - t0) * 1e3;
         printf("label thin: %u of %u in %.1f ms\n", n, N, ms);
         CHECK(n > 1000 && n < 4000);                            /* about one per 48 x 16 px box */
         CHECK(ms < 200);
         free(big); free(o);
+    }
+
+    {   /* the k smallest and largest: ordered, NaN and inf left out, a subset by ids, fewer than k */
+        static const float v[] = { 5, NAN, 1, 9, 3, INFINITY, 7, -2 };
+        uint32_t lo[3], hi[3];
+        uint32_t m = cv_label_extremes(v, NULL, 8, 3, lo, hi);
+        CHECK(m == 3);
+        CHECK(lo[0] == 7 && lo[1] == 2 && lo[2] == 4);          /* -2 1 3 */
+        CHECK(hi[0] == 3 && hi[1] == 6 && hi[2] == 0);          /* 9 7 5 */
+        static const uint32_t ids[] = { 0, 4, 6 };
+        m = cv_label_extremes(v, ids, 3, 5, lo, hi);
+        CHECK(m == 3 && lo[0] == 4 && lo[2] == 6 && hi[0] == 6 && hi[2] == 4);
+        CHECK(cv_label_extremes(v, NULL, 8, 0, lo, hi) == 0);
+        static const float nan2[] = { NAN, NAN };
+        CHECK(cv_label_extremes(nan2, NULL, 2, 2, lo, hi) == 0);
     }
 }
 #endif
