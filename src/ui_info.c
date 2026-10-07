@@ -131,9 +131,15 @@ void window_details(struct nk_context* ctx, float s, float row, int fw, int fh) 
     if (!was_open) nk_window_show(ctx, "Details", NK_SHOWN);
     was_open = true;
     build();
-    float w = 430 * s, h = CV_MIN(fh * 0.8f, row * (nl + 3.5f));
-    /* first opened in the view's upper middle: clear of the legend (right) and the probe (bottom left) */
-    if (nk_begin(ctx, "Details", nk_rect(G.vp_x + (G.vp_w - w) * 0.5f, G.vp_y + 20 * s, w, h),
+    /* as wide as its longest line; above the Probe at the left, so the model stays free to turn */
+    const struct nk_user_font* fnt = ctx->style.font;
+    float tw = 0;
+    for (int i = 0; i < nl; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, L[i], (int)strlen(L[i])));
+    float w = CV_MIN(CV_MAX(300 * s, tw + 2 * ctx->style.window.padding.x + 30 * s), G.vp_w * 0.6f);
+    const struct nk_window* pw = nk_window_find(ctx, "Probe");
+    float bottom = pw ? pw->bounds.y - 6 * s : G.vp_y + G.vp_h - 10 * s;
+    float h = CV_MIN(bottom - G.vp_y - 10 * s, row * (nl + 3.5f) + 16 * s);
+    if (nk_begin(ctx, "Details", nk_rect(G.vp_x + 10 * s, bottom - h, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
         nk_layout_row_dynamic(ctx, row, 1);
         for (int i = 0; i < nl; i++) {

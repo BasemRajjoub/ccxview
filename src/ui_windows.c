@@ -222,29 +222,44 @@ void window_overlay(struct nk_context* ctx, float s) {
         uint32_t e = G.probe.elem;
         v3 cen = v3_make(0, 0, 0);
         uint32_t n = G.frd.eoff[e + 1] - G.frd.eoff[e];
+        /* a label that would overlap one drawn already is left out (the element's first,
+           then the nodes in order), so a small element on screen shows a few ids, not a pile */
+        struct nk_rect placed[33];
+        int np = 0;
         for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
             uint32_t i = G.frd.conn[j];
             const float* p = G.frd.xyz + 3 * i;
             const float* d = G.disp ? G.disp + 3 * i : NULL;
             v3 q = v3_make(p[0] + (d ? d[0] * sc : 0), p[1] + (d ? d[1] * sc : 0), p[2] + (d ? d[2] * sc : 0));
             cen = v3_add(cen, v3_scale(q, 1.f / n));
-            float sx, sy;
-            if (!app_project(q, &sx, &sy)) continue;
-            char lab[16];
-            snprintf(lab, sizeof lab, "%u", G.frd.node_id[i]);
-            float tw = font->width(font->userdata, font->height, lab, (int)strlen(lab));
-            nk_fill_rect(cv, nk_rect(sx + 3 * s, sy - font->height * 0.5f, tw + 4 * s, font->height), 2, nk_rgba(0, 0, 0, 160));
-            nk_draw_text(cv, nk_rect(sx + 5 * s, sy - font->height * 0.5f, tw + 2, font->height), lab, (int)strlen(lab), font,
-                         nk_rgba(0, 0, 0, 0), nk_rgb(255, 230, 120));
         }
         float sx, sy;
         if (app_project(cen, &sx, &sy)) {
             char lab[24];
             snprintf(lab, sizeof lab, "el %u", G.frd.elem_id[e]);
             float tw = font->width(font->userdata, font->height, lab, (int)strlen(lab));
-            nk_fill_rect(cv, nk_rect(sx - tw * 0.5f - 2 * s, sy - font->height * 0.5f, tw + 4 * s, font->height), 2, nk_rgba(0, 0, 0, 160));
-            nk_draw_text(cv, nk_rect(sx - tw * 0.5f, sy - font->height * 0.5f, tw + 2, font->height), lab, (int)strlen(lab), font,
-                         nk_rgba(0, 0, 0, 0), nk_rgb(150, 220, 255));
+            struct nk_rect r = nk_rect(sx - tw * 0.5f - 2 * s, sy - font->height * 0.5f, tw + 4 * s, font->height);
+            nk_fill_rect(cv, r, 2, nk_rgba(0, 0, 0, 160));
+            nk_draw_text(cv, nk_rect(sx - tw * 0.5f, r.y, tw + 2, r.h), lab, (int)strlen(lab), font, nk_rgba(0, 0, 0, 0), nk_rgb(150, 220, 255));
+            placed[np++] = r;
+        }
+        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1] && np < 33; j++) {
+            uint32_t i = G.frd.conn[j];
+            const float* p = G.frd.xyz + 3 * i;
+            const float* d = G.disp ? G.disp + 3 * i : NULL;
+            v3 q = v3_make(p[0] + (d ? d[0] * sc : 0), p[1] + (d ? d[1] * sc : 0), p[2] + (d ? d[2] * sc : 0));
+            if (!app_project(q, &sx, &sy)) continue;
+            char lab[16];
+            snprintf(lab, sizeof lab, "%u", G.frd.node_id[i]);
+            float tw = font->width(font->userdata, font->height, lab, (int)strlen(lab));
+            struct nk_rect r = nk_rect(sx + 3 * s, sy - font->height * 0.5f, tw + 4 * s, font->height);
+            bool clash = false;
+            for (int k = 0; k < np && !clash; k++)
+                clash = r.x < placed[k].x + placed[k].w && placed[k].x < r.x + r.w && r.y < placed[k].y + placed[k].h && placed[k].y < r.y + r.h;
+            if (clash) continue;
+            nk_fill_rect(cv, r, 2, nk_rgba(0, 0, 0, 160));
+            nk_draw_text(cv, nk_rect(sx + 5 * s, r.y, tw + 2, r.h), lab, (int)strlen(lab), font, nk_rgba(0, 0, 0, 0), nk_rgb(255, 230, 120));
+            placed[np++] = r;
         }
     }
     nk_end(ctx);

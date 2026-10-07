@@ -48,7 +48,7 @@ ccxview --version
 | left drag / right or middle drag / wheel | orbit / pan / zoom, about the point under the cursor (View panel: up axis Y or Z, turntable or free rotation, cursor pivot on/off, rotation centre mark) |
 | X / Y / Z held + drag | orbit about that world axis only |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
-| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green); they are toned and outlined, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
+| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green); selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre) |
 | right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, clip here, copy, hide this element / material / type / set or show only it; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |

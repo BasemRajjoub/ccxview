@@ -89,7 +89,7 @@ void cv_render_colormap(int cmap, bool reverse, bool grey);
 enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_GEOTRI,
        CV_AUX_MARK, CV_AUX_PATHLN, CV_AUX_RAYLN, CV_AUX_PICKPT, CV_AUX_ELEMTRI, CV_AUX_CAPTRI,
        CV_AUX_SELLN, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN, CV_AUX_N };
-       /* the box selection: outline (vertex pairs), faces and nodes (in the negative), its max and min */
+       /* the box selection: outline (vertex pairs), faces (toned), nodes (dots), its max and min */
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n);
 /* the same with the second displacement part (harmonic: -DISPI, scaled by def_scale2) */
 void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n);

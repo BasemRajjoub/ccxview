@@ -18,6 +18,7 @@ static void sel_upload_none(void) {
 void app_sel_clear(void) {
     free(G.sel); G.sel = NULL; G.sel_n = 0;
     free(G.seln); G.seln = NULL; G.seln_n = 0;
+    free(G.sel_inside); G.sel_inside = NULL;
     G.boxq.on = false;
     sel_upload_none();
 }
@@ -37,8 +38,8 @@ static void marker(int which, uint32_t i, bool elem) {
     cv_free_vec(pos); cv_free_vec(disp);
 }
 
-/* what shows the selection: the elements' outer faces in the negative and outlined,
-   the nodes as dots in the negative, the max and min as balls; moves with the shape */
+/* what shows the selection: the elements' outer faces toned yellow and outlined, the
+   nodes as magenta dots, the max and min as red and blue balls; moves with the shape */
 void app_sel_refresh(void) {
     sel_upload_none();
     if (!G.loaded || (!G.sel_n && !G.seln_n)) return;
@@ -70,12 +71,9 @@ void app_sel_refresh(void) {
         app_aux_upload(CV_AUX_SELTRI, &pos, &disp, nv || ev ? val.a : NULL);
     }
     if (G.seln_n) {
-        pos.n = disp.n = val.n = 0;
-        for (uint32_t k = 0; k < G.seln_n; k++) {
-            push_pt(&pos, &disp, G.seln[k]);
-            if (cv_reserve(val, val.n + 1)) val.a[val.n++] = nv ? nv[G.seln[k]] : 0.f;
-        }
-        app_aux_upload(CV_AUX_SELPT, &pos, &disp, nv ? val.a : NULL);
+        pos.n = disp.n = 0;
+        for (uint32_t k = 0; k < G.seln_n; k++) push_pt(&pos, &disp, G.seln[k]);
+        app_aux_upload(CV_AUX_SELPT, &pos, &disp, NULL);
     }
     cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(val);
     if (G.boxq.on && G.boxq.gen == G.field_gen) {
@@ -93,19 +91,12 @@ static void take(const float* val, uint32_t* imax, uint32_t* imin, uint32_t* cnt
     if (*imin == UINT32_MAX || v < val[*imin]) *imin = i;
 }
 
-bool app_box_select(float x0, float y0, float x1, float y1) {
-    app_sel_clear();
-    if (!G.loaded) return false;
-    G.sel_box[0] = x0; G.sel_box[1] = y0; G.sel_box[2] = x1; G.sel_box[3] = y1;
-    bool crossing = x1 < x0;                         /* right to left */
-    bool want_e = G.sel_elems || !G.sel_nodes, want_n = G.sel_nodes;   /* never nothing */
-    float lx = CV_MIN(x0, x1), hx = CV_MAX(x0, x1), ly = CV_MIN(y0, y1), hy = CV_MAX(y0, y1);
-    uint32_t N = G.frd.n_nodes, E = G.frd.n_elems;
+/* which nodes a box holds, by projection with the camera as it is now */
+static uint8_t* box_nodes(float x0, float y0, float x1, float y1) {
+    uint32_t N = G.frd.n_nodes;
     uint8_t* inside = calloc(CV_MAX(N, 1), 1);
-    uint8_t* shown = calloc(CV_MAX(N, 1), 1);        /* nodes of shown elements */
-    uint32_t* sel = malloc((size_t)CV_MAX(E, 1) * sizeof *sel);
-    uint32_t* seln = want_n ? malloc((size_t)CV_MAX(N, 1) * sizeof *seln) : NULL;
-    if (!inside || !shown || !sel || (want_n && !seln)) { free(inside); free(shown); free(sel); free(seln); return false; }
+    if (!inside) return NULL;
+    float lx = CV_MIN(x0, x1), hx = CV_MAX(x0, x1), ly = CV_MIN(y0, y1), hy = CV_MAX(y0, y1);
     float mvp[16], mv[16];
     cam_matrices(mvp, mv, NULL);
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
@@ -117,14 +108,28 @@ bool app_box_select(float x0, float y0, float x1, float y1) {
         float sx = G.vp_x + (c[0] / c[3] * 0.5f + 0.5f) * G.vp_w, sy = G.vp_y + (0.5f - c[1] / c[3] * 0.5f) * G.vp_h;
         inside[i] = sx >= lx && sx <= hx && sy >= ly && sy <= hy;
     }
+    return inside;
+}
+
+/* the selection from the nodes a box held (taken over: freed with the selection):
+   the elements and / or nodes asked for, the extremes over them, the probe on the max */
+static bool select_from(uint8_t* inside, bool crossing) {
+    if (G.sel_inside == inside) G.sel_inside = NULL;  /* a reselect: keep it through the clear */
+    app_sel_clear();
+    G.sel_inside = inside;
+    bool want_e = G.sel_elems || !G.sel_nodes, want_n = G.sel_nodes;   /* never nothing */
+    uint32_t N = G.frd.n_nodes, E = G.frd.n_elems;
+    uint32_t* sel = malloc((size_t)CV_MAX(E, 1) * sizeof *sel);
+    uint32_t* seln = want_n ? malloc((size_t)CV_MAX(N, 1) * sizeof *seln) : NULL;
+    uint8_t* seen = calloc(CV_MAX(N, 1), 1);
+    if (!sel || (want_n && !seln) || !seen) { free(sel); free(seln); free(seen); return false; }
     uint32_t n = want_e ? cv_box_elems(&G.frd, G.vis, inside, crossing, sel) : 0, nn = 0;
-    if (want_n) {
+    if (want_n) {                                    /* nodes of shown elements */
         for (uint32_t e = 0; e < E; e++)
-            if (!G.vis || G.vis[e]) for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) shown[G.frd.conn[j]] = 1;
-        for (uint32_t i = 0; i < N; i++) if (inside[i] && shown[i]) seln[nn++] = i;
+            if (!G.vis || G.vis[e]) for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) seen[G.frd.conn[j]] = 1;
+        for (uint32_t i = 0; i < N; i++) if (inside[i] && seen[i]) seln[nn++] = i;
     }
-    free(shown);
-    if (!n && !nn) { free(inside); free(sel); free(seln); return false; }
+    if (!n && !nn) { free(sel); free(seln); free(seen); return false; }
     if (n) { G.sel = sel; G.sel_n = n; } else free(sel);
     if (nn) { G.seln = seln; G.seln_n = nn; } else free(seln);
     G.sel_crossing = crossing;
@@ -134,24 +139,24 @@ bool app_box_select(float x0, float y0, float x1, float y1) {
     const float* val = !G.has_field || G.field_src == 1 ? NULL : elem ? G.elem_val : G.scalar;
     uint32_t imax = UINT32_MAX, imin = UINT32_MAX, cnt = 0;
     if (val) {
-        memset(inside, 0, CV_MAX(N, 1));             /* reused: counted already */
+        memset(seen, 0, CV_MAX(N, 1));               /* reused: counted already */
         if (!elem && G.seln_n) for (uint32_t k = 0; k < G.seln_n; k++) take(val, &imax, &imin, &cnt, G.seln[k]);
         else if (!elem) {
             for (uint32_t k = 0; k < G.sel_n; k++)
                 for (uint32_t j = G.frd.eoff[G.sel[k]]; j < G.frd.eoff[G.sel[k] + 1]; j++) {
                     uint32_t i = G.frd.conn[j];
-                    if (!inside[i]) { inside[i] = 1; take(val, &imax, &imin, &cnt, i); }
+                    if (!seen[i]) { seen[i] = 1; take(val, &imax, &imin, &cnt, i); }
                 }
         } else if (G.sel_n) for (uint32_t k = 0; k < G.sel_n; k++) take(val, &imax, &imin, &cnt, G.sel[k]);
         else {
-            for (uint32_t k = 0; k < G.seln_n; k++) inside[G.seln[k]] = 1;
+            for (uint32_t k = 0; k < G.seln_n; k++) seen[G.seln[k]] = 1;
             for (uint32_t e = 0; e < E; e++) {
                 if (G.vis && !G.vis[e]) continue;
-                for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) if (inside[G.frd.conn[j]]) { take(val, &imax, &imin, &cnt, e); break; }
+                for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) if (seen[G.frd.conn[j]]) { take(val, &imax, &imin, &cnt, e); break; }
             }
         }
     }
-    free(inside);
+    free(seen);
     if (cnt) {
         app_probe_at(imax, elem);
         G.boxq.on = true; G.boxq.elem = elem; G.boxq.n = cnt; G.boxq.gen = G.field_gen;
@@ -161,9 +166,21 @@ bool app_box_select(float x0, float y0, float x1, float y1) {
     return true;
 }
 
+bool app_box_select(float x0, float y0, float x1, float y1) {
+    if (!G.loaded) return false;
+    uint8_t* inside = box_nodes(x0, y0, x1, y1);
+    if (!inside) return false;
+    bool ok = select_from(inside, x1 < x0);          /* right to left: a crossing */
+    if (!ok) app_sel_clear();
+    return ok;
+}
+
+/* the same nodes again, whatever the camera does now: only what is taken of them changes */
 bool app_box_reselect(void) {
-    if (!G.sel_n && !G.seln_n) return false;
-    return app_box_select(G.sel_box[0], G.sel_box[1], G.sel_box[2], G.sel_box[3]);
+    if (!G.sel_inside) return false;
+    bool ok = select_from(G.sel_inside, G.sel_crossing);
+    if (!ok) app_sel_clear();
+    return ok;
 }
 
 /* ---- hiding by hand -------------------------------------------------------------- */

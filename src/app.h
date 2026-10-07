@@ -318,7 +318,7 @@ typedef struct {
     uint32_t* seln;                  /* the selected nodes (indices), seln_n of them */
     uint32_t  seln_n;
     bool      sel_elems, sel_nodes;  /* what a box selects: elements, nodes, or both */
-    float     sel_box[4];            /* the last box (start x, y, end x, y), to select again when they change */
+    uint8_t*  sel_inside;            /* per node, 1: it was in the last box (as dragged), to select again when they change */
     bool      sel_crossing;          /* ... by a crossing box (else a window) */
     uint8_t*  hide;                  /* per element, 1: hidden by hand (context menu), NULL none */
     /* the context menu (right click in the view): where, and what was under it */
