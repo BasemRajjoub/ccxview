@@ -135,7 +135,7 @@ static uint8_t* first_faces(void) {
 }
 
 /* the mean of some points with their displacements, as one anchor */
-typedef struct { float c[3], cd[6]; uint32_t n; } mean;
+typedef struct { double c[3], cd[6]; uint32_t n; } mean;   /* double: a set may hold millions of nodes */
 static void mean_add(mean* m, const float p[3], const float d[6]) {
     for (int q = 0; q < 3; q++) m->c[q] += p[q];
     for (int q = 0; q < 6; q++) m->cd[q] += d[q];
@@ -143,9 +143,10 @@ static void mean_add(mean* m, const float p[3], const float d[6]) {
 }
 static void mean_anchor(mean* m, const char* text) {
     if (!m->n) return;
-    for (int q = 0; q < 3; q++) m->c[q] /= m->n;
-    for (int q = 0; q < 6; q++) m->cd[q] /= m->n;
-    anchor_add(m->c, m->cd, text);
+    float c[3], cd[6];
+    for (int q = 0; q < 3; q++) c[q] = (float)(m->c[q] / m->n);
+    for (int q = 0; q < 6; q++) cd[q] = (float)(m->cd[q] / m->n);
+    anchor_add(c, cd, text);
 }
 
 static void build_named(int kind) {
@@ -205,7 +206,8 @@ static void build_named(int kind) {
         if (!m) break;
         for (size_t k = 0; k < G.skin.n_face; k++) {
             uint32_t e = G.skin.face[k] >> 3;
-            if (e >= f->n_elems || !face_centre(e, (int)(G.skin.face[k] & 7), p, d)) continue;
+            if (e >= f->n_elems || !ax->of_elem || ax->of_elem[e] >= ax->n) continue;
+            if (!face_centre(e, (int)(G.skin.face[k] & 7), p, d)) continue;
             mean_add(&m[ax->of_elem[e]], p, d);
         }
         for (int mi = 0; mi < ax->n; mi++) {
@@ -322,7 +324,7 @@ void app_label_frame(const cv_draw* d) {
         return;
     }
     float px = roundf(CV_MAX(G.label_px, 6.f) * ui_scale());
-    if (!F.live || F.px != px) font_bake(px);
+    if (F.px != px) font_bake(px);           /* a failed bake is tried again only at another size */
     if (!F.live) return;
     bool rebuild = A.gen != G.label_gen || A.asked != G.label_kind || A.sel_only != G.label_sel_only || A.probe_only != G.label_probe_only;
     if (rebuild) build_anchors();

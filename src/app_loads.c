@@ -534,9 +534,10 @@ void loads_refresh(void) {
             }
             node_axes(dk, c->node, p, Q);
             for (int k = 0; k < 3; k++) dir[k] = Q[(c->dof - 1) % 3][k] * (c->value < 0 ? -1.f : 1.f);
+            bool drawn = true;
             if (c->dof > 3) moment(&mo, p, dir, LL * rel(c->value, mmax), d);
-            else if (thin_take(&th, p, 0.4f * LL, 100u + c->dof * 2u + (c->value < 0))) arrow(&ld, p, dir, LL * rel(c->value, fmax), d);
-            if (G.label_kind == CV_LABEL_LOADS) { snprintf(lt, sizeof lt, "%s %g", c->dof > 3 ? "M" : "F", c->value); label_sink_add(p, d, lt); }
+            else if ((drawn = thin_take(&th, p, 0.4f * LL, 100u + c->dof * 2u + (c->value < 0)))) arrow(&ld, p, dir, LL * rel(c->value, fmax), d);
+            if (drawn && G.label_kind == CV_LABEL_LOADS) { snprintf(lt, sizeof lt, "%s %g", c->dof > 3 ? "M" : "F", c->value); label_sink_add(p, d, lt); }
         }
 
         /* on faces and edges */
@@ -615,7 +616,10 @@ void loads_refresh(void) {
             for (int k = 0; k < 3; k++) back[k] = -ax[k];
             frame(ax, u, w);
             arc(l, cen, ax, r, 0, 6.2831853f, cd, NULL);
-            if (G.label_kind == CV_LABEL_LOADS) { snprintf(lt, sizeof lt, held && v == 0 ? "bolt locked" : "bolt %g", v); label_sink_add(cen, cd, lt); }
+            if (G.label_kind == CV_LABEL_LOADS) {
+                if (held && v == 0) snprintf(lt, sizeof lt, "bolt locked"); else snprintf(lt, sizeof lt, "bolt %g", v);
+                label_sink_add(cen, cd, lt);
+            }
             for (int q = 0; q < 4; q++) {
                 float at[3], tip[3];
                 const float* e = q & 1 ? w : u;
