@@ -905,9 +905,10 @@ static void draw_labels(const cv_draw* d) {
     vs_label vs;
     memcpy(vs.mvp, d->mvp, sizeof vs.mvp);
     vs.p[0] = d->def_scale; vs.p[1] = d->def_scale2; vs.p[2] = (float)d->vp_w; vs.p[3] = (float)d->vp_h;
-    /* three label heights: pixels to view units per clip w are 2 / (P11 * vp_h) */
+    /* by the labels' reach, so a face tilted up to 45 degrees cannot cut into them; pixels to
+       view units per clip w are 2 / (P11 * vp_h) */
     float per_px = 2.f / CV_MAX(d->proj[5] * (float)d->vp_h, 1e-6f);
-    vs.q[0] = 3.f * CV_MAX(d->label_px, 1.f) * per_px; vs.q[1] = d->labels_on_top ? 1.f : 0.f; vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
+    vs.q[0] = CV_MAX(d->label_px, 1.f) * per_px; vs.q[1] = d->labels_on_top ? 1.f : 0.f; vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
     sg_apply_pipeline(R.pip_label);
     for (int pass = 0; pass < 2; pass++) {
         uint32_t n = pass ? LB.ng : LB.nb;

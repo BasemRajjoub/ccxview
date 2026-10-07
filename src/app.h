@@ -479,7 +479,7 @@ const char* app_label_name(int kind);          /* "node id", ... for the panel *
 const char* app_label_key(int kind);           /* "node", ... for --labels and the ini */
 int  app_label_find(const char* key);          /* -1 unknown */
 void app_label_changed(void);                  /* the labelled things changed: anchors again next frame */
-void app_label_frame(const cv_draw* d);        /* per frame, before cv_render_draw: thin, lay out, upload when needed */
+void app_label_frame(cv_draw* d);              /* per frame, before cv_render_draw: thin, lay out, upload when needed; sets d->label_px */
 /* the shown .frd field's stored components at a node (global, as the file has them);
    names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
 int app_field_comps(uint32_t node, char names[][12], float* vals, int max);

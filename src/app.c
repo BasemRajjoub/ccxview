@@ -446,7 +446,6 @@ static void frame(void) {
         d.labels = G.label_kind != CV_LABEL_NONE;
         d.labels_on_top = G.label_kind == CV_LABEL_SETS || G.label_kind == CV_LABEL_LINKS || G.label_kind == CV_LABEL_MATERIALS ||
                           G.label_probe_only;    /* a few labels that must show: a centre may lie inside the model */
-        d.label_px = roundf(CV_MAX(G.label_px, 6.f) * ui_scale());
         memcpy(d.label_rgb, G.label_rgb, sizeof d.label_rgb); memcpy(d.label_box_rgba, G.label_box_rgba, sizeof d.label_box_rgba);
         d.gauss_on_top = G.gp_on_top;
         d.gauss_points_color = G.gp_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;

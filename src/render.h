@@ -60,7 +60,7 @@ typedef struct {
     bool  labels;              /* the label layer (cv_render_labels) */
     bool  labels_on_top;       /* through the faces: names at centres inside the model */
     float label_rgb[3], label_box_rgba[4];
-    float label_px;            /* the text height on screen: sets the depth pull */
+    float label_px;            /* how far a label reaches from its point, px: the depth pull (app_label_frame) */
     int   vectors_color;       /* CV_COLOR_SOLID or CV_COLOR_NODAL */
     float geo_size;
     int   vp_x, vp_y, vp_w, vp_h; /* viewport in framebuffer pixels, origin top-left */

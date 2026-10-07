@@ -60,6 +60,7 @@ static void font_bake(float px) {
    no text. Named things keep their text. */
 typedef struct {
     cv_fvec anc;                        /* 9 per anchor */
+    cv_fvec nrm;                        /* 3 per anchor: the surface normal there, 0 0 0 for none (never culled) */
     CV_VEC(uint32_t) ref;               /* per anchor: node / element index, UINT32_MAX none */
     CV_VEC(char) txt;                   /* texts, 0-terminated, back to back */
     CV_VEC(uint32_t) toff;              /* text offset per anchor, UINT32_MAX: formatted from ref */
@@ -70,24 +71,56 @@ static struct { anchors a; unsigned gen, serial; int kind, asked; bool sel_only,
 /* kind: the one built (a value field per element becomes evalue); asked: G.label_kind then;
    probe_*: the probe these were built for (probe-only labels follow it) */
 
-static void pack(anchors* s, const float p[3], const float d[6], uint32_t ref, const char* text) {
-    if (!cv_reserve(s->anc, s->anc.n + 9) || !cv_reserve(s->toff, s->toff.n + 1) || !cv_reserve(s->ref, s->ref.n + 1)) return;
+static void pack(anchors* s, const float p[3], const float d[6], const float n[3], uint32_t ref, const char* text) {
+    if (!cv_reserve(s->anc, s->anc.n + 9) || !cv_reserve(s->nrm, s->nrm.n + 3) || !cv_reserve(s->toff, s->toff.n + 1) ||
+        !cv_reserve(s->ref, s->ref.n + 1)) return;
     size_t len = text ? strlen(text) + 1 : 0;
     if (len && !cv_reserve(s->txt, s->txt.n + len)) return;
     for (int k = 0; k < 3; k++) s->anc.a[s->anc.n++] = p[k];
     for (int k = 0; k < 6; k++) s->anc.a[s->anc.n++] = d[k];
+    for (int k = 0; k < 3; k++) s->nrm.a[s->nrm.n++] = n ? n[k] : 0.f;
     s->ref.a[s->ref.n++] = ref;
     s->toff.a[s->toff.n++] = text ? (uint32_t)s->txt.n : UINT32_MAX;
     if (len) { memcpy(s->txt.a + s->txt.n, text, len); s->txt.n += len; }
     s->n++;
 }
-static void anchor_add(const float p[3], const float d[6], const char* text) { pack(&A.a, p, d, UINT32_MAX, text); }
-static void anchor_ref(const float p[3], const float d[6], uint32_t ref) { pack(&A.a, p, d, ref, NULL); }
+static void anchor_add(const float p[3], const float d[6], const char* text) { pack(&A.a, p, d, NULL, UINT32_MAX, text); }
+static void anchor_ref(const float p[3], const float d[6], const float n[3], uint32_t ref) { pack(&A.a, p, d, n, ref, NULL); }
+
+/* the surface normal at each skin node: the mean of its skin triangles' (undeformed), once
+   per skin; a label whose node faces away from the eye is not drawn */
+static struct { float* n; const uint32_t* tri; size_t n_tri; } N;
+static const float* node_normals(void) {
+    if (N.n && N.tri == G.skin.tri && N.n_tri == G.skin.n_tri) return N.n;
+    free(N.n); N.n = calloc((size_t)CV_MAX(G.frd.n_nodes, 1) * 3, sizeof *N.n);
+    if (!N.n) return NULL;
+    const float* x = G.frd.xyz;
+    for (size_t t = 0; t < G.skin.n_tri; t++) {
+        const uint32_t* v = G.skin.tri + 3 * t;
+        const float *a = x + 3 * v[0], *b = x + 3 * v[1], *c = x + 3 * v[2];
+        float e1[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, e2[3] = { c[0] - a[0], c[1] - a[1], c[2] - a[2] };
+        float nn[3] = { e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0] };
+        for (int j = 0; j < 3; j++) for (int k = 0; k < 3; k++) N.n[3 * v[j] + k] += nn[k];   /* area weighted */
+    }
+    N.tri = G.skin.tri; N.n_tri = G.skin.n_tri;
+    return N.n;
+}
 
 static void anchor_node(uint32_t i) {
     float d[6];
     app_node_disp6(i, d);
-    anchor_ref(G.frd.xyz + 3 * i, d, i);
+    const float* nn = node_normals();
+    anchor_ref(G.frd.xyz + 3 * i, d, nn ? nn + 3 * i : NULL, i);
+}
+
+/* the outward normal of an exterior face, from its first three corners */
+static void face_normal(uint32_t e, int face, float n[3]) {
+    uint32_t c[4];
+    n[0] = n[1] = n[2] = 0;
+    if (cv_elem_face_corners(&G.frd, e, face, c) < 3) return;
+    const float *a = G.frd.xyz + 3 * c[0], *b = G.frd.xyz + 3 * c[1], *q = G.frd.xyz + 3 * c[2];
+    float e1[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, e2[3] = { q[0] - a[0], q[1] - a[1], q[2] - a[2] };
+    n[0] = e1[1] * e2[2] - e1[2] * e2[1]; n[1] = e1[2] * e2[0] - e1[0] * e2[2]; n[2] = e1[0] * e2[1] - e1[1] * e2[0];
 }
 
 /* the text of an anchor: its own, or its id / value formatted now */
@@ -121,8 +154,8 @@ static bool face_centre(uint32_t e, int face, float p[3], float d[6]) {
 
 /* ---- the sink: loads and supports, recorded by app_loads.c as it builds the symbols ---- */
 static struct { bool on; anchors a; } S;
-void label_sink_begin(int kind) { S.on = kind == CV_LABEL_LOADS || kind == CV_LABEL_SUPPORTS; S.a.anc.n = S.a.txt.n = S.a.toff.n = S.a.ref.n = 0; S.a.n = 0; }
-void label_sink_add(const float p[3], const float d[6], const char* text) { if (S.on) pack(&S.a, p, d, UINT32_MAX, text); }
+void label_sink_begin(int kind) { S.on = kind == CV_LABEL_LOADS || kind == CV_LABEL_SUPPORTS; S.a.anc.n = S.a.nrm.n = S.a.txt.n = S.a.toff.n = S.a.ref.n = 0; S.a.n = 0; }
+void label_sink_add(const float p[3], const float d[6], const char* text) { if (S.on) pack(&S.a, p, d, NULL, UINT32_MAX, text); }
 
 /* per element its first exterior face (0xFF none), from the skin */
 static uint8_t* first_faces(void) {
@@ -243,7 +276,7 @@ static void elem_label(uint32_t e) {
 }
 
 static void build_anchors(void) {
-    A.a.anc.n = A.a.txt.n = A.a.toff.n = A.a.ref.n = 0; A.a.n = 0;
+    A.a.anc.n = A.a.nrm.n = A.a.txt.n = A.a.toff.n = A.a.ref.n = 0; A.a.n = 0;
     A.kind = A.asked = G.label_kind; A.gen = G.label_gen; A.sel_only = G.label_sel_only; A.probe_only = G.label_probe_only;
     A.probe_on = G.probe_on; A.probe_elem = G.probe.elem;
     A.serial++;
@@ -304,7 +337,9 @@ static void build_anchors(void) {
             float p[3], d[6];
             if (!face_centre(e, (int)(G.skin.face[k] & 7), p, d)) continue;
             if (kind == CV_LABEL_EVALUE && G.elem_val[e] != G.elem_val[e]) continue;
-            anchor_ref(p, d, e);
+            float nf[3];
+            face_normal(e, (int)(G.skin.face[k] & 7), nf);
+            anchor_ref(p, d, nf, e);
         }
         free(done);
         break;
@@ -334,7 +369,7 @@ static void coarse_check(float cell) {
     C.cell = cell; C.serial = A.serial;
 }
 
-void app_label_frame(const cv_draw* d) {
+void app_label_frame(cv_draw* d) {
     static float last_mvp[16], last_px, last_sp, last_f1, last_f2, last_clip[4]; static unsigned last_gen; static int last_kind, last_w, last_h;
     if (!G.loaded || G.label_kind == CV_LABEL_NONE) {
         if (A.a.n || last_kind) {
@@ -369,6 +404,9 @@ void app_label_frame(const cv_draw* d) {
     memcpy(last_mvp, d->mvp, sizeof last_mvp); memcpy(last_clip, clip, sizeof last_clip); last_px = px; last_sp = G.label_spacing; last_gen = G.label_gen;
     last_kind = G.label_kind; last_w = d->vp_w; last_h = d->vp_h; last_f1 = d->def_scale; last_f2 = d->def_scale2;
     const float* M = d->mvp;
+    v3 eye, fwd, right, up;                      /* to cull the nodes facing away: toward the eye, or against the view */
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    bool persp = !G.cam.ortho;
     uint32_t np = 0;
     for (uint32_t k = 0; k < n_ids; k++) {
         uint32_t i = ids ? ids[k] : k;
@@ -377,6 +415,11 @@ void app_label_frame(const cv_draw* d) {
         for (int q = 0; q < 3; q++) p[q] = a[q] + d->def_scale * a[3 + q] + d->def_scale2 * a[6 + q];
         if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;      /* no position (NaN displacement) */
         if (d->clip && p[0] * d->clip_n[0] + p[1] * d->clip_n[1] + p[2] * d->clip_n[2] > d->clip_d) continue;   /* cut away */
+        const float* nn = A.a.nrm.a + 3 * i;
+        if (nn[0] != 0 || nn[1] != 0 || nn[2] != 0) {                     /* faces away from the eye */
+            float to[3] = { persp ? eye.x - p[0] : -fwd.x, persp ? eye.y - p[1] : -fwd.y, persp ? eye.z - p[2] : -fwd.z };
+            if (nn[0] * to[0] + nn[1] * to[1] + nn[2] * to[2] <= 0) continue;
+        }
         for (int r = 0; r < 4; r++) c[r] = M[r] * p[0] + M[4 + r] * p[1] + M[8 + r] * p[2] + M[12 + r];
         if (c[3] <= 1e-9f) continue;                                      /* behind the eye */
         pts[np].sx = d->vp_x + (c[0] / c[3] * 0.5f + 0.5f) * d->vp_w;
@@ -391,10 +434,14 @@ void app_label_frame(const cv_draw* d) {
     cv_fvec gly = {0}, box = {0};
     float dx = 4 * ui_scale(), dy = -(F.m.height + 3 * ui_scale());
     char t[64];
+    float reach = F.m.height;                      /* the farthest a label's box reaches from its point, px */
     for (uint32_t k = 0; k < n; k++) {
         uint32_t i = chosen[k];
-        cv_label_layout(&F.m, A.a.anc.a + 9 * i, anchor_text(i, t, sizeof t), dx, dy, true, 2 * ui_scale(), &gly, &box);
+        float w = cv_label_layout(&F.m, A.a.anc.a + 9 * i, anchor_text(i, t, sizeof t), dx, dy, true, 2 * ui_scale(), &gly, &box);
+        float rx = dx + w + 2 * ui_scale(), ry = -dy + 2 * ui_scale();
+        reach = CV_MAX(reach, sqrtf(rx * rx + ry * ry));
     }
+    d->label_px = reach;                           /* the depth pull: a label clears the face its point lies on */
     cv_render_labels(box.a, (uint32_t)(box.n / CV_LABEL_FLOATS), gly.a, (uint32_t)(gly.n / CV_LABEL_FLOATS));
     cv_free_vec(gly); cv_free_vec(box); free(pts); free(chosen);
     snprintf(G.label_note, sizeof G.label_note, "labels: %s, shown %u of %u", app_label_name(A.kind), n, A.a.n);
