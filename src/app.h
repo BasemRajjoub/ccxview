@@ -25,7 +25,7 @@ enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
 /* the side panel's sections and sub-sections: open or closed, kept in the settings */
 enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
        CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
-       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_N };
+       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_N };
 
 enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
 
@@ -160,7 +160,6 @@ typedef struct {
     size_t    nan_count;             /* values without data */
     bool      show_markers;          /* min / max balls */
     bool      show_ghost;            /* undeformed edges behind the deformed shape */
-    bool      show_ids;              /* node / element ids of the picked element */
     bool      find_open;             /* Ctrl+F window */
     int       seq_left, seq_total;   /* PNG sequence export: frames still to write */
     bool      seq_anim;              /* Animate before the export, restored after */

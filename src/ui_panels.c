@@ -482,6 +482,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
         if (G.frd.n_steps == 0) {
             nk_label(ctx, "No results in this file.", NK_TEXT_LEFT);
             section_mesh(ctx, s, row);
+            section_label(ctx, s, row);
         } else {
             const cv_step* st = &G.frd.steps[G.step];
             nk_bool em = G.elem_mode;
@@ -528,6 +529,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             section_calc(ctx, s, row);
             section_failure(ctx, s, row);
             section_mesh(ctx, s, row);
+            section_label(ctx, s, row);
         }
         /* integration-point fields from the .dat, at this increment */
         if (gp_loaded()) {

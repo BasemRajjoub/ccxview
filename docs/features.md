@@ -126,6 +126,12 @@ and what is drawn for it; `samples/symbols/` shows them all.
 - Compare two runs (A minus B).
 - Clip plane with the cut filled, crop box, mirror symmetry, cyclic symmetry,
   replicate (rows of copies of a periodic model).
+- Labels on the model (Fields > Labels): node or element ids, the field's value at
+  nodes or per element, the names of sets, surfaces, couplings and materials, loads
+  with their values, supports with their held DOFs. Drawn by the GPU at their own
+  size, hidden by the model where it is in front, thinned to a spacing nearest
+  first with the count shown; size, colours and spacing to taste; the selection
+  or the probed element only.
 - A right-click menu with what fits where you click: the element and node under
   the cursor, the box selection, the view. Hide an element, a material, an
   element type or a set, or show only it; hide or isolate a selection; show all.

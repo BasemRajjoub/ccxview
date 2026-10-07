@@ -1,5 +1,5 @@
 /* bench.c -- headless: map + parse + groups + skin + decode, timed.
-   usage: bench [--quiet] file | bench --fuzz N file */
+   usage: bench [--quiet] file | bench --fuzz N file | bench --labels N */
 #include <math.h>
 #include "../src/frd.h"
 #include "../src/mesh.h"
@@ -10,6 +10,30 @@
 #include "../src/inp.h"
 #include "../src/fbd.h"
 #include "../src/sta.h"
+#include "../src/label.h"
+
+/* --labels N: thin N random anchors on a 1600 x 1000 view at 24 px, and the coarse pass over N random points */
+static int bench_labels(uint32_t N) {
+    cv_label_pt* p = malloc(N * sizeof *p);
+    uint32_t* out = malloc(N * sizeof *out);
+    float* xyz = malloc((size_t)N * 3 * sizeof *xyz);
+    if (!p || !out || !xyz) { fprintf(stderr, "out of memory\n"); return 1; }
+    unsigned s = 7;
+    for (uint32_t i = 0; i < N; i++) {
+        float r[3];
+        for (int k = 0; k < 3; k++) { s = s * 1103515245u + 12345u; r[k] = (float)(s >> 8 & 0xffff) / 65535.f; }
+        p[i] = (cv_label_pt){ r[0] * 1600, r[1] * 1000, r[2], i };
+        memcpy(xyz + 3 * i, r, sizeof r);
+    }
+    double t0 = cv_now();
+    uint32_t n = cv_label_thin(p, N, 24, 0, 0, 1600, 1000, out, N);
+    double t1 = cv_now();
+    uint32_t m = cv_label_coarse(xyz, N, 0.02f, out);
+    double t2 = cv_now();
+    printf("labels: thin %u -> %u in %.1f ms; coarse %u -> %u in %.1f ms\n", N, n, (t1 - t0) * 1e3, N, m, (t2 - t1) * 1e3);
+    free(p); free(out); free(xyz);
+    return 0;
+}
 
 /* --fuzz N file: parse N byte-flipped copies with the reader matching the
    extension (and truncated prefixes). Only crashes and sanitizer reports count. */
@@ -71,8 +95,9 @@ static bool file_reader(void* user, const char* path, char** data, size_t* size)
 
 int main(int argc, char** argv) {
     if (argc == 4 && strcmp(argv[1], "--fuzz") == 0) return fuzz(argv[3], atoi(argv[2]));
+    if (argc == 3 && strcmp(argv[1], "--labels") == 0) return bench_labels((uint32_t)strtoul(argv[2], NULL, 10));
     int quiet = argc > 1 && strcmp(argv[1], "--quiet") == 0;
-    if (argc < 2 + quiet) { fprintf(stderr, "usage: bench [--quiet] file | bench --fuzz N file\n"); return 2; }
+    if (argc < 2 + quiet) { fprintf(stderr, "usage: bench [--quiet] file | bench --fuzz N file | bench --labels N\n"); return 2; }
     const char* path = argv[1 + quiet];
 
     cv_map m;

@@ -235,11 +235,15 @@ static int wrap_pieces(const struct nk_user_font* f, const char* txt, float w, i
 
 static float head_row(const struct nk_user_font* f, float row, float s) { return CV_MIN(row, f->height + 6 * s); }
 
+/* the title's lines: the field, its component, its unit, and the labels' count while they are on */
+enum { HEAD_LINES = 4 };
+static const char* head_line(int k) { return k < 3 ? G.legend_lines[k] : G.label_note; }
+
 /* the legend width for the title: its widest line, within the legend's limits */
 static float head_width(const struct nk_user_font* f, float s) {
     float w = 150 * s;
-    for (int k = 0; k < 3; k++) {
-        const char* t = G.legend_lines[k];
+    for (int k = 0; k < HEAD_LINES; k++) {
+        const char* t = head_line(k);
         w = CV_MAX(w, f->width(f->userdata, f->height, t, (int)strlen(t)) + 24 * s);
     }
     return CV_MIN(w, 260 * s);
@@ -248,7 +252,7 @@ static float head_width(const struct nk_user_font* f, float s) {
 /* how many rows the title takes in a legend whose text is w wide */
 static int head_rows(const struct nk_user_font* f, float w) {
     int n = 0, len[HEAD_PIECES];
-    for (int k = 0; k < 3; k++) if (G.legend_lines[k][0]) n += wrap_pieces(f, G.legend_lines[k], w, len, HEAD_PIECES);
+    for (int k = 0; k < HEAD_LINES; k++) if (head_line(k)[0]) n += wrap_pieces(f, head_line(k), w, len, HEAD_PIECES);
     return CV_MAX(n, 1);
 }
 
@@ -292,8 +296,8 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
     struct nk_rect cr = nk_window_get_content_region(ctx);
     float hr = head_row(hf, row, s), tw = cr.w - 2 * ctx->style.text.padding.x - 4;
     int nrow = 0;
-    for (int k = 0; k < 3; k++) {
-        const char* ln = G.legend_lines[k];
+    for (int k = 0; k < HEAD_LINES; k++) {
+        const char* ln = head_line(k);
         if (!ln[0]) continue;
         int len[HEAD_PIECES], np = wrap_pieces(hf, ln, tw, len, HEAD_PIECES);
         for (int p = 0, at = 0; p < np; at += len[p++]) {

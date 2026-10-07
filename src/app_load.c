@@ -446,7 +446,7 @@ static void apply_load(cv_job* j) {
     if (O.find) {
         bool el = O.find[0] == 'e' || O.find[0] == 'E';
         if (!app_find((uint32_t)strtoul(O.find + (el ? 1 : 0), NULL, 10), el)) cv_msg_add(&G.msgs, 0, false, "--find: not in this model");
-        else G.show_ids = true;
+        else { G.label_probe_only = true; if (G.label_kind == CV_LABEL_NONE) G.label_kind = CV_LABEL_NODE; app_label_changed(); }
     }
     if (O.nsets && deck_loaded()) {
         const cv_inp* dk = deck_get();

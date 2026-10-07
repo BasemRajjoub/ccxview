@@ -122,8 +122,13 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     }
     if (G.sel_n || G.seln_n) ui_sel_what(ctx, row);
     nk_layout_row_dynamic(ctx, row, 3);
-    tip(ctx, "Node ids of this element, drawn in the view");
-    nk_checkbox_label(ctx, "ids", &G.show_ids);
+    nk_bool lb = G.label_probe_only && G.label_kind != CV_LABEL_NONE;
+    tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");
+    if (nk_checkbox_label(ctx, "labels", &lb)) {
+        G.label_probe_only = lb;
+        if (lb && G.label_kind == CV_LABEL_NONE) G.label_kind = CV_LABEL_NODE;
+        app_label_changed();
+    }
     tip(ctx, "Everything about this node and element in a window of its own:\n"
              "displacement, every component of the field, sets, nodes, the box selection");
     if (nk_button_label(ctx, "details...")) G.show_details = !G.show_details;
@@ -152,7 +157,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     nk_end(ctx);
 }
 
-/* ---- overlay: text in the 3D view (node / element ids of the picked element) ---- */
+/* ---- the navigation mark in the 3D view ---- */
 /* The navigation mark: while the mouse turns, pans or zooms the view, what it
    happens about -- an axis cross (X red, Y green, Z blue) with a ring at the
    rotation centre, a ring and cross hair at the zoom point. Only while the
@@ -209,64 +214,6 @@ void window_nav(struct nk_context* ctx, float s) {
     nk_style_pop_style_item(ctx);
 }
 
-void window_overlay(struct nk_context* ctx, float s) {
-    if (!G.loaded || !G.probe_on || !G.show_ids || G.probe.elem >= G.frd.n_elems) return;
-    struct nk_rect wr = nk_rect(G.vp_x, G.vp_y, G.vp_w, G.vp_h);
-    nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(nk_rgba(0, 0, 0, 0)));
-    nk_style_push_float(ctx, &ctx->style.window.border, 0);
-    if (nk_begin(ctx, "overlay", wr, NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_NO_INPUT | NK_WINDOW_BACKGROUND)) {
-        nk_window_set_bounds(ctx, "overlay", wr);
-        struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
-        const struct nk_user_font* font = ctx->style.font;
-        float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
-        uint32_t e = G.probe.elem;
-        v3 cen = v3_make(0, 0, 0);
-        uint32_t n = G.frd.eoff[e + 1] - G.frd.eoff[e];
-        /* a label that would overlap one drawn already is left out (the element's first,
-           then the nodes in order), so a small element on screen shows a few ids, not a pile */
-        struct nk_rect placed[33];
-        int np = 0;
-        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
-            uint32_t i = G.frd.conn[j];
-            const float* p = G.frd.xyz + 3 * i;
-            const float* d = G.disp ? G.disp + 3 * i : NULL;
-            v3 q = v3_make(p[0] + (d ? d[0] * sc : 0), p[1] + (d ? d[1] * sc : 0), p[2] + (d ? d[2] * sc : 0));
-            cen = v3_add(cen, v3_scale(q, 1.f / n));
-        }
-        float sx, sy;
-        if (app_project(cen, &sx, &sy)) {
-            char lab[24];
-            snprintf(lab, sizeof lab, "el %u", G.frd.elem_id[e]);
-            float tw = font->width(font->userdata, font->height, lab, (int)strlen(lab));
-            struct nk_rect r = nk_rect(sx - tw * 0.5f - 2 * s, sy - font->height * 0.5f, tw + 4 * s, font->height);
-            nk_fill_rect(cv, r, 2, nk_rgba(0, 0, 0, 160));
-            nk_draw_text(cv, nk_rect(sx - tw * 0.5f, r.y, tw + 2, r.h), lab, (int)strlen(lab), font, nk_rgba(0, 0, 0, 0), nk_rgb(150, 220, 255));
-            placed[np++] = r;
-        }
-        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1] && np < 33; j++) {
-            uint32_t i = G.frd.conn[j];
-            const float* p = G.frd.xyz + 3 * i;
-            const float* d = G.disp ? G.disp + 3 * i : NULL;
-            v3 q = v3_make(p[0] + (d ? d[0] * sc : 0), p[1] + (d ? d[1] * sc : 0), p[2] + (d ? d[2] * sc : 0));
-            if (!app_project(q, &sx, &sy)) continue;
-            char lab[16];
-            snprintf(lab, sizeof lab, "%u", G.frd.node_id[i]);
-            float tw = font->width(font->userdata, font->height, lab, (int)strlen(lab));
-            struct nk_rect r = nk_rect(sx + 3 * s, sy - font->height * 0.5f, tw + 4 * s, font->height);
-            bool clash = false;
-            for (int k = 0; k < np && !clash; k++)
-                clash = r.x < placed[k].x + placed[k].w && placed[k].x < r.x + r.w && r.y < placed[k].y + placed[k].h && placed[k].y < r.y + r.h;
-            if (clash) continue;
-            nk_fill_rect(cv, r, 2, nk_rgba(0, 0, 0, 160));
-            nk_draw_text(cv, nk_rect(sx + 5 * s, r.y, tw + 2, r.h), lab, (int)strlen(lab), font, nk_rgba(0, 0, 0, 0), nk_rgb(255, 230, 120));
-            placed[np++] = r;
-        }
-    }
-    nk_end(ctx);
-    nk_style_pop_float(ctx);
-    nk_style_pop_style_item(ctx);
-}
-
 /* ---- find (Ctrl+F): a node or element by its id -------------------------------- */
 void window_find(struct nk_context* ctx, float s, float row) {
     static bool was_open;
@@ -292,7 +239,7 @@ void window_find(struct nk_context* ctx, float s, float row) {
         if ((ev & NK_EDIT_COMMITED) || go) {
             uint32_t id = (uint32_t)strtoul(buf, NULL, 10);
             missing = !app_find(id, element);
-            if (!missing) G.show_ids = true;
+            if (!missing) { G.label_probe_only = true; if (G.label_kind == CV_LABEL_NONE) G.label_kind = CV_LABEL_NODE; app_label_changed(); }
         }
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label_colored(ctx, missing ? "not in this model" : "id as in the file; Enter", NK_TEXT_LEFT,

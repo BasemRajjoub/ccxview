@@ -35,6 +35,7 @@
 #define section_failure         uii_section_failure
 #define window_mesh             uii_window_mesh
 #define section_mesh            uii_section_mesh
+#define section_label           uii_section_label
 #define units_summary           uii_units_summary
 #define window_probe            uii_window_probe
 #define ui_sel_what             uii_sel_what
@@ -42,7 +43,6 @@
 #define window_about            uii_window_about
 #define window_menu             uii_window_menu
 #define window_nav              uii_window_nav
-#define window_overlay          uii_window_overlay
 #define window_find             uii_window_find
 #define window_browser          uii_window_browser
 #define drop_hint               uii_drop_hint
@@ -135,6 +135,7 @@ void window_failure(struct nk_context* ctx, float s, float row, int fw, int fh);
 void section_failure(struct nk_context* ctx, float s, float row);
 void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_mesh.c */
 void section_mesh(struct nk_context* ctx, float s, float row);
+void section_label(struct nk_context* ctx, float s, float row);    /* ui_label.c */
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
 void ui_sel_what(struct nk_context* ctx, float row);   /* ui_windows.c: what a box selects */
@@ -142,7 +143,6 @@ void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);
 void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
 void window_menu(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_menu.c */
 void window_nav(struct nk_context* ctx, float s);
-void window_overlay(struct nk_context* ctx, float s);
 void window_find(struct nk_context* ctx, float s, float row);
 void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh);
 void drop_hint(struct nk_context* ctx, float s, float row);
