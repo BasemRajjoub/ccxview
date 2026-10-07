@@ -32,6 +32,8 @@ Measured on one desktop PC; `build/bench file.frd` prints the numbers for yours.
   shape, animation, vectors, principal stresses, tensor glyphs, stress
   trajectories, Gauss points, probe with full node and element details,
   CAD-style box selection with its max and min, history and path plots.
+  Labels on the model: ids, values, the n largest and smallest, set and
+  material names, loads and supports, any mix, thinned to stay readable.
 - **The deck on the model.** Supports, loads, thermal loads, bolts, springs and
   constraints of the step on screen, each with its own 3D symbol.
 - **True to the element.** Quadratic elements are drawn and cut through their
