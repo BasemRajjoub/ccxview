@@ -95,7 +95,7 @@ static void init(void) {
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
     G.sel_elems = true;
-    G.label_px = 13.f; G.minmax_n = 1; G.label_spacing = 10.f; G.label_front = true;
+    G.label_px = 13.f; G.minmax_n = 1; G.oor_grey = 3; G.label_spacing = 10.f; G.label_front = true;
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
@@ -385,7 +385,7 @@ static void frame(void) {
         d.rmin = G.rmin; d.rmax = G.rmax;
         if (!(d.rmax > d.rmin)) { d.rmin -= 0.5f; d.rmax += 0.5f; }  /* constant field */
         d.bands = G.bands;
-        d.grey_out_of_range = G.range_lock;
+        d.grey_out_of_range = G.range_lock ? G.oor_grey : 0;
         /* a .dat field lives on the Gauss points only: the faces stay plain */
         int fm = (!G.has_field || G.field_src == 1) ? CV_COLOR_SOLID
                : G.elem_mode ? CV_COLOR_ELEM : CV_COLOR_NODAL;
@@ -1009,6 +1009,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
+        else if (!strcmp(argv[i], "--range") && i + 1 < argc) O.range_set = sscanf(argv[++i], "%f,%f", &O.range[0], &O.range[1]) == 2;
         else if (!strcmp(argv[i], "--menu") && i + 1 < argc) O.menu_set = sscanf(argv[++i], "%f,%f", &O.menu[0], &O.menu[1]) == 2;
         else if (!strcmp(argv[i], "--box") && i + 1 < argc)
             O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;

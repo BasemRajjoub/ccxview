@@ -29,6 +29,7 @@ ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the vi
 ccxview model.frd --find 120 --details      # probe node 120, its Details window open
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
+ccxview model.frd --range 50,150 --opt oor_grey=1   # the legend locked to 50 .. 150; outside it: 1 grey above only, 2 below only, 3 both, 0 the map's ends
 ccxview model.frd --labels node,value,loads # labels on the model, any mix of: node elem value evalue sets links loads supports materials gpvalue gpid minmax
 ccxview model.inp --opt sym_thin=1          # crowded supports and loads thinned to a pattern
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits

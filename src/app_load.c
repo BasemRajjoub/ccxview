@@ -416,6 +416,7 @@ static void apply_load(cv_job* j) {
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
+    if (O.range_set && !G.reload_keep) { G.range_lock = true; G.rmin = O.range[0]; G.rmax = O.range[1]; }
     if (O.labels && !G.reload_keep) {
         int m = app_label_parse(O.labels);
         if (!m) cv_msg_add(&G.msgs, 0, false, "--labels: unknown kind (node, elem, value, evalue, sets, links, loads, supports, materials, gpvalue, gpid, minmax)");

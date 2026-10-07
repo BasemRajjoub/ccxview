@@ -27,7 +27,7 @@ typedef struct {
     float def_scale2;          /* on the second displacement (imaginary part of a harmonic response) */
     float rmin, rmax;
     int   bands;               /* 0 = smooth */
-    bool  grey_out_of_range;   /* only while the range is locked */
+    int   grey_out_of_range;   /* only while the range is locked: bit 1 values above in light grey, bit 2 below in dark grey; the rest take the map's end colour */
     bool  faces, edges, points;
     bool  outline;             /* the feature edges: never hidden with the dense mesh */
     bool  shade;               /* light + shadow on faces; off = exact colours */

@@ -392,8 +392,8 @@ static const char* kFS =
     /* keep in step with cv_band_center() in field.h */
     "      if (u_rng.z > 0.5) { float b = u_rng.z; t = (min(floor(t * b), b - 1.0) + 0.5) / b; }\n"
     "      c = textureLod(u_cmap, vec2(t, 0.5), 0.0).rgb;\n"
-    "      if (u_flags.x > 0.5 && t0 > 1.0001) c = vec3(0.85);\n"      /* CV_OOR_ABOVE */
-    "      if (u_flags.x > 0.5 && t0 < -1e-4) c = vec3(0.48);\n"       /* CV_OOR_BELOW */
+    "      if ((int(u_flags.x) & 1) != 0 && t0 > 1.0001) c = vec3(0.85);\n"   /* CV_OOR_ABOVE */
+    "      if ((int(u_flags.x) & 2) != 0 && t0 < -1e-4) c = vec3(0.48);\n"    /* CV_OOR_BELOW */
     "    }\n"
     "  }\n"
     "  if (u_flags.w > 0.5) c = mix(c, vec3(1.0, 0.9, 0.2), 0.5);\n"   /* the box selection: its colours toned toward yellow */
@@ -868,7 +868,7 @@ static void uniforms(const cv_draw* d, bool has_disp, bool has_disp2, int mode, 
     fs_params fs = {
         .color = { rgb[0], rgb[1], rgb[2], 1 },
         .rng = { d->rmin, d->rmax, (float)d->bands, (float)mode },
-        .flags = { d->grey_out_of_range ? 1.f : 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
+        .flags = { (float)d->grey_out_of_range, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
         .pz = { d->proj[10], d->proj[14], d->proj[11], d->proj[15] },
         .clip = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 1e30f },
     };
@@ -1167,7 +1167,7 @@ void cv_render_draw(const cv_draw* d) {
             static const float glyph_rgb[3] = { 0.85f, 0.85f, 0.85f }, ten_rgb[3] = { 0.90f, 0.15f, 0.12f },
                                cmp_rgb[3] = { 0.15f, 0.35f, 0.95f };
             cv_draw c = *d;
-            c.rmin = -d->sign_lim; c.rmax = d->sign_lim; c.bands = 0; c.grey_out_of_range = false;
+            c.rmin = -d->sign_lim; c.rmax = d->sign_lim; c.bands = 0; c.grey_out_of_range = 0;
             bool sg = d->sign_lim > 0;
             if (d->tensors) {
                 if (d->glyph_signed && sg) draw_glyphs(CV_COLOR_NODAL, glyph_rgb, &c, R.div_view);

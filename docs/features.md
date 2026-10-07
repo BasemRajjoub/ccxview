@@ -123,6 +123,9 @@ and what is drawn for it; `samples/symbols/` shows them all.
   membrane + bending, peak and total at both ends and their largest value on the
   line; bending from the components normal to the line as 5-A.4.1.2 asks, or
   from all six.
+- A locked legend range keeps min / max across steps and components; values outside
+  it in grey (light above, dark below) to stand out, or in the map's end colours to
+  blend in, either side.
 - Compare two runs (A minus B).
 - Clip plane with the cut filled, crop box, mirror symmetry, cyclic symmetry,
   replicate (rows of copies of a periodic model).

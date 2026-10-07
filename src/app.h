@@ -241,6 +241,7 @@ typedef struct {
     bool      dlg_for_compare;       /* the open dialog picks the comparison file */
     float     rmin, rmax;
     bool      range_lock;
+    int       oor_grey;              /* a locked range: bit 1 values above in light grey, bit 2 below in dark grey (else the map's end colour) */
     bool      center_zero;
 
     bool      deform;

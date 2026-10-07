@@ -39,6 +39,8 @@ typedef struct {
     bool        details;        /* --details: the Details window of the probe (with --find or --box) */
     bool        about;          /* --about: the About window open */
     const char* labels;         /* --labels KIND: what the labels show, by key */
+    float       range[2];       /* --range MIN,MAX: the legend's range, locked */
+    bool        range_set;
     float       menu[2];        /* --menu x,y: the context menu at that point of the view (fractions) */
     bool        menu_set;
     bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */

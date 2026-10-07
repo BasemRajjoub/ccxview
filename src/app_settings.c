@@ -43,7 +43,7 @@ static const setting S[] = {
     B(show_disc), B(show_links), B(show_hl), F(hl_size, 0.5f, 64),
     B(vec_colored), F(vec_pct, 0.01f, 100),
     I(tensor_style, 0, CV_GLYPH_N - 1), B(tensor_colored), F(tensor_scale, 0.01f, 100),
-    I(traj_which, 0, 2), F(traj_spacing, 0.2f, 50), F(geo_size, 0.5f, 64), B(show_markers), B(show_ghost),
+    I(traj_which, 0, 2), F(traj_spacing, 0.2f, 50), F(geo_size, 0.5f, 64), B(show_markers), B(show_ghost), I(oor_grey, 0, 3),
     SEC("Colours and legend"),
     I(cmap, 0, CV_CMAP_N - 1), I(bands, 0, 64), B(center_zero), B(legend_reverse), B(legend_grey),
     I(legend_fmt, 0, 2), I(legend_decimals, 0, 9), B(hide_legend),
