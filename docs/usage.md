@@ -27,6 +27,7 @@ ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of i
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
 ccxview model.frd --find 120 --details      # probe node 120, its Details window open
+ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
 ccxview model.frd --opt key=value           # any setting of ccxview.ini for this run
 ccxview model.frd --software                # CPU rendering

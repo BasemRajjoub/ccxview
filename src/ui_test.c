@@ -198,6 +198,9 @@ static bool box_crossing(struct nk_context* ctx) { return G.sel_n > 0 && G.sel_c
 static bool box_window(struct nk_context* ctx) { return G.sel_n > 0 && !G.sel_crossing; }
 static void open_details(struct nk_context* ctx) { app_probe_at(0, false); G.show_details = true; }
 static bool details_gone(struct nk_context* ctx) { return !G.show_details; }
+static void open_about(struct nk_context* ctx) { G.show_about = true; }
+static bool about_gone(struct nk_context* ctx) { return !G.show_about; }
+static bool about_shown(struct nk_context* ctx) { return G.show_about && win_of(ctx, "About"); }
 /* a box round the whole view: its max is the field's max, the probe on it */
 static bool box_found(struct nk_context* ctx) {
     return !G.box_arm && G.boxq.on && G.probe_on && G.boxq.vmax == G.data_max && G.boxq.vmin <= G.boxq.vmax &&
@@ -404,6 +407,11 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Open file", open_browser, browser_gone),
     CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
     CLOSED_THEN_PANELS("Details", open_details, details_gone),
+    CLOSED_THEN_PANELS("About", open_about, about_gone),
+
+    CASE("about: opened from the status bar"),
+    AT_TIP("Status", "Who made ccxview"), CLICK, WAIT(2), EXPECT(about_shown, "the About window opens"),
+    AT_CLOSE("About"), CLICK, WAIT(2), EXPECT(about_gone, "About is closed"), PANELS_ANSWER,
 
     CASE("mesh quality: the limits open, a limit answers"),
     DO(open_mesh), WAIT(5), AT_TIP("Mesh quality", "Set your own limits"), CLICK, WAIT(2),

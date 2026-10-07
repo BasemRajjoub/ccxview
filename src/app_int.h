@@ -37,6 +37,7 @@ typedef struct {
     float       box[4];         /* --box x0,y0,x1,y1: max in that box of the view (fractions), after load */
     bool        box_set;
     bool        details;        /* --details: the Details window of the probe (with --find or --box) */
+    bool        about;          /* --about: the About window open */
     bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */
     const char* view_file;      /* --view FILE: a saved view state, applied after load */
     bool        watch;          /* --watch: reload when the file changes */

@@ -1,6 +1,8 @@
 /* os.c -- file mapping, threads, mutex, clock for Win32 and POSIX. */
 #include "os.h"
 #include <ctype.h>
+#include <string.h>
+#include <stdlib.h>
 
 static int dirent_cmp(const void* a, const void* b) {
     const cv_dirent *x = a, *y = b;
@@ -11,9 +13,21 @@ static int dirent_cmp(const void* a, const void* b) {
     }
 }
 
+static bool url_ok(const char* u) {
+    if (strncmp(u, "https://", 8) && strncmp(u, "http://", 7)) return false;
+    for (; *u; u++) if ((unsigned char)*u <= ' ' || *u == '"' || *u == '\'' || *u == '\\') return false;
+    return true;
+}
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shellapi.h>
+
+bool cv_open_url(const char* url) {
+    if (!url_ok(url)) return false;
+    return (INT_PTR)ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL) > 32;
+}
 
 bool cv_map_open(cv_map* m, const char* path) {
     memset(m, 0, sizeof *m);
@@ -229,6 +243,37 @@ void cv_set_window_icon(const void* hwnd) {
 #include <mach-o/dyld.h>
 #include <mach/mach.h>
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#else
+#include <sys/wait.h>
+#endif
+
+bool cv_open_url(const char* url) {
+    if (!url_ok(url)) return false;
+#ifdef __EMSCRIPTEN__
+    EM_ASM({ window.open(UTF8ToString($0), "_blank", "noopener"); }, url);
+    return true;
+#else
+    pid_t p = fork();                      /* twice, so no child is left to reap */
+    if (p < 0) return false;
+    if (p == 0) {
+        if (fork() == 0) {
+            unsetenv("LD_LIBRARY_PATH");    /* the launcher's bundled libraries are not the browser's */
+#if defined(__APPLE__)
+            execlp("open", "open", url, (char*)NULL);
+#else
+            execlp("xdg-open", "xdg-open", url, (char*)NULL);
+#endif
+            _exit(127);
+        }
+        _exit(0);
+    }
+    int st;
+    waitpid(p, &st, 0);
+    return true;
+#endif
+}
 
 bool cv_map_open(cv_map* m, const char* path) {
     memset(m, 0, sizeof *m);

@@ -1,5 +1,6 @@
 /* ui_info.c -- the Details window: everything about the probed node and element
-   (and the box selection it came from) that the small Probe has no room for. */
+   (and the box selection it came from) that the small Probe has no room for; and
+   the About window: who made ccxview, its licence, what it is built with. */
 #include "app.h"
 #include "ui.h"
 #include "sokol_app.h"
@@ -9,6 +10,7 @@
 #include "ui_int.h"
 #include "app_fail.h"
 #include "app_mesh.h"
+#include "os.h"
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -147,5 +149,68 @@ void window_details(struct nk_context* ctx, float s, float row, int fw, int fh) 
         }
     }
     if (nk_window_is_hidden(ctx, "Details")) G.show_details = false;
+    nk_end(ctx);
+}
+
+/* ---- About ------------------------------------------------------------------------- */
+
+static const struct { const char *name, *by, *licence, *url; } credits[] = {
+    { "sokol",            "Andre Weissflog",                 "zlib",        "https://github.com/floooh/sokol" },
+    { "Nuklear",          "Micha Mettke and contributors",   "MIT / PD",    "https://github.com/Immediate-Mode-UI/Nuklear" },
+    { "stb_image_write, stb_sprintf", "Sean Barrett",        "MIT / PD",    "https://github.com/nothings/stb" },
+    { "tinyfiledialogs",  "Guillaume Vareille",              "zlib",        "https://sourceforge.net/projects/tinyfiledialogs/" },
+    { "minih264, minimp4", "Lieff",                          "CC0",         "https://github.com/lieff/minih264" },
+    { "TinyExpr",         "Lewis Van Winkle",                "zlib",        "https://github.com/codeplea/tinyexpr" },
+    { "miniz",            "Rich Geldreich and contributors", "MIT",         "https://github.com/richgel999/miniz" },
+    { "Inter (font)",     "Rasmus Andersson",                "OFL 1.1",     "https://github.com/rsms/inter" },
+    { "Noto Sans Math (font)", "Google, Noto project",       "OFL 1.1",     "https://github.com/notofonts/math" },
+    { "Lucide (icons)",   "Lucide contributors, Feather",    "ISC",         "https://github.com/lucide-icons/lucide" },
+    { "ProggyClean (font)", "Tristan Grimmer",               "MIT",         "https://github.com/bluescan/proggyfonts" },
+};
+
+static void link_button(struct nk_context* ctx, const char* label, const char* url) {
+    tip(ctx, url);
+    if (nk_button_label(ctx, label) && !cv_open_url(url))
+        cv_msg_add(&G.msgs, 0, false, "could not open the browser");
+}
+
+void window_about(struct nk_context* ctx, float s, float row, int fw, int fh) {
+    static bool was_open;
+    if (!G.show_about) { was_open = false; return; }
+    if (!was_open) nk_window_show(ctx, "About", NK_SHOWN);
+    was_open = true;
+    float w = CV_MIN(560 * s, fw * 0.9f), h = CV_MIN(fh * 0.85f, row * 24);
+    if (nk_begin(ctx, "About", nk_rect((fw - w) / 2, (fh - h) / 2, w, h),
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
+        char t[160];
+        nk_layout_row_dynamic(ctx, row, 1);
+        snprintf(t, sizeof t, "ccxview %s", app_version());
+        nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
+        nk_label(ctx, "A fast viewer for CalculiX results and models.", NK_TEXT_LEFT);
+        nk_label_colored(ctx, "Free software under the GPL, version 3 or later.", NK_TEXT_LEFT, P.dim);
+        uii_hsep(ctx, s);
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label(ctx, "Made by Basem Rajjoub, structural engineer and researcher", NK_TEXT_LEFT);
+        nk_layout_row_dynamic(ctx, row, 3);
+        link_button(ctx, "website", "https://basemrajjoub.com/");
+        link_button(ctx, "LinkedIn", "https://www.linkedin.com/in/rajjoub/");
+        link_button(ctx, "GitHub", "https://github.com/BasemRajjoub");
+        nk_layout_row_dynamic(ctx, row, 2);
+        link_button(ctx, "ccxview on GitHub", "https://github.com/BasemRajjoub/ccxview");
+        link_button(ctx, "report a problem", "https://github.com/BasemRajjoub/ccxview/issues");
+        uii_hsep(ctx, s);
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, "Built with, and thanks to their authors:", NK_TEXT_LEFT, P.dim);
+        const float cols[] = { 0.38f, 0.42f, 0.2f };
+        for (size_t i = 0; i < CV_COUNT(credits); i++) {
+            nk_layout_row(ctx, NK_DYNAMIC, row, 3, cols);
+            link_button(ctx, credits[i].name, credits[i].url);
+            nk_label(ctx, credits[i].by, NK_TEXT_LEFT);
+            nk_label_colored(ctx, credits[i].licence, NK_TEXT_LEFT, P.dim);
+        }
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, "Their licence texts ship in the licenses folder.", NK_TEXT_LEFT, P.dim);
+    }
+    if (nk_window_is_hidden(ctx, "About")) G.show_about = false;
     nk_end(ctx);
 }

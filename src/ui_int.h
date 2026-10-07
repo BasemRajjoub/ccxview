@@ -38,6 +38,7 @@
 #define units_summary           uii_units_summary
 #define window_probe            uii_window_probe
 #define window_details          uii_window_details
+#define window_about            uii_window_about
 #define window_nav              uii_window_nav
 #define window_overlay          uii_window_overlay
 #define window_find             uii_window_find
@@ -135,6 +136,7 @@ void section_mesh(struct nk_context* ctx, float s, float row);
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
 void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_info.c */
+void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
 void window_nav(struct nk_context* ctx, float s);
 void window_overlay(struct nk_context* ctx, float s);
 void window_find(struct nk_context* ctx, float s, float row);

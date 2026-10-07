@@ -424,11 +424,12 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
     bool loading = !G.loaded && app_busy();
     float sw = 14 * s;
     float ub = 150 * s;                    /* the units button */
-    nk_layout_row_begin(ctx, NK_STATIC, row, (exporting ? 5 : loading ? 4 : 3) + 4);
+    float ab = 60 * s;                     /* About */
+    nk_layout_row_begin(ctx, NK_STATIC, row, (exporting ? 5 : loading ? 4 : 3) + 6);
     nk_layout_row_push(ctx, pw);
     nk_label(ctx, G.loaded ? cv_basename(G.path) : "", NK_TEXT_LEFT);
     nk_layout_row_push(ctx, sw); uii_vsep(ctx);
-    float midw = CV_MAX(width - pw - bw - ub - 7 * ctx->style.window.spacing.x - 3 * (sw + ctx->style.window.spacing.x), 10);
+    float midw = CV_MAX(width - pw - bw - ub - ab - 8 * ctx->style.window.spacing.x - 4 * (sw + ctx->style.window.spacing.x), 10);
     if (exporting) {                       /* frame export: a real bar, the count, a stop button */
         nk_size cur = (nk_size)done;
         nk_layout_row_push(ctx, midw * 0.45f);
@@ -468,6 +469,10 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
     } else {
         nk_label(ctx, badge, NK_TEXT_RIGHT);
     }
+    nk_layout_row_push(ctx, sw); uii_vsep(ctx);
+    nk_layout_row_push(ctx, ab);
+    tip(ctx, "Who made ccxview, its licence, and the libraries it is built with");
+    if (nk_button_label(ctx, "About")) G.show_about = !G.show_about;
     nk_layout_row_end(ctx);
 }
 

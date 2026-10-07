@@ -31,6 +31,8 @@
 #define CV_VERSION "dev"
 #endif
 
+const char* app_version(void) { return CV_VERSION; }
+
 /* --crash-test: a deliberate null write two calls deep, to check the crash report
    and that scripts/symbolize.sh names these two functions */
 #if defined(__GNUC__)
@@ -981,6 +983,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--details")) O.details = true;
+        else if (!strcmp(argv[i], "--about")) O.about = true;
         else if (!strcmp(argv[i], "--box") && i + 1 < argc)
             O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;
         else if (!strcmp(argv[i], "--fly-clip") || !strcmp(argv[i], "--fly-hide")) {

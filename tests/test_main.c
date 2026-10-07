@@ -567,6 +567,11 @@ static void test_list_dir(void) {
     char d[1024];
     CHECK(cv_exe_dir(d, sizeof d));
     CHECK(cv_is_dir(d));
+    /* only plain web links reach the browser (a good one would open it: not tried here) */
+    CHECK(!cv_open_url("file:///etc/passwd"));
+    CHECK(!cv_open_url("javascript:alert(1)"));
+    CHECK(!cv_open_url("https://example.com/a b"));
+    CHECK(!cv_open_url("https://example.com/\"x"));
 }
 
 static void test_dat(void) {

@@ -324,6 +324,7 @@ typedef struct {
     bool      show_mesh;             /* the mesh quality window */
     bool      mesh_limits_open;      /* ... with the user's limits shown */
     bool      show_details;          /* the Details window of the probed node and element */
+    bool      show_about;            /* the About window: author, licence, libraries */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
     float     bg[3];                 /* view background */
@@ -434,6 +435,7 @@ bool app_box_select(float x_start, float y_start, float x_end, float y_end);
 void app_sel_clear(void);
 void app_sel_refresh(void);                     /* the outline again: the shape changed */
 void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
+const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* the shown .frd field's stored components at a node (global, as the file has them);
    names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
 int app_field_comps(uint32_t node, char names[][12], float* vals, int max);
