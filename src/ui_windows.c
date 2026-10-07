@@ -124,9 +124,10 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     nk_layout_row_dynamic(ctx, row, 3);
     nk_bool lb = G.label_probe_only && G.label_kind != CV_LABEL_NONE;
     tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");
-    if (nk_checkbox_label(ctx, "labels", &lb)) {
+    if (nk_checkbox_label(ctx, "labels", &lb)) {           /* on: this element only; off: no labels at all */
         G.label_probe_only = lb;
         if (lb && G.label_kind == CV_LABEL_NONE) G.label_kind = CV_LABEL_NODE;
+        if (!lb) G.label_kind = CV_LABEL_NONE;
         app_label_changed();
     }
     tip(ctx, "Everything about this node and element in a window of its own:\n"

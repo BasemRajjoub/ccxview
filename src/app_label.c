@@ -66,7 +66,9 @@ typedef struct {
     uint32_t n;
 } anchors;
 
-static struct { anchors a; bool on_top; unsigned gen, serial; int kind, asked; bool sel_only, probe_only; } A;   /* serial: bumped per build */   /* kind: the one built (a value field per element becomes evalue); asked: G.label_kind then */
+static struct { anchors a; unsigned gen, serial; int kind, asked; bool sel_only, probe_only, probe_on; uint32_t probe_elem; } A;
+/* kind: the one built (a value field per element becomes evalue); asked: G.label_kind then;
+   probe_*: the probe these were built for (probe-only labels follow it) */
 
 static void pack(anchors* s, const float p[3], const float d[6], uint32_t ref, const char* text) {
     if (!cv_reserve(s->anc, s->anc.n + 9) || !cv_reserve(s->toff, s->toff.n + 1) || !cv_reserve(s->ref, s->ref.n + 1)) return;
@@ -157,7 +159,6 @@ static void build_named(int kind) {
     switch (kind) {
     case CV_LABEL_SETS: {                         /* the ticked sets and surfaces: the name at their centre */
         if (!dk) break;
-        A.on_top = true;
         uint8_t* ff = first_faces();
         bool* son = deck_set_flags(); bool* fon = deck_surf_flags();
         for (int s = 0; ff && s < dk->nsets; s++) {
@@ -190,7 +191,6 @@ static void build_named(int kind) {
     }
     case CV_LABEL_LINKS: {                        /* couplings and rigid bodies: the name at the reference node */
         if (!dk) break;
-        A.on_top = true;
         static const char* kn[] = { "rigid body", "coupling", "distributing", "equation", "tie", "contact" };
         for (int k = 0; k < dk->nlinks; k++) {
             const cv_link* l = &dk->links[k];
@@ -200,7 +200,6 @@ static void build_named(int kind) {
         break;
     }
     case CV_LABEL_MATERIALS: {                    /* the name at the centre of each material's surface */
-        A.on_top = true;
         const cv_axis* ax = &G.groups.axis[CV_AXIS_MAT];
         mean* m = calloc(CV_MAX(ax->n, 1), sizeof *m);
         if (!m) break;
@@ -226,9 +225,27 @@ static void build_named(int kind) {
     }
 }
 
+/* "el N" at an element's centre (probe-only labels are drawn on top, so a centre inside it shows) */
+static void elem_label(uint32_t e) {
+    const cv_frd* f = &G.frd;
+    uint32_t b = f->eoff[e], m = f->eoff[e + 1] - b;
+    if (!m) return;
+    float p[3] = { 0, 0, 0 }, d[6] = { 0 }, dj[6];
+    for (uint32_t j = 0; j < m; j++) {
+        uint32_t i = f->conn[b + j];
+        app_node_disp6(i, dj);
+        for (int q = 0; q < 3; q++) p[q] += f->xyz[3 * i + q] / m;
+        for (int q = 0; q < 6; q++) d[q] += dj[q] / m;
+    }
+    char t[32];
+    snprintf(t, sizeof t, "el %u", f->elem_id[e]);
+    anchor_add(p, d, t);
+}
+
 static void build_anchors(void) {
-    A.a.anc.n = A.a.txt.n = A.a.toff.n = A.a.ref.n = 0; A.a.n = 0; A.on_top = false;
+    A.a.anc.n = A.a.txt.n = A.a.toff.n = A.a.ref.n = 0; A.a.n = 0;
     A.kind = A.asked = G.label_kind; A.gen = G.label_gen; A.sel_only = G.label_sel_only; A.probe_only = G.label_probe_only;
+    A.probe_on = G.probe_on; A.probe_elem = G.probe.elem;
     A.serial++;
     if (!G.loaded || G.label_kind == CV_LABEL_NONE) return;
     const cv_frd* f = &G.frd;
@@ -252,7 +269,7 @@ static void build_anchors(void) {
     switch (kind) {
     case CV_LABEL_NODE: case CV_LABEL_VALUE:
         if (kind == CV_LABEL_VALUE && !nodal) break;
-        if (G.label_probe_only) {                 /* the probed element's nodes */
+        if (G.label_probe_only) {                 /* the probed element's nodes, and its own id */
             if (!G.probe_on) break;
             uint32_t e = G.probe.elem;
             for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
@@ -260,6 +277,7 @@ static void build_anchors(void) {
                 if (kind == CV_LABEL_VALUE && G.scalar[i] != G.scalar[i]) continue;
                 anchor_node(i);
             }
+            if (kind == CV_LABEL_NODE) elem_label(e);
             break;
         }
         for (size_t k = 0; k < G.skin.n_pt; k++) {
@@ -273,11 +291,15 @@ static void build_anchors(void) {
         if (kind == CV_LABEL_EVALUE && !elemv) break;
         uint8_t* done = calloc(CV_MAX(f->n_elems, 1), 1);
         if (!done) break;
+        if (G.label_probe_only) {                 /* the probed element, wherever it is (a cap, a found element) */
+            if (G.probe_on && kind == CV_LABEL_ELEM) elem_label(G.probe.elem);
+            free(done);
+            break;
+        }
         for (size_t k = 0; k < G.skin.n_face; k++) {   /* each element once, on its first exterior face */
             uint32_t e = G.skin.face[k] >> 3;
             if (e >= f->n_elems || done[e]) continue;
             done[e] = 1;
-            if (G.label_probe_only && !(G.probe_on && e == G.probe.elem)) continue;
             if (G.label_sel_only && !(emark && emark[e])) continue;
             float p[3], d[6];
             if (!face_centre(e, (int)(G.skin.face[k] & 7), p, d)) continue;
@@ -293,7 +315,6 @@ static void build_anchors(void) {
 }
 
 void app_label_changed(void) { G.label_gen++; }
-
 
 /* ---- per frame: thin, lay out, upload when the camera or the anchors changed --------- */
 
@@ -314,7 +335,7 @@ static void coarse_check(float cell) {
 }
 
 void app_label_frame(const cv_draw* d) {
-    static float last_mvp[16], last_px, last_sp, last_f1, last_f2; static unsigned last_gen; static int last_kind, last_w, last_h;
+    static float last_mvp[16], last_px, last_sp, last_f1, last_f2, last_clip[4]; static unsigned last_gen; static int last_kind, last_w, last_h;
     if (!G.loaded || G.label_kind == CV_LABEL_NONE) {
         if (A.a.n || last_kind) {
             A.a.n = 0; A.asked = -1;                  /* the same kind again rebuilds */
@@ -326,10 +347,13 @@ void app_label_frame(const cv_draw* d) {
     float px = roundf(CV_MAX(G.label_px, 6.f) * ui_scale());
     if (F.px != px) font_bake(px);           /* a failed bake is tried again only at another size */
     if (!F.live) return;
-    bool rebuild = A.gen != G.label_gen || A.asked != G.label_kind || A.sel_only != G.label_sel_only || A.probe_only != G.label_probe_only;
+    bool rebuild = A.gen != G.label_gen || A.asked != G.label_kind || A.sel_only != G.label_sel_only || A.probe_only != G.label_probe_only ||
+                   (G.label_probe_only && (A.probe_on != G.probe_on || A.probe_elem != G.probe.elem));
     if (rebuild) build_anchors();
+    float clip[4] = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 0 };
     bool moved = memcmp(last_mvp, d->mvp, sizeof last_mvp) != 0 || last_px != px || last_sp != G.label_spacing ||
-                 last_w != d->vp_w || last_h != d->vp_h || last_f1 != d->def_scale || last_f2 != d->def_scale2;
+                 last_w != d->vp_w || last_h != d->vp_h || last_f1 != d->def_scale || last_f2 != d->def_scale2 ||
+                 memcmp(last_clip, clip, sizeof clip) != 0;
     if (!rebuild && !moved && last_gen == G.label_gen && last_kind == G.label_kind) return;
 
     float spacing = G.label_spacing * ui_scale();
@@ -342,7 +366,7 @@ void app_label_frame(const cv_draw* d) {
     cv_label_pt* pts = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *pts);
     uint32_t* chosen = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *chosen);
     if (!pts || !chosen) { free(pts); free(chosen); return; }   /* tried again next frame */
-    memcpy(last_mvp, d->mvp, sizeof last_mvp); last_px = px; last_sp = G.label_spacing; last_gen = G.label_gen;
+    memcpy(last_mvp, d->mvp, sizeof last_mvp); memcpy(last_clip, clip, sizeof last_clip); last_px = px; last_sp = G.label_spacing; last_gen = G.label_gen;
     last_kind = G.label_kind; last_w = d->vp_w; last_h = d->vp_h; last_f1 = d->def_scale; last_f2 = d->def_scale2;
     const float* M = d->mvp;
     uint32_t np = 0;
@@ -352,6 +376,7 @@ void app_label_frame(const cv_draw* d) {
         float p[3], c[4];
         for (int q = 0; q < 3; q++) p[q] = a[q] + d->def_scale * a[3 + q] + d->def_scale2 * a[6 + q];
         if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;      /* no position (NaN displacement) */
+        if (d->clip && p[0] * d->clip_n[0] + p[1] * d->clip_n[1] + p[2] * d->clip_n[2] > d->clip_d) continue;   /* cut away */
         for (int r = 0; r < 4; r++) c[r] = M[r] * p[0] + M[4 + r] * p[1] + M[8 + r] * p[2] + M[12 + r];
         if (c[3] <= 1e-9f) continue;                                      /* behind the eye */
         pts[np].sx = d->vp_x + (c[0] / c[3] * 0.5f + 0.5f) * d->vp_w;
@@ -372,5 +397,5 @@ void app_label_frame(const cv_draw* d) {
     }
     cv_render_labels(box.a, (uint32_t)(box.n / CV_LABEL_FLOATS), gly.a, (uint32_t)(gly.n / CV_LABEL_FLOATS));
     cv_free_vec(gly); cv_free_vec(box); free(pts); free(chosen);
-    snprintf(G.label_note, sizeof G.label_note, "labels: %s, shown %u of %u", app_label_name(G.label_kind), n, A.a.n);
+    snprintf(G.label_note, sizeof G.label_note, "labels: %s, shown %u of %u", app_label_name(A.kind), n, A.a.n);
 }

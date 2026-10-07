@@ -216,6 +216,8 @@ static bool labels_node(struct nk_context* ctx) { return G.label_kind == CV_LABE
 static void labels_small(struct nk_context* ctx) { G.label_px = 8.f; }
 static bool labels_bigger(struct nk_context* ctx) { return G.label_px > 8.f; }
 static bool labels_shown(struct nk_context* ctx) { return strstr(G.label_note, "shown ") && !strstr(G.label_note, "shown 0 of"); }
+static bool labels_none(struct nk_context* ctx) { return strstr(G.label_note, "shown 0 of 0") != NULL; }
+static void probe_close(struct nk_context* ctx) { G.probe_on = false; }
 static void labels_off(struct nk_context* ctx) { G.label_kind = CV_LABEL_NONE; G.label_px = 13.f; app_label_changed(); sections_open(ctx); }
 /* the Details window leaves the view's upper right free: a drag there turns the model */
 static bool details_clear_of_view(struct nk_context* ctx) {
@@ -408,8 +410,9 @@ static const step script[] = {
     DO(snapshot), AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "the model turns with labels up"),
     DO(labels_off), WAIT(2),
 
-    CASE("ids shown: a drag in the view still turns the model"),
-    DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2), DO(ids_on), WAIT(3), DO(snapshot),
+    CASE("ids shown: a drag in the view still turns the model; closing the probe clears them"),
+    DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2), DO(ids_on), WAIT(3), EXPECT(labels_shown, "the probed element's ids show"),
+    DO(probe_close), WAIT(3), EXPECT(labels_none, "closing the probe leaves no labels"), AT_MODEL, CLICK, WAIT(3), DO(snapshot),
     AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "the camera turns with the ids overlay on"),
     DO(ids_off), DO(close_all), DO(fit_view), WAIT(2),
 

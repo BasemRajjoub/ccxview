@@ -218,9 +218,10 @@ static const char* kVSI =
     "}\n";
 
 /* Labels: a quad per glyph or box, anchored to a model point, sized in pixels, so it
-   never scales with the zoom; its depth is the anchor's pulled a hair toward the eye,
-   so the model hides labels on its far side. u_p: deform scales, viewport w, h.
-   u_q: x pull in clip depth, y on top (the front 2 % of the range, as the markers). */
+   never scales with the zoom; its depth is the anchor's pulled toward the eye, so the
+   model hides labels on its far side. u_p: deform scales, viewport w, h.
+   u_q: x the pull in view units per unit of clip w (parallel: in view units), y on top,
+   z proj[10], w proj[11] (-1 perspective, 0 parallel). */
 static const char* kVSL =
     GLSL_HDR
     "uniform mat4 u_mvp;\n"
@@ -240,7 +241,17 @@ static const char* kVSL =
     "  vec4 c = u_mvp * vec4(p, 1.0);\n"
     "  vec2 px = i_off + a_q * i_size;\n"
     "  c.xy += vec2(px.x * 2.0 / u_p.z, -px.y * 2.0 / u_p.w) * c.w;\n"
-    "  if (u_q.y > 0.5) c.z = -c.w + (c.z + c.w) * 0.02; else c.z -= u_q.x * c.w;\n"
+    /* toward the eye by a few label heights in view units (as VS_TAIL does for the symbols), so
+       the quad, which lies in the screen plane, is not cut by the oblique face it sits on;
+       on top: the front 2 % of the depth range, as the markers */
+    "  if (u_q.y > 0.5) c.z = -c.w + (c.z + c.w) * 0.02;\n"
+    "  else if (u_q.w != 0.0) {\n"
+    "    float pl = min(u_q.x * c.w, 0.5 * max(c.w, 0.0));\n"
+    "    float w2 = c.w - pl;\n"
+    "    if (c.w > 0.0) c.xy *= w2 / c.w;\n"
+    "    c.z += u_q.z * pl;\n"
+    "    c.w = w2;\n"
+    "  } else c.z += u_q.z * u_q.x;\n"
     "  gl_Position = c;\n"
     "  v_uv = mix(i_uv0, i_uv1, a_q);\n"
     "}\n";
@@ -894,7 +905,9 @@ static void draw_labels(const cv_draw* d) {
     vs_label vs;
     memcpy(vs.mvp, d->mvp, sizeof vs.mvp);
     vs.p[0] = d->def_scale; vs.p[1] = d->def_scale2; vs.p[2] = (float)d->vp_w; vs.p[3] = (float)d->vp_h;
-    vs.q[0] = 0.002f; vs.q[1] = d->labels_on_top ? 1.f : 0.f; vs.q[2] = vs.q[3] = 0;
+    /* three label heights: pixels to view units per clip w are 2 / (P11 * vp_h) */
+    float per_px = 2.f / CV_MAX(d->proj[5] * (float)d->vp_h, 1e-6f);
+    vs.q[0] = 3.f * CV_MAX(d->label_px, 1.f) * per_px; vs.q[1] = d->labels_on_top ? 1.f : 0.f; vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
     sg_apply_pipeline(R.pip_label);
     for (int pass = 0; pass < 2; pass++) {
         uint32_t n = pass ? LB.ng : LB.nb;

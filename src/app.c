@@ -444,7 +444,9 @@ static void frame(void) {
         eye_caps(eye_clip, &d);
         d.hl_size = G.hl_size * ui_scale();
         d.labels = G.label_kind != CV_LABEL_NONE;
-        d.labels_on_top = G.label_kind == CV_LABEL_SETS || G.label_kind == CV_LABEL_LINKS || G.label_kind == CV_LABEL_MATERIALS;
+        d.labels_on_top = G.label_kind == CV_LABEL_SETS || G.label_kind == CV_LABEL_LINKS || G.label_kind == CV_LABEL_MATERIALS ||
+                          G.label_probe_only;    /* a few labels that must show: a centre may lie inside the model */
+        d.label_px = roundf(CV_MAX(G.label_px, 6.f) * ui_scale());
         memcpy(d.label_rgb, G.label_rgb, sizeof d.label_rgb); memcpy(d.label_box_rgba, G.label_box_rgba, sizeof d.label_box_rgba);
         d.gauss_on_top = G.gp_on_top;
         d.gauss_points_color = G.gp_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
@@ -465,6 +467,7 @@ static void frame(void) {
         app_label_frame(&d);
         cv_render_draw(&d);
         int nc = app_copies();
+        d.labels = false;                      /* labels belong to the file's nodes: not on the copies */
         if (nc > 1) {                          /* the mirror and replicate copies */
             float mvp0[16], mv0[16], M[16];
             memcpy(mvp0, d.mvp, sizeof mvp0); memcpy(mv0, d.mv, sizeof mv0);

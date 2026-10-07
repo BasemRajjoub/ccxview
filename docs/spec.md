@@ -35,6 +35,9 @@ src/
   frd.c/.h      .frd index pass + lazy field decode           (headless)
   mesh.c/.h     topology, groups, visibility, skin, edges, pick (headless)
   cap.c/.h      the filled cut of the clip plane through the solids, prepared once per normal (headless)
+  label.c/.h    labels on the model: glyph layout from a metrics table, thinning to a spacing nearest first, a coarse 3D pass (headless)
+  app_label.c   the anchors and texts per label kind, the font atlas, the per-frame thin / layout / upload
+  ui_label.c    Fields > Labels
   field.c/.h    scalar options, von Mises/magnitude/principal, ranges (headless)
   vmath.h       tiny vec3/mat4
   render.c/.h   sokol_gfx pipelines, buffers, colormaps
