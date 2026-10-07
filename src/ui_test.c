@@ -194,6 +194,8 @@ static void scale_big(struct nk_context* ctx) { G.deform_scale = 50.f; G.deform_
 static bool scale_true(struct nk_context* ctx) { return G.deform_scale == 1.f && !G.deform_auto && G.deform; }
 static bool box_armed(struct nk_context* ctx) { return G.box_arm; }
 static void arm_box(struct nk_context* ctx) { G.box_arm = true; }
+static bool nodes_selected(struct nk_context* ctx) { return G.sel_nodes && G.seln_n > 0 && G.boxq.on; }
+static void nodes_off(struct nk_context* ctx) { G.sel_nodes = false; G.sel_elems = true; }
 static bool box_crossing(struct nk_context* ctx) { return G.sel_n > 0 && G.sel_crossing && G.probe_on; }
 static bool box_window(struct nk_context* ctx) { return G.sel_n > 0 && !G.sel_crossing; }
 static void open_details(struct nk_context* ctx) { app_probe_at(0, false); G.show_details = true; }
@@ -361,6 +363,8 @@ static const step script[] = {
     CASE("box selection: right to left is a crossing"),
     DO(arm_box), AT_VIEW(0.6f, 0.6f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.4f, 0.4f), RELEASE, WAIT(2),
     EXPECT(box_crossing, "a crossing selection, the probe on its max"),
+    AT_TIP("Probe", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
+    DO(nodes_off), WAIT(2),
     AT_VIEW(0.02f, 0.5f), CLICK, PANELS_ANSWER,
 
     CASE("toolbar: one list after the other, no pause"),

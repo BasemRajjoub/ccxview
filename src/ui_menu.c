@@ -87,15 +87,17 @@ static void build(void) {
             ns++;
         }
     }
-    if (G.sel_n) {
+    if (G.sel_n || G.seln_n) {
         add(M_SEP, 0, NULL);
-        add(M_SEL_HIDE, 0, "Hide the %u selected", G.sel_n);
-        add(M_SEL_ONLY, 0, "Show only the selected");
+        if (G.sel_n) {
+            add(M_SEL_HIDE, 0, "Hide the %u selected", G.sel_n);
+            add(M_SEL_ONLY, 0, "Show only the selected");
+        }
         if (G.boxq.on && G.boxq.gen == G.field_gen) {
             add(M_SEL_MAX, 0, "Go to the selection's max");
             add(M_SEL_MIN, 0, "Go to the selection's min");
         }
-        add(M_SEL_IDS, 0, "Copy the selected ids");
+        add(M_SEL_IDS, 0, G.sel_n ? "Copy the selected element ids" : "Copy the selected node ids");
         add(M_SEL_CSV, 0, "Save the selection as CSV");
         add(M_SEL_CLEAR, 0, "Clear the selection");
     }
@@ -160,7 +162,7 @@ static void act(const item* m) {
         break;
     }
     case M_SEL_IDS: {
-        size_t n = (size_t)G.sel_n * 12 + 64;
+        size_t n = (size_t)CV_MAX(G.sel_n, G.seln_n) * 12 + 64;
         char* s = malloc(n);
         if (s) { app_sel_ids(s, n); sapp_set_clipboard_string(s); free(s); }
         break;

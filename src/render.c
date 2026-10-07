@@ -333,7 +333,7 @@ static const char* kFS =
     "      if (u_flags.x > 0.5 && t0 < -1e-4) c = vec3(0.48);\n"       /* CV_OOR_BELOW */
     "    }\n"
     "  }\n"
-    "  if (u_flags.w > 0.5) c = mix(c, vec3(1.0, 0.92, 0.2), 0.45);\n"   /* the box selection: its own colours, toned */
+    "  if (u_flags.w > 0.5) c = vec3(1.0) - c;\n"   /* the box selection: the negative of its colours, against anything */
     "  if (u_flags.y > 0.5) {\n"
     /* symbols and glyphs bring their own normal: smooth, with a soft highlight */
     "    bool sm = dot(v_n, v_n) > 0.0;\n"
@@ -348,7 +348,7 @@ static const char* kFS =
     "}\n";
 
 typedef struct { float mvp[16]; float mv[16]; float p[4]; float q[4]; } vs_params;
-static float g_tint;                         /* the next layers are the selection: toned (u_flags.w) */
+static float g_tint;                         /* the next layers are the selection: drawn in the negative (u_flags.w) */
 typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; } fs_params;
 
 /* ---- state ------------------------------------------------------------------- */
@@ -871,7 +871,7 @@ void cv_render_draw(const cv_draw* d) {
         int m = d->faces_color == CV_COLOR_NODAL || d->faces_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         draw_layer(R.pip_tri_ni, A[CV_AUX_CAPTRI].v, NO_IB, (int)A[CV_AUX_CAPTRI].n, m, d->face_rgb, d->shade, d, 1, false, 0.f, 0);
     }
-    if (d->faces && A[CV_AUX_SELTRI].n) {    /* the box selection's faces again, a hair in front, toned */
+    if (d->faces && A[CV_AUX_SELTRI].n) {    /* the box selection's faces again, a hair in front, in the negative */
         int m = d->faces_color == CV_COLOR_NODAL || d->faces_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         g_tint = 1.f;
         draw_layer(R.pip_tri_ni, A[CV_AUX_SELTRI].v, NO_IB, (int)A[CV_AUX_SELTRI].n, m, d->face_rgb, d->shade, d, 1, false, PULL, 0);
@@ -912,6 +912,23 @@ void cv_render_draw(const cv_draw* d) {
     if (A[CV_AUX_PICKPT].n) {                /* the picked nodes, on top */
         static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
         draw_layer(R.pip_pt_ni, A[CV_AUX_PICKPT].v, NO_IB, (int)A[CV_AUX_PICKPT].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size, true, 0.f, 0);
+    }
+    if (A[CV_AUX_SELPT].n) {   /* the selected nodes: dots against what is under them -- the negative on plain
+                                  faces, the field's own colour on selected (negative) faces */
+        int m = d->faces_color == CV_COLOR_NODAL || d->faces_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        g_tint = A[CV_AUX_SELTRI].n ? 0.f : 1.f;
+        draw_layer(R.pip_pt_ni, A[CV_AUX_SELPT].v, NO_IB, (int)A[CV_AUX_SELPT].n, m, d->face_rgb, false, d, d->hl_size, false, 0.f, 0);
+        g_tint = 0.f;
+    }
+    {   /* the selection's max (red) and min (blue) on top, each on a white ball a size larger
+           drawn at its true depth, so the coloured one wins where they meet */
+        static const float white[3] = { 1, 1, 1 }, red[3] = { 0.9f, 0.08f, 0.08f }, blue[3] = { 0.1f, 0.3f, 0.95f };
+        const int w[2] = { CV_AUX_SELMAX, CV_AUX_SELMIN };
+        for (int k = 0; k < 2; k++) {
+            if (!A[w[k]].n) continue;
+            draw_layer(R.pip_pt_ni, A[w[k]].v, NO_IB, (int)A[w[k]].n, CV_COLOR_SOLID, white, false, d, d->marker_size * 1.45f, false, 0.f, 0);
+            draw_layer(R.pip_pt_ni, A[w[k]].v, NO_IB, (int)A[w[k]].n, CV_COLOR_SOLID, k ? blue : red, false, d, d->marker_size, true, 0.f, 0);
+        }
     }
     if (d->markers && A[CV_AUX_MARK].n)      /* min (first) and max (second), coloured by the field */
         draw_layer(R.pip_pt_ni, A[CV_AUX_MARK].v, NO_IB, (int)A[CV_AUX_MARK].n,

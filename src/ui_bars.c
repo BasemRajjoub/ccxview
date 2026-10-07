@@ -520,6 +520,7 @@ void legend_controls(struct nk_context* ctx, float s, float row) {
         tip(ctx, "Drag a box in the view next: the probe goes to the field's max inside it,\n"
                  "with the min beside it (also Ctrl+Shift+drag at any time; Esc cancels)");
         if (nk_button_label(ctx, G.box_arm ? "max in a box: drag one..." : "max in a box")) G.box_arm = !G.box_arm;
+        ui_sel_what(ctx, row);
     }
 }
 

@@ -315,6 +315,10 @@ typedef struct {
     struct { bool on; uint32_t max_at, min_at, n; float vmax, vmin; bool elem; unsigned gen; } boxq;   /* gen: G.field_gen it holds for */
     uint32_t* sel;                   /* the selected elements (indices), sel_n of them */
     uint32_t  sel_n;
+    uint32_t* seln;                  /* the selected nodes (indices), seln_n of them */
+    uint32_t  seln_n;
+    bool      sel_elems, sel_nodes;  /* what a box selects: elements, nodes, or both */
+    float     sel_box[4];            /* the last box (start x, y, end x, y), to select again when they change */
     bool      sel_crossing;          /* ... by a crossing box (else a window) */
     uint8_t*  hide;                  /* per element, 1: hidden by hand (context menu), NULL none */
     /* the context menu (right click in the view): where, and what was under it */
@@ -438,6 +442,7 @@ bool app_project(v3 p, float* sx, float* sy);   /* world -> window pixels; false
    selection (its nodes, or its elements per element) go to G.boxq, the probe to the
    max, the selection's outer faces outlined. false: nothing selected */
 bool app_box_select(float x_start, float y_start, float x_end, float y_end);
+bool app_box_reselect(void);                    /* the last box again (G.sel_elems / sel_nodes changed) */
 void app_sel_clear(void);
 void app_sel_refresh(void);                     /* the outline again: the shape changed */
 void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */

@@ -10,66 +10,102 @@ static void shown_pos(uint32_t n, float sc, float sc2, float p[3]) {
         p[k] = G.frd.xyz[3 * n + k] + (G.disp ? sc * G.disp[3 * n + k] : 0) + (G.disp2 ? sc2 * G.disp2[3 * n + k] : 0);
 }
 
-void app_sel_clear(void) {
-    free(G.sel); G.sel = NULL; G.sel_n = 0;
-    G.boxq.on = false;
-    cv_render_aux(CV_AUX_SELLN, NULL, NULL, NULL, 0);
-    cv_render_aux(CV_AUX_SELTRI, NULL, NULL, NULL, 0);
+static void sel_upload_none(void) {
+    const int w[] = { CV_AUX_SELLN, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN };
+    for (size_t k = 0; k < CV_COUNT(w); k++) cv_render_aux(w[k], NULL, NULL, NULL, 0);
 }
 
-/* the corner edges of the selected elements' exterior faces, moving with the shape */
-void app_sel_refresh(void) {
-    if (!G.sel_n || !G.loaded) { cv_render_aux(CV_AUX_SELLN, NULL, NULL, NULL, 0); cv_render_aux(CV_AUX_SELTRI, NULL, NULL, NULL, 0); return; }
-    uint8_t* on = calloc(CV_MAX(G.frd.n_elems, 1), 1);
-    if (!on) return;
-    for (uint32_t i = 0; i < G.sel_n; i++) on[G.sel[i]] = 1;
+void app_sel_clear(void) {
+    free(G.sel); G.sel = NULL; G.sel_n = 0;
+    free(G.seln); G.seln = NULL; G.seln_n = 0;
+    G.boxq.on = false;
+    sel_upload_none();
+}
+
+static void push_pt(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
+    float d[6];
+    app_node_disp6(i, d);
+    if (cv_reserve(*pos, pos->n + 3)) for (int q = 0; q < 3; q++) pos->a[pos->n++] = G.frd.xyz[3 * i + q];
+    if (cv_reserve(*disp, disp->n + 6)) for (int q = 0; q < 6; q++) disp->a[disp->n++] = d[q];
+}
+
+/* one marker ball: at a node, or for an element at its first node (where the probe goes) */
+static void marker(int which, uint32_t i, bool elem) {
     cv_fvec pos = {0}, disp = {0};
-    for (size_t k = 0; k < G.skin.n_face; k++) {
-        uint32_t e = G.skin.face[k] >> 3, c[4];
-        if (e >= G.frd.n_elems || !on[e]) continue;
-        int m = cv_elem_face_corners(&G.frd, e, (int)(G.skin.face[k] & 7), c);
-        for (int j = 0; j < m; j++) {
-            uint32_t ends[2] = { c[j], c[(j + 1) % m] };
-            for (int t = 0; t < 2; t++) {
-                float d[6];
-                app_node_disp6(ends[t], d);
-                if (cv_reserve(pos, pos.n + 3)) for (int q = 0; q < 3; q++) pos.a[pos.n++] = G.frd.xyz[3 * ends[t] + q];
-                if (cv_reserve(disp, disp.n + 6)) for (int q = 0; q < 6; q++) disp.a[disp.n++] = d[q];
-            }
-        }
-    }
-    app_aux_upload(CV_AUX_SELLN, &pos, &disp, NULL);
-    /* their skin triangles, coloured by the field as the faces are */
+    push_pt(&pos, &disp, elem ? G.frd.conn[G.frd.eoff[i]] : i);
+    app_aux_upload(which, &pos, &disp, NULL);
+    cv_free_vec(pos); cv_free_vec(disp);
+}
+
+/* what shows the selection: the elements' outer faces in the negative and outlined,
+   the nodes as dots in the negative, the max and min as balls; moves with the shape */
+void app_sel_refresh(void) {
+    sel_upload_none();
+    if (!G.loaded || (!G.sel_n && !G.seln_n)) return;
+    cv_fvec pos = {0}, disp = {0}, val = {0};
     const float* nv = G.has_field && !G.elem_mode ? G.scalar : NULL;
     const float* ev = G.has_field && G.elem_mode ? G.elem_val : NULL;
-    pos.n = disp.n = 0;
-    cv_fvec val = {0};
-    for (size_t t = 0; t < G.skin.n_tri; t++) {
-        uint32_t e = G.skin.tri_elem[t];
-        if (e >= G.frd.n_elems || !on[e]) continue;
-        for (int j = 0; j < 3; j++) {
-            uint32_t i = G.skin.tri[3 * t + j];
-            float d[6];
-            app_node_disp6(i, d);
-            if (cv_reserve(pos, pos.n + 3)) for (int q = 0; q < 3; q++) pos.a[pos.n++] = G.frd.xyz[3 * i + q];
-            if (cv_reserve(disp, disp.n + 6)) for (int q = 0; q < 6; q++) disp.a[disp.n++] = d[q];
-            if (cv_reserve(val, val.n + 1)) val.a[val.n++] = nv ? nv[i] : ev ? ev[e] : 0.f;
+    if (G.sel_n) {
+        uint8_t* on = calloc(CV_MAX(G.frd.n_elems, 1), 1);
+        if (!on) return;
+        for (uint32_t i = 0; i < G.sel_n; i++) on[G.sel[i]] = 1;
+        for (size_t k = 0; k < G.skin.n_face; k++) {     /* the corner edges of their exterior faces */
+            uint32_t e = G.skin.face[k] >> 3, c[4];
+            if (e >= G.frd.n_elems || !on[e]) continue;
+            int m = cv_elem_face_corners(&G.frd, e, (int)(G.skin.face[k] & 7), c);
+            for (int j = 0; j < m; j++) { push_pt(&pos, &disp, c[j]); push_pt(&pos, &disp, c[(j + 1) % m]); }
         }
+        app_aux_upload(CV_AUX_SELLN, &pos, &disp, NULL);
+        pos.n = disp.n = 0;
+        for (size_t t = 0; t < G.skin.n_tri; t++) {     /* their skin triangles, coloured as the faces are */
+            uint32_t e = G.skin.tri_elem[t];
+            if (e >= G.frd.n_elems || !on[e]) continue;
+            for (int j = 0; j < 3; j++) {
+                uint32_t i = G.skin.tri[3 * t + j];
+                push_pt(&pos, &disp, i);
+                if (cv_reserve(val, val.n + 1)) val.a[val.n++] = nv ? nv[i] : ev ? ev[e] : 0.f;
+            }
+        }
+        free(on);
+        app_aux_upload(CV_AUX_SELTRI, &pos, &disp, nv || ev ? val.a : NULL);
     }
-    free(on);
-    app_aux_upload(CV_AUX_SELTRI, &pos, &disp, nv || ev ? val.a : NULL);
+    if (G.seln_n) {
+        pos.n = disp.n = val.n = 0;
+        for (uint32_t k = 0; k < G.seln_n; k++) {
+            push_pt(&pos, &disp, G.seln[k]);
+            if (cv_reserve(val, val.n + 1)) val.a[val.n++] = nv ? nv[G.seln[k]] : 0.f;
+        }
+        app_aux_upload(CV_AUX_SELPT, &pos, &disp, nv ? val.a : NULL);
+    }
     cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(val);
+    if (G.boxq.on && G.boxq.gen == G.field_gen) {
+        marker(CV_AUX_SELMAX, G.boxq.max_at, G.boxq.elem);
+        marker(CV_AUX_SELMIN, G.boxq.min_at, G.boxq.elem);
+    }
+}
+
+/* one value into the running extremes */
+static void take(const float* val, uint32_t* imax, uint32_t* imin, uint32_t* cnt, uint32_t i) {
+    float v = val[i];
+    if (v != v) return;
+    (*cnt)++;
+    if (*imax == UINT32_MAX || v > val[*imax]) *imax = i;
+    if (*imin == UINT32_MAX || v < val[*imin]) *imin = i;
 }
 
 bool app_box_select(float x0, float y0, float x1, float y1) {
     app_sel_clear();
     if (!G.loaded) return false;
+    G.sel_box[0] = x0; G.sel_box[1] = y0; G.sel_box[2] = x1; G.sel_box[3] = y1;
     bool crossing = x1 < x0;                         /* right to left */
+    bool want_e = G.sel_elems || !G.sel_nodes, want_n = G.sel_nodes;   /* never nothing */
     float lx = CV_MIN(x0, x1), hx = CV_MAX(x0, x1), ly = CV_MIN(y0, y1), hy = CV_MAX(y0, y1);
     uint32_t N = G.frd.n_nodes, E = G.frd.n_elems;
     uint8_t* inside = calloc(CV_MAX(N, 1), 1);
+    uint8_t* shown = calloc(CV_MAX(N, 1), 1);        /* nodes of shown elements */
     uint32_t* sel = malloc((size_t)CV_MAX(E, 1) * sizeof *sel);
-    if (!inside || !sel) { free(inside); free(sel); return false; }
+    uint32_t* seln = want_n ? malloc((size_t)CV_MAX(N, 1) * sizeof *seln) : NULL;
+    if (!inside || !shown || !sel || (want_n && !seln)) { free(inside); free(shown); free(sel); free(seln); return false; }
     float mvp[16], mv[16];
     cam_matrices(mvp, mv, NULL);
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
@@ -81,27 +117,37 @@ bool app_box_select(float x0, float y0, float x1, float y1) {
         float sx = G.vp_x + (c[0] / c[3] * 0.5f + 0.5f) * G.vp_w, sy = G.vp_y + (0.5f - c[1] / c[3] * 0.5f) * G.vp_h;
         inside[i] = sx >= lx && sx <= hx && sy >= ly && sy <= hy;
     }
-    uint32_t n = cv_box_elems(&G.frd, G.vis, inside, crossing, sel);
-    if (!n) { free(inside); free(sel); return false; }
-    G.sel = sel; G.sel_n = n; G.sel_crossing = crossing;
-    app_sel_refresh();
-    /* the extremes over the selection: its nodes, or its elements per element */
+    uint32_t n = want_e ? cv_box_elems(&G.frd, G.vis, inside, crossing, sel) : 0, nn = 0;
+    if (want_n) {
+        for (uint32_t e = 0; e < E; e++)
+            if (!G.vis || G.vis[e]) for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) shown[G.frd.conn[j]] = 1;
+        for (uint32_t i = 0; i < N; i++) if (inside[i] && shown[i]) seln[nn++] = i;
+    }
+    free(shown);
+    if (!n && !nn) { free(inside); free(sel); free(seln); return false; }
+    if (n) { G.sel = sel; G.sel_n = n; } else free(sel);
+    if (nn) { G.seln = seln; G.seln_n = nn; } else free(seln);
+    G.sel_crossing = crossing;
+    /* the extremes: over the selected nodes (or the selected elements' nodes); per
+       element over the selected elements (or those holding a selected node) */
     bool elem = G.elem_mode;
     const float* val = !G.has_field || G.field_src == 1 ? NULL : elem ? G.elem_val : G.scalar;
     uint32_t imax = UINT32_MAX, imin = UINT32_MAX, cnt = 0;
     if (val) {
-        memset(inside, 0, CV_MAX(N, 1));             /* reused: node already counted */
-        for (uint32_t k = 0; k < n; k++) {
-            uint32_t e = sel[k], b = G.frd.eoff[e], m = elem ? 1 : G.frd.eoff[e + 1] - b;
-            for (uint32_t j = 0; j < m; j++) {        /* the element itself, or each of its nodes once */
-                uint32_t i = elem ? e : G.frd.conn[b + j];
-                if (!elem && inside[i]) continue;
-                if (!elem) inside[i] = 1;
-                float v = val[i];
-                if (v != v) continue;
-                cnt++;
-                if (imax == UINT32_MAX || v > val[imax]) imax = i;
-                if (imin == UINT32_MAX || v < val[imin]) imin = i;
+        memset(inside, 0, CV_MAX(N, 1));             /* reused: counted already */
+        if (!elem && G.seln_n) for (uint32_t k = 0; k < G.seln_n; k++) take(val, &imax, &imin, &cnt, G.seln[k]);
+        else if (!elem) {
+            for (uint32_t k = 0; k < G.sel_n; k++)
+                for (uint32_t j = G.frd.eoff[G.sel[k]]; j < G.frd.eoff[G.sel[k] + 1]; j++) {
+                    uint32_t i = G.frd.conn[j];
+                    if (!inside[i]) { inside[i] = 1; take(val, &imax, &imin, &cnt, i); }
+                }
+        } else if (G.sel_n) for (uint32_t k = 0; k < G.sel_n; k++) take(val, &imax, &imin, &cnt, G.sel[k]);
+        else {
+            for (uint32_t k = 0; k < G.seln_n; k++) inside[G.seln[k]] = 1;
+            for (uint32_t e = 0; e < E; e++) {
+                if (G.vis && !G.vis[e]) continue;
+                for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) if (inside[G.frd.conn[j]]) { take(val, &imax, &imin, &cnt, e); break; }
             }
         }
     }
@@ -111,7 +157,13 @@ bool app_box_select(float x0, float y0, float x1, float y1) {
         G.boxq.on = true; G.boxq.elem = elem; G.boxq.n = cnt; G.boxq.gen = G.field_gen;
         G.boxq.max_at = imax; G.boxq.min_at = imin; G.boxq.vmax = val[imax]; G.boxq.vmin = val[imin];
     }
+    app_sel_refresh();
     return true;
+}
+
+bool app_box_reselect(void) {
+    if (!G.sel_n && !G.seln_n) return false;
+    return app_box_select(G.sel_box[0], G.sel_box[1], G.sel_box[2], G.sel_box[3]);
 }
 
 /* ---- hiding by hand -------------------------------------------------------------- */
@@ -179,16 +231,18 @@ void app_clip_at(const float p[3], const float n[3]) {
 /* ---- the selection out ------------------------------------------------------------- */
 
 size_t app_sel_ids(char* out, size_t n) {
+    bool nodes = !G.sel_n;                           /* the elements, else the nodes */
+    uint32_t cnt = nodes ? G.seln_n : G.sel_n;
     size_t o = 0;
     if (n) out[0] = 0;
-    for (uint32_t i = 0; i < G.sel_n && o + 16 < n; i++)
-        o += (size_t)snprintf(out + o, n - o, "%u%s", G.frd.elem_id[G.sel[i]],
-                              i + 1 == G.sel_n ? "\n" : i % 16 == 15 ? ",\n" : ", ");
+    for (uint32_t i = 0; i < cnt && o + 16 < n; i++)
+        o += (size_t)snprintf(out + o, n - o, "%u%s", nodes ? G.frd.node_id[G.seln[i]] : G.frd.elem_id[G.sel[i]],
+                              i + 1 == cnt ? "\n" : i % 16 == 15 ? ",\n" : ", ");
     return o;
 }
 
 bool app_sel_csv(void) {
-    if (!G.loaded || !G.sel_n) return false;
+    if (!G.loaded || (!G.sel_n && !G.seln_n)) return false;
     char base[1024], path[1100];
     snprintf(base, sizeof base, "%s", G.path);
     char* dot = strrchr(base, '.');
@@ -197,6 +251,19 @@ bool app_sel_csv(void) {
     snprintf(path, sizeof path, "%s_selection.csv", base);
     FILE* fp = fopen(path, "w");
     bool ok = fp != NULL;
+    if (fp && !G.sel_n) {                            /* nodes only: a row per node */
+        bool val = G.has_field && G.field_src != 1 && !G.elem_mode;
+        fprintf(fp, "node,x,y,z%s\n", val ? ",value" : "");
+        for (uint32_t k = 0; k < G.seln_n; k++) {
+            uint32_t i = G.seln[k];
+            const float* x = G.frd.xyz + 3 * i;
+            fprintf(fp, "%u,%.9g,%.9g,%.9g", G.frd.node_id[i], x[0], x[1], x[2]);
+            if (val) fprintf(fp, ",%.9g", G.scalar[i]);
+            fputc('\n', fp);
+        }
+        ok = fclose(fp) == 0;
+        fp = NULL;
+    }
     if (fp) {
         bool val = G.has_field && G.field_src != 1;
         fprintf(fp, "element,type,material,x,y,z%s\n", !val ? "" : G.elem_mode ? ",value" : ",min,max");

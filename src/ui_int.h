@@ -37,6 +37,7 @@
 #define section_mesh            uii_section_mesh
 #define units_summary           uii_units_summary
 #define window_probe            uii_window_probe
+#define ui_sel_what             uii_sel_what
 #define window_details          uii_window_details
 #define window_about            uii_window_about
 #define window_menu             uii_window_menu
@@ -136,6 +137,7 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh);   
 void section_mesh(struct nk_context* ctx, float s, float row);
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
+void ui_sel_what(struct nk_context* ctx, float row);   /* ui_windows.c: what a box selects */
 void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_info.c */
 void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
 void window_menu(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_menu.c */

@@ -111,8 +111,9 @@ static void build(void) {
     if (G.has_field && mesh_probe_text(e, t, sizeof t)) line(false, "mesh   %s", t);
 
     /* the box it came from */
-    if (G.sel_n) {
-        line(true, "Box selection: %u elements (%s)", G.sel_n, G.sel_crossing ? "crossing: any node inside" : "window: wholly inside");
+    if (G.sel_n || G.seln_n) {
+        line(true, "Box selection: %u elements, %u nodes (%s)", G.sel_n, G.seln_n,
+             G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
         if (G.boxq.on && G.boxq.gen == G.field_gen) {
             const uint32_t* id = G.boxq.elem ? f->elem_id : f->node_id;
             const char* what = G.boxq.elem ? "element" : "node";

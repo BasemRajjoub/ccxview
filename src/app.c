@@ -94,6 +94,7 @@ static void init(void) {
     G.anim_factor = 1.f;
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
+    G.sel_elems = true;
     G.path_lin = true;                   /* the Path window opens on the linearization */
     G.lin_asme = true;
     G.path_to = UINT32_MAX;

@@ -64,6 +64,19 @@ void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh)
 
 const char* path_dirs[] = { "to a node", "along normal", "along X", "along Y", "along Z" };
 
+/* what a box selects: elements, nodes or both (never neither); a change selects again */
+void ui_sel_what(struct nk_context* ctx, float row) {
+    nk_layout_row_dynamic(ctx, row, 3);
+    nk_label(ctx, "a box selects:", NK_TEXT_LEFT);
+    bool e = G.sel_elems, n = G.sel_nodes;
+    tip(ctx, "Elements: drag left to right for those wholly inside, right to left for every one touched");
+    nk_checkbox_label(ctx, "elements", &G.sel_elems);
+    tip(ctx, "Nodes inside the box; the max and min are then taken over them");
+    nk_checkbox_label(ctx, "nodes", &G.sel_nodes);
+    if (!G.sel_elems && !G.sel_nodes) { if (e) G.sel_nodes = true; else G.sel_elems = true; }   /* never nothing */
+    if (e != G.sel_elems || n != G.sel_nodes) app_box_reselect();
+}
+
 void window_probe(struct nk_context* ctx, float s, float row) {
     if (!G.probe_on || !G.loaded) return;
     const cv_pick* p = &G.probe;
@@ -95,7 +108,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     float tw = 0;
     for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
     float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
-    float h = row * (n + 5.8f);
+    float h = row * (n + 5.8f + (G.sel_n || G.seln_n ? 1.1f : 0.f));
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -107,6 +120,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
         if (tips[i]) tip(ctx, tips[i]);
         nk_label(ctx, ln[i], NK_TEXT_LEFT);
     }
+    if (G.sel_n || G.seln_n) ui_sel_what(ctx, row);
     nk_layout_row_dynamic(ctx, row, 3);
     tip(ctx, "Node ids of this element, drawn in the view");
     nk_checkbox_label(ctx, "ids", &G.show_ids);
