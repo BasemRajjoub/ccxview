@@ -541,6 +541,7 @@ void refresh_field(void) {
     refresh_lin();
     refresh_path();
     refresh_hist();
+    app_label_changed();                  /* values and the field they show */
 }
 
 /* The imaginary part of a steady-state response: G.disp2 = -DISPI, so the shape at

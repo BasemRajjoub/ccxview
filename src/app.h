@@ -48,7 +48,10 @@ enum { CV_CACHE_N = 8 };
 
 /* Background work: loading a file, or rebuilding the skin after a group change. */
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
-enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
+enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };
+/* labels on the model (app_label.c): what they show */
+enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
+       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_N };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 
 typedef struct {
     int       kind;
@@ -334,6 +337,14 @@ typedef struct {
     bool      show_mesh;             /* the mesh quality window */
     bool      mesh_limits_open;      /* ... with the user's limits shown */
     bool      show_details;          /* the Details window of the probed node and element */
+    /* labels on the model */
+    int       label_kind;            /* CV_LABEL_*: what the labels show */
+    float     label_px;              /* text height, px (before ui scale) */
+    float     label_spacing;         /* min distance between labels, px; 0 all */
+    float     label_rgb[3], label_box_rgba[4];
+    bool      label_sel_only, label_probe_only;
+    unsigned  label_gen;             /* bumped when the labelled things change (model, step, field, selection) */
+    char      label_note[64];        /* "labels: node id, shown 420 of 18 000"; "" when off */
     bool      show_about;            /* the About window: author, licence, libraries */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
@@ -464,6 +475,12 @@ size_t app_sel_ids(char* out, size_t n);         /* its element ids, 16 a line, 
 void app_menu_open(float x, float y);            /* the context menu at this pixel, what lies there picked */
 void app_probe_pixel(float x, float y);          /* probe what lies under the pixel, as a click does */
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
+/* app_label.c: labels on the model */
+const char* app_label_name(int kind);          /* "node id", ... for the panel */
+const char* app_label_key(int kind);           /* "node", ... for --labels and the ini */
+int  app_label_find(const char* key);          /* -1 unknown */
+void app_label_changed(void);                  /* the labelled things changed: anchors again next frame */
+void app_label_frame(const cv_draw* d);        /* per frame, before cv_render_draw: thin, lay out, upload when needed */
 /* the shown .frd field's stored components at a node (global, as the file has them);
    names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
 int app_field_comps(uint32_t node, char names[][12], float* vals, int max);

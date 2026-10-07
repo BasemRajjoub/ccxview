@@ -224,6 +224,42 @@ static const char* kVSI =
    by the normal stress in each direction), and how the glyph moves.
    Superquadric: glyph.h cv_superquad_point (keep in step). Reynolds: radius
    |n.S.n| along n; HWY: the shear |S.n - (n.S.n) n|. */
+/* Labels: a quad per glyph or box, anchored to a model point, sized in pixels, so it
+   never scales with the zoom; its depth is the anchor's pulled a hair toward the eye,
+   so the model hides labels on its far side. u_p: deform scales, viewport w, h.
+   u_q: x pull in clip depth, y on top (the front 2 % of the range, as the markers). */
+static const char* kVSL =
+    GLSL_HDR
+    "uniform mat4 u_mvp;\n"
+    "uniform vec4 u_p;\n"
+    "uniform vec4 u_q;\n"
+    "in vec2 a_q;\n"
+    "in vec3 i_pos;\n"
+    "in vec3 i_disp;\n"
+    "in vec3 i_disp2;\n"
+    "in vec2 i_off;\n"
+    "in vec2 i_size;\n"
+    "in vec2 i_uv0;\n"
+    "in vec2 i_uv1;\n"
+    "out vec2 v_uv;\n"
+    "void main() {\n"
+    "  vec3 p = i_pos + i_disp * u_p.x + i_disp2 * u_p.y;\n"
+    "  vec4 c = u_mvp * vec4(p, 1.0);\n"
+    "  vec2 px = i_off + a_q * i_size;\n"
+    "  c.xy += vec2(px.x * 2.0 / u_p.z, -px.y * 2.0 / u_p.w) * c.w;\n"
+    "  if (u_q.y > 0.5) c.z = -c.w + (c.z + c.w) * 0.02; else c.z -= u_q.x * c.w;\n"
+    "  gl_Position = c;\n"
+    "  v_uv = mix(i_uv0, i_uv1, a_q);\n"
+    "}\n";
+
+static const char* kFSL =
+    GLSL_HDR
+    "uniform vec4 u_color;\n"
+    "uniform sampler2D u_atlas;\n"
+    "in vec2 v_uv;\n"
+    "out vec4 frag;\n"
+    "void main() { frag = vec4(u_color.rgb, u_color.a * texture(u_atlas, v_uv).r); }\n";
+
 static const char* kVSG =
     GLSL_HDR
     VS_UNIFORMS
@@ -363,6 +399,10 @@ static struct {
     sg_pipeline pip_inst;             /* the instanced symbol bodies */
     sg_shader   shd_glyph;
     sg_pipeline pip_glyph;            /* the tensor glyphs */
+    sg_shader   shd_label;
+    sg_pipeline pip_label;            /* labels: a unit quad per instance */
+    sg_buffer   label_quad;
+    sg_image    label_img;  sg_view label_view;   /* the font atlas, alpha */
     sg_buffer   gmesh[3];  int gmesh_n[3];              /* the unit glyph: (theta, phi) grids, fine to coarse */
     sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
@@ -600,6 +640,47 @@ void cv_render_init(void) {
             .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
         };
         R.pip_inst = sg_make_pipeline(&pi);
+    }
+    {   /* labels: a unit quad per instance, CV_LABEL_FLOATS per instance, blended, no depth write */
+        typedef struct { float mvp[16]; float p[4]; float q[4]; } vs_label;
+        R.shd_label = sg_make_shader(&(sg_shader_desc){
+            .vertex_func.source = kVSL, .fragment_func.source = kFSL,
+            .attrs = { [0] = { .glsl_name = "a_q" }, [1] = { .glsl_name = "i_pos" }, [2] = { .glsl_name = "i_disp" },
+                       [3] = { .glsl_name = "i_disp2" }, [4] = { .glsl_name = "i_off" }, [5] = { .glsl_name = "i_size" },
+                       [6] = { .glsl_name = "i_uv0" }, [7] = { .glsl_name = "i_uv1" } },
+            .uniform_blocks[0] = { .stage = SG_SHADERSTAGE_VERTEX, .size = sizeof(vs_label),
+                .glsl_uniforms = { [0] = { .type = SG_UNIFORMTYPE_MAT4, .glsl_name = "u_mvp" },
+                                   [1] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_p" },
+                                   [2] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_q" } } },
+            .uniform_blocks[1] = { .stage = SG_SHADERSTAGE_FRAGMENT, .size = 16,
+                .glsl_uniforms = { [0] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_color" } } },
+            .views = { [0].texture = { .stage = SG_SHADERSTAGE_FRAGMENT, .image_type = SG_IMAGETYPE_2D, .sample_type = SG_IMAGESAMPLETYPE_FLOAT } },
+            .samplers = { [0] = { .stage = SG_SHADERSTAGE_FRAGMENT, .sampler_type = SG_SAMPLERTYPE_FILTERING } },
+            .texture_sampler_pairs = { [0] = { .stage = SG_SHADERSTAGE_FRAGMENT, .view_slot = 0, .sampler_slot = 0, .glsl_name = "u_atlas" } },
+        });
+        R.pip_label = sg_make_pipeline(&(sg_pipeline_desc){
+            .shader = R.shd_label,
+            .layout = {
+                .buffers = { [0] = { .stride = 8 }, [1] = { .stride = CV_LABEL_FLOATS * 4, .step_func = SG_VERTEXSTEP_PER_INSTANCE } },
+                .attrs = {
+                    [0] = { .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2 },
+                    [1] = { .buffer_index = 1, .offset = 0,  .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [2] = { .buffer_index = 1, .offset = 12, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [3] = { .buffer_index = 1, .offset = 24, .format = SG_VERTEXFORMAT_FLOAT3 },
+                    [4] = { .buffer_index = 1, .offset = 36, .format = SG_VERTEXFORMAT_FLOAT2 },
+                    [5] = { .buffer_index = 1, .offset = 44, .format = SG_VERTEXFORMAT_FLOAT2 },
+                    [6] = { .buffer_index = 1, .offset = 52, .format = SG_VERTEXFORMAT_FLOAT2 },
+                    [7] = { .buffer_index = 1, .offset = 60, .format = SG_VERTEXFORMAT_FLOAT2 },
+                },
+            },
+            .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+            .index_type = SG_INDEXTYPE_NONE,
+            .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = false },
+            .colors[0].blend = { .enabled = true, .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA, .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                                 .src_factor_alpha = SG_BLENDFACTOR_ONE, .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
+        });
+        static const float q[12] = { 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1 };
+        R.label_quad = make_buf(q, sizeof q, false);
         float v[12 * 12 * 3];
         R.body_n[0] = unit_body(v, 12, true);
         R.body[0] = make_buf(v, (size_t)R.body_n[0] * 12, false);
@@ -661,6 +742,7 @@ void cv_render_clear_model(void) {
     kill_buf(&R.ib_tri); kill_buf(&R.ib_edge); kill_buf(&R.ib_pt); kill_buf(&R.ib_fedge);
     R.n_tri = R.n_edge = R.n_pt = R.n_fedge = 0;
     R.n_nodes = 0;
+    cv_render_labels(NULL, 0, NULL, 0);
 }
 
 void cv_render_shutdown(void) {
@@ -788,6 +870,46 @@ void cv_render_aux2(int which, const float* pos, const float* disp, const float*
 }
 
 static struct { sg_buffer buf; uint32_t n; } I[CV_INST_N];
+static struct { sg_buffer box, gly; uint32_t nb, ng; } LB;   /* the labels: boxes, glyphs */
+
+void cv_render_label_atlas(const unsigned char* a8, int w, int h) {
+    if (R.label_view.id) { sg_destroy_view(R.label_view); R.label_view.id = 0; }
+    if (R.label_img.id) { sg_destroy_image(R.label_img); R.label_img.id = 0; }
+    if (!a8 || w <= 0 || h <= 0) return;
+    R.label_img = sg_make_image(&(sg_image_desc){ .width = w, .height = h, .pixel_format = SG_PIXELFORMAT_R8,
+                                                  .data.mip_levels[0] = { a8, (size_t)w * (size_t)h } });
+    R.label_view = sg_make_view(&(sg_view_desc){ .texture.image = R.label_img });
+}
+
+void cv_render_labels(const float* box, uint32_t nb, const float* gly, uint32_t ng) {
+    kill_buf(&LB.box); kill_buf(&LB.gly); LB.nb = LB.ng = 0;
+    if (box && nb) { LB.box = make_buf(box, (size_t)nb * CV_LABEL_FLOATS * 4, false); LB.nb = nb; }
+    if (gly && ng) { LB.gly = make_buf(gly, (size_t)ng * CV_LABEL_FLOATS * 4, false); LB.ng = ng; }
+}
+
+/* the two label layers: the boxes, then the glyphs over them */
+static void draw_labels(const cv_draw* d) {
+    if (!R.label_view.id || (!LB.nb && !LB.ng)) return;
+    typedef struct { float mvp[16]; float p[4]; float q[4]; } vs_label;
+    vs_label vs;
+    memcpy(vs.mvp, d->mvp, sizeof vs.mvp);
+    vs.p[0] = d->def_scale; vs.p[1] = d->def_scale2; vs.p[2] = (float)d->vp_w; vs.p[3] = (float)d->vp_h;
+    vs.q[0] = 0.002f; vs.q[1] = d->labels_on_top ? 1.f : 0.f; vs.q[2] = vs.q[3] = 0;
+    sg_apply_pipeline(R.pip_label);
+    for (int pass = 0; pass < 2; pass++) {
+        uint32_t n = pass ? LB.ng : LB.nb;
+        if (!n) continue;
+        sg_bindings b = { .vertex_buffers = { [0] = R.label_quad, [1] = pass ? LB.gly : LB.box },
+                          .views = { [0] = R.label_view }, .samplers = { [0] = R.smp_lin } };
+        sg_apply_bindings(&b);
+        sg_apply_uniforms(0, &SG_RANGE(vs));
+        float col[4];
+        if (pass) { col[0] = d->label_rgb[0]; col[1] = d->label_rgb[1]; col[2] = d->label_rgb[2]; col[3] = 1; }
+        else memcpy(col, d->label_box_rgba, sizeof col);
+        sg_apply_uniforms(1, &SG_RANGE(col));
+        sg_draw(0, 6, (int)n);
+    }
+}
 
 void cv_render_inst(int which, const float* inst, uint32_t n) {
     if (which < 0 || which >= CV_INST_N) return;
@@ -979,6 +1101,7 @@ void cv_render_draw(const cv_draw* d) {
         }
         if (d->links) draw_inst(CV_INST_LINK, CV_COLOR_SOLID, link_rgb, d, px);
         if (d->discrete) draw_inst(CV_INST_DISC, CV_COLOR_SOLID, disc_rgb, d, px);
+        if (d->labels) draw_labels(d);
     }
     {
         /* cgx geometry: surfaces as patches, curves pulled onto them, points as balls */

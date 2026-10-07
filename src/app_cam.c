@@ -469,6 +469,7 @@ void app_probe_at(uint32_t i, bool element) {
     G.probe_ip = 0;
     G.boxq.on = false;
     G.probe_value = !G.has_field ? NAN : G.elem_mode ? (e != UINT32_MAX ? G.elem_val[e] : NAN) : G.scalar[n];
+    if (G.label_probe_only) app_label_changed();
 }
 
 bool app_find(uint32_t id, bool element) {
@@ -728,6 +729,7 @@ void do_pick(float px, float py) {
     G.probe_on = G.probe.hit;
     app_sel_clear();
     G.probe_ip = 0;
+    if (G.label_probe_only) app_label_changed();
     if (G.probe.hit && G.path_arm) app_path_end(G.probe.node);
     if (G.probe.hit) {
         G.probe_value = !G.has_field ? NAN

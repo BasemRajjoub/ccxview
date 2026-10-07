@@ -416,6 +416,12 @@ static void apply_load(cv_job* j) {
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
+    if (O.labels) {
+        int k = app_label_find(O.labels);
+        if (k < 0) cv_msg_add(&G.msgs, 0, false, "--labels: unknown kind (node, elem, value, evalue, sets, links, loads, supports, materials)");
+        else G.label_kind = k;
+    }
+    app_label_changed();
     if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
     if (O.compare) app_compare_open(O.compare);
@@ -599,6 +605,7 @@ void poll_job(void) {
                 app_sel_clear();                  /* it may hold elements now hidden */
             }
             deck_refresh_highlight();
+            app_label_changed();                  /* other nodes and faces to label */
         } else {
             cv_msg_add(&G.msgs, 0, false, j->err);
         }

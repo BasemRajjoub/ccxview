@@ -95,6 +95,9 @@ static void init(void) {
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
     G.sel_elems = true;
+    G.label_px = 13.f; G.label_spacing = 40.f;
+    G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
+    G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
     G.lin_asme = true;
     G.path_to = UINT32_MAX;
@@ -440,6 +443,9 @@ static void frame(void) {
         }
         eye_caps(eye_clip, &d);
         d.hl_size = G.hl_size * ui_scale();
+        d.labels = G.label_kind != CV_LABEL_NONE;
+        d.labels_on_top = G.label_kind == CV_LABEL_SETS || G.label_kind == CV_LABEL_LINKS || G.label_kind == CV_LABEL_MATERIALS;
+        memcpy(d.label_rgb, G.label_rgb, sizeof d.label_rgb); memcpy(d.label_box_rgba, G.label_box_rgba, sizeof d.label_box_rgba);
         d.gauss_on_top = G.gp_on_top;
         d.gauss_points_color = G.gp_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;
         d.gauss_size = G.gp_size * ui_scale();
@@ -456,6 +462,7 @@ static void frame(void) {
         .swapchain = sglue_swapchain(),
     });
     if (G.loaded) {
+        app_label_frame(&d);
         cv_render_draw(&d);
         int nc = app_copies();
         if (nc > 1) {                          /* the mirror and replicate copies */
@@ -996,6 +1003,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
+        else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
         else if (!strcmp(argv[i], "--menu") && i + 1 < argc) O.menu_set = sscanf(argv[++i], "%f,%f", &O.menu[0], &O.menu[1]) == 2;
         else if (!strcmp(argv[i], "--box") && i + 1 < argc)
             O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;

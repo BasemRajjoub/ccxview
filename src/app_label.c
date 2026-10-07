@@ -1,0 +1,261 @@
+/* app_label.c -- labels on the model (label.h): what to label for the chosen kind, the
+   font atlas, and the per-frame thinning, layout and upload. Only what can be seen gets
+   a label: skin nodes, exterior faces, shown elements. */
+#include "app_int.h"
+#include "label.h"
+#include "ui.h"
+#include "nk.h"
+#include <math.h>
+#include <strings.h>
+
+extern const unsigned char cv_font_text[];
+extern const unsigned cv_font_text_size;
+
+static const struct { const char *key, *name; } kinds[CV_LABEL_N] = {
+    { "none", "none" }, { "node", "node id" }, { "elem", "element id" }, { "value", "node value" },
+    { "evalue", "element value" }, { "sets", "set and surface names" }, { "links", "couplings, rigid bodies" },
+    { "loads", "loads" }, { "supports", "supports" }, { "materials", "materials" },
+};
+const char* app_label_name(int k) { return k >= 0 && k < CV_LABEL_N ? kinds[k].name : "?"; }
+const char* app_label_key(int k) { return k >= 0 && k < CV_LABEL_N ? kinds[k].key : "none"; }
+int app_label_find(const char* key) {
+    for (int k = 0; k < CV_LABEL_N; k++) if (!strcasecmp(kinds[k].key, key)) return k;
+    return -1;
+}
+
+/* ---- the font: Inter baked at the label size, kept as metrics ------------------------ */
+static struct {
+    float px;
+    struct nk_font_atlas atlas;
+    bool live;
+    cv_label_glyph g[95];               /* codepoints 32 .. 126 */
+    cv_label_metrics m;
+} F;
+
+static void font_bake(float px) {
+    if (F.live) { nk_font_atlas_clear(&F.atlas); F.live = false; }
+    nk_font_atlas_init_default(&F.atlas);
+    nk_font_atlas_begin(&F.atlas);
+    static const nk_rune range[] = { 32, 126, 0 };
+    struct nk_font_config cfg = nk_font_config(px);
+    cfg.range = range; cfg.oversample_h = 1; cfg.oversample_v = 1; cfg.pixel_snap = nk_true;
+    struct nk_font* font = nk_font_atlas_add_from_memory(&F.atlas, (void*)cv_font_text, cv_font_text_size, px, &cfg);
+    int w, h;
+    const void* pixels = nk_font_atlas_bake(&F.atlas, &w, &h, NK_FONT_ATLAS_ALPHA8);
+    cv_render_label_atlas(pixels, w, h);
+    struct nk_draw_null_texture null = {0};
+    nk_font_atlas_end(&F.atlas, nk_handle_id(0), &null);
+    for (int c = 32; c <= 126; c++) {
+        const struct nk_font_glyph* g = nk_font_find_glyph(font, (nk_rune)c);
+        F.g[c - 32] = (cv_label_glyph){ g->xadvance, g->x0, g->y0, g->x1, g->y1, g->u0, g->v0, g->u1, g->v1 };
+    }
+    F.m = (cv_label_metrics){ F.g, 32, 95, px, null.uv.x, null.uv.y };
+    F.px = px; F.live = true;
+}
+
+/* ---- the anchors: one per labelled thing, pos[3] disp[3] disp2[3], and its text ------- */
+/* Ids and values are formatted only for the labels shown (a million anchors would take
+   100 ms to format up front): such an anchor keeps the node or element index in ref and
+   no text. Named things keep their text. */
+typedef struct {
+    cv_fvec anc;                        /* 9 per anchor */
+    CV_VEC(uint32_t) ref;               /* per anchor: node / element index, UINT32_MAX none */
+    CV_VEC(char) txt;                   /* texts, 0-terminated, back to back */
+    CV_VEC(uint32_t) toff;              /* text offset per anchor, UINT32_MAX: formatted from ref */
+    uint32_t n;
+} anchors;
+
+static struct { anchors a; bool on_top; unsigned gen; int kind, asked; bool sel_only, probe_only; } A;   /* kind: the one built (a value field per element becomes evalue); asked: G.label_kind then */
+
+static void pack(anchors* s, const float p[3], const float d[6], uint32_t ref, const char* text) {
+    if (!cv_reserve(s->anc, s->anc.n + 9) || !cv_reserve(s->toff, s->toff.n + 1) || !cv_reserve(s->ref, s->ref.n + 1)) return;
+    size_t len = text ? strlen(text) + 1 : 0;
+    if (len && !cv_reserve(s->txt, s->txt.n + len)) return;
+    for (int k = 0; k < 3; k++) s->anc.a[s->anc.n++] = p[k];
+    for (int k = 0; k < 6; k++) s->anc.a[s->anc.n++] = d[k];
+    s->ref.a[s->ref.n++] = ref;
+    s->toff.a[s->toff.n++] = text ? (uint32_t)s->txt.n : UINT32_MAX;
+    if (len) { memcpy(s->txt.a + s->txt.n, text, len); s->txt.n += len; }
+    s->n++;
+}
+static inline void anchor_add(const float p[3], const float d[6], const char* text) { pack(&A.a, p, d, UINT32_MAX, text); }   /* the named kinds */
+static void anchor_ref(const float p[3], const float d[6], uint32_t ref) { pack(&A.a, p, d, ref, NULL); }
+
+static void anchor_node(uint32_t i) {
+    float d[6];
+    app_node_disp6(i, d);
+    anchor_ref(G.frd.xyz + 3 * i, d, i);
+}
+
+/* the text of an anchor: its own, or its id / value formatted now */
+static const char* anchor_text(uint32_t i, char* buf, size_t n) {
+    uint32_t off = A.a.toff.a[i], ref = A.a.ref.a[i];
+    if (off != UINT32_MAX) return A.a.txt.a + off;
+    switch (A.kind) {
+    case CV_LABEL_NODE:   snprintf(buf, n, "%u", G.frd.node_id[ref]); break;
+    case CV_LABEL_ELEM:   snprintf(buf, n, "%u", G.frd.elem_id[ref]); break;
+    case CV_LABEL_VALUE:  app_legend_fmt(buf, n, G.scalar[ref]); break;
+    case CV_LABEL_EVALUE: app_legend_fmt(buf, n, G.elem_val[ref]); break;
+    default: buf[0] = 0;
+    }
+    return buf;
+}
+
+/* the centre of an exterior face of e, with its mean displacement */
+static bool face_centre(uint32_t e, int face, float p[3], float d[6]) {
+    uint32_t c[4];
+    int m = cv_elem_face_corners(&G.frd, e, face, c);
+    if (m < 3) return false;
+    memset(p, 0, 3 * sizeof *p); memset(d, 0, 6 * sizeof *d);
+    for (int j = 0; j < m; j++) {
+        float dj[6];
+        app_node_disp6(c[j], dj);
+        for (int q = 0; q < 3; q++) p[q] += G.frd.xyz[3 * c[j] + q] / m;
+        for (int q = 0; q < 6; q++) d[q] += dj[q] / m;
+    }
+    return true;
+}
+
+static void build_anchors(void) {
+    A.a.anc.n = A.a.txt.n = A.a.toff.n = A.a.ref.n = 0; A.a.n = 0; A.on_top = false;
+    A.kind = A.asked = G.label_kind; A.gen = G.label_gen; A.sel_only = G.label_sel_only; A.probe_only = G.label_probe_only;
+    if (!G.loaded || G.label_kind == CV_LABEL_NONE) return;
+    const cv_frd* f = &G.frd;
+    /* the selection as marks, when asked for */
+    uint8_t* nmark = NULL; uint8_t* emark = NULL;
+    if (G.label_sel_only) {
+        nmark = calloc(CV_MAX(f->n_nodes, 1), 1); emark = calloc(CV_MAX(f->n_elems, 1), 1);
+        if (nmark && emark) {
+            for (uint32_t k = 0; k < G.seln_n; k++) nmark[G.seln[k]] = 1;
+            for (uint32_t k = 0; k < G.sel_n; k++) {
+                emark[G.sel[k]] = 1;
+                for (uint32_t j = f->eoff[G.sel[k]]; j < f->eoff[G.sel[k] + 1]; j++) nmark[f->conn[j]] = 1;
+            }
+        }
+    }
+    bool nodal = G.has_field && !G.elem_mode && G.field_src != 1 && G.scalar;
+    bool elemv = G.has_field && (G.elem_mode || G.field_src == 1) && G.elem_val;
+    int kind = G.label_kind;
+    if (kind == CV_LABEL_VALUE && !nodal && elemv) kind = CV_LABEL_EVALUE;   /* a per-element field: on the faces */
+    A.kind = kind;
+    switch (kind) {
+    case CV_LABEL_NODE: case CV_LABEL_VALUE:
+        if (kind == CV_LABEL_VALUE && !nodal) break;
+        if (G.label_probe_only) {                 /* the probed element's nodes */
+            if (!G.probe_on) break;
+            uint32_t e = G.probe.elem;
+            for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
+                uint32_t i = f->conn[j];
+                if (kind == CV_LABEL_VALUE && G.scalar[i] != G.scalar[i]) continue;
+                anchor_node(i);
+            }
+            break;
+        }
+        for (size_t k = 0; k < G.skin.n_pt; k++) {
+            uint32_t i = G.skin.pt[k];
+            if (G.label_sel_only && !(nmark && nmark[i])) continue;
+            if (kind == CV_LABEL_VALUE && G.scalar[i] != G.scalar[i]) continue;
+            anchor_node(i);
+        }
+        break;
+    case CV_LABEL_ELEM: case CV_LABEL_EVALUE: {
+        if (kind == CV_LABEL_EVALUE && !elemv) break;
+        uint8_t* done = calloc(CV_MAX(f->n_elems, 1), 1);
+        if (!done) break;
+        for (size_t k = 0; k < G.skin.n_face; k++) {   /* each element once, on its first exterior face */
+            uint32_t e = G.skin.face[k] >> 3;
+            if (e >= f->n_elems || done[e]) continue;
+            done[e] = 1;
+            if (G.label_probe_only && !(G.probe_on && e == G.probe.elem)) continue;
+            if (G.label_sel_only && !(emark && emark[e])) continue;
+            float p[3], d[6];
+            if (!face_centre(e, (int)(G.skin.face[k] & 7), p, d)) continue;
+            if (kind == CV_LABEL_EVALUE && G.elem_val[e] != G.elem_val[e]) continue;
+            anchor_ref(p, d, e);
+        }
+        free(done);
+        break;
+    }
+    default: break;                               /* the named kinds: sets, links, loads, supports, materials */
+    }
+    free(nmark); free(emark);
+}
+
+void app_label_changed(void) { G.label_gen++; }
+
+/* ---- per frame: thin, lay out, upload when the camera or the anchors changed --------- */
+
+/* huge sets: one anchor per 3D cell about the spacing at the model's distance, so the
+   per-move cost stays bounded; kept until the cell changes by a fifth or the anchors do */
+static struct { uint32_t* keep; uint32_t n; float cell; unsigned gen; int kind; float f1, f2; } C;
+
+static void coarse_check(float cell, float f1, float f2) {
+    if (C.keep && C.gen == A.gen && C.kind == A.kind && C.f1 == f1 && C.f2 == f2 && fabsf(cell - C.cell) <= 0.2f * C.cell) return;
+    free(C.keep); C.keep = malloc((size_t)CV_MAX(A.a.n, 1) * sizeof *C.keep);
+    float* xyz = malloc((size_t)CV_MAX(A.a.n, 1) * 3 * sizeof *xyz);
+    if (!C.keep || !xyz) { free(xyz); free(C.keep); C.keep = NULL; return; }
+    for (uint32_t i = 0; i < A.a.n; i++) {
+        const float* a = A.a.anc.a + 9 * i;
+        for (int k = 0; k < 3; k++) xyz[3 * i + k] = a[k] + f1 * a[3 + k] + f2 * a[6 + k];
+    }
+    C.n = cv_label_coarse(xyz, A.a.n, cell, C.keep);
+    free(xyz);
+    C.cell = cell; C.gen = A.gen; C.kind = A.kind; C.f1 = f1; C.f2 = f2;
+}
+
+void app_label_frame(const cv_draw* d) {
+    static float last_mvp[16], last_px, last_sp, last_f1, last_f2; static unsigned last_gen; static int last_kind, last_w, last_h;
+    if (!G.loaded || G.label_kind == CV_LABEL_NONE) {
+        if (A.a.n || last_kind) { A.a.n = 0; cv_render_labels(NULL, 0, NULL, 0); G.label_note[0] = 0; last_kind = 0; }
+        return;
+    }
+    float px = roundf(CV_MAX(G.label_px, 6.f) * ui_scale());
+    if (!F.live || F.px != px) font_bake(px);
+    bool rebuild = A.gen != G.label_gen || A.asked != G.label_kind || A.sel_only != G.label_sel_only || A.probe_only != G.label_probe_only;
+    if (rebuild) build_anchors();
+    bool moved = memcmp(last_mvp, d->mvp, sizeof last_mvp) != 0 || last_px != px || last_sp != G.label_spacing ||
+                 last_w != d->vp_w || last_h != d->vp_h || last_f1 != d->def_scale || last_f2 != d->def_scale2;
+    if (!rebuild && !moved && last_gen == G.label_gen && last_kind == G.label_kind) return;
+    memcpy(last_mvp, d->mvp, sizeof last_mvp); last_px = px; last_sp = G.label_spacing; last_gen = G.label_gen;
+    last_kind = G.label_kind; last_w = d->vp_w; last_h = d->vp_h; last_f1 = d->def_scale; last_f2 = d->def_scale2;
+
+    float spacing = G.label_spacing * ui_scale();
+    /* which anchors to project: all, or the coarse subset of a huge set */
+    const uint32_t* ids = NULL; uint32_t n_ids = A.a.n;
+    if (A.a.n > 200000 && spacing > 0) {
+        coarse_check(spacing * app_pixel_size(G.cam.target), d->def_scale, d->def_scale2);
+        if (C.keep) { ids = C.keep; n_ids = C.n; }
+    }
+    cv_label_pt* pts = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *pts);
+    uint32_t* chosen = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *chosen);
+    if (!pts || !chosen) { free(pts); free(chosen); return; }
+    const float* M = d->mvp;
+    uint32_t np = 0;
+    for (uint32_t k = 0; k < n_ids; k++) {
+        uint32_t i = ids ? ids[k] : k;
+        const float* a = A.a.anc.a + 9 * i;
+        float p[3], c[4];
+        for (int q = 0; q < 3; q++) p[q] = a[q] + d->def_scale * a[3 + q] + d->def_scale2 * a[6 + q];
+        if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;      /* no position (NaN displacement) */
+        for (int r = 0; r < 4; r++) c[r] = M[r] * p[0] + M[4 + r] * p[1] + M[8 + r] * p[2] + M[12 + r];
+        if (c[3] <= 1e-9f) continue;                                      /* behind the eye */
+        pts[np].sx = d->vp_x + (c[0] / c[3] * 0.5f + 0.5f) * d->vp_w;
+        pts[np].sy = d->vp_y + (0.5f - c[1] / c[3] * 0.5f) * d->vp_h;
+        pts[np].depth = c[2] / c[3] * 0.5f + 0.5f;
+        pts[np].id = i;
+        np++;
+    }
+    uint32_t max_out = 20000;                     /* more than fits any screen: a cap for spacing 0 */
+    uint32_t n = cv_label_thin(pts, np, spacing, (float)d->vp_x, (float)d->vp_y, (float)d->vp_w, (float)d->vp_h, chosen, max_out);
+    /* lay the chosen out: text a little right of and above the point */
+    cv_fvec gly = {0}, box = {0};
+    float dx = 4 * ui_scale(), dy = -(F.m.height + 3 * ui_scale());
+    char t[64];
+    for (uint32_t k = 0; k < n; k++) {
+        uint32_t i = chosen[k];
+        cv_label_layout(&F.m, A.a.anc.a + 9 * i, anchor_text(i, t, sizeof t), dx, dy, true, 2 * ui_scale(), &gly, &box);
+    }
+    cv_render_labels(box.a, (uint32_t)(box.n / CV_LABEL_FLOATS), gly.a, (uint32_t)(gly.n / CV_LABEL_FLOATS));
+    cv_free_vec(gly); cv_free_vec(box); free(pts); free(chosen);
+    snprintf(G.label_note, sizeof G.label_note, "labels: %s, shown %u of %u", app_label_name(G.label_kind), n, A.a.n);
+}

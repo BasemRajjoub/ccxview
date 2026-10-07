@@ -4,6 +4,7 @@
 #ifndef CV_RENDER_H
 #define CV_RENDER_H
 
+#include "label.h"
 #include "base.h"
 
 enum { CV_CMAP_FAST, CV_CMAP_COOLWARM, CV_CMAP_VIRIDIS, CV_CMAP_TURBO, CV_CMAP_HEAT, CV_CMAP_RAINBOW, CV_CMAP_JET, CV_CMAP_INFERNO,
@@ -56,6 +57,9 @@ typedef struct {
     bool  clip;                /* discard what lies beyond the plane n . x > d */
     float clip_n[3], clip_d;
     float marker_size;
+    bool  labels;              /* the label layer (cv_render_labels) */
+    bool  labels_on_top;       /* through the faces: names at centres inside the model */
+    float label_rgb[3], label_box_rgba[4];
     int   vectors_color;       /* CV_COLOR_SOLID or CV_COLOR_NODAL */
     float geo_size;
     int   vp_x, vp_y, vp_w, vp_h; /* viewport in framebuffer pixels, origin top-left */
@@ -119,6 +123,11 @@ void cv_render_inst(int which, const float* inst, uint32_t n);
      by the normal stress), disp[3], disp2[3]. NULL / 0 clears. */
 #define CV_GLYPH_FLOATS 26
 void cv_render_glyphs(const float* inst, uint32_t n);
+
+/* Labels (label.h): a quad per glyph or box, anchored to a model point, sized in pixels.
+   The atlas is the font's alpha (R8); boxes first, then glyphs. NULL / 0 clears. */
+void cv_render_label_atlas(const unsigned char* a8, int w, int h);
+void cv_render_labels(const float* box, uint32_t nb, const float* gly, uint32_t ng);
 
 void cv_render_draw(const cv_draw* d);
 

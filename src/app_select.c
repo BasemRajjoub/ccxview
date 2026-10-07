@@ -19,6 +19,7 @@ void app_sel_clear(void) {
     free(G.sel); G.sel = NULL; G.sel_n = 0;
     free(G.seln); G.seln = NULL; G.seln_n = 0;
     free(G.sel_inside); G.sel_inside = NULL;
+    if (G.label_sel_only) app_label_changed();
     G.boxq.on = false;
     sel_upload_none();
 }
@@ -163,6 +164,7 @@ static bool select_from(uint8_t* inside, bool crossing) {
         G.boxq.max_at = imax; G.boxq.min_at = imin; G.boxq.vmax = val[imax]; G.boxq.vmin = val[imin];
     }
     app_sel_refresh();
+    if (G.label_sel_only) app_label_changed();
     return true;
 }
 
