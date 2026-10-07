@@ -51,7 +51,7 @@ enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
-       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_N };
+       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_GPVALUE, CV_LABEL_GPID, CV_LABEL_N };
 
 typedef struct {
     int       kind;
@@ -530,6 +530,10 @@ bool gp_desc(const char* name, cv_field_desc* d);
 bool gp_refresh(void);
 void gp_refresh_geometry(void);
 void gp_build_nodal(void);
+/* the Gauss points as last drawn (shown elements): position, displacement, value, the
+   element and point number of each; for the labels */
+typedef struct { const float *pos, *disp, *val; const uint32_t* elem; const uint8_t* ip; uint32_t n; } gp_points;
+gp_points gp_last(void);
 void app_gauss_changed(void);          /* layer toggled: rebuild the points */
 void gp_values(const float** v, size_t* n);
 bool gp_probe(uint32_t e, const float hit[3], float scale, int* ip, float* value);

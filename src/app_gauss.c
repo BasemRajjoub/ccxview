@@ -23,6 +23,26 @@ static struct {
     uint32_t  n;              /* points */
 } P = { .block = -1 };
 
+/* the points as last uploaded, kept for the labels (app_label.c) */
+static struct { cv_fvec pos, disp, val; CV_VEC(uint32_t) elem; CV_VEC(uint8_t) ip; } K;
+static void keep_clear(void) { K.pos.n = K.disp.n = K.val.n = K.elem.n = K.ip.n = 0; }
+static void keep_point(const float x[3], const float d[3], float v, uint32_t e, int k) {
+    if (!cv_reserve(K.pos, K.pos.n + 3) || !cv_reserve(K.disp, K.disp.n + 3) || !cv_reserve(K.val, K.val.n + 1) ||
+        !cv_reserve(K.elem, K.elem.n + 1) || !cv_reserve(K.ip, K.ip.n + 1)) return;
+    for (int j = 0; j < 3; j++) { K.pos.a[K.pos.n++] = x[j]; K.disp.a[K.disp.n++] = d[j]; }
+    K.val.a[K.val.n++] = v; K.elem.a[K.elem.n++] = e; K.ip.a[K.ip.n++] = (uint8_t)k;
+}
+gp_points gp_last(void) {
+    gp_points g = { K.pos.a, K.disp.a, K.val.a, K.elem.a, K.ip.a, (uint32_t)K.val.n };
+    return g;
+}
+/* the points to the renderer, and to the labels when they show them */
+static void upload(const float* pos, const float* disp, const float* val, uint32_t n) {
+    cv_render_aux(CV_AUX_GP, pos, disp, val, n);
+    if (!n) keep_clear();
+    if (G.label_kind == CV_LABEL_GPVALUE || G.label_kind == CV_LABEL_GPID) app_label_changed();
+}
+
 static void free_arrays(void) {
     free(P.epos); free(P.enip); free(P.ipv); free(P.gpos); free(P.gdisp);
     P.epos = NULL; P.enip = NULL; P.ipv = NULL; P.gpos = NULL; P.gdisp = NULL;
@@ -37,7 +57,7 @@ void gp_clear(void) {
     memset(&P.dat, 0, sizeof P.dat);
     P.on = false;
     P.path[0] = 0;
-    cv_render_aux(CV_AUX_GP, NULL, NULL, NULL, 0);
+    upload(NULL, NULL, NULL, 0);
 }
 
 void gp_set(cv_dat* d, const char* path) {
@@ -121,7 +141,7 @@ static void elem_point(uint32_t e, const double xi[3], float pos[3], float disp[
 
 void gp_refresh_geometry(void) {
     if (!P.on || P.block < 0 || !P.epos) {
-        cv_render_aux(CV_AUX_GP, NULL, NULL, NULL, 0);
+        upload(NULL, NULL, NULL, 0);
         return;
     }
     /* per-point displacement follows the current increment */
@@ -138,6 +158,7 @@ void gp_refresh_geometry(void) {
     }
     /* Gauss points of visible elements */
     CV_VEC(float) gp = {0}, gd = {0}, gv = {0};
+    keep_clear();
     for (uint32_t e = 0; e < G.frd.n_elems; e++) {
         if (P.epos[e] == UINT32_MAX || (G.vis && !G.vis[e])) continue;
         for (int k = 0; k < P.enip[e]; k++) {
@@ -145,9 +166,10 @@ void gp_refresh_geometry(void) {
             if (P.gpos[3 * i] != P.gpos[3 * i]) continue;       /* no position */
             for (int j = 0; j < 3; j++) { cv_push(gp, P.gpos[3 * i + j]); cv_push(gd, P.gdisp[3 * i + j]); }
             cv_push(gv, P.ipv[i]);
+            keep_point(P.gpos + 3 * i, P.gdisp + 3 * i, P.ipv[i], e, k);
         }
     }
-    cv_render_aux(CV_AUX_GP, gp.a, gd.a, gv.a, (uint32_t)gv.n);
+    upload(gp.a, gd.a, gv.a, (uint32_t)gv.n);
     cv_free_vec(gp); cv_free_vec(gd); cv_free_vec(gv);
 
 }
@@ -177,12 +199,13 @@ static int default_nip(int t) {
 }
 
 void gp_build_nodal(void) {
-    if (!G.loaded || !G.show_gp) { cv_render_aux(CV_AUX_GP, NULL, NULL, NULL, 0); return; }
+    if (!G.loaded || !G.show_gp) { upload(NULL, NULL, NULL, 0); return; }
     const uint32_t E = G.frd.n_elems;
     size_t total = 0;
     for (uint32_t e = 0; e < E; e++) if (!G.vis || G.vis[e]) total += (size_t)default_nip(G.frd.etype[e]);
     bool one = total > 8000000;          /* huge models: one point per element keeps it drawable */
     CV_VEC(float) gp = {0}, gd = {0}, gv = {0};
+    keep_clear();
     const bool val = G.has_field && G.scalar;
     /* the field's components, when the scalar shown is an invariant of them */
     const float* comp = NULL;
@@ -218,10 +241,11 @@ void gp_build_nodal(void) {
             }
             if (!cv_reserve(gp, gp.n + 3) || !cv_reserve(gd, gd.n + 3) || !cv_push(gv, val ? (float)v : NAN)) goto done;
             for (int j = 0; j < 3; j++) { gp.a[gp.n++] = (float)x[j]; gd.a[gd.n++] = (float)d[j]; }
+            keep_point(gp.a + gp.n - 3, gd.a + gd.n - 3, gv.a[gv.n - 1], e, k);
         }
     }
 done:
-    cv_render_aux(CV_AUX_GP, gp.a, gd.a, gv.a, (uint32_t)gv.n);
+    upload(gp.a, gd.a, gv.a, (uint32_t)gv.n);
     cv_free_vec(gp); cv_free_vec(gd); cv_free_vec(gv);
 }
 

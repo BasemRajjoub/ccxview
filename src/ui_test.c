@@ -216,6 +216,9 @@ static bool labels_node(struct nk_context* ctx) { return G.label_kind == CV_LABE
 static void labels_small(struct nk_context* ctx) { G.label_px = 8.f; }
 static bool labels_bigger(struct nk_context* ctx) { return G.label_px > 8.f; }
 static bool labels_behind(struct nk_context* ctx) { return !G.label_front; }
+static bool labels_shown(struct nk_context* ctx);
+static bool labels_gauss(struct nk_context* ctx) { return G.label_kind == CV_LABEL_GPVALUE && G.show_gp && labels_shown(ctx); }
+static void gauss_off(struct nk_context* ctx) { G.show_gp = false; app_gauss_changed(); }
 static void labels_front(struct nk_context* ctx) { G.label_front = true; }
 static bool labels_shown(struct nk_context* ctx) { return strstr(G.label_note, "shown ") && !strstr(G.label_note, "shown 0 of"); }
 static bool labels_none(struct nk_context* ctx) { return strstr(G.label_note, "shown 0 of 0") != NULL; }
@@ -410,6 +413,8 @@ static const step script[] = {
     EXPECT(labels_shown, "some labels are shown"),
     DO(labels_small), WAIT(2), AT_TIP_X("Scene", "Text height in pixels", 0.95f), CLICK, EXPECT(labels_bigger, "the size answers"),
     AT_TIP("Scene", "Labels in front of everything"), CLICK, EXPECT(labels_behind, "the front box toggles"), DO(labels_front),
+    AT_TIP("Scene", "The field's value at every Gauss point"), CLICK, WAIT(4), EXPECT(labels_gauss, "Gauss point values show, the layer on"),
+    DO(gauss_off),
     DO(snapshot), AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "the model turns with labels up"),
     DO(labels_off), WAIT(2),
 

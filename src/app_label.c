@@ -15,6 +15,7 @@ static const struct { const char *key, *name; } kinds[CV_LABEL_N] = {
     { "none", "none" }, { "node", "node id" }, { "elem", "element id" }, { "value", "node value" },
     { "evalue", "element value" }, { "sets", "set and surface names" }, { "links", "couplings, rigid bodies" },
     { "loads", "loads" }, { "supports", "supports" }, { "materials", "materials" },
+    { "gpvalue", "Gauss point value" }, { "gpid", "Gauss point id" },
 };
 const char* app_label_name(int k) { return k >= 0 && k < CV_LABEL_N ? kinds[k].name : "?"; }
 const char* app_label_key(int k) { return k >= 0 && k < CV_LABEL_N ? kinds[k].key : "none"; }
@@ -148,6 +149,12 @@ static const char* anchor_text(uint32_t i, char* buf, size_t n) {
     case CV_LABEL_ELEM:   snprintf(buf, n, "%u", G.frd.elem_id[ref]); break;
     case CV_LABEL_VALUE:  app_legend_fmt(buf, n, G.scalar[ref]); break;
     case CV_LABEL_EVALUE: app_legend_fmt(buf, n, G.elem_val[ref]); break;
+    case CV_LABEL_GPVALUE: { gp_points g = gp_last(); app_legend_fmt(buf, n, ref < g.n ? g.val[ref] : NAN); break; }
+    case CV_LABEL_GPID: {
+        gp_points g = gp_last();
+        if (ref < g.n) snprintf(buf, n, "%u:%u", G.frd.elem_id[g.elem[ref]], (unsigned)g.ip[ref] + 1); else buf[0] = 0;
+        break;
+    }
     default: buf[0] = 0;
     }
     return buf;
@@ -264,6 +271,15 @@ static void build_named(int kind) {
             mean_anchor(&m[mi], t);
         }
         free(m);
+        break;
+    }
+    case CV_LABEL_GPVALUE: case CV_LABEL_GPID: {  /* the Gauss points as drawn: their value, or element:point */
+        gp_points g = gp_last();
+        for (uint32_t i = 0; i < g.n; i++) {
+            if (kind == CV_LABEL_GPVALUE && g.val[i] != g.val[i]) continue;
+            float d6[6] = { g.disp[3 * i], g.disp[3 * i + 1], g.disp[3 * i + 2], 0, 0, 0 };
+            anchor_ref(g.pos + 3 * i, d6, NULL, i);
+        }
         break;
     }
     case CV_LABEL_LOADS: case CV_LABEL_SUPPORTS:  /* at the symbols: what loads_refresh recorded */
@@ -383,7 +399,14 @@ static float widest_label(void) {
         if (A.probe_only) { snprintf(t, sizeof t, "el %u", big); w = CV_MAX(w, cv_label_width(&F.m, t)); }
         break;
     }
-    case CV_LABEL_VALUE: case CV_LABEL_EVALUE:
+    case CV_LABEL_GPID: {
+        uint32_t big = 0;
+        for (uint32_t i = 0; i < G.frd.n_elems; i++) if (G.frd.elem_id[i] > big) big = G.frd.elem_id[i];
+        snprintf(t, sizeof t, "%u:27", big);
+        w = cv_label_width(&F.m, t);
+        break;
+    }
+    case CV_LABEL_VALUE: case CV_LABEL_EVALUE: case CV_LABEL_GPVALUE:
         app_legend_fmt(t, sizeof t, G.rmin); w = cv_label_width(&F.m, t);
         app_legend_fmt(t, sizeof t, G.rmax); w = CV_MAX(w, cv_label_width(&F.m, t));
         app_legend_fmt(t, sizeof t, -G.rmax); w = CV_MAX(w, cv_label_width(&F.m, t));

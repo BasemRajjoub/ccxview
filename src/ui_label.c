@@ -51,13 +51,19 @@ void section_label(struct nk_context* ctx, float s, float row) {
         "Loads: kind and value at the symbol (F force, M moment, p pressure, g gravity, bolt preload), in the deck's units",
         "Supports: the held degrees of freedom at the node",
         "Materials: the name at the centre of each material's surface",
+        "The field's value at every Gauss point drawn (the Gauss points layer is turned on)",
+        "Every Gauss point drawn: element id : point number (the Gauss points layer is turned on)",
     };
     if (!nk_tree_state_push(ctx, NK_TREE_NODE, "Labels", (enum nk_collapse_states*)&G.tree[CV_TREE_LABELS])) return;
     nk_layout_row_dynamic(ctx, row, 1);
     for (int k = 0; k < CV_LABEL_N; k++) {
         bool on = G.label_kind == k;
         tip(ctx, tips[k]);
-        if (nk_option_label(ctx, app_label_name(k), on) && !on) { G.label_kind = k; app_label_changed(); }
+        if (nk_option_label(ctx, app_label_name(k), on) && !on) {
+            G.label_kind = k;
+            if (k >= CV_LABEL_GPVALUE && !G.show_gp) { G.show_gp = true; app_gauss_changed(); }   /* the points they label */
+            app_label_changed();
+        }
     }
     if (G.label_kind != CV_LABEL_NONE) {
         if (G.label_note[0]) nk_label_colored(ctx, G.label_note + 8, NK_TEXT_LEFT, P.dim);   /* "shown 420 of 18 000" */
