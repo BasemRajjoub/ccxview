@@ -16,7 +16,7 @@ static void test_label(void) {
     cv_fvec gly = {0}, box = {0};
 
     /* layout: one quad per glyph, the pen advancing; the box over all of it */
-    float w = cv_label_layout(&m, anchor, "AB", 4, -14, true, 2, &gly, &box);
+    float w = cv_label_layout(&m, anchor, "AB", 4, -14, true, 2, 0.5f, &gly, &box);
     CHECK_NEAR(w, 20, 0);
     CHECK_EQ(gly.n, 2 * CV_LABEL_FLOATS);
     CHECK_EQ(box.n, CV_LABEL_FLOATS);
@@ -30,11 +30,12 @@ static void test_label(void) {
     CHECK_NEAR(b[9], 2, 0); CHECK_NEAR(b[10], -16, 0);          /* padded by 2 */
     CHECK_NEAR(b[11], 24, 0); CHECK_NEAR(b[12], 16, 0);         /* 20 + 4 wide, 12 + 4 high */
     CHECK_NEAR(b[13], 0.99f, 0); CHECK_NEAR(b[15], 0.99f, 0);   /* the white pixel */
+    CHECK_NEAR(b[17], 0.5f, 0); CHECK_NEAR(a[17], 0.5f, 0);     /* the pull, on box and glyphs alike */
     CHECK_NEAR(cv_label_width(&m, "ABC"), 30, 0);
 
     /* layout: codepoints outside the table draw as ? */
     gly.n = box.n = 0;
-    cv_label_layout(&m, anchor, "A\xc3\xa4", 0, 0, false, 0, &gly, &box);   /* "Aä" */
+    cv_label_layout(&m, anchor, "A\xc3\xa4", 0, 0, false, 0, 0, &gly, &box);   /* "Aä" */
     CHECK_EQ(gly.n, 2 * CV_LABEL_FLOATS);
     CHECK_NEAR(gly.a[CV_LABEL_FLOATS + 13], 0.1f * ('?' - 32), 1e-6);
     CHECK_EQ(box.n, 0);

@@ -443,10 +443,9 @@ static void frame(void) {
         }
         eye_caps(eye_clip, &d);
         d.hl_size = G.hl_size * ui_scale();
-        d.labels = G.label_kind != CV_LABEL_NONE;
-        d.labels_on_top = G.label_front || G.label_kind == CV_LABEL_SETS || G.label_kind == CV_LABEL_LINKS ||
-                          G.label_kind == CV_LABEL_MATERIALS || G.label_kind >= CV_LABEL_GPVALUE ||
-                          G.label_probe_only;    /* names, Gauss points and the probe's: inside the model */
+        d.labels = G.label_kinds != 0;
+        d.labels_on_top = G.label_front || G.label_probe_only ||   /* names, Gauss points and the probe's: inside the model */
+                          (G.label_kinds & (1 << CV_LABEL_SETS | 1 << CV_LABEL_LINKS | 1 << CV_LABEL_MATERIALS | 1 << CV_LABEL_GPVALUE | 1 << CV_LABEL_GPID));
         memcpy(d.label_rgb, G.label_rgb, sizeof d.label_rgb); memcpy(d.label_box_rgba, G.label_box_rgba, sizeof d.label_box_rgba);
         d.gauss_on_top = G.gp_on_top;
         d.gauss_points_color = G.gp_colored && G.has_field ? CV_COLOR_NODAL : CV_COLOR_SOLID;

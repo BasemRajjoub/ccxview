@@ -720,7 +720,7 @@ void deck_refresh_highlight(void) {
     app_sel_refresh();                              /* the box selection's outline moves with the shape too */
     /* the named labels follow the sets ticked, the symbols and the step; ids and values do not
        depend on any of it (a million node ids would be rebuilt on every symbol-size drag) */
-    if (G.label_kind >= CV_LABEL_SETS) app_label_changed();
+    if (G.label_kinds >> CV_LABEL_SETS) app_label_changed();
     cv_free_vec(pp); cv_free_vec(pd); cv_free_vec(tp); cv_free_vec(td);
 }
 

@@ -40,7 +40,7 @@ gp_points gp_last(void) {
 static void upload(const float* pos, const float* disp, const float* val, uint32_t n) {
     cv_render_aux(CV_AUX_GP, pos, disp, val, n);
     if (!n) keep_clear();
-    if (G.label_kind == CV_LABEL_GPVALUE || G.label_kind == CV_LABEL_GPID) app_label_changed();
+    if (app_label_on(CV_LABEL_GPVALUE) || app_label_on(CV_LABEL_GPID)) app_label_changed();
 }
 
 static void free_arrays(void) {

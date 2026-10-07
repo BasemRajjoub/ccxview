@@ -337,7 +337,7 @@ typedef struct {
     bool      mesh_limits_open;      /* ... with the user's limits shown */
     bool      show_details;          /* the Details window of the probed node and element */
     /* labels on the model */
-    int       label_kind;            /* CV_LABEL_*: what the labels show */
+    int       label_kinds;           /* bit k set: the labels show kind CV_LABEL_k; any mix (app_label_on) */
     float     label_px;              /* text height, px (before ui scale) */
     float     label_spacing;         /* the gap kept between labels, px; 0: every one, overlapping */
     float     label_rgb[3], label_box_rgba[4];
@@ -477,8 +477,9 @@ void app_probe_pixel(float x, float y);          /* probe what lies under the pi
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* app_label.c: labels on the model */
 const char* app_label_name(int kind);          /* "node id", ... for the panel */
-const char* app_label_key(int kind);           /* "node", ... for --labels and the ini */
-int  app_label_find(const char* key);          /* -1 unknown */
+const char* app_label_key(int kind);           /* "node", ... for --labels */
+int  app_label_parse(const char* keys);        /* "node,value,loads" -> the kinds' bits; 0 when one is unknown */
+static inline bool app_label_on(int kind) { return (G.label_kinds >> kind) & 1; }
 void app_label_changed(void);                  /* the labelled things changed: anchors again next frame */
 void app_label_frame(cv_draw* d);              /* per frame, before cv_render_draw: thin, lay out, upload when needed; sets d->label_px */
 /* the shown .frd field's stored components at a node (global, as the file has them);

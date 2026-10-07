@@ -122,12 +122,12 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     }
     if (G.sel_n || G.seln_n) ui_sel_what(ctx, row);
     nk_layout_row_dynamic(ctx, row, 3);
-    nk_bool lb = G.label_probe_only && G.label_kind != CV_LABEL_NONE;
+    nk_bool lb = G.label_probe_only && G.label_kinds;
     tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");
     if (nk_checkbox_label(ctx, "labels", &lb)) {           /* on: this element only; off: no labels at all */
         G.label_probe_only = lb;
-        if (lb && G.label_kind == CV_LABEL_NONE) G.label_kind = CV_LABEL_NODE;
-        if (!lb) G.label_kind = CV_LABEL_NONE;
+        if (lb && !G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE;
+        if (!lb) G.label_kinds = 0;
         app_label_changed();
     }
     tip(ctx, "Everything about this node and element in a window of its own:\n"
@@ -240,7 +240,7 @@ void window_find(struct nk_context* ctx, float s, float row) {
         if ((ev & NK_EDIT_COMMITED) || go) {
             uint32_t id = (uint32_t)strtoul(buf, NULL, 10);
             missing = !app_find(id, element);
-            if (!missing) { G.label_probe_only = true; if (G.label_kind == CV_LABEL_NONE) G.label_kind = CV_LABEL_NODE; app_label_changed(); }
+            if (!missing) { G.label_probe_only = true; if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE; app_label_changed(); }
         }
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label_colored(ctx, missing ? "not in this model" : "id as in the file; Enter", NK_TEXT_LEFT,

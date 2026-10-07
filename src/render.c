@@ -237,15 +237,17 @@ static const char* kVSL =
     "in vec2 i_size;\n"
     "in vec2 i_uv0;\n"
     "in vec2 i_uv1;\n"
+    "in float i_pull;\n"
     "out vec2 v_uv;\n"
     "void main() {\n"
     "  vec3 p = i_pos + i_disp * u_p.x + i_disp2 * u_p.y;\n"
     "  vec4 c = u_mvp * vec4(p, 1.0);\n"
     /* the point a few label heights nearer the eye, compared with the depth drawn at the
        point's pixel: behind the surface there, the whole label leaves the screen */
-    "  float pl0 = min(u_q.x * c.w, 0.5 * max(c.w, 0.0));\n"
+    "  float pv = i_pull > 0.0 ? i_pull : u_q.x * (u_q.w != 0.0 ? c.w : 1.0);\n"   /* its own, or a few pixels' worth */
+    "  float pl0 = min(pv, 0.5 * max(c.w, 0.0));\n"
     "  vec4 r = c;\n"
-    "  if (u_q.w != 0.0) { r.z += u_q.z * pl0; r.w -= pl0; } else r.z += u_q.z * u_q.x;\n"
+    "  if (u_q.w != 0.0) { r.z += u_q.z * pl0; r.w -= pl0; } else r.z += u_q.z * pv;\n"
     "  if (u_q.y > 0.5 && c.w > 0.0) {\n"
     "    vec2 uv = c.xy / c.w * 0.5 + 0.5;\n"
     "    float zr = r.z / r.w * 0.5 + 0.5;\n"
@@ -682,7 +684,7 @@ void cv_render_init(void) {
             .vertex_func.source = kVSL, .fragment_func.source = kFSL,
             .attrs = { [0] = { .glsl_name = "a_q" }, [1] = { .glsl_name = "i_pos" }, [2] = { .glsl_name = "i_disp" },
                        [3] = { .glsl_name = "i_disp2" }, [4] = { .glsl_name = "i_off" }, [5] = { .glsl_name = "i_size" },
-                       [6] = { .glsl_name = "i_uv0" }, [7] = { .glsl_name = "i_uv1" } },
+                       [6] = { .glsl_name = "i_uv0" }, [7] = { .glsl_name = "i_uv1" }, [8] = { .glsl_name = "i_pull" } },
             .uniform_blocks[0] = { .stage = SG_SHADERSTAGE_VERTEX, .size = sizeof(vs_label),
                 .glsl_uniforms = { [0] = { .type = SG_UNIFORMTYPE_MAT4, .glsl_name = "u_mvp" },
                                    [1] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_p" },
@@ -719,6 +721,7 @@ void cv_render_init(void) {
                     [5] = { .buffer_index = 1, .offset = 44, .format = SG_VERTEXFORMAT_FLOAT2 },
                     [6] = { .buffer_index = 1, .offset = 52, .format = SG_VERTEXFORMAT_FLOAT2 },
                     [7] = { .buffer_index = 1, .offset = 60, .format = SG_VERTEXFORMAT_FLOAT2 },
+                    [8] = { .buffer_index = 1, .offset = 68, .format = SG_VERTEXFORMAT_FLOAT },
                 },
             },
             .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,

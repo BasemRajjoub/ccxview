@@ -25,11 +25,11 @@ static const cv_label_glyph* glyph(const cv_label_metrics* m, unsigned cp) {
     return &m->g[cp - m->first];
 }
 
-static void quad(cv_fvec* v, const float anchor[9], float x, float y, float w, float h, float u0, float v0, float u1, float v1) {
+static void quad(cv_fvec* v, const float anchor[9], float x, float y, float w, float h, float u0, float v0, float u1, float v1, float pull) {
     if (!cv_reserve(*v, v->n + CV_LABEL_FLOATS)) return;
     float* o = v->a + v->n;
     memcpy(o, anchor, 9 * sizeof *o);
-    o[9] = x; o[10] = y; o[11] = w; o[12] = h; o[13] = u0; o[14] = v0; o[15] = u1; o[16] = v1;
+    o[9] = x; o[10] = y; o[11] = w; o[12] = h; o[13] = u0; o[14] = v0; o[15] = u1; o[16] = v1; o[17] = pull;
     v->n += CV_LABEL_FLOATS;
 }
 
@@ -40,15 +40,15 @@ float cv_label_width(const cv_label_metrics* m, const char* text) {
 }
 
 float cv_label_layout(const cv_label_metrics* m, const float anchor[9], const char* text,
-                      float dx, float dy, bool box, float pad, cv_fvec* gly, cv_fvec* boxes) {
+                      float dx, float dy, bool box, float pad, float pull, cv_fvec* gly, cv_fvec* boxes) {
     float w = cv_label_width(m, text);
-    if (box) quad(boxes, anchor, dx - pad, dy - pad, w + 2 * pad, m->height + 2 * pad, m->white_u, m->white_v, m->white_u, m->white_v);
+    if (box) quad(boxes, anchor, dx - pad, dy - pad, w + 2 * pad, m->height + 2 * pad, m->white_u, m->white_v, m->white_u, m->white_v, pull);
     float pen = dx;
     for (const char* s = text; *s;) {
         const cv_label_glyph* g = glyph(m, next_cp(&s));
         if (!g) continue;
         if (g->x1 > g->x0 && g->y1 > g->y0)
-            quad(gly, anchor, pen + g->x0, dy + g->y0, g->x1 - g->x0, g->y1 - g->y0, g->u0, g->v0, g->u1, g->v1);
+            quad(gly, anchor, pen + g->x0, dy + g->y0, g->x1 - g->x0, g->y1 - g->y0, g->u0, g->v0, g->u1, g->v1, pull);
         pen += g->xadvance;
     }
     return w;

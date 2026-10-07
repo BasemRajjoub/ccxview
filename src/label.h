@@ -13,14 +13,15 @@ typedef struct { const cv_label_glyph* g; int first, n; float height; float whit
 
 /* an instance (a glyph quad or a label's box), CV_LABEL_FLOATS numbers:
    pos[3], disp[3], disp2[3], off[2] (px from the anchor's screen point to the quad's
-   top-left, y down), size[2] (px), uv0[2], uv1[2] */
-#define CV_LABEL_FLOATS 17
+   top-left, y down), size[2] (px), uv0[2], uv1[2], pull (model units the point is moved
+   toward the eye for its visibility test; 0: a couple of pixels) */
+#define CV_LABEL_FLOATS 18
 
 /* the glyph quads of text at the anchor (pos[3] disp[3] disp2[3]), the text's top-left
    dx, dy px from the anchor's point; appended to gly. With box, one quad over the text
    padded by pad px, uv the white pixel, appended to box. Returns the text width in px. */
 float cv_label_layout(const cv_label_metrics* m, const float anchor[9], const char* text,
-                      float dx, float dy, bool box, float pad, cv_fvec* gly, cv_fvec* boxes);
+                      float dx, float dy, bool box, float pad, float pull, cv_fvec* gly, cv_fvec* boxes);
 float cv_label_width(const cv_label_metrics* m, const char* text);
 
 /* thinning: pts projected to window px with a depth (nearer = smaller, 0 .. 1); those

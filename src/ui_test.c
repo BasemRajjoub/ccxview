@@ -153,7 +153,7 @@ static void close_all(struct nk_context* ctx) {
     if (sc) sc->scrollbar.y = 0;
     G.show_units = G.show_msgs = G.show_calc_help = G.show_conv = G.legend_edit = G.find_open = G.browser_open = false;
     G.show_details = false;
-    G.label_probe_only = false; G.label_kind = CV_LABEL_NONE;
+    G.label_probe_only = false; G.label_kinds = 0;
     G.hist_open = G.path_open = false;
 }
 static void snapshot(struct nk_context* ctx) {
@@ -205,25 +205,25 @@ static uint32_t seln_was;
 static void remember_nodes_turn(struct nk_context* ctx) { seln_was = G.seln_n; G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }
 static bool nodes_kept(struct nk_context* ctx) { return !G.sel_elems && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
 static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
-static void ids_on(struct nk_context* ctx) { G.label_kind = CV_LABEL_NODE; G.label_probe_only = true; app_label_changed(); }
-static void ids_off(struct nk_context* ctx) { G.label_kind = CV_LABEL_NONE; G.label_probe_only = false; app_label_changed(); }
+static void ids_on(struct nk_context* ctx) { G.label_kinds = 1 << CV_LABEL_NODE; G.label_probe_only = true; app_label_changed(); }
+static void ids_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_probe_only = false; app_label_changed(); }
 /* only Fields open, the panel scrolled to its end: the Labels tree is Fields' last item */
 static void labels_tree_open(struct nk_context* ctx) {
     for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS || k == CV_TREE_LABELS;
     struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 100000;   /* Nuklear clamps it to the content */
 }
-static bool labels_node(struct nk_context* ctx) { return G.label_kind == CV_LABEL_NODE && !G.label_probe_only; }
+static bool labels_node(struct nk_context* ctx) { return app_label_on(CV_LABEL_NODE) && !G.label_probe_only; }
 static void labels_small(struct nk_context* ctx) { G.label_px = 8.f; }
 static bool labels_bigger(struct nk_context* ctx) { return G.label_px > 8.f; }
 static bool labels_behind(struct nk_context* ctx) { return !G.label_front; }
 static bool labels_shown(struct nk_context* ctx);
-static bool labels_gauss(struct nk_context* ctx) { return G.label_kind == CV_LABEL_GPVALUE && G.show_gp && labels_shown(ctx); }
+static bool labels_gauss(struct nk_context* ctx) { return app_label_on(CV_LABEL_GPVALUE) && app_label_on(CV_LABEL_NODE) && G.show_gp && labels_shown(ctx); }
 static void gauss_off(struct nk_context* ctx) { G.show_gp = false; app_gauss_changed(); }
 static void labels_front(struct nk_context* ctx) { G.label_front = true; }
 static bool labels_shown(struct nk_context* ctx) { return strstr(G.label_note, "shown ") && !strstr(G.label_note, "shown 0 of"); }
 static bool labels_none(struct nk_context* ctx) { return strstr(G.label_note, "shown 0 of 0") != NULL; }
 static void probe_close(struct nk_context* ctx) { G.probe_on = false; }
-static void labels_off(struct nk_context* ctx) { G.label_kind = CV_LABEL_NONE; G.label_px = 13.f; app_label_changed(); sections_open(ctx); }
+static void labels_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_px = 13.f; app_label_changed(); sections_open(ctx); }
 /* the Details window leaves the view's upper right free: a drag there turns the model */
 static bool details_clear_of_view(struct nk_context* ctx) {
     struct nk_window* w = win_of(ctx, "Details");

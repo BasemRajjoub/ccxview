@@ -76,7 +76,7 @@ void  units_apply(const char* field, int ncomp, float* v, size_t n);   /* model 
 float units_len_raw(void);           /* shown lengths -> model lengths (the shape) */
 int          find_field(int step, const char* name);
 /* app_label.c: the loads' and supports' label anchors, recorded while the symbols are built */
-void label_sink_begin(int kind);                 /* CV_LABEL_LOADS or CV_LABEL_SUPPORTS: record; else ignore */
+void label_sink_begin(int kinds);                /* the kinds' bits: records when loads or supports are among them */
 void label_sink_add(const float p[3], const float d[6], const char* text);
 void         init_group_colors(void);
 void         refresh_tri_colors(void);

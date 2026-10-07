@@ -417,9 +417,9 @@ static void apply_load(cv_job* j) {
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
     if (O.labels && !G.reload_keep) {
-        int k = app_label_find(O.labels);
-        if (k < 0) cv_msg_add(&G.msgs, 0, false, "--labels: unknown kind (node, elem, value, evalue, sets, links, loads, supports, materials)");
-        else G.label_kind = k;
+        int m = app_label_parse(O.labels);
+        if (!m) cv_msg_add(&G.msgs, 0, false, "--labels: unknown kind (node, elem, value, evalue, sets, links, loads, supports, materials, gpvalue, gpid)");
+        else G.label_kinds = m;
     }
     app_label_changed();
     if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }
@@ -446,7 +446,7 @@ static void apply_load(cv_job* j) {
     if (O.find) {
         bool el = O.find[0] == 'e' || O.find[0] == 'E';
         if (!app_find((uint32_t)strtoul(O.find + (el ? 1 : 0), NULL, 10), el)) cv_msg_add(&G.msgs, 0, false, "--find: not in this model");
-        else { G.label_probe_only = true; if (G.label_kind == CV_LABEL_NONE) G.label_kind = CV_LABEL_NODE; app_label_changed(); }
+        else { G.label_probe_only = true; if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE; app_label_changed(); }
     }
     if (O.nsets && deck_loaded()) {
         const cv_inp* dk = deck_get();

@@ -56,17 +56,18 @@ void section_label(struct nk_context* ctx, float s, float row) {
     };
     if (!nk_tree_state_push(ctx, NK_TREE_NODE, "Labels", (enum nk_collapse_states*)&G.tree[CV_TREE_LABELS])) return;
     nk_layout_row_dynamic(ctx, row, 1);
-    for (int k = 0; k < CV_LABEL_N; k++) {
-        bool on = G.label_kind == k;
+    for (int k = 1; k < CV_LABEL_N; k++) {           /* any mix; id and value at one point make one label */
+        nk_bool on = app_label_on(k);
         tip(ctx, tips[k]);
-        if (nk_option_label(ctx, app_label_name(k), on) && !on) {
-            G.label_kind = k;
-            if (k >= CV_LABEL_GPVALUE && !G.show_gp) { G.show_gp = true; app_gauss_changed(); }   /* the points they label */
+        if (nk_checkbox_label(ctx, app_label_name(k), &on)) {
+            G.label_kinds = on ? G.label_kinds | 1 << k : G.label_kinds & ~(1 << k);
+            if (on && k >= CV_LABEL_GPVALUE && !G.show_gp) { G.show_gp = true; app_gauss_changed(); }   /* the points they label */
             app_label_changed();
         }
     }
-    if (G.label_kind != CV_LABEL_NONE) {
-        if (G.label_note[0]) nk_label_colored(ctx, G.label_note + 8, NK_TEXT_LEFT, P.dim);   /* "shown 420 of 18 000" */
+    if (G.label_kinds) {
+        const char* shown = strstr(G.label_note, "; ");
+        if (shown) nk_label_colored(ctx, shown + 2, NK_TEXT_LEFT, P.dim);   /* "shown 420 of 18 000" */
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Text height in pixels");
         nk_property_float(ctx, "#size", 6.f, &G.label_px, 48.f, 1.f, 0.2f);
