@@ -32,7 +32,7 @@ step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
 | `*CYCLIC SYMMETRY MODEL` | `N=` and the axis preset the cyclic view (View > Cyclic symmetry) |
 | `*SPRING`, `*DASHPOT` | the DOF of a one-node spring or dashpot |
 | `*EQUATION` | multi-point constraints, drawn as links between the nodes |
-| `*RIGID BODY` | the reference node linked to its `NSET=` or `ELSET=` |
+| `*RIGID BODY` | the reference node linked to its `NSET=` or `ELSET=`; on its `ROT NODE=` DOFs 1-3 are the body's rotations, so a `*CLOAD` there is drawn as a moment and a held DOF as a held rotation |
 | `*COUPLING` + `*KINEMATIC` / `*DISTRIBUTING` | the reference node linked to its `SURFACE=` |
 | `*DISTRIBUTING COUPLING` | the `DCOUP3D` element's node linked to the listed nodes |
 | `*TIE` | the slave and master surfaces, drawn as a surface pair |

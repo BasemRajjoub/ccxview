@@ -23,7 +23,9 @@
                        given temperature: a diamond; body heat: a zigzag block arrow
 
    A node in a *TRANSFORM has its DOFs along the local axes there, and its symbols
-   follow them. Symbols are sized within their own kind by magnitude. Every symbol is
+   follow them. Symbols are sized within their own kind by magnitude. Where they
+   crowd (a symmetry plane held at every node of a fine mesh), one of a kind is
+   drawn per patch about its own size: an even pattern instead of a carpet. Every symbol is
    made of round bodies, cones and tubes, that the GPU draws from one stored body
    (render.h, cv_render_inst): 15 numbers each, lit, readable from any side, never
    thinner than a pixel. All in world
@@ -117,10 +119,12 @@ static void turning(layer* l, const float c[3], const float dir[3], float r, con
     cone(l, t, u, 1.1f * h, fmaxf(0.45f * h, 2.5f * l->T), d);
 }
 
-/* a moment about dir at p: the double-headed arrow, and the curved arrow round the
-   middle of its shaft, wide and a stroke thicker: the part a reader sees first */
-static void moment(layer* l, const float p[3], const float dir[3], float len, const float d[6]) {
-    float c[3], t[3], b[3];
+/* a moment about dir at p: the double-headed arrow leaving p (a reference node sits
+   inside the part it turns: from it, the symbol reaches out), and the curved arrow
+   round the middle of its shaft, wide and a stroke thicker: what a reader sees first */
+static void moment(layer* l, const float at[3], const float dir[3], float len, const float d[6]) {
+    float c[3], t[3], b[3], p[3];
+    along(at, dir, len, p);                         /* the tip, len out from the node */
     along(p, dir, -len, t);
     along(p, dir, -0.5f * len, b);
     seg(l, t, b, d);
@@ -132,6 +136,32 @@ static void moment(layer* l, const float p[3], const float dir[3], float len, co
     l->T = 1.4f * T;
     turning(l, c, dir, 0.42f * len, d);
     l->T = T;
+}
+
+/* Thinning: a set of (cell, kind) taken, cells of the size given */
+typedef struct { uint64_t* k; uint32_t cap, n; } thin;
+
+static bool thin_take(thin* t, const float p[3], float cell, uint32_t kind) {
+    if (!(cell > 0)) return true;
+    if (2 * (t->n + 1) > t->cap) {                  /* grow, rehash */
+        uint32_t cap = t->cap ? 2 * t->cap : 1024;
+        uint64_t* k = calloc(cap, sizeof *k);
+        if (!k) return true;
+        for (uint32_t i = 0; i < t->cap; i++) {
+            if (!t->k[i]) continue;
+            uint32_t h = (uint32_t)(t->k[i] * 0x9E3779B97F4A7C15ull >> 32) & (cap - 1);
+            while (k[h]) h = (h + 1) & (cap - 1);
+            k[h] = t->k[i];
+        }
+        free(t->k); t->k = k; t->cap = cap;
+    }
+    uint64_t c[3];
+    for (int i = 0; i < 3; i++) c[i] = (uint64_t)((int64_t)floorf(p[i] / cell) & 0x1FFFFF);
+    uint64_t key = ((c[0] << 42 | c[1] << 21 | c[2]) ^ ((uint64_t)kind * 0xD6E8FEB86659FD93ull)) | 1;
+    uint32_t h = (uint32_t)(key * 0x9E3779B97F4A7C15ull >> 32) & (t->cap - 1);
+    while (t->k[h]) { if (t->k[h] == key) return false; h = (h + 1) & (t->cap - 1); }
+    t->k[h] = key; t->n++;
+    return true;
 }
 
 /* a bar across the tail of an arrow that arrives at tip along dir */
@@ -466,15 +496,17 @@ void loads_refresh(void) {
             }
         }
         if (nm) qsort(m, nm, sizeof *m, bc_mask_cmp);
+        thin th = {0};
         for (uint32_t i = 0; i < nm;) {
             uint32_t node = m[i].node, bits = 0;
             for (; i < nm && m[i].node == node; i++) bits |= m[i].mask;
-            if (!deck_node_pd(node, p, d)) continue;
+            if (!deck_node_pd(node, p, d) || !thin_take(&th, p, 0.7f * L, bits)) continue;
             node_axes(dk, node, p, Q);
             if (bits & 64) cross(&bc, p, 0.25f * L, d);
             support(&bc, p, d, bits, L, Q);
         }
         free(m);
+        free(th.k); memset(&th, 0, sizeof th);
 
         /* point loads: forces, moments, heat */
         for (uint32_t i = 0; i < a->ncloads; i++) {
@@ -491,7 +523,7 @@ void loads_refresh(void) {
             node_axes(dk, c->node, p, Q);
             for (int k = 0; k < 3; k++) dir[k] = Q[(c->dof - 1) % 3][k] * (c->value < 0 ? -1.f : 1.f);
             if (c->dof > 3) moment(&mo, p, dir, LL * rel(c->value, mmax), d);
-            else arrow(&ld, p, dir, LL * rel(c->value, fmax), d);
+            else if (thin_take(&th, p, 0.4f * LL, 100u + c->dof * 2u + (c->value < 0))) arrow(&ld, p, dir, LL * rel(c->value, fmax), d);
         }
 
         /* on faces and edges */
@@ -502,6 +534,7 @@ void loads_refresh(void) {
             int ty = deck_etype(dk, q->elem, &shell);
             bool edge = q->kind == CV_DL_EDGE || (ty >= 7 && ty <= 10 && !shell);
             if (q->value == 0 || !face_at(q->elem, q->face, edge, cen, out, cd)) continue;
+            if (!thin_take(&th, cen, 0.4f * LL, 200u + (uint32_t)q->kind)) continue;
             float len = LL * rel(q->value, dmax[q->kind]);
             float sgn = q->value < 0 ? 1.f : -1.f;              /* positive: into the face */
             for (int k = 0; k < 3; k++) in[k] = out[k] * sgn;
@@ -544,6 +577,7 @@ void loads_refresh(void) {
             box_exit(lo, hi, dir, from);
             block_arrow(b->kind == CV_BL_HEAT ? &ht : &ld, from, dir, len, cd, b->kind == CV_BL_HEAT);
         }
+        free(th.k);
 
         /* bolts: at the cut, sized by the preload on the reference node */
         float tmax = 0;

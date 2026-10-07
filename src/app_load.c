@@ -407,6 +407,7 @@ static void apply_load(cv_job* j) {
         app_set_step(G.step);
     } else {
         refresh_field();
+        deck_refresh_highlight();             /* no steps: an unsolved deck shows its last step's loads */
     }
     if (G.reload_keep) { view_bounds(); G.cam = G.keep_cam; G.reload_keep = false; }
     else app_view(CV_VIEW_ISO);
