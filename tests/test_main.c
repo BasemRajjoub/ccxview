@@ -1438,7 +1438,9 @@ static void test_localsys_requests(void) {
 #include "t_units.h"
 #include "t_loads.h"
 #include "../src/cap.h"
+#include "../src/label.h"
 #include "t_cap.h"
+#include "t_label.h"
 #include "t_glyph.h"
 #include "../src/traj.h"
 #include "t_traj.h"
@@ -1451,6 +1453,7 @@ int main(void) {
     test_units();
     test_loads();
     test_cap();
+    test_label();
     test_glyph();
     test_traj();
     test_failure();
