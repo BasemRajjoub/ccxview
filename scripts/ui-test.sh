@@ -6,8 +6,10 @@
 bin=${1:-build/ccxview}
 frd=${2:-samples/showcase/showcase.frd}
 out=build/ui-test
-mkdir -p "$out"
-rm -f "$out"/ui-test-*.png
+mkdir -p "$out/model"
+rm -f "$out"/ui-test-*.png "$out"/model/*
+cp "${frd%.*}".* "$out/model/"          # a copy: what the script saves (a selection CSV) stays under build/
+frd="$out/model/$(basename "$frd")"
 run() { "$@" "$bin" "$frd" --ui-test "$out" --size 1400x900; }
 if [ -n "$UI_TEST_DISPLAY" ]; then DISPLAY=$UI_TEST_DISPLAY run
 elif command -v xvfb-run >/dev/null 2>&1; then run xvfb-run -a -s "-screen 0 1600x1000x24"

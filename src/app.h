@@ -316,6 +316,12 @@ typedef struct {
     uint32_t* sel;                   /* the selected elements (indices), sel_n of them */
     uint32_t  sel_n;
     bool      sel_crossing;          /* ... by a crossing box (else a window) */
+    uint8_t*  hide;                  /* per element, 1: hidden by hand (context menu), NULL none */
+    /* the context menu (right click in the view): where, and what was under it */
+    bool      menu_on;
+    float     menu_x, menu_y;
+    cv_pick   menu_pick;
+    float     menu_p[3], menu_n[3];  /* the point hit and its face normal (model frame) */
 
     bool      show_msgs;
     bool      show_calc_help;        /* the formula builder window */
@@ -435,6 +441,22 @@ bool app_box_select(float x_start, float y_start, float x_end, float y_end);
 void app_sel_clear(void);
 void app_sel_refresh(void);                     /* the outline again: the shape changed */
 void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
+/* what lies under the pixel (mirror and replicate copies too), the probe untouched;
+   o, d: the ray in the model's frame */
+bool app_pick(float px, float py, cv_pick* out, float o[3], float d[3]);
+/* hiding elements by hand (on top of groups, sets and crop): hide these, show only
+   these, or show everything again (the hand-hidden ones and every group) */
+void app_hide_elems(const uint32_t* elems, uint32_t n);
+void app_isolate_elems(const uint32_t* elems, uint32_t n);
+void app_hide_set(const char* name, bool isolate);  /* a deck element set */
+void app_show_all(void);
+/* the axis clip plane through p, across the axis nearest the normal n, cutting
+   away the side the eye is on */
+void app_clip_at(const float p[3], const float n[3]);
+bool app_sel_csv(void);                          /* the selection to <model>_selection.csv */
+size_t app_sel_ids(char* out, size_t n);         /* its element ids, 16 a line, comma separated (an *ELSET body) */
+void app_menu_open(float x, float y);            /* the context menu at this pixel, what lies there picked */
+void app_probe_pixel(float x, float y);          /* probe what lies under the pixel, as a click does */
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* the shown .frd field's stored components at a node (global, as the file has them);
    names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */

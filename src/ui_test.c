@@ -201,6 +201,38 @@ static bool details_gone(struct nk_context* ctx) { return !G.show_details; }
 static void open_about(struct nk_context* ctx) { G.show_about = true; }
 static bool about_gone(struct nk_context* ctx) { return !G.show_about; }
 static bool about_shown(struct nk_context* ctx) { return G.show_about && win_of(ctx, "About"); }
+static bool turned(struct nk_context* ctx);
+static void fit_view(struct nk_context* ctx) { app_view(CV_VIEW_ISO); }
+static bool menu_open(struct nk_context* ctx) { return G.menu_on && win_of(ctx, "Menu"); }
+static bool menu_closed(struct nk_context* ctx) { return !G.menu_on; }
+static bool menu_closed_turned(struct nk_context* ctx) { return !G.menu_on && turned(ctx); }
+static bool one_hidden(struct nk_context* ctx) {
+    uint32_t n = 0;
+    for (uint32_t e = 0; G.hide && e < G.frd.n_elems; e++) n += G.hide[e];
+    return n == 1 && G.vis && !G.menu_on;
+}
+static bool sel_hidden(struct nk_context* ctx) {
+    uint32_t n = 0;
+    for (uint32_t e = 0; G.hide && e < G.frd.n_elems; e++) n += G.hide[e];
+    return n > 1 && !G.sel_n;
+}
+static bool all_shown(struct nk_context* ctx) { return !G.hide; }
+static bool clipped(struct nk_context* ctx) { return G.clip_on && !G.menu_on; }
+static void unclip(struct nk_context* ctx) { G.clip_on = false; }
+/* the selection CSV beside the model: a header and a row per selected element */
+static bool csv_saved(struct nk_context* ctx) {
+    char path[1100];
+    snprintf(path, sizeof path, "%s", G.path);
+    char* dot = strrchr(path, '.');
+    if (dot) *dot = 0;
+    strncat(path, "_selection.csv", sizeof path - strlen(path) - 1);
+    FILE* f = fopen(path, "r");
+    if (!f) return false;
+    int lines = 0, c;
+    while ((c = fgetc(f)) != EOF) lines += c == '\n';
+    fclose(f);
+    return lines == (int)G.sel_n + 1;
+}
 /* a box round the whole view: its max is the field's max, the probe on it */
 static bool box_found(struct nk_context* ctx) {
     return !G.box_arm && G.boxq.on && G.probe_on && G.boxq.vmax == G.data_max && G.boxq.vmin <= G.boxq.vmax &&
@@ -408,6 +440,39 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
     CLOSED_THEN_PANELS("Details", open_details, details_gone),
     CLOSED_THEN_PANELS("About", open_about, about_gone),
+
+    CASE("menu: a right click on the model opens it, an item acts and closes it"),
+    DO(close_all), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),
+    DO(snapshot), AT_TIP("Menu", "#menu Centre the view here"), CLICK, WAIT(2), EXPECT(menu_closed_turned, "the view centres, the menu closes"),
+
+    CASE("menu: a click beside it only closes it"),
+    DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),
+    AT_VIEW(0.03f, 0.5f), CLICK, WAIT(2), EXPECT(menu_closed, "the menu closes"), PANELS_ANSWER,
+
+    CASE("menu: hide an element, then show all from empty space"),
+    DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu Hide element"), CLICK, WAIT(10), EXPECT(one_hidden, "one element hidden"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens on empty space"),
+    AT_TIP("Menu", "#menu Show all"), CLICK, WAIT(10), EXPECT(all_shown, "everything shown again"),
+
+    CASE("menu: hide this element type, then show all"),
+    DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu hide every"), CLICK, WAIT(10), EXPECT(menu_closed, "the menu closes"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Show all"), CLICK, WAIT(10), EXPECT(all_shown, "everything shown again"),
+
+    CASE("menu: clip here"),
+    DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu Clip here"), CLICK, WAIT(3), EXPECT(clipped, "the clip plane is on"),
+    DO(unclip), WAIT(2),
+
+    CASE("menu: look from +X"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), DO(snapshot), AT_TIP("Menu", "#menu look +X"), CLICK, WAIT(2),
+    EXPECT(menu_closed_turned, "the view turns, the menu closes"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Fit"), CLICK, WAIT(2),
+
+    CASE("menu: a box selection hidden from the menu"),
+    DO(arm_box), AT_VIEW(0.3f, 0.3f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.7f, 0.7f), RELEASE, WAIT(2), EXPECT(box_window, "a selection"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Save the selection"), CLICK, WAIT(2), EXPECT(csv_saved, "the CSV holds the selection"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Hide the"), CLICK, WAIT(10), EXPECT(sel_hidden, "the selection is hidden"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Show all"), CLICK, WAIT(10), EXPECT(all_shown, "everything shown again"),
+    PANELS_ANSWER,
 
     CASE("about: opened from the status bar"),
     AT_TIP("Status", "Who made ccxview"), CLICK, WAIT(2), EXPECT(about_shown, "the About window opens"),

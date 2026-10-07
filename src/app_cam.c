@@ -698,23 +698,33 @@ bool app_cursor_point(float px, float py, v3* out, bool* on_model) {
     return true;
 }
 
-void do_pick(float px, float py) {
-    if (!G.loaded) return;
-    float o[3], d[3];
+bool app_pick(float px, float py, cv_pick* out, float o[3], float d[3]) {
+    memset(out, 0, sizeof *out);
+    if (!G.loaded) return false;
     cam_ray(px, py, o, d);
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
-    G.probe = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, o, d);
+    *out = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, o, d);
     /* mirror and replicate copies: the ray taken into the model's own frame
        (distances kept, so t compares directly) */
     for (int i = 1, n = app_copies(); i < n; i++) {
         float mo[3], md[3];
         copy_ray(i, o, d, mo, md);
         cv_pick p = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, mo, md);
-        if (p.hit && (!G.probe.hit || p.t < G.probe.t)) {
-            G.probe = p;
-            memcpy(o, mo, sizeof o); memcpy(d, md, sizeof d);   /* gp_probe works in the model's frame */
+        if (p.hit && (!out->hit || p.t < out->t)) {
+            *out = p;
+            memcpy(o, mo, 3 * sizeof *o); memcpy(d, md, 3 * sizeof *d);   /* gp_probe works in the model's frame */
         }
     }
+    return out->hit;
+}
+
+void app_probe_pixel(float x, float y) { do_pick(x, y); }
+
+void do_pick(float px, float py) {
+    if (!G.loaded) return;
+    float o[3], d[3];
+    float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
+    app_pick(px, py, &G.probe, o, d);
     G.probe_on = G.probe.hit;
     app_sel_clear();
     G.probe_ip = 0;

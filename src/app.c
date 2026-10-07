@@ -346,6 +346,10 @@ static void frame(void) {
     update_title();
     tick_anim();
     tick_flight();
+    if (O.menu_set && !O.box_set && G.loaded && !app_busy() && G.vp_w > 0) {   /* --menu: after --box */
+        O.menu_set = false;
+        app_menu_open(G.vp_x + O.menu[0] * G.vp_w, G.vp_y + O.menu[1] * G.vp_h);
+    }
     if (O.box_set && G.loaded && !app_busy() && G.vp_w > 0) {     /* --box: once the view has its size */
         O.box_set = false;
         G.nav_box[0] = G.vp_x + O.box[0] * G.vp_w; G.nav_box[1] = G.vp_y + O.box[1] * G.vp_h;
@@ -778,6 +782,7 @@ static void event(const sapp_event* ev) {
 #endif
             break;
         case SAPP_EVENTTYPE_MOUSE_DOWN:
+            if (G.menu_on && !over_ui) { G.menu_on = false; if (ev->mouse_button == SAPP_MOUSEBUTTON_LEFT) break; }   /* a click beside the menu only closes it */
             if (!over_ui && !nk_busy && in_view(ev->mouse_x, ev->mouse_y)) {
                 bool ctrl = (ev->modifiers & (SAPP_MODIFIER_CTRL | SAPP_MODIFIER_SUPER)) != 0;
                 bool alt = (ev->modifiers & SAPP_MODIFIER_ALT) != 0, shift = (ev->modifiers & SAPP_MODIFIER_SHIFT) != 0;
@@ -805,6 +810,8 @@ static void event(const sapp_event* ev) {
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_LEFT && drag.mode != CV_NAV_BOX) {
                 do_pick(ev->mouse_x, ev->mouse_y);
             }
+            if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_RIGHT && !G.flight)   /* a right click: the menu */
+                app_menu_open(ev->mouse_x, ev->mouse_y);
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_MIDDLE && !G.flight) {
                 app_view_push();
                 app_center_at(ev->mouse_x, ev->mouse_y);
@@ -984,6 +991,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
+        else if (!strcmp(argv[i], "--menu") && i + 1 < argc) O.menu_set = sscanf(argv[++i], "%f,%f", &O.menu[0], &O.menu[1]) == 2;
         else if (!strcmp(argv[i], "--box") && i + 1 < argc)
             O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;
         else if (!strcmp(argv[i], "--fly-clip") || !strcmp(argv[i], "--fly-hide")) {

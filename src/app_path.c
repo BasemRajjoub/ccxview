@@ -169,6 +169,7 @@ void app_path_start(uint32_t node) {
 void app_pick_cancel(void) {
     if (G.path_arm) { G.path_arm = false; G.path_a = UINT32_MAX; }
     G.box_arm = false;
+    if (G.menu_on) { G.menu_on = false; return; }   /* Esc closes the menu first, the selection stays */
     app_sel_clear();
 }
 

@@ -1,7 +1,9 @@
 /* app_select.c -- box selection, CAD style (app.h): which elements a dragged box
    takes, the field's extremes over them, and their outline in the view. */
 #include "app_int.h"
+#include "web.h"
 #include <math.h>
+#include <stdio.h>
 
 static void shown_pos(uint32_t n, float sc, float sc2, float p[3]) {
     for (int k = 0; k < 3; k++)
@@ -110,4 +112,131 @@ bool app_box_select(float x0, float y0, float x1, float y1) {
         G.boxq.max_at = imax; G.boxq.min_at = imin; G.boxq.vmax = val[imax]; G.boxq.vmin = val[imin];
     }
     return true;
+}
+
+/* ---- hiding by hand -------------------------------------------------------------- */
+
+static bool hide_alloc(void) {
+    if (!G.hide) G.hide = calloc(CV_MAX(G.frd.n_elems, 1), 1);
+    return G.hide != NULL;
+}
+
+void app_hide_elems(const uint32_t* el, uint32_t n) {
+    if (!G.loaded || !n || !hide_alloc()) return;
+    for (uint32_t i = 0; i < n; i++) if (el[i] < G.frd.n_elems) G.hide[el[i]] = 1;
+    G.probe_on = false;
+    app_sel_clear();
+    app_groups_changed();
+}
+
+void app_isolate_elems(const uint32_t* el, uint32_t n) {
+    if (!G.loaded || !n || !hide_alloc()) return;
+    memset(G.hide, 1, G.frd.n_elems);
+    for (uint32_t i = 0; i < n; i++) if (el[i] < G.frd.n_elems) G.hide[el[i]] = 0;
+    G.probe_on = false;
+    app_sel_clear();
+    app_groups_changed();
+}
+
+void app_hide_set(const char* name, bool isolate) {
+    const cv_inp* d = deck_get();
+    const cv_set* s = d ? cv_inp_set(d, name, true) : NULL;
+    if (!s) return;
+    uint32_t* el = malloc((size_t)CV_MAX(s->n, 1) * sizeof *el), n = 0;
+    if (!el) return;
+    for (uint32_t i = 0; i < s->n; i++) {
+        uint32_t e = cv_frd_elem_index(&G.frd, s->ids[i]);
+        if (e != UINT32_MAX) el[n++] = e;
+    }
+    if (isolate) app_isolate_elems(el, n); else app_hide_elems(el, n);
+    free(el);
+}
+
+void app_show_all(void) {
+    if (!G.loaded) return;
+    free(G.hide); G.hide = NULL;
+    for (int a = 0; a < CV_AXIS_N; a++)
+        for (int i = 0; i < G.groups.axis[a].n; i++) G.groups.axis[a].on[i] = true;
+    app_groups_changed();
+}
+
+/* ---- clip here ------------------------------------------------------------------- */
+
+void app_clip_at(const float p[3], const float n[3]) {
+    if (!G.loaded) return;
+    int k = 0;
+    for (int a = 1; a < 3; a++) if (fabsf(n[a]) > fabsf(n[k])) k = a;
+    const float lo[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, hi[3] = { G.bmax.x, G.bmax.y, G.bmax.z };
+    v3 eye, f, r, u;
+    cam_basis(&G.cam, &eye, &f, &r, &u);
+    const float e[3] = { eye.x, eye.y, eye.z };
+    G.clip_axis = k;
+    G.clip_pos = hi[k] > lo[k] ? CV_MIN(CV_MAX((p[k] - lo[k]) / (hi[k] - lo[k]), 0.f), 1.f) : 0.5f;
+    G.clip_flip = e[k] < p[k];                       /* the clip drops n . x > d: the eye's side goes */
+    G.clip_on = true;
+}
+
+/* ---- the selection out ------------------------------------------------------------- */
+
+size_t app_sel_ids(char* out, size_t n) {
+    size_t o = 0;
+    if (n) out[0] = 0;
+    for (uint32_t i = 0; i < G.sel_n && o + 16 < n; i++)
+        o += (size_t)snprintf(out + o, n - o, "%u%s", G.frd.elem_id[G.sel[i]],
+                              i + 1 == G.sel_n ? "\n" : i % 16 == 15 ? ",\n" : ", ");
+    return o;
+}
+
+bool app_sel_csv(void) {
+    if (!G.loaded || !G.sel_n) return false;
+    char base[1024], path[1100];
+    snprintf(base, sizeof base, "%s", G.path);
+    char* dot = strrchr(base, '.');
+    char* sep = strrchr(base, cv_path_sep());
+    if (dot && (!sep || dot > sep)) *dot = 0;
+    snprintf(path, sizeof path, "%s_selection.csv", base);
+    FILE* fp = fopen(path, "w");
+    bool ok = fp != NULL;
+    if (fp) {
+        bool val = G.has_field && G.field_src != 1;
+        fprintf(fp, "element,type,material,x,y,z%s\n", !val ? "" : G.elem_mode ? ",value" : ",min,max");
+        for (uint32_t k = 0; k < G.sel_n; k++) {
+            uint32_t e = G.sel[k], b = G.frd.eoff[e], m = G.frd.eoff[e + 1] - b;
+            double c[3] = { 0, 0, 0 };
+            float mn = INFINITY, mx = -INFINITY;
+            for (uint32_t j = 0; j < m; j++) {
+                uint32_t i = G.frd.conn[b + j];
+                for (int a = 0; a < 3; a++) c[a] += G.frd.xyz[3 * i + a] / (double)m;
+                if (val && !G.elem_mode && G.scalar[i] == G.scalar[i]) { mn = CV_MIN(mn, G.scalar[i]); mx = CV_MAX(mx, G.scalar[i]); }
+            }
+            fprintf(fp, "%u,%s,%u,%.9g,%.9g,%.9g", G.frd.elem_id[e], cv_frd_type_name(G.frd.etype[e]), G.frd.emat[e], c[0], c[1], c[2]);
+            if (val && G.elem_mode) fprintf(fp, ",%.9g", G.elem_val[e]);
+            else if (val) fprintf(fp, ",%.9g,%.9g", mn, mx);
+            fputc('\n', fp);
+        }
+        ok = fclose(fp) == 0;
+    }
+    snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", path);
+    G.note_t = cv_now();
+    cv_msg_add(&G.msgs, 0, false, G.note);
+    if (ok) CV_EXPORTED(path);
+    return ok;
+}
+
+/* ---- the context menu ---------------------------------------------------------------- */
+
+void app_menu_open(float x, float y) {
+    if (!G.loaded) return;
+    float o[3], d[3];
+    G.menu_on = true; G.menu_x = x; G.menu_y = y;
+    memset(G.menu_n, 0, sizeof G.menu_n);
+    if (!app_pick(x, y, &G.menu_pick, o, d)) return;
+    for (int k = 0; k < 3; k++) G.menu_p[k] = o[k] + d[k] * G.menu_pick.t;
+    if (G.menu_pick.tri < G.skin.n_tri) {             /* the face's normal, as shown */
+        float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f, q[3][3];
+        for (int j = 0; j < 3; j++) shown_pos(G.skin.tri[3 * G.menu_pick.tri + j], sc, sc2, q[j]);
+        float a[3], b[3];
+        for (int k = 0; k < 3; k++) { a[k] = q[1][k] - q[0][k]; b[k] = q[2][k] - q[0][k]; }
+        G.menu_n[0] = a[1] * b[2] - a[2] * b[1]; G.menu_n[1] = a[2] * b[0] - a[0] * b[2]; G.menu_n[2] = a[0] * b[1] - a[1] * b[0];
+    }
 }

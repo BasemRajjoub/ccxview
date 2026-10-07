@@ -316,6 +316,8 @@ static void apply_load(cv_job* j) {
     G.field_src = 0;
     free(G.vis); G.vis = NULL;
     G.eye_hide_on = false;
+    free(G.hide); G.hide = NULL;
+    G.menu_on = false;
     G.crop_on = false;
     for (int k = 0; k < 3; k++) { G.crop_lo[k] = 0.f; G.crop_hi[k] = 1.f; }
     init_group_colors();
@@ -527,6 +529,7 @@ static void start_skin_job(void) {
     if (!G.job.vis) { cv_msg_add(&G.msgs, 0, false, "out of memory"); return; }
     cv_groups_mask(&G.groups, G.frd.n_elems, G.job.vis);
     deck_apply_mask(&G.frd, G.job.vis);        /* ticked element sets: a display group */
+    for (uint32_t e = 0; G.hide && e < G.frd.n_elems; e++) if (G.hide[e]) G.job.vis[e] = 0;   /* hidden by hand */
     G.job.crop = G.crop_on;
     const float lo[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, hi[3] = { G.bmax.x, G.bmax.y, G.bmax.z };
     for (int k = 0; k < 3; k++) {           /* fractions -> world, padded so 0/1 keep the edges */

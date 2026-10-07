@@ -126,6 +126,9 @@ and what is drawn for it; `samples/symbols/` shows them all.
 - Compare two runs (A minus B).
 - Clip plane with the cut filled, crop box, mirror symmetry, cyclic symmetry,
   replicate (rows of copies of a periodic model).
+- A right-click menu with what fits where you click: the element and node under
+  the cursor, the box selection, the view. Hide an element, a material, an
+  element type or a set, or show only it; hide or isolate a selection; show all.
 - Free flight (G) through the model; the eye can cut what lies just ahead of it
   (the cut filled) or hide whole elements there, to see inside.
 - Convergence plot from `.sta` / `.cvg`.

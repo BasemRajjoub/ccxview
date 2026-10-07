@@ -38,6 +38,8 @@ typedef struct {
     bool        box_set;
     bool        details;        /* --details: the Details window of the probe (with --find or --box) */
     bool        about;          /* --about: the About window open */
+    float       menu[2];        /* --menu x,y: the context menu at that point of the view (fractions) */
+    bool        menu_set;
     bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */
     const char* view_file;      /* --view FILE: a saved view state, applied after load */
     bool        watch;          /* --watch: reload when the file changes */

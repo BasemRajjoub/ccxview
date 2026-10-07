@@ -304,6 +304,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_probe(ctx, s, row);
     window_details(ctx, s, row, fw, fh);
     window_about(ctx, s, row, fw, fh);
+    window_menu(ctx, s, row, fw, fh);                 /* last: over every other window */
     window_messages(ctx, s, row, fw, fh);
     window_calc_help(ctx, s, row, fw, fh);
     window_units(ctx, s, row, fw, fh);
