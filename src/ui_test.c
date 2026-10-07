@@ -215,6 +215,8 @@ static void labels_tree_open(struct nk_context* ctx) {
 static bool labels_node(struct nk_context* ctx) { return G.label_kind == CV_LABEL_NODE && !G.label_probe_only; }
 static void labels_small(struct nk_context* ctx) { G.label_px = 8.f; }
 static bool labels_bigger(struct nk_context* ctx) { return G.label_px > 8.f; }
+static bool labels_behind(struct nk_context* ctx) { return !G.label_front; }
+static void labels_front(struct nk_context* ctx) { G.label_front = true; }
 static bool labels_shown(struct nk_context* ctx) { return strstr(G.label_note, "shown ") && !strstr(G.label_note, "shown 0 of"); }
 static bool labels_none(struct nk_context* ctx) { return strstr(G.label_note, "shown 0 of 0") != NULL; }
 static void probe_close(struct nk_context* ctx) { G.probe_on = false; }
@@ -407,6 +409,7 @@ static const step script[] = {
     DO(labels_tree_open), WAIT(3), AT_TIP("Scene", "Every node of the surface"), CLICK, WAIT(3), EXPECT(labels_node, "node ids chosen"),
     EXPECT(labels_shown, "some labels are shown"),
     DO(labels_small), WAIT(2), AT_TIP_X("Scene", "Text height in pixels", 0.95f), CLICK, EXPECT(labels_bigger, "the size answers"),
+    AT_TIP("Scene", "Labels in front of everything"), CLICK, EXPECT(labels_behind, "the front box toggles"), DO(labels_front),
     DO(snapshot), AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "the model turns with labels up"),
     DO(labels_off), WAIT(2),
 

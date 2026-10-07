@@ -70,6 +70,10 @@ void section_label(struct nk_context* ctx, float s, float row) {
         if (nk_checkbox_label(ctx, "selection only", &G.label_sel_only)) app_label_changed();
         tip(ctx, "Only the probed element and its nodes (the Probe's labels box)");
         if (nk_checkbox_label(ctx, "probed element only", &G.label_probe_only)) app_label_changed();
+        nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "Labels in front of everything, never cut by a face (nodes facing away get none anyway).\n"
+                 "Off: hidden by what is nearer, as the model is; a face at a steep angle may cut into one");
+        nk_checkbox_label(ctx, "always in front", &G.label_front);
         static const float tp[3][3] = { { 1.f, 0.93f, 0.6f }, { 1.f, 1.f, 1.f }, { 0.1f, 0.1f, 0.1f } };
         static const float bp[3][3] = { { 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, { 0.15f, 0.25f, 0.5f } };
         static const char* const tn[3] = { "yellow", "white", "black" }, *const bn[3] = { "black", "white", "blue" };

@@ -342,6 +342,7 @@ typedef struct {
     float     label_spacing;         /* the gap kept between labels, px; 0: every one, overlapping */
     float     label_rgb[3], label_box_rgba[4];
     bool      label_sel_only, label_probe_only;
+    bool      label_front;           /* drawn in front of everything (nodes facing away are left out anyway) */
     unsigned  label_gen;             /* bumped when the labelled things change (model, step, field, selection) */
     char      label_note[64];        /* "labels: node id, shown 420 of 18 000"; "" when off */
     bool      show_about;            /* the About window: author, licence, libraries */
