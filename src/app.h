@@ -48,10 +48,10 @@ enum { CV_CACHE_N = 8 };
 
 /* Background work: loading a file, or rebuilding the skin after a group change. */
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
-enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };
+enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
-       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_N };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
+       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_N };
 
 typedef struct {
     int       kind;

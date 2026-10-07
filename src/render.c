@@ -217,13 +217,6 @@ static const char* kVSI =
     "  v_n = mat3(u_mv) * nm;\n"
     "}\n";
 
-/* The tensor glyph: a_m is (theta, phi) on the unit sphere's grid. The instance
-   gives the centre and scalar, the base axes (direction times length) with the
-   superquadric exponents alpha, beta, cee in their w, the signed eigenvalue along
-   each axis and the kind (i_l.w: 0 superquadric, 1 Reynolds, 2 HWY; + 4 coloured
-   by the normal stress in each direction), and how the glyph moves.
-   Superquadric: glyph.h cv_superquad_point (keep in step). Reynolds: radius
-   |n.S.n| along n; HWY: the shear |S.n - (n.S.n) n|. */
 /* Labels: a quad per glyph or box, anchored to a model point, sized in pixels, so it
    never scales with the zoom; its depth is the anchor's pulled a hair toward the eye,
    so the model hides labels on its far side. u_p: deform scales, viewport w, h.
@@ -260,6 +253,13 @@ static const char* kFSL =
     "out vec4 frag;\n"
     "void main() { frag = vec4(u_color.rgb, u_color.a * texture(u_atlas, v_uv).r); }\n";
 
+/* The tensor glyph: a_m is (theta, phi) on the unit sphere's grid. The instance
+   gives the centre and scalar, the base axes (direction times length) with the
+   superquadric exponents alpha, beta, cee in their w, the signed eigenvalue along
+   each axis and the kind (i_l.w: 0 superquadric, 1 Reynolds, 2 HWY; + 4 coloured
+   by the normal stress in each direction), and how the glyph moves.
+   Superquadric: glyph.h cv_superquad_point (keep in step). Reynolds: radius
+   |n.S.n| along n; HWY: the shear |S.n - (n.S.n) n|. */
 static const char* kVSG =
     GLSL_HDR
     VS_UNIFORMS
@@ -640,6 +640,11 @@ void cv_render_init(void) {
             .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
         };
         R.pip_inst = sg_make_pipeline(&pi);
+        float v[12 * 12 * 3];
+        R.body_n[0] = unit_body(v, 12, true);
+        R.body[0] = make_buf(v, (size_t)R.body_n[0] * 12, false);
+        R.body_n[1] = unit_body(v, 6, false);
+        R.body[1] = make_buf(v, (size_t)R.body_n[1] * 12, false);
     }
     {   /* labels: a unit quad per instance, CV_LABEL_FLOATS per instance, blended, no depth write */
         typedef struct { float mvp[16]; float p[4]; float q[4]; } vs_label;
@@ -681,11 +686,6 @@ void cv_render_init(void) {
         });
         static const float q[12] = { 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1 };
         R.label_quad = make_buf(q, sizeof q, false);
-        float v[12 * 12 * 3];
-        R.body_n[0] = unit_body(v, 12, true);
-        R.body[0] = make_buf(v, (size_t)R.body_n[0] * 12, false);
-        R.body_n[1] = unit_body(v, 6, false);
-        R.body[1] = make_buf(v, (size_t)R.body_n[1] * 12, false);
     }
 
     {   /* tensor glyphs: the unit grid per vertex, CV_GLYPH_FLOATS per instance */

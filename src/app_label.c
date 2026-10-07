@@ -40,14 +40,15 @@ static void font_bake(float px) {
     struct nk_font_config cfg = nk_font_config(px);
     cfg.range = range; cfg.oversample_h = 1; cfg.oversample_v = 1; cfg.pixel_snap = nk_true;
     struct nk_font* font = nk_font_atlas_add_from_memory(&F.atlas, (void*)cv_font_text, cv_font_text_size, px, &cfg);
-    int w, h;
-    const void* pixels = nk_font_atlas_bake(&F.atlas, &w, &h, NK_FONT_ATLAS_ALPHA8);
+    int w = 0, h = 0;
+    const void* pixels = font ? nk_font_atlas_bake(&F.atlas, &w, &h, NK_FONT_ATLAS_ALPHA8) : NULL;
+    if (!pixels) { nk_font_atlas_clear(&F.atlas); cv_render_label_atlas(NULL, 0, 0); F.px = px; return; }   /* out of memory: no labels */
     cv_render_label_atlas(pixels, w, h);
     struct nk_draw_null_texture null = {0};
     nk_font_atlas_end(&F.atlas, nk_handle_id(0), &null);
     for (int c = 32; c <= 126; c++) {
         const struct nk_font_glyph* g = nk_font_find_glyph(font, (nk_rune)c);
-        F.g[c - 32] = (cv_label_glyph){ g->xadvance, g->x0, g->y0, g->x1, g->y1, g->u0, g->v0, g->u1, g->v1 };
+        F.g[c - 32] = g ? (cv_label_glyph){ g->xadvance, g->x0, g->y0, g->x1, g->y1, g->u0, g->v0, g->u1, g->v1 } : (cv_label_glyph){0};
     }
     F.m = (cv_label_metrics){ F.g, 32, 95, px, null.uv.x, null.uv.y };
     F.px = px; F.live = true;
@@ -65,7 +66,7 @@ typedef struct {
     uint32_t n;
 } anchors;
 
-static struct { anchors a; bool on_top; unsigned gen; int kind, asked; bool sel_only, probe_only; } A;   /* kind: the one built (a value field per element becomes evalue); asked: G.label_kind then */
+static struct { anchors a; bool on_top; unsigned gen, serial; int kind, asked; bool sel_only, probe_only; } A;   /* serial: bumped per build */   /* kind: the one built (a value field per element becomes evalue); asked: G.label_kind then */
 
 static void pack(anchors* s, const float p[3], const float d[6], uint32_t ref, const char* text) {
     if (!cv_reserve(s->anc, s->anc.n + 9) || !cv_reserve(s->toff, s->toff.n + 1) || !cv_reserve(s->ref, s->ref.n + 1)) return;
@@ -226,6 +227,7 @@ static void build_named(int kind) {
 static void build_anchors(void) {
     A.a.anc.n = A.a.txt.n = A.a.toff.n = A.a.ref.n = 0; A.a.n = 0; A.on_top = false;
     A.kind = A.asked = G.label_kind; A.gen = G.label_gen; A.sel_only = G.label_sel_only; A.probe_only = G.label_probe_only;
+    A.serial++;
     if (!G.loaded || G.label_kind == CV_LABEL_NONE) return;
     const cv_frd* f = &G.frd;
     /* the selection as marks, when asked for */
@@ -295,48 +297,51 @@ void app_label_changed(void) { G.label_gen++; }
 
 /* huge sets: one anchor per 3D cell about the spacing at the model's distance, so the
    per-move cost stays bounded; kept until the cell changes by a fifth or the anchors do */
-static struct { uint32_t* keep; uint32_t n; float cell; unsigned gen; int kind; float f1, f2; } C;
+static struct { uint32_t* keep; uint32_t n; float cell; unsigned serial; } C;
 
-static void coarse_check(float cell, float f1, float f2) {
-    if (C.keep && C.gen == A.gen && C.kind == A.kind && C.f1 == f1 && C.f2 == f2 && fabsf(cell - C.cell) <= 0.2f * C.cell) return;
+/* on the undeformed positions: the cell is coarse, and an animation must not rebuild it every frame */
+static void coarse_check(float cell) {
+    if (C.keep && C.serial == A.serial && fabsf(cell - C.cell) <= 0.2f * C.cell) return;
     free(C.keep); C.keep = malloc((size_t)CV_MAX(A.a.n, 1) * sizeof *C.keep);
     float* xyz = malloc((size_t)CV_MAX(A.a.n, 1) * 3 * sizeof *xyz);
     if (!C.keep || !xyz) { free(xyz); free(C.keep); C.keep = NULL; return; }
-    for (uint32_t i = 0; i < A.a.n; i++) {
-        const float* a = A.a.anc.a + 9 * i;
-        for (int k = 0; k < 3; k++) xyz[3 * i + k] = a[k] + f1 * a[3 + k] + f2 * a[6 + k];
-    }
+    for (uint32_t i = 0; i < A.a.n; i++) memcpy(xyz + 3 * i, A.a.anc.a + 9 * i, 3 * sizeof *xyz);
     C.n = cv_label_coarse(xyz, A.a.n, cell, C.keep);
     free(xyz);
-    C.cell = cell; C.gen = A.gen; C.kind = A.kind; C.f1 = f1; C.f2 = f2;
+    C.cell = cell; C.serial = A.serial;
 }
 
 void app_label_frame(const cv_draw* d) {
     static float last_mvp[16], last_px, last_sp, last_f1, last_f2; static unsigned last_gen; static int last_kind, last_w, last_h;
     if (!G.loaded || G.label_kind == CV_LABEL_NONE) {
-        if (A.a.n || last_kind) { A.a.n = 0; cv_render_labels(NULL, 0, NULL, 0); G.label_note[0] = 0; last_kind = 0; }
+        if (A.a.n || last_kind) {
+            A.a.n = 0; A.asked = -1;                  /* the same kind again rebuilds */
+            free(C.keep); C.keep = NULL; C.n = 0;
+            cv_render_labels(NULL, 0, NULL, 0); G.label_note[0] = 0; last_kind = 0;
+        }
         return;
     }
     float px = roundf(CV_MAX(G.label_px, 6.f) * ui_scale());
     if (!F.live || F.px != px) font_bake(px);
+    if (!F.live) return;
     bool rebuild = A.gen != G.label_gen || A.asked != G.label_kind || A.sel_only != G.label_sel_only || A.probe_only != G.label_probe_only;
     if (rebuild) build_anchors();
     bool moved = memcmp(last_mvp, d->mvp, sizeof last_mvp) != 0 || last_px != px || last_sp != G.label_spacing ||
                  last_w != d->vp_w || last_h != d->vp_h || last_f1 != d->def_scale || last_f2 != d->def_scale2;
     if (!rebuild && !moved && last_gen == G.label_gen && last_kind == G.label_kind) return;
-    memcpy(last_mvp, d->mvp, sizeof last_mvp); last_px = px; last_sp = G.label_spacing; last_gen = G.label_gen;
-    last_kind = G.label_kind; last_w = d->vp_w; last_h = d->vp_h; last_f1 = d->def_scale; last_f2 = d->def_scale2;
 
     float spacing = G.label_spacing * ui_scale();
     /* which anchors to project: all, or the coarse subset of a huge set */
     const uint32_t* ids = NULL; uint32_t n_ids = A.a.n;
     if (A.a.n > 200000 && spacing > 0) {
-        coarse_check(spacing * app_pixel_size(G.cam.target), d->def_scale, d->def_scale2);
+        coarse_check(spacing * app_pixel_size(G.cam.target));
         if (C.keep) { ids = C.keep; n_ids = C.n; }
     }
     cv_label_pt* pts = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *pts);
     uint32_t* chosen = malloc((size_t)CV_MAX(n_ids, 1) * sizeof *chosen);
-    if (!pts || !chosen) { free(pts); free(chosen); return; }
+    if (!pts || !chosen) { free(pts); free(chosen); return; }   /* tried again next frame */
+    memcpy(last_mvp, d->mvp, sizeof last_mvp); last_px = px; last_sp = G.label_spacing; last_gen = G.label_gen;
+    last_kind = G.label_kind; last_w = d->vp_w; last_h = d->vp_h; last_f1 = d->def_scale; last_f2 = d->def_scale2;
     const float* M = d->mvp;
     uint32_t np = 0;
     for (uint32_t k = 0; k < n_ids; k++) {
