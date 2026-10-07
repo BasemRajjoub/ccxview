@@ -653,7 +653,12 @@ void app_cmap_rgb(float t, float rgb[3]) {
 
 void app_legend_fmt(char* out, size_t n, double v) {
     if (v != v) { snprintf(out, n, "-"); return; }
-    if (G.legend_fmt == 1) { snprintf(out, n, "%.*f", G.legend_decimals, v); return; }
+    if (G.legend_fmt == 1) {                 /* fixed decimals, unless the range is too small to show any: scientific then */
+        double big = CV_MAX(fabs(G.rmin), fabs(G.rmax));
+        if (big > 0 && big < pow(10.0, 1 - G.legend_decimals)) snprintf(out, n, "%.*e", G.legend_decimals, v);
+        else snprintf(out, n, "%.*f", G.legend_decimals, v);
+        return;
+    }
     if (G.legend_fmt == 2) { snprintf(out, n, "%.*e", G.legend_decimals, v); return; }
     double a = fabs(v);
     if (a != 0 && (a < 1e-3 || a >= 1e5)) snprintf(out, n, "%.3e", v);

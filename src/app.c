@@ -95,7 +95,7 @@ static void init(void) {
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
     G.sel_elems = true;
-    G.label_px = 13.f; G.label_spacing = 40.f;
+    G.label_px = 13.f; G.label_spacing = 10.f;
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */

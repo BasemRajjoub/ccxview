@@ -40,7 +40,7 @@ static void test_label(void) {
     CHECK_EQ(box.n, 0);
     cv_free_vec(gly); cv_free_vec(box);
 
-    /* thin: nearest first, one per spacing, off-screen and behind-the-eye dropped */
+    /* thin: nearest first, one per box, off-screen and behind-the-eye dropped */
     cv_label_pt p[] = {
         { 100, 100, 0.5f, 0 },      /* a cluster: 1 is nearer than 0 and 2 */
         { 105, 102, 0.2f, 1 },
@@ -51,14 +51,14 @@ static void test_label(void) {
         { 200, 200, 2.f, 6 },       /* beyond the far plane */
     };
     uint32_t out[8];
-    uint32_t n = cv_label_thin(p, 7, 20, 0, 0, 800, 600, out, 8);
+    uint32_t n = cv_label_thin(p, 7, 20, 20, 0, 0, 800, 600, out, 8);
     CHECK_EQ(n, 2);
     CHECK_EQ(out[0], 1); CHECK_EQ(out[1], 3);                   /* nearest first */
     /* thin: spacing 0 keeps every one inside */
-    n = cv_label_thin(p, 7, 0, 0, 0, 800, 600, out, 8);
+    n = cv_label_thin(p, 7, 0, 0, 0, 0, 800, 600, out, 8);
     CHECK_EQ(n, 4);
     /* thin: max_out caps */
-    n = cv_label_thin(p, 7, 0, 0, 0, 800, 600, out, 1);
+    n = cv_label_thin(p, 7, 0, 0, 0, 0, 800, 600, out, 1);
     CHECK_EQ(n, 1);
 
     /* coarse: one per cell, the first met */
@@ -80,10 +80,10 @@ static void test_label(void) {
             big[i] = (cv_label_pt){ x * 1600, y * 1000, z, i };
         }
         double t0 = cv_now();
-        n = cv_label_thin(big, N, 24, 0, 0, 1600, 1000, o, N);
+        n = cv_label_thin(big, N, 48, 16, 0, 0, 1600, 1000, o, N);
         double ms = (cv_now() - t0) * 1e3;
         printf("label thin: %u of %u in %.1f ms\n", n, N, ms);
-        CHECK(n > 1000 && n < 4000);                            /* about one per cell of 24 px */
+        CHECK(n > 1000 && n < 4000);                            /* about one per 48 x 16 px box */
         CHECK(ms < 200);
         free(big); free(o);
     }

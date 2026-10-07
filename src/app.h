@@ -339,7 +339,7 @@ typedef struct {
     /* labels on the model */
     int       label_kind;            /* CV_LABEL_*: what the labels show */
     float     label_px;              /* text height, px (before ui scale) */
-    float     label_spacing;         /* min distance between labels, px; 0 all */
+    float     label_spacing;         /* the gap kept between labels, px; 0: every one, overlapping */
     float     label_rgb[3], label_box_rgba[4];
     bool      label_sel_only, label_probe_only;
     unsigned  label_gen;             /* bumped when the labelled things change (model, step, field, selection) */

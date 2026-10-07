@@ -24,10 +24,11 @@ float cv_label_layout(const cv_label_metrics* m, const float anchor[9], const ch
 float cv_label_width(const cv_label_metrics* m, const char* text);
 
 /* thinning: pts projected to window px with a depth (nearer = smaller, 0 .. 1); those
-   inside the viewport, nearest first, no two within spacing px of each other (0: every
-   one inside). Chosen ids to out (at most max_out), returns how many. pts is reordered. */
+   inside the viewport, nearest first, no two closer than dx px across and dy px down (the
+   labels' box: their widest plus a gap, their height plus the gap; 0: every one inside).
+   Chosen ids to out (at most max_out), returns how many. pts is reordered. */
 typedef struct { float sx, sy, depth; uint32_t id; } cv_label_pt;
-uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float spacing, float vx, float vy, float vw, float vh,
+uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float dx, float dy, float vx, float vy, float vw, float vh,
                        uint32_t* out, uint32_t max_out);
 
 /* a coarse pass for huge sets: of the points in one 3D cell of size cell, the first

@@ -86,8 +86,9 @@ static uint32_t cell_slot(const grid* g, uint64_t key) {
     return h;
 }
 
-uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float spacing, float vx, float vy, float vw, float vh,
+uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float dxs, float dys, float vx, float vy, float vw, float vh,
                        uint32_t* out, uint32_t max_out) {
+    float spacing = dxs > dys ? dxs : dys;       /* the grid cell: the larger reach */
     /* inside the viewport and the depth range: the rest to the back of the array */
     uint32_t m = 0;
     for (uint32_t i = 0; i < n; i++) {
@@ -111,7 +112,6 @@ uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float spacing, float vx, fl
     uint32_t* next = malloc(m * sizeof *next);
     uint32_t taken = 0;
     if (!g.cell || !g.head || !next) { free(g.cell); free(g.head); free(next); return 0; }
-    float s2 = spacing * spacing;
     for (uint32_t i = 0; i < m && taken < max_out; i++) {
         const cv_label_pt* p = &pts[i];
         int64_t cx = (int64_t)floorf(p->sx / spacing), cy = (int64_t)floorf(p->sy / spacing);
@@ -123,7 +123,7 @@ uint32_t cv_label_thin(cv_label_pt* pts, uint32_t n, float spacing, float vx, fl
                 if (!g.cell[h]) continue;
                 for (uint32_t j = g.head[h]; j != UINT32_MAX; j = next[j]) {
                     float dx = pts[j].sx - p->sx, dy = pts[j].sy - p->sy;
-                    if (dx * dx + dy * dy < s2) { clash = true; break; }
+                    if (fabsf(dx) < dxs && fabsf(dy) < dys) { clash = true; break; }   /* the boxes would overlap */
                 }
             }
         if (clash) continue;

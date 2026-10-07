@@ -64,8 +64,8 @@ void section_label(struct nk_context* ctx, float s, float row) {
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Text height in pixels");
         nk_property_float(ctx, "#size", 6.f, &G.label_px, 48.f, 1.f, 0.2f);
-        tip(ctx, "Least distance between labels, pixels; 0 shows every one (a carpet on a fine mesh)");
-        nk_property_float(ctx, "#spacing", 0.f, &G.label_spacing, 400.f, 5.f, 1.f);
+        tip(ctx, "The gap kept between labels, pixels; 0 shows every one, overlapping (a carpet on a fine mesh)");
+        nk_property_float(ctx, "#gap", 0.f, &G.label_spacing, 400.f, 2.f, 0.5f);
         tip(ctx, "Only the box selection's nodes and elements");
         if (nk_checkbox_label(ctx, "selection only", &G.label_sel_only)) app_label_changed();
         tip(ctx, "Only the probed element and its nodes (the Probe's labels box)");

@@ -57,7 +57,7 @@ static const setting S[] = {
     I(fail_crit, 0, CV_FC_N - 1), I(fail_out, 0, CV_FO_N - 1),
     SEC("Mesh quality field: 0 size, 1 shortest edge, 2 longest edge, 3 aspect ratio, 4 scaled Jacobian, 5 Jacobian ratio, 6 skewness, 7 smallest angle, 8 largest angle, 9 warpage, 10 shape factor"),
     I(mesh_q, 0, CV_MQ_N - 1), F(mesh_warn_pct, 0, 100),
-    SEC("Labels on the model: kind (0 none, 1 node id, 2 element id, 3 node value, 4 element value, 5 sets, 6 couplings, 7 loads, 8 supports, 9 materials), size px, spacing px, colours"),
+    SEC("Labels on the model: kind (0 none, 1 node id, 2 element id, 3 node value, 4 element value, 5 sets, 6 couplings, 7 loads, 8 supports, 9 materials), size px, gap px, colours"),
     I(label_kind, 0, CV_LABEL_N - 1), F(label_px, 6, 48), F(label_spacing, 0, 400), B(label_sel_only), B(label_probe_only),
     { "label_r", 'f', &G.label_rgb[0], 0, 1 }, { "label_g", 'f', &G.label_rgb[1], 0, 1 }, { "label_b", 'f', &G.label_rgb[2], 0, 1 },
     { "label_box_r", 'f', &G.label_box_rgba[0], 0, 1 }, { "label_box_g", 'f', &G.label_box_rgba[1], 0, 1 },

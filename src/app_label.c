@@ -87,6 +87,25 @@ static void pack(anchors* s, const float p[3], const float d[6], const float n[3
 static void anchor_add(const float p[3], const float d[6], const char* text) { pack(&A.a, p, d, NULL, UINT32_MAX, text); }
 static void anchor_ref(const float p[3], const float d[6], const float n[3], uint32_t ref) { pack(&A.a, p, d, n, ref, NULL); }
 
+/* the centre of an element (undeformed) */
+static void elem_centre(uint32_t e, float c[3]) {
+    const cv_frd* f = &G.frd;
+    uint32_t b = f->eoff[e], m = f->eoff[e + 1] - b;
+    c[0] = c[1] = c[2] = 0;
+    for (uint32_t j = 0; m && j < m; j++) for (int k = 0; k < 3; k++) c[k] += f->xyz[3 * f->conn[b + j] + k] / m;
+}
+
+/* the normal of a triangle a b c, turned to point away from the element it belongs to:
+   the skin's winding is not kept outward (the faces are shaded from screen derivatives) */
+static void tri_normal_out(const float* a, const float* b, const float* c, uint32_t e, float nn[3]) {
+    float e1[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, e2[3] = { c[0] - a[0], c[1] - a[1], c[2] - a[2] };
+    nn[0] = e1[1] * e2[2] - e1[2] * e2[1]; nn[1] = e1[2] * e2[0] - e1[0] * e2[2]; nn[2] = e1[0] * e2[1] - e1[1] * e2[0];
+    float ec[3], out[3];
+    elem_centre(e, ec);
+    for (int k = 0; k < 3; k++) out[k] = (a[k] + b[k] + c[k]) / 3 - ec[k];
+    if (nn[0] * out[0] + nn[1] * out[1] + nn[2] * out[2] < 0) for (int k = 0; k < 3; k++) nn[k] = -nn[k];
+}
+
 /* the surface normal at each skin node: the mean of its skin triangles' (undeformed), once
    per skin; a label whose node faces away from the eye is not drawn */
 static struct { float* n; const uint32_t* tri; size_t n_tri; } N;
@@ -97,9 +116,8 @@ static const float* node_normals(void) {
     const float* x = G.frd.xyz;
     for (size_t t = 0; t < G.skin.n_tri; t++) {
         const uint32_t* v = G.skin.tri + 3 * t;
-        const float *a = x + 3 * v[0], *b = x + 3 * v[1], *c = x + 3 * v[2];
-        float e1[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, e2[3] = { c[0] - a[0], c[1] - a[1], c[2] - a[2] };
-        float nn[3] = { e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0] };
+        float nn[3];
+        tri_normal_out(x + 3 * v[0], x + 3 * v[1], x + 3 * v[2], G.skin.tri_elem[t], nn);
         for (int j = 0; j < 3; j++) for (int k = 0; k < 3; k++) N.n[3 * v[j] + k] += nn[k];   /* area weighted */
     }
     N.tri = G.skin.tri; N.n_tri = G.skin.n_tri;
@@ -118,9 +136,7 @@ static void face_normal(uint32_t e, int face, float n[3]) {
     uint32_t c[4];
     n[0] = n[1] = n[2] = 0;
     if (cv_elem_face_corners(&G.frd, e, face, c) < 3) return;
-    const float *a = G.frd.xyz + 3 * c[0], *b = G.frd.xyz + 3 * c[1], *q = G.frd.xyz + 3 * c[2];
-    float e1[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, e2[3] = { q[0] - a[0], q[1] - a[1], q[2] - a[2] };
-    n[0] = e1[1] * e2[2] - e1[2] * e2[1]; n[1] = e1[2] * e2[0] - e1[0] * e2[2]; n[2] = e1[0] * e2[1] - e1[1] * e2[0];
+    tri_normal_out(G.frd.xyz + 3 * c[0], G.frd.xyz + 3 * c[1], G.frd.xyz + 3 * c[2], e, n);
 }
 
 /* the text of an anchor: its own, or its id / value formatted now */
@@ -351,6 +367,34 @@ static void build_anchors(void) {
 
 void app_label_changed(void) { G.label_gen++; }
 
+/* the widest text the labels of this build can have, px: ids by their largest id, values
+   by the legend's ends, names by the names themselves */
+static float widest_label(void) {
+    char t[64];
+    float w = 0;
+    switch (A.kind) {
+    case CV_LABEL_NODE: case CV_LABEL_ELEM: {
+        uint32_t big = 0;
+        const uint32_t* id = A.kind == CV_LABEL_NODE ? G.frd.node_id : G.frd.elem_id;
+        uint32_t n = A.kind == CV_LABEL_NODE ? G.frd.n_nodes : G.frd.n_elems;
+        for (uint32_t i = 0; i < n; i++) if (id[i] > big) big = id[i];
+        snprintf(t, sizeof t, "%u", big);
+        w = cv_label_width(&F.m, t);
+        if (A.probe_only) { snprintf(t, sizeof t, "el %u", big); w = CV_MAX(w, cv_label_width(&F.m, t)); }
+        break;
+    }
+    case CV_LABEL_VALUE: case CV_LABEL_EVALUE:
+        app_legend_fmt(t, sizeof t, G.rmin); w = cv_label_width(&F.m, t);
+        app_legend_fmt(t, sizeof t, G.rmax); w = CV_MAX(w, cv_label_width(&F.m, t));
+        app_legend_fmt(t, sizeof t, -G.rmax); w = CV_MAX(w, cv_label_width(&F.m, t));
+        break;
+    default:
+        for (uint32_t i = 0; i < A.a.n; i++)
+            if (A.a.toff.a[i] != UINT32_MAX) w = CV_MAX(w, cv_label_width(&F.m, A.a.txt.a + A.a.toff.a[i]));
+    }
+    return w;
+}
+
 /* ---- per frame: thin, lay out, upload when the camera or the anchors changed --------- */
 
 /* huge sets: one anchor per 3D cell about the spacing at the model's distance, so the
@@ -391,7 +435,10 @@ void app_label_frame(cv_draw* d) {
                  memcmp(last_clip, clip, sizeof clip) != 0;
     if (!rebuild && !moved && last_gen == G.label_gen && last_kind == G.label_kind) return;
 
-    float spacing = G.label_spacing * ui_scale();
+    /* the thinning box: the widest label plus the gap across, the text height plus it down */
+    float gap = G.label_spacing * ui_scale(), pad = 2 * ui_scale();
+    float bx = gap > 0 ? widest_label() + 2 * pad + gap : 0, by = gap > 0 ? F.m.height + 2 * pad + gap : 0;
+    float spacing = CV_MAX(bx, by);
     /* which anchors to project: all, or the coarse subset of a huge set */
     const uint32_t* ids = NULL; uint32_t n_ids = A.a.n;
     if (A.a.n > 200000 && spacing > 0) {
@@ -429,7 +476,7 @@ void app_label_frame(cv_draw* d) {
         np++;
     }
     uint32_t max_out = 20000;                     /* more than fits any screen: a cap for spacing 0 */
-    uint32_t n = cv_label_thin(pts, np, spacing, (float)d->vp_x, (float)d->vp_y, (float)d->vp_w, (float)d->vp_h, chosen, max_out);
+    uint32_t n = cv_label_thin(pts, np, bx, by, (float)d->vp_x, (float)d->vp_y, (float)d->vp_w, (float)d->vp_h, chosen, max_out);
     /* lay the chosen out: text a little right of and above the point */
     cv_fvec gly = {0}, box = {0};
     float dx = 4 * ui_scale(), dy = -(F.m.height + 3 * ui_scale());
