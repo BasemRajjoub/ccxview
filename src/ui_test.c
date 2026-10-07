@@ -219,6 +219,13 @@ static bool sel_hidden(struct nk_context* ctx) {
     return n > 1 && !G.sel_n;
 }
 static bool all_shown(struct nk_context* ctx) { return !G.hide; }
+static void symbols_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_SYMBOLS;
+    struct nk_window* w = nk_window_find(ctx, "Scene");
+    if (w) w->scrollbar.y = 0;
+}
+static bool thin_on(struct nk_context* ctx) { return G.sym_thin; }
+static void thin_off(struct nk_context* ctx) { G.sym_thin = false; sections_open(ctx); }
 static bool clipped(struct nk_context* ctx) { return G.clip_on && !G.menu_on; }
 static void unclip(struct nk_context* ctx) { G.clip_on = false; }
 /* the selection CSV beside the model: a header and a row per selected element */
@@ -477,6 +484,10 @@ static const step script[] = {
     AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Hide the"), CLICK, WAIT(10), EXPECT(sel_hidden, "the selection is hidden"),
     AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Show all"), CLICK, WAIT(10), EXPECT(all_shown, "everything shown again"),
     PANELS_ANSWER,
+
+    CASE("symbol sizes: thin crowded symbols"),
+    DO(symbols_open), WAIT(3), AT_TIP("Scene", "Where supports or loads crowd"), CLICK, EXPECT(thin_on, "thinning turns on"),
+    DO(thin_off), WAIT(2), PANELS_ANSWER,
 
     CASE("about: opened from the status bar"),
     AT_TIP("Status", "Who made ccxview"), CLICK, WAIT(2), EXPECT(about_shown, "the About window opens"),

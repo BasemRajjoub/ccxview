@@ -362,6 +362,7 @@ typedef struct {
     bool      sym_auto;              /* symbol size follows the model's size (else sym_size) */
     float     sym_size;              /* symbol size by hand, model units */
     float     sym_thick;             /* thickness of the symbols' lines, times the default (4.5 % of the symbol size) */
+    bool      sym_thin;              /* crowded supports and loads: one of a kind per patch of their size (off: every node) */
 
     /* file dialogs */
     char      exe_dir[1024];

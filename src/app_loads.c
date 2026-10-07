@@ -23,9 +23,10 @@
                        given temperature: a diamond; body heat: a zigzag block arrow
 
    A node in a *TRANSFORM has its DOFs along the local axes there, and its symbols
-   follow them. Symbols are sized within their own kind by magnitude. Where they
-   crowd (a symmetry plane held at every node of a fine mesh), one of a kind is
-   drawn per patch about its own size: an even pattern instead of a carpet. Every symbol is
+   follow them. Symbols are sized within their own kind by magnitude. Each node
+   gets its symbol; with "thin crowded" on, where they crowd (a symmetry plane held
+   at every node of a fine mesh) one of a kind is drawn per patch about its own
+   size: an even pattern instead of a carpet. Every symbol is
    made of round bodies, cones and tubes, that the GPU draws from one stored body
    (render.h, cv_render_inst): 15 numbers each, lit, readable from any side, never
    thinner than a pixel. All in world
@@ -142,7 +143,7 @@ static void moment(layer* l, const float at[3], const float dir[3], float len, c
 typedef struct { uint64_t* k; uint32_t cap, n; } thin;
 
 static bool thin_take(thin* t, const float p[3], float cell, uint32_t kind) {
-    if (!(cell > 0)) return true;
+    if (!G.sym_thin || !(cell > 0)) return true;     /* off: a symbol at every node, as the deck says */
     if (2 * (t->n + 1) > t->cap) {                  /* grow, rehash */
         uint32_t cap = t->cap ? 2 * t->cap : 1024;
         uint64_t* k = calloc(cap, sizeof *k);

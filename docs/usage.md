@@ -29,6 +29,7 @@ ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the vi
 ccxview model.frd --find 120 --details      # probe node 120, its Details window open
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
+ccxview model.inp --opt sym_thin=1          # crowded supports and loads thinned to a pattern
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
 ccxview model.frd --opt key=value           # any setting of ccxview.ini for this run
 ccxview model.frd --software                # CPU rendering

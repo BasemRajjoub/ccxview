@@ -48,6 +48,10 @@ static void symbol_sizes(struct nk_context* ctx, float s, float row) {
             if (v != G.sym_size && v > 0) { G.sym_size = v; app_symbol_size(); }
         }
         ch |= scale_slider(ctx, row, "thickness", "Thickness of the symbols' lines, times the default", &G.sym_thick, 0.2f, 5.f);
+        nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "Where supports or loads crowd (a plane held at every node of a fine mesh),\n"
+                 "draw one of a kind per patch of their own size. Off: one at every node");
+        ch |= nk_checkbox_label(ctx, "thin crowded symbols", &G.sym_thin);
         if (G.sym_thick < 0) G.sym_thick = 1.f;
         if (deck_has_bc() || deck_has_discrete()) {
             ch |= scale_slider(ctx, row, "supports", "Supports, springs and masses, times the symbol size", &G.bc_scale, 0.1f, 10.f);
