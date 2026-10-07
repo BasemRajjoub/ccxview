@@ -772,7 +772,11 @@ static void event(const sapp_event* ev) {
     bool over_ui = g_nk && ui_mouse_captured(g_nk, wheel);
     /* Nuklear scrolls its active window wherever the mouse is: a wheel turn over the
        3D view is the view's alone, or the sidebar would scroll while the model zooms */
-    bool nk_busy = wheel && !over_ui ? false : snk_handle_event(ev);
+    bool handled = wheel && !over_ui ? false : snk_handle_event(ev);
+    /* Nuklear counts a hovered display-only overlay (the ids, the navigation mark) as its
+       own, so with one up every press in the view was taken for the interface. A press is
+       the view's unless a window that takes input is under it or a text box is being edited. */
+    bool nk_busy = handled && (over_ui || (g_nk && ui_text_focus(g_nk)));
 
     switch (ev->type) {
         case SAPP_EVENTTYPE_FILES_DROPPED:
