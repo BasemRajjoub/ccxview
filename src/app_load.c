@@ -210,11 +210,12 @@ void unload(void) {
     for (int k = 0; k < 3; k++) G.legend_lines[k][0] = 0;
 }
 
-/* Default: von Mises if there is stress, else |DISP|, else the first field. */
+/* Default: |DISP| when there is one (the first look is whether it moved as expected,
+   #24), else von Mises, else the first field. */
 static void pick_default_field(void) {
     G.field_name[0] = 0;
     const cv_step* s = &G.frd.steps[G.step];
-    const char* pref[] = { "STRESS", "DISP", "NDTEMP" };
+    const char* pref[] = { "DISP", "STRESS", "NDTEMP" };
     for (int p = 0; p < 3 && !G.field_name[0]; p++)
         for (int i = 0; i < s->nfields; i++)
             if (strcmp(s->fields[i].name, pref[p]) == 0) {

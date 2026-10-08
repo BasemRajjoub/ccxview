@@ -115,13 +115,14 @@ static uint8_t* box_nodes(float x0, float y0, float x1, float y1) {
 
 /* the side facing the camera: per node 1 when a skin triangle of its turns toward the
    eye, per element 1 when one of its does; a shell counts from both sides, and an element
-   without a face on the skin (a beam, an interior one) is left as 2: "no face to judge by".
+   beam (no face to judge by) is 2; an interior solid element has no face toward the eye: 0.
    Triangles are oriented outward from the element's centre, as drawn (deformed). */
 static void facing(uint8_t* node, uint8_t* elem) {
     const cv_frd* f = &G.frd;
     const cv_skin* s = &G.skin;
     uint32_t N = f->n_nodes, E = f->n_elems;
-    memset(node, 0, N); memset(elem, 2, E);
+    memset(node, 0, N); memset(elem, 0, E);
+    for (uint32_t e = 0; e < E; e++) if (f->etype[e] == 11 || f->etype[e] == 12) elem[e] = 2;   /* beams: no face to judge by */
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
     v3 eye, fwd, right, up;
     cam_basis(&G.cam, &eye, &fwd, &right, &up);

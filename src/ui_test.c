@@ -292,6 +292,8 @@ static bool box_found(struct nk_context* ctx) {
 }
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
+static bool symbols_off(struct nk_context* ctx) { return !G.show_bc && !G.show_loads && !G.show_links && !G.show_disc; }
+static bool symbols_on(struct nk_context* ctx) { return G.show_bc && G.show_loads && G.show_links && G.show_disc; }
 static bool edges_toggled(struct nk_context* ctx) { return G.show_edges != was.edges; }
 static bool units_changed(struct nk_context* ctx) { return G.units != was.units; }
 static bool units_shown(struct nk_context* ctx) { return G.show_units && win_of(ctx, "Units"); }
@@ -473,6 +475,8 @@ static const step script[] = {
 
     CASE("sidebar and toolbar tick boxes"),
     PANELS_ANSWER,
+    AT_TIP("Toolbar", "Every symbol layer at once"), CLICK, WAIT(2), EXPECT(symbols_off, "one box hides every symbol layer"),
+    AT_TIP("Toolbar", "Every symbol layer at once"), CLICK, WAIT(2), EXPECT(symbols_on, "and shows them all again"),
 
     CASE("wheel: scrolls the sidebar under it, zooms the view under it"),
     DO(sections_open), WAIT(2), DO(snapshot), AT_WIN("Scene", 0.5f, 0.5f), WHEEL(-3), WAIT(2),

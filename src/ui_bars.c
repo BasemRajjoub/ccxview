@@ -56,7 +56,7 @@ void cmap_combo(struct nk_context* ctx, float s, float row) {
    looks (colormap, bands, range) below. Camera controls live in the View tree. */
 void panel_toolbar(struct nk_context* ctx, float s, float row) {
     /* line 1: deformation */
-    nk_layout_row_begin(ctx, NK_STATIC, row, 10);
+    nk_layout_row_begin(ctx, NK_STATIC, row, 13);
     nk_layout_row_push(ctx, 80 * s);
     tip(ctx, "Draw the shape displaced by DISP x scale");
     nk_checkbox_label(ctx, "Deform", &G.deform);
@@ -90,6 +90,15 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     uii_vsep(ctx);
     nk_layout_row_push(ctx, 64 * s);
     if (nk_button_label(ctx, IC_SCAN "  Fit")) app_fit();
+    nk_layout_row_push(ctx, 24 * s);
+    uii_vsep(ctx);
+    nk_layout_row_push(ctx, 90 * s);
+    {   /* supports, loads, couplings and springs with one box: a picture with them, then a
+           look at the stresses without; the Layers panel keeps each on its own */
+        nk_bool any = G.show_bc || G.show_loads || G.show_links || G.show_disc;
+        tip(ctx, "Every symbol layer at once: supports, loads, couplings, springs (Layers: each on its own)");
+        if (nk_checkbox_label(ctx, "Symbols", &any)) G.show_bc = G.show_loads = G.show_links = G.show_disc = any;
+    }
     nk_layout_row_end(ctx);
 
     /* line 2: colours */
