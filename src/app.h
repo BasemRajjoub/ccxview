@@ -327,6 +327,7 @@ typedef struct {
     uint32_t  seln_n;
     bool      sel_elems, sel_nodes;  /* what a box selects: elements, nodes, or both */
     bool      sel_visible;           /* only the side facing the camera: nodes on faces turned toward it, elements with such a face */
+    bool      sel_mark_max, sel_mark_min;   /* the balls on the selection's extremes (the values are in the probe either way) */
     uint8_t*  sel_inside;            /* per node, 1: it was in the last box (as dragged), to select again when they change */
     uint8_t*  sel_front;             /* per node, 1: on a face turned toward the camera as the box was dragged; NULL: not judged */
     uint8_t*  sel_front_e;           /* per element: 1 such a face, 0 none turned this way, 2 no face on the skin */

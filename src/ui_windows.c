@@ -74,12 +74,17 @@ void ui_sel_what(struct nk_context* ctx, float row) {
     tip(ctx, "Nodes inside the box; the max and min are then taken over them");
     nk_checkbox_label(ctx, "nodes", &G.sel_nodes);
     if (!G.sel_elems && !G.sel_nodes) { if (e) G.sel_nodes = true; else G.sel_elems = true; }   /* never nothing */
-    bool vis = G.sel_visible;
-    nk_layout_row_dynamic(ctx, row, 1);
+    bool vis = G.sel_visible, mx = G.sel_mark_max, mn = G.sel_mark_min;
+    nk_layout_row_dynamic(ctx, row, 3);
     tip(ctx, "Only the side facing you: nodes on faces turned toward the camera, elements with such a face.\n"
              "Off: everything inside the box, through the model");
     nk_checkbox_label(ctx, "facing side only", &G.sel_visible);
+    tip(ctx, "A red ball on the selection's maximum");
+    nk_checkbox_label(ctx, "mark max", &G.sel_mark_max);
+    tip(ctx, "A blue ball on the selection's minimum (compression, the cold spot); the value is in the probe either way");
+    nk_checkbox_label(ctx, "mark min", &G.sel_mark_min);
     if (e != G.sel_elems || n != G.sel_nodes || vis != G.sel_visible) app_box_reselect();
+    else if (mx != G.sel_mark_max || mn != G.sel_mark_min) app_sel_refresh();
 }
 
 void window_probe(struct nk_context* ctx, float s, float row) {

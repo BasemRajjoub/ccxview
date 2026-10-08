@@ -204,6 +204,7 @@ static void nodes_off(struct nk_context* ctx) { G.sel_nodes = false; G.sel_elems
 static uint32_t seln_was;
 static void remember_nodes(struct nk_context* ctx) { seln_was = G.seln_n; }
 static bool nodes_more(struct nk_context* ctx) { return !G.sel_visible && G.seln_n > seln_was; }
+static bool min_marked(struct nk_context* ctx) { return G.sel_mark_min && G.boxq.on; }
 static void remember_nodes_turn(struct nk_context* ctx) { seln_was = G.seln_n; G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }
 static bool nodes_kept(struct nk_context* ctx) { return !G.sel_elems && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
 static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
@@ -412,6 +413,8 @@ static const step script[] = {
     AT_TIP("Probe", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
     DO(remember_nodes), AT_TIP("Probe", "Only the side facing you"), CLICK, WAIT(2), EXPECT(nodes_more, "through the model: more nodes"),
     AT_TIP("Probe", "Only the side facing you"), CLICK, WAIT(2),
+    AT_TIP("Probe", "A blue ball on the selection's minimum"), CLICK, WAIT(2), EXPECT(min_marked, "the min gets its ball"),
+    AT_TIP("Probe", "A blue ball on the selection's minimum"), CLICK, WAIT(2),
     DO(remember_nodes_turn), WAIT(2), AT_TIP("Probe", "Elements: drag left to right"), CLICK, WAIT(2),
     EXPECT(nodes_kept, "unticking elements after a turn keeps the same nodes, no elements"),
     DO(nodes_off), WAIT(2),

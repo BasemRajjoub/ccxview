@@ -41,7 +41,7 @@ static void marker(int which, uint32_t i, bool elem) {
 }
 
 /* what shows the selection: the elements' outer faces toned yellow and outlined, the
-   nodes as magenta dots, the max and min as red and blue balls; moves with the shape */
+   nodes as magenta dots, the max and min as red and blue balls when asked; moves with the shape */
 void app_sel_refresh(void) {
     sel_upload_none();
     if (!G.loaded || (!G.sel_n && !G.seln_n)) return;
@@ -79,7 +79,8 @@ void app_sel_refresh(void) {
     }
     cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(val);
     if (G.boxq.on && G.boxq.gen == G.field_gen) {
-        marker(CV_AUX_SELMAX, G.boxq.max_at, G.boxq.elem);   /* the min stays in the Details: it sits on the selection's rim */
+        if (G.sel_mark_max) marker(CV_AUX_SELMAX, G.boxq.max_at, G.boxq.elem);
+        if (G.sel_mark_min) marker(CV_AUX_SELMIN, G.boxq.min_at, G.boxq.elem);   /* off by default: on a selection it sits on the rim */
     }
 }
 
