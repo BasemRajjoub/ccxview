@@ -37,6 +37,18 @@ Second row: the field and component lists. Status bar: the units button also sho
 the display units when they differ. Mirror, replicate, cyclic, compare, background
 picker, probe tools stay in the panels. Plan posted in the issue, 8 Oct 2026.
 
+## Selection window
+One floating "Selection" window instead of the rows in the Probe: how (new / add /
+remove / intersect; box, click, lasso, face by crease angle from the feature edges,
+edge chain, connected part, grow / shrink, invert, nodes <-> elements, boundary),
+filters (facing side, coordinate ranges x y z or r theta z about an axis, field
+above / below a value or the top N %, element type, material), by name (the Groups
+entries with select / add / remove, an id list "1-100, 205"), use (summary with the
+extremes and the sets, hide / isolate, save as a named selection in the sidecar
+and as *NSET / *ELSET, CSV, history over it, labels, clip or crop to it). About a
+week in four blocks; the first (window, modes, by name, by id, invert, conversions)
+is the one that matters. Evaluated 8 Oct 2026.
+
 ## #19 Shell section forces
 A Fields subgroup "Shell forces": Nxx Nyy Nxy, Mxx Myy Mxy, Qx Qy per unit width,
 from the nodal stresses of the expanded shell elements (cv_elemmap gives the
