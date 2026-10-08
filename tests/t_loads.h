@@ -121,7 +121,7 @@ static void test_loads(void) {
         CHECK(cv_inp_parse(&c, buf, (size_t)n, NULL, NULL));
         for (size_t i = 0; i < c.msgs.n; i++) CHECK(!strstr(c.msgs.a[i].text, "could not be read"));
         CHECK_EQ(c.nsteps, 3);
-        CHECK_EQ(c.npret, 2);
+        CHECK_EQ(c.npret, 3);                        /* two bolts and one buried in a block */
         CHECK_EQ(c.ntransforms, 1);
         cv_applied h, m, l;                          /* heat step, all loads, the last step */
         CHECK(cv_inp_applied(&c, 0, &h) && cv_inp_applied(&c, 1, &m) && cv_inp_applied(&c, 2, &l));
@@ -132,7 +132,12 @@ static void test_loads(void) {
         CHECK(forces == 0 && heat == 2);
         forces = 0;
         for (uint32_t i = 0; i < m.ncloads; i++) { forces += m.cloads[i].dof <= 3; moments += m.cloads[i].dof >= 4 && m.cloads[i].dof <= 6; }
-        CHECK(forces > 10 && moments == 2);
+        CHECK(forces > 10 && moments == 3);          /* two on beams, one on a rigid body's ROT NODE */
+        {   /* the last step holds the first bolt's preload (*BOUNDARY, FIXED on its reference node) */
+            bool held = false;
+            for (uint32_t i = 0; i < l.nbcs; i++) held |= l.bcs[i].node == c.pret[0].ref;
+            CHECK(held);
+        }
         CHECK(t_dloads(&m, CV_DL_EDGE) == 1 && t_dloads(&m, CV_DL_P) >= 5);
         CHECK(t_body(&m, CV_BL_GRAV) && t_body(&m, CV_BL_CENTRIF) && m.ntemps == 4);
         bool prescribed = false;

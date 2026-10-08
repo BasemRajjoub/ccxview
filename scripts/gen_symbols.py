@@ -11,10 +11,12 @@ along X, one row per family along Y:
                       held temperature, supports and a force in a cylindrical *TRANSFORM
   row 1  loads        force, moment, pressure (*DLOAD), surface pressure (*DSLOAD),
                       shell edge load, pressure on a plane element's edge, gravity,
-                      centrifugal, body force, two bolts (*PRE-TENSION SECTION)
+                      centrifugal, body force, two bolts (*PRE-TENSION SECTION; the first
+                      held in the last step), a bolt buried in a block
   row 2  thermal      *CFLUX, *DFLUX, *FILM, *RADIATE, *TEMPERATURE, body heat (BF)
   row 3  constraints  rigid body, kinematic and distributing coupling, *EQUATION, *MPC,
-                      *TIE, *CONTACT PAIR, spring, dashpot, mass, gap
+                      *TIE, *CONTACT PAIR, spring, dashpot, mass, gap, a rigid body turned
+                      by a moment on its ROT NODE
 Step 1 (*HEAT TRANSFER) holds the thermal loads; CalculiX keeps them through the later
 steps. Step 2 (*STATIC) adds every mechanical load. Step 3 (*STATIC) drops all point
 loads (*CLOAD, OP=NEW) but one force, turned round and doubled, and adds a pressure:
@@ -161,6 +163,27 @@ if "bolt" not in OMIT:
         model += [f"*SURFACE, NAME=SCUT{k}", f"{e_lo}, S2",
                   f"*PRE-TENSION SECTION, SURFACE=SCUT{k}, NODE={ref}", "0., 0., 1."]
         step1 += (["*CLOAD", f"{ref}, 1, {50. * (k + 1)}"])
+        if k == 0: step2 += ["*BOUNDARY, FIXED", f"{ref}, 1, 1"]   # the first bolt: its preload held in the last step
+
+if "bolt" not in OMIT:                 # a bolt buried in a block: the section inside the solid, the symbol drawn in front
+    x, y, z = at(11, 1)
+    g = {}                             # a 4 x 4 x 3 node grid, cubes sharing nodes; the centre column is the bolt
+    for i in range(4):
+        for j in range(4):
+            for k in range(3):
+                g[i, j, k] = node(x + i * D / 3, y + j * D / 3, z + k * D / 2)
+    e_cut = None
+    for i in range(3):
+        for j in range(3):
+            for k in range(2):
+                c = [g[i, j, k], g[i + 1, j, k], g[i + 1, j + 1, k], g[i, j + 1, k],
+                     g[i, j, k + 1], g[i + 1, j, k + 1], g[i + 1, j + 1, k + 1], g[i, j + 1, k + 1]]
+                e = elem("C3D8", c, "L12_BOLT_IN_BLOCK")
+                if i == 1 and j == 1 and k == 0: e_cut = e
+    held([g[i, j, 0] for i in range(4) for j in range(4)])
+    ref = node(x + D / 2, y + D / 2, z + D + 6)
+    model += ["*SURFACE, NAME=SCUT2", f"{e_cut}, S2", f"*PRE-TENSION SECTION, SURFACE=SCUT2, NODE={ref}", "0., 0., 1."]
+    step1 += ["*CLOAD", f"{ref}, 1, 80."]
 
 # ---- row 2: thermal loads (step 1) ---------------------------------------------------
 c, _ = cube(0, 2, "T1_NODE_HEAT")
@@ -212,6 +235,15 @@ ref = node(x + D / 2, y + D / 2, D + 5)
 model += ["*SURFACE, NAME=SDIS", f"{e}, S2", f"*COUPLING, REF NODE={ref}, SURFACE=SDIS, CONSTRAINT NAME=DIS",
           "*DISTRIBUTING", "1, 3"]
 step1 += ["*CLOAD", f"{ref}, 3, -5."]
+
+c, _ = cube(8, 3, "C12_RIGID_BODY_ROT")              # a rigid top turned by a moment on its ROT NODE
+held(c[:4])
+x, y, z = at(8, 3)
+ref = node(x + D / 2, y + D / 2, D + 5)
+rot = node(x + D / 2, y + D / 2, D + 5)
+nset("NRIGID2", c[4:])
+model += [f"*RIGID BODY, NSET=NRIGID2, REF NODE={ref}, ROT NODE={rot}"]
+step1 += ["*CLOAD", f"{rot}, 3, 30."]
 
 a, _ = cube(3, 3, "C4_EQUATION")                    # two tops tied in z by an equation
 held(a[:4])
