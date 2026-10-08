@@ -112,7 +112,9 @@ void cv_render_aux2(int which, const float* pos, const float* disp, const float*
 /* CV_INST_TENS / COMP: the bars of the principal cross in tension / compression */
 /* CV_INST_TRAJ1 / TRAJ3: principal stress trajectories of S1 / S3 */
 enum { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_DISC, CV_INST_LINK, CV_INST_VEC,
-       CV_INST_TENS, CV_INST_COMP, CV_INST_TRAJ1, CV_INST_TRAJ3, CV_INST_N };
+       CV_INST_TENS, CV_INST_COMP, CV_INST_TRAJ1, CV_INST_TRAJ3, CV_INST_BOLTLD, CV_INST_BOLTBC, CV_INST_N };
+/* BOLTLD / BOLTBC: bolt preloads (load colour) and held bolts (support colour), drawn in
+   front of everything: a pretension section lies inside the bolt */
 #define CV_INST_FLOATS 21
 void cv_render_inst(int which, const float* inst, uint32_t n);
 

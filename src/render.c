@@ -1033,7 +1033,7 @@ static void draw_glyphs(int mode, const float rgb[3], const cv_draw* d, sg_view 
 }
 
 /* a layer of symbols, lit; min_px: the least radius on screen; cmap: the colour map texture */
-static void draw_inst_map(int which, int mode, const float rgb[3], const cv_draw* d, float min_px, sg_view cmap) {
+static void draw_inst_map(int which, int mode, const float rgb[3], const cv_draw* d, float min_px, sg_view cmap, bool on_top) {
     if (!I[which].n) return;
     int lod = I[which].n > 30000 ? 1 : 0;       /* great numbers: six sides, one end disc */
     sg_apply_pipeline(R.pip_inst);
@@ -1043,12 +1043,12 @@ static void draw_inst_map(int which, int mode, const float rgb[3], const cv_draw
         .samplers = { [0] = R.smp_lin, [1] = R.smp_near },
     };
     sg_apply_bindings(&b);
-    uniforms(d, true, true, mode, rgb, true, min_px, false, 0.f);
+    uniforms(d, true, true, mode, rgb, true, min_px, on_top, 0.f);
     sg_draw(0, R.body_n[lod], (int)I[which].n);
 }
 
 static void draw_inst(int which, int mode, const float rgb[3], const cv_draw* d, float min_px) {
-    draw_inst_map(which, mode, rgb, d, min_px, R.cmap_view);
+    draw_inst_map(which, mode, rgb, d, min_px, R.cmap_view, false);
 }
 
 void cv_render_draw(const cv_draw* d) {
@@ -1162,11 +1162,15 @@ void cv_render_draw(const cv_draw* d) {
         static const float link_rgb[3] = { 0.55f, 0.95f, 0.45f }, disc_rgb[3] = { 0.80f, 0.45f, 0.95f },
                            vec_rgb[3] = { 0.95f, 0.95f, 0.95f };
         const float px = 0.6f;                    /* the least radius of a stroke on screen */
-        if (d->supports) draw_inst(CV_INST_BC, CV_COLOR_SOLID, bc_rgb, d, px);
+        if (d->supports) {
+            draw_inst(CV_INST_BC, CV_COLOR_SOLID, bc_rgb, d, px);
+            draw_inst_map(CV_INST_BOLTBC, CV_COLOR_SOLID, bc_rgb, d, px, R.cmap_view, true);   /* inside the bolt: in front */
+        }
         if (d->loads) {
             draw_inst(CV_INST_LD, CV_COLOR_SOLID, ld_rgb, d, px);
             draw_inst(CV_INST_MOM, CV_COLOR_SOLID, mom_rgb, d, px);
             draw_inst(CV_INST_HEAT, CV_COLOR_SOLID, heat_rgb, d, px);
+            draw_inst_map(CV_INST_BOLTLD, CV_COLOR_SOLID, ld_rgb, d, px, R.cmap_view, true);
         }
         if (d->vectors) draw_inst(CV_INST_VEC, d->vectors_color, vec_rgb, d, px);
         {   /* tensor glyphs, the cross and the trajectories. Coloured by sign: blue -lim, pale 0, red +lim */
@@ -1178,12 +1182,12 @@ void cv_render_draw(const cv_draw* d) {
             if (d->tensors) {
                 if (d->glyph_signed && sg) draw_glyphs(CV_COLOR_NODAL, glyph_rgb, &c, R.div_view);
                 else draw_glyphs(d->glyph_signed ? CV_COLOR_SOLID : d->tensors_color, glyph_rgb, d, R.cmap_view);
-                draw_inst_map(CV_INST_TENS, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, ten_rgb, sg ? &c : d, px, R.div_view);
-                draw_inst_map(CV_INST_COMP, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, cmp_rgb, sg ? &c : d, px, R.div_view);
+                draw_inst_map(CV_INST_TENS, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, ten_rgb, sg ? &c : d, px, R.div_view, false);
+                draw_inst_map(CV_INST_COMP, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, cmp_rgb, sg ? &c : d, px, R.div_view, false);
             }
             if (d->traj) {
-                draw_inst_map(CV_INST_TRAJ1, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, ten_rgb, sg ? &c : d, px, R.div_view);
-                draw_inst_map(CV_INST_TRAJ3, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, cmp_rgb, sg ? &c : d, px, R.div_view);
+                draw_inst_map(CV_INST_TRAJ1, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, ten_rgb, sg ? &c : d, px, R.div_view, false);
+                draw_inst_map(CV_INST_TRAJ3, sg ? CV_COLOR_NODAL : CV_COLOR_SOLID, cmp_rgb, sg ? &c : d, px, R.div_view, false);
             }
         }
         if (d->links) draw_inst(CV_INST_LINK, CV_COLOR_SOLID, link_rgb, d, px);

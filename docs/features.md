@@ -105,7 +105,8 @@ with a symbol of its own: held and prescribed degrees of freedom, forces,
 moments, pressures, edge loads, gravity, centrifugal load, bolt preload, heat
 flux, film, radiation, given temperatures, springs, dashpots, masses, gaps,
 couplings, equations and MPCs. Symbols are solid, sized from the model, and
-follow the deformed shape. [keywords.md](keywords.md) lists every keyword read
+follow the deformed shape; a bolt's preload sits on its section inside the
+bolt, so it is drawn in front of the faces. [keywords.md](keywords.md) lists every keyword read
 and what is drawn for it; `samples/symbols/` shows them all.
 
 ## Looking at results
@@ -117,8 +118,10 @@ and what is drawn for it; `samples/symbols/` shows them all.
   displacement, every component of the field, the element's material, sets
   and nodes.
 - Box selection as in CAD (Ctrl+Shift+drag): left to right the elements wholly
-  inside, right to left every element touched; highlighted, with the field's
-  max and min over them.
+  inside, right to left every element touched; by default only the side facing
+  the camera (nodes on faces turned toward it, elements with such a face), or
+  through the model; highlighted, with the field's max over them marked and the
+  min in the details.
 - ASME VIII-2 stress linearization along a line through the wall: membrane,
   membrane + bending, peak and total at both ends and their largest value on the
   line; bending from the components normal to the line as 5-A.4.1.2 asks, or

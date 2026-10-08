@@ -456,9 +456,9 @@ static bool bolt_at(const cv_inp* dk, const cv_pretension* t, float cen[3], floa
 }
 
 void loads_refresh(void) {
-    layer bc = {{0}}, ld = {{0}}, mo = {{0}}, ht = {{0}};
-    layer* all[4] = { &bc, &ld, &mo, &ht };
-    for (int k = 0; k < 4; k++) all[k]->T = deck_stroke();
+    layer bc = {{0}}, ld = {{0}}, mo = {{0}}, ht = {{0}}, bl = {{0}}, bb = {{0}};   /* bl, bb: bolts, drawn in front */
+    layer* all[6] = { &bc, &ld, &mo, &ht, &bl, &bb };
+    for (int k = 0; k < 6; k++) all[k]->T = deck_stroke();
     const cv_inp* dk = G.loaded ? deck_get() : NULL;
     const cv_applied* a = applied(dk);
     label_sink_begin(G.label_kinds);
@@ -611,7 +611,7 @@ void loads_refresh(void) {
             /* a ring round the section, outside the body, and on it pairs of arrows along
                the axis: meeting at the cut when tightened, parting when loosened. Held:
                the support colour; locked (no value) with clamp bars across the section */
-            layer* l = force ? &ld : &bc;
+            layer* l = force ? &bl : &bb;                /* the section lies inside the bolt: its own layer, in front */
             float len = force ? LL * rel(v, tmax) : LL, r = rad > 0 ? 1.12f * rad : 0.45f * len;
             for (int k = 0; k < 3; k++) back[k] = -ax[k];
             frame(ax, u, w);
@@ -647,8 +647,8 @@ void loads_refresh(void) {
         for (uint32_t i = 0; i < a->ntemps; i++)
             if (deck_node_pd(a->temps[i].node, p, d)) diamond(&ht, p, 0.3f * L, d);
     }
-    static const int which[4] = { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT };
-    for (int k = 0; k < 4; k++) {
+    static const int which[6] = { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_BOLTLD, CV_INST_BOLTBC };
+    for (int k = 0; k < 6; k++) {
         cv_render_inst(which[k], all[k]->in.a, (uint32_t)(all[k]->in.n / CV_INST_FLOATS));
         cv_free_vec(all[k]->in);
     }
