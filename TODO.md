@@ -30,6 +30,18 @@ same reader as the settings), loaded when the .frd opens, saved on change.
 
 Dropped: animation once, solid undeformed ghost, set area / volume / mass summary.
 
+## #19 Shell section forces
+A Fields subgroup "Shell forces": Nxx Nyy Nxy, Mxx Myy Mxy, Qx Qy per unit width,
+from the nodal stresses of the expanded shell elements (cv_elemmap gives the
+shell, layer, thickness and local axes of each): stresses turned into the
+shell's local system, integrated through the thickness (two points for linear,
+three for quadratic shells; N = int s dz, M = int s z dz, Q = int tau dz),
+layers summed, averaged at the shell nodes, written on bottom and top nodes so
+the contour sits on the expanded shell. Headless shell.c + t_shell.h (a
+cantilever plate with a known root moment), --field key, units N/mm and
+N mm/mm. Later: reinforcement design from them (Wood-Armer / Capra-Maury, as
+Code_Aster's CALC_FERRAILLAGE). Plan posted in the issue, 8 Oct 2026.
+
 ## Movable labels
 Drag a label on the model to where it reads best. Hit test on the laid-out
 boxes (screen space, kept per frame); the press wins over the camera as a
