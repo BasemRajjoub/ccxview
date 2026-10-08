@@ -568,6 +568,8 @@ static void section_export(struct nk_context* ctx, float s, float row) {
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "The 3D view with legend and axes as <model>_stepN.png beside the model, numbered, never overwritten");
     if (nk_button_label(ctx, "Image of the view (Ctrl+E)")) app_export_png();
+    tip(ctx, "The PNG with a transparent background: only the model, legend and axes on the page");
+    nk_checkbox_label(ctx, "transparent background", &G.png_alpha);
 
     /* animation: what loops, in which form, how long */
     nk_layout_row_dynamic(ctx, row, 2);

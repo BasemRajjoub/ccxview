@@ -178,6 +178,8 @@ typedef struct {
     int       exp_cycles;            /* deformation cycles recorded */
     int       exp_fps;               /* frames per second of a video / cycle */
     bool      exp_lock_range;        /* keep the colour range fixed while recording */
+    bool      png_alpha;             /* the PNG of the view with a transparent background */
+    int       png_alpha_arm;         /* frames drawn with the background cleared to alpha 0 before the export reads them */
     int       tree[CV_TREE_N];       /* CV_TREE_*: panel section expanded (nk_collapse_states) */
     int       seq_warm;              /* frames to let pass before recording: the arming frame is drawn with the old state */
     void*     video;                 /* an MP4 being written (cv_video*), frames of the sequence go there */
@@ -393,6 +395,7 @@ typedef struct {
     char      browse_dir[1024];
     bool      show_help;
     bool      hide_legend, hide_axes; /* View: legend and axes gizmo off */
+    bool      legend_box;            /* a white box with a border behind the legend, for pictures on a page */
     bool      hide_panels;           /* H: the 3D view alone, for screenshots */
     /* legend look (right-click the legend) */
     bool      legend_reverse;        /* colour map turned around */

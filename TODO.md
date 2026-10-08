@@ -11,31 +11,19 @@ same reader as the settings), loaded when the .frd opens, saved on change.
 
 ## From PrePoMax, agreed 7 Oct 2026 (in this order)
 
-1. Deformation scale presets: a list beside the scale box: true, auto, auto x0.25,
-   x0.5, x2, x5, user.
-2. Colour maps not yet in the list: Cividis, Plasma, Black body, Kindlmann,
-   Rainbow desaturated, Warm, Cool (tables for make_cmap).
-3. Legend background and border (none by default; white for pictures on a page).
-4. Transparent background in the PNG (a checkbox in the export; the swapchain
-   cleared to alpha 0 and the PNG written with alpha). White background preset
-   exists already.
-5. Measurements as labels (the label system): distance between two nodes with
+Done 8 Oct: deformation scale presets, the colour maps, the legend box, the
+transparent PNG.
+
+1. Measurements as labels (the label system): distance between two nodes with
    dx dy dz, angle through three nodes, circle radius and centre through three;
    deformed and undeformed values.
-6. Integrals of a field as history: surface integral over a set of faces (total
+2. Integrals of a field as history: surface integral over a set of faces (total
    force from a pressure or a reaction), volume integral and volume average over
    an element set. The volume average is the homogenised value of an RVE
    (<s> = 1/V sum s_e V_e, <e> likewise), so a set's homogenised stress and strain
    per step come out of the same code; a CSV of them.
 
 Dropped: animation once, solid undeformed ghost, set area / volume / mass summary.
-
-## #14 Top bar
-Right of Fit: a View list (Iso, +X .. -Z), ortho, Clip on/off, Section only (while
-clipped), Undeformed, a PNG button, a "white" box (white background, dark text).
-Second row: the field and component lists. Status bar: the units button also shows
-the display units when they differ. Mirror, replicate, cyclic, compare, background
-picker, probe tools stay in the panels. Plan posted in the issue, 8 Oct 2026.
 
 ## Selection window
 One floating "Selection" window instead of the rows in the Probe: how (new / add /
@@ -77,14 +65,6 @@ Sergio: parts of the assembly that were not simulated, for the picture. STL is
 simple (binary and ASCII, a triangle list; no ids, no results): a mesh-only
 layer with show / hide and transparency, listed in Groups, remembered by the
 sidecar (#5). Answered: doable, but held while labels and the sidecar land.
-
-## #6 Mesh quality report and field
-Aspect ratio, skewness, Jacobian ratio, volume ratio, warpage per element;
-a summary report and a per-element field to colour the model. User-set
-limits good / warning / bad, and a tolerated percentage of bad elements
-(bad elements away from hot spots are a warning, not a failure). Reference:
-https://github.com/eigemx/neatmesh. Headless module (quality.c + t_quality.h),
-a Fields entry "Mesh quality", a report window.
 
 ## #2 Keywords and results coverage
 Supports and loads follow the step on screen, with a symbol per kind

@@ -146,7 +146,7 @@ static void check_always(struct nk_context* ctx) {
 }
 
 /* ---- the script's own state and checks ------------------------------------------- */
-static struct { int cmap, bands, faces_mode, units, cyc_axis, tensor_style, traj_which; bool deform, markers, edges; float dist, scroll; cv_camera cam; } was;
+static struct { int cmap, bands, faces_mode, units, cyc_axis, tensor_style, traj_which, comp; bool deform, markers, edges; float dist, scroll; cv_camera cam; } was;
 
 static void close_all(struct nk_context* ctx) {
     struct nk_window* sc = nk_window_find(ctx, "Scene");     /* every case starts with the sidebar at its top */
@@ -159,7 +159,7 @@ static void close_all(struct nk_context* ctx) {
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
     was.tensor_style = G.tensor_style; was.traj_which = G.traj_which;
-    was.deform = G.deform; was.markers = G.show_markers; was.edges = G.show_edges;
+    was.deform = G.deform; was.markers = G.show_markers; was.edges = G.show_edges; was.comp = G.comp;
     was.cam = G.cam;
     struct nk_window* w = win_of(ctx, "Scene");
     was.scroll = w ? (float)w->scrollbar.y : 0;
@@ -292,6 +292,16 @@ static bool box_found(struct nk_context* ctx) {
 }
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
+static void first_field(struct nk_context* ctx) { app_select_src("DISP", CV_COMP_MAG, 0); }
+static bool ortho_on(struct nk_context* ctx) { return G.cam.ortho; }
+static bool ortho_off(struct nk_context* ctx) { return !G.cam.ortho; }
+static bool clip_on(struct nk_context* ctx) { return G.clip_on; }
+static bool clip_off(struct nk_context* ctx) { return !G.clip_on; }
+static bool bg_white(struct nk_context* ctx) { return G.bg[0] > 0.9f && G.bg[2] > 0.9f; }
+static bool bg_back(struct nk_context* ctx) { return G.bg[0] < 0.9f; }
+static bool field_other(struct nk_context* ctx) { return G.field_src == 0 && strcmp(G.field_name, "DISP") != 0; }
+static bool field_disp(struct nk_context* ctx) { return G.field_src == 0 && !strcmp(G.field_name, "DISP"); }
+static bool comp_changed(struct nk_context* ctx) { return G.comp != was.comp; }
 static bool symbols_off(struct nk_context* ctx) { return !G.show_bc && !G.show_loads && !G.show_links && !G.show_disc; }
 static bool symbols_on(struct nk_context* ctx) { return G.show_bc && G.show_loads && G.show_links && G.show_disc; }
 static bool edges_toggled(struct nk_context* ctx) { return G.show_edges != was.edges; }
@@ -477,6 +487,15 @@ static const step script[] = {
     PANELS_ANSWER,
     AT_TIP("Toolbar", "Every symbol layer at once"), CLICK, WAIT(2), EXPECT(symbols_off, "one box hides every symbol layer"),
     AT_TIP("Toolbar", "Every symbol layer at once"), CLICK, WAIT(2), EXPECT(symbols_on, "and shows them all again"),
+
+    CASE("toolbar: ortho, clip and white boxes, the view list, the field and component lists"),
+    AT_TIP("Toolbar", "Parallel projection"), CLICK, WAIT(2), EXPECT(ortho_on, "ortho on"), AT_TIP("Toolbar", "Parallel projection"), CLICK, WAIT(2), EXPECT(ortho_off, "ortho off"),
+    AT_TIP("Toolbar", "Cut the drawing at the clip plane"), CLICK, WAIT(4), EXPECT(clip_on, "clip on"), AT_TIP("Toolbar", "Cut the drawing at the clip plane"), CLICK, WAIT(4), EXPECT(clip_off, "clip off"),
+    AT_TIP("Toolbar", "White background"), CLICK, WAIT(2), EXPECT(bg_white, "white background"), AT_TIP("Toolbar", "White background"), CLICK, WAIT(2), EXPECT(bg_back, "the colour is back"),
+    AT_TIP("Toolbar", "Look from a side"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the view list opens"), AT_POPUP("Toolbar", 0.5f, 0.21f), CLICK, WAIT(3), EXPECT(toolbar_no_popup, "the list closes on a pick"),
+    AT_TIP("Toolbar", "The result field shown"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the field list opens"), AT_POPUP("Toolbar", 0.5f, 0.5f), CLICK, WAIT(3), EXPECT(field_other, "another field picked from the list"),
+    DO(snapshot), AT_TIP("Toolbar", "The component or invariant"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the component list opens"), AT_POPUP("Toolbar", 0.5f, 0.5f), CLICK, WAIT(3), EXPECT(comp_changed, "another component picked"),
+    DO(first_field), WAIT(3), EXPECT(field_disp, "DISP again"), PANELS_ANSWER,
 
     CASE("wheel: scrolls the sidebar under it, zooms the view under it"),
     DO(sections_open), WAIT(2), DO(snapshot), AT_WIN("Scene", 0.5f, 0.5f), WHEEL(-3), WAIT(2),

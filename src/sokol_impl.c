@@ -82,13 +82,23 @@ unsigned char* cv_read_pixels_region(int x, int y, int w, int h, int fb_h) {
 
 /* Save a window-space rectangle (top-left origin, framebuffer pixels) as PNG.
    Alpha is forced opaque so the image looks the same in every viewer. */
-bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h) {
+/* bg: the colour the frame was cleared to with alpha 0, for a transparent picture; the
+   panels' text (legend, gizmo) is drawn without alpha, so a pixel that left the clear
+   colour counts as opaque. NULL: an opaque picture */
+bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h, const float* bg) {
     if (w <= 0 || h <= 0) return false;
     unsigned char* px = malloc((size_t)w * h * 4);
     if (!px) return false;
     glPixelStorei(0x0D05 /* GL_PACK_ALIGNMENT */, 1);
     glReadPixels(x, fb_h - (y + h), w, h, 0x1908 /* GL_RGBA */, 0x1401 /* GL_UNSIGNED_BYTE */, px);
-    for (size_t i = 0; i < (size_t)w * h; i++) px[4 * i + 3] = 255;
+    if (!bg) for (size_t i = 0; i < (size_t)w * h; i++) px[4 * i + 3] = 255;
+    else {
+        int b0 = (int)(bg[0] * 255.f + 0.5f), b1 = (int)(bg[1] * 255.f + 0.5f), b2 = (int)(bg[2] * 255.f + 0.5f);
+        for (size_t i = 0; i < (size_t)w * h; i++) {
+            unsigned char* q = px + 4 * i;
+            if (q[3] == 0 && (abs(q[0] - b0) > 2 || abs(q[1] - b1) > 2 || abs(q[2] - b2) > 2)) q[3] = 255;
+        }
+    }
     stbi_flip_vertically_on_write(1);
     int ok = stbi_write_png(path, w, h, 4, px, w * 4);
     free(px);

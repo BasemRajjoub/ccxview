@@ -236,7 +236,7 @@ void section_view(struct nk_context* ctx, float s, float row) {
         nk_layout_row_template_push_static(ctx, row * 1.4f);
         nk_layout_row_template_end(ctx);
         nk_label(ctx, "Background", NK_TEXT_LEFT);
-        if (nk_button_label(ctx, "white")) { G.bg[0] = G.bg[1] = G.bg[2] = 1.f; }
+        if (nk_button_label(ctx, "white")) { G.bg[0] = 0.96f; G.bg[1] = 0.96f; G.bg[2] = 0.95f; }   /* soft, as the usual viewers */
         if (nk_button_label(ctx, "grey"))  { G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f; }
         if (nk_button_label(ctx, "black")) { G.bg[0] = G.bg[1] = G.bg[2] = 0.f; }
         static bool bg_pick;

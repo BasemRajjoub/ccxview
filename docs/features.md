@@ -128,7 +128,13 @@ and what is drawn for it; `samples/symbols/` shows them all.
   from all six.
 - A locked legend range keeps min / max across steps and components; the values past
   either end in grey to stand out, in the map's end colour to blend in, in a colour
-  of yours, or not drawn at all.
+  of yours, or not drawn at all. Fifteen colour maps (Fast, cool-warm, viridis,
+  turbo, cividis, plasma, inferno, black body, Kindlmann, heat, warm, cool, rainbow
+  and its desaturated form, jet); a white box behind the legend for a page.
+- The top bar holds what is used all the time: deformation on / off and its scale
+  (auto and multiples of it, true scale), animation, fit, all symbol layers in
+  one box, the colour map and bands, the field and its component, the standard
+  views, orthographic, the clip plane, a PNG of the view, a white background.
 - Compare two runs (A minus B).
 - Clip plane with the cut filled, crop box, mirror symmetry, cyclic symmetry,
   replicate (rows of copies of a periodic model).
@@ -158,8 +164,9 @@ BE2/BE3).
 
 ## Export
 
-PNG of the view, MP4 video or PNG sequence of a deformation cycle or of every
-step, CSV, VTK for ParaView, and a view file to reproduce a picture later. All
+PNG of the view (with a transparent background when asked), MP4 video or PNG
+sequence of a deformation cycle or of every step, CSV, VTK for ParaView, and a
+view file to reproduce a picture later. All
 available from the command line for scripting ([usage.md](usage.md)).
 
 ## Settings and crashes

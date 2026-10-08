@@ -12,7 +12,15 @@ void cv_gl_enable_point_size(void);   /* sokol_impl.c: glEnable(GL_PROGRAM_POINT
    purpose; later maps are appended so saved indices keep their meaning. */
 
 const char* const cv_cmap_names[CV_CMAP_N] = { "Fast", "Cool-warm", "Viridis", "Turbo", "Heat", "Rainbow", "Jet", "Inferno",
-                                               "Rainbow desat." };
+                                               "Rainbow desat.", "Cividis", "Plasma", "Black body", "Kindlmann", "Warm", "Cool" };
+
+/* a map from a few colours evenly spaced over 0 .. 1, linear between them */
+static void map_pts(const float (*r)[3], int n, float t, float o[3]) {
+    float s = t * (float)(n - 1);
+    int i = (int)s; if (i > n - 2) i = n - 2;
+    float f = s - (float)i;
+    for (int k = 0; k < 3; k++) o[k] = r[i][k] + (r[i + 1][k] - r[i][k]) * f;
+}
 
 static const float kFast[32][3] = {
     {0.0549f,0.0549f,0.4706f},{0.1098f,0.1373f,0.5333f},{0.1490f,0.2118f,0.5961f},{0.1843f,0.2863f,0.6588f},
@@ -91,6 +99,35 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
             o[2] = clamp01(fminf(x + 0.5f, 2.5f - x));
             return;
         }
+        case CV_CMAP_CIVIDIS: {                 /* Nunez, Anderton, Renslow 2018: viridis for colour-blind readers */
+            static const float r[11][3] = {
+                {0.000f,0.133f,0.306f}, {0.071f,0.208f,0.439f}, {0.231f,0.286f,0.424f}, {0.341f,0.365f,0.427f},
+                {0.439f,0.443f,0.451f}, {0.541f,0.525f,0.471f}, {0.647f,0.612f,0.455f}, {0.765f,0.702f,0.412f},
+                {0.882f,0.800f,0.333f}, {0.996f,0.910f,0.220f}, {1.000f,0.925f,0.220f},
+            };
+            map_pts(r, 11, t, o); return;
+        }
+        case CV_CMAP_PLASMA: {                  /* matplotlib's */
+            static const float r[11][3] = {
+                {0.051f,0.031f,0.529f}, {0.255f,0.016f,0.616f}, {0.416f,0.000f,0.659f}, {0.561f,0.051f,0.643f},
+                {0.694f,0.165f,0.565f}, {0.800f,0.278f,0.471f}, {0.882f,0.392f,0.384f}, {0.949f,0.518f,0.294f},
+                {0.988f,0.651f,0.212f}, {0.988f,0.808f,0.145f}, {0.941f,0.976f,0.131f},
+            };
+            map_pts(r, 11, t, o); return;
+        }
+        case CV_CMAP_BLACKBODY: {               /* black - red - yellow - white, the radiation of a hot body */
+            static const float r[4][3] = { {0,0,0}, {0.9f,0,0}, {0.9f,0.9f,0}, {1,1,1} };
+            map_pts(r, 4, t, o); return;
+        }
+        case CV_CMAP_KINDLMANN: {               /* Kindlmann, Reinhard, Creem 2002: luminance climbs, the hue turns */
+            static const float r[8][3] = {
+                {0,0,0}, {0.16f,0.02f,0.48f}, {0.02f,0.33f,0.57f}, {0.01f,0.49f,0.37f},
+                {0.06f,0.63f,0.07f}, {0.57f,0.73f,0.06f}, {0.98f,0.74f,0.73f}, {1,1,1},
+            };
+            map_pts(r, 8, t, o); return;
+        }
+        case CV_CMAP_WARM: cv_colormap_rgb(CV_CMAP_COOLWARM, 0.5f + 0.5f * t, o); return;   /* the halves of cool-warm */
+        case CV_CMAP_COOL: cv_colormap_rgb(CV_CMAP_COOLWARM, 0.5f - 0.5f * t, o); return;
         case CV_CMAP_RAINBOW_DESAT: {           /* ParaView's: the rainbow with darker, calmer ends */
             static const float r[8][3] = {
                 {0.2784f,0.2784f,0.8588f}, {0.0f,0.0f,0.3608f}, {0.0f,1.0f,1.0f}, {0.0f,0.5020f,0.0f},

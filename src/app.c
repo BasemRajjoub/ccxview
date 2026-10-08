@@ -62,7 +62,7 @@ static void seq_end(void);
 static void event(const sapp_event* ev);
 
 bool cv_save_png(const char* path, int w, int h);
-bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h);
+bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h, const float* bg);
 unsigned char* cv_read_pixels_region(int x, int y, int w, int h, int fb_h);
 void cv_snk_before_shutdown(void);
 
@@ -469,7 +469,7 @@ static void frame(void) {
     }
     sg_begin_pass(&(sg_pass){
         .action = {
-            .colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { G.bg[0], G.bg[1], G.bg[2], 1 } },
+            .colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { G.bg[0], G.bg[1], G.bg[2], G.png_alpha && G.export_req ? 0.f : 1.f } },
         },
         .swapchain = sglue_swapchain(),
     });
@@ -492,7 +492,11 @@ static void frame(void) {
     }
     snk_render(sapp_width(), sapp_height());
     sg_end_pass();
-    if (G.export_req) { G.export_req = false; export_now(); }
+    /* a transparent PNG: two frames cleared to alpha 0 first (the read-back sees the frame before) */
+    if (G.export_req) {
+        if (G.png_alpha && G.png_alpha_arm < 2) G.png_alpha_arm++;
+        else { G.export_req = false; G.png_alpha_arm = 0; export_now(); }
+    }
     if (G.seq_left > 0 && !app_busy() && G.seq_warm > 0) G.seq_warm--;
     else if (G.seq_left > 0 && !app_busy()) {
         if (G.video) video_frame(); else export_now();
@@ -676,7 +680,7 @@ static void export_now(void) {
         k++;
     } while (cv_file_size(path) > 0 && k < 1000);
     /* 2 px in from each side: the neighbouring panels draw their borders on the edge */
-    bool ok = cv_save_png_region(path, G.vp_x + 2, G.vp_y + 2, G.vp_w - 4, G.vp_h - 4, sapp_height());
+    bool ok = cv_save_png_region(path, G.vp_x + 2, G.vp_y + 2, G.vp_w - 4, G.vp_h - 4, sapp_height(), G.png_alpha && G.seq_left == 0 ? G.bg : NULL);
     snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", path);
     G.note_t = cv_now();
     cv_msg_add(&G.msgs, 0, false, G.note);

@@ -66,9 +66,16 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     nk_property_float(ctx, "#scale", 0.f, &G.deform_scale, 1e9f, CV_MAX(G.deform_scale * 0.1f, 0.01f),
                       CV_MAX(G.deform_scale * 0.01f, 0.001f));
     if (G.deform_scale != before) G.deform_auto = false;
-    nk_layout_row_push(ctx, 50 * s);
-    tip(ctx, "Scale so the largest displacement is ~10% of the model; never below 1");
-    if (nk_button_label(ctx, "auto")) { G.deform_auto = true; G.deform_scale = G.auto_scale; }
+    nk_layout_row_push(ctx, 74 * s);
+    tip(ctx, "Scale so the largest displacement is ~10% of the model (never below 1), or a multiple of that");
+    if (nk_combo_begin_label(ctx, "auto", nk_vec2(120 * s, 5 * row + 20 * s))) {
+        static const char* pre[5] = { "auto", "auto x0.25", "auto x0.5", "auto x2", "auto x5" };
+        static const float pf[5] = { 1.f, 0.25f, 0.5f, 2.f, 5.f };
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (int i = 0; i < 5; i++)
+            if (nk_combo_item_label(ctx, pre[i], NK_TEXT_LEFT)) { G.deform_auto = i == 0; G.deform_scale = G.auto_scale * pf[i]; G.deform = true; }
+        nk_combo_end(ctx);
+    }
     nk_layout_row_push(ctx, 40 * s);
     tip(ctx, "True scale: the displacement as computed (scale 1)");
     if (nk_button_label(ctx, "1:1")) { G.deform_auto = false; G.deform_scale = 1.f; G.deform = true; }
@@ -102,8 +109,8 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     nk_layout_row_end(ctx);
 
     /* line 2: colours */
-    nk_layout_row_begin(ctx, NK_STATIC, row, 8);
-    nk_layout_row_push(ctx, 150 * s);
+    nk_layout_row_begin(ctx, NK_STATIC, row, 28);
+    nk_layout_row_push(ctx, 130 * s);
     cmap_combo(ctx, s, row);
     /* the combo shows the usual counts; any other number (legend settings) shows as "N bands" */
     static const int band_vals[] = { 0, 6, 12, 24 };
@@ -112,18 +119,82 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     const char* band_names[] = { "smooth", "6 bands", "12 bands", "24 bands", custom };
     int bi = 4;
     for (int i = 0; i < 4; i++) if (band_vals[i] == G.bands) bi = i;
-    nk_layout_row_push(ctx, 100 * s);
+    nk_layout_row_push(ctx, 90 * s);
     tip(ctx, "Contour bands: discrete colour steps, or a smooth gradient (any count: legend settings)");
     int bj = nk_combo(ctx, band_names, bi == 4 ? 5 : 4, bi, (int)row, nk_vec2(110 * s, 180 * s));
     if (bj != bi && bj < 4) G.bands = band_vals[bj];
     nk_layout_row_push(ctx, 24 * s);
     if (G.range_lock) uii_vsep(ctx); else nk_spacing(ctx, 1);
     if (G.range_lock) {
-        nk_layout_row_push(ctx, 120 * s);
+        nk_layout_row_push(ctx, 100 * s);
         char a[32], b[32], lab[80];
         legend_num(a, sizeof a, G.rmin); legend_num(b, sizeof b, G.rmax);
         snprintf(lab, sizeof lab, "locked %s .. %s", a, b);
         nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.warn);
+    }
+    /* the field and its component, as the Fields tree picks them */
+    if (G.loaded && G.frd.n_steps > 0 && G.step < G.frd.n_steps && G.frd.steps[G.step].nfields > 0) {
+        const cv_step* st = &G.frd.steps[G.step];
+        nk_layout_row_push(ctx, 24 * s);
+        uii_vsep(ctx);
+        nk_layout_row_push(ctx, 110 * s);
+        const char* fname = G.field_src == 0 ? G.field_name : G.field_src == 2 ? "calculated" : G.field_name;
+        tip(ctx, "The result field shown (Fields tree: the same, with the calculated and failure fields)");
+        if (nk_combo_begin_label(ctx, fname[0] ? fname : "field", nk_vec2(220 * s, CV_MIN(st->nfields, 12) * row + 20 * s))) {
+            nk_layout_row_dynamic(ctx, row, 1);
+            for (int f = 0; f < st->nfields; f++)
+                if (nk_combo_item_label(ctx, st->fields[f].name, NK_TEXT_LEFT)) {
+                    cv_scalar_opt o[CV_MAX_OPTS];
+                    int n = app_field_options(&st->fields[f], o, CV_MAX_OPTS);
+                    app_select_src(st->fields[f].name, n ? o[0].comp : 0, 0);
+                }
+            nk_combo_end(ctx);
+        }
+        const cv_field_desc* cur = NULL;
+        for (int f = 0; G.field_src == 0 && f < st->nfields; f++) if (!strcmp(st->fields[f].name, G.field_name)) cur = &st->fields[f];
+        if (cur) {
+            cv_scalar_opt o[CV_MAX_OPTS];
+            int n = app_field_options(cur, o, CV_MAX_OPTS), ci = -1;
+            for (int i = 0; i < n; i++) if (o[i].comp == G.comp) ci = i;
+            nk_layout_row_push(ctx, 120 * s);
+            tip(ctx, "The component or invariant of the field");
+            if (nk_combo_begin_label(ctx, ci >= 0 ? o[ci].label : "component", nk_vec2(200 * s, CV_MIN(n, 12) * row + 20 * s))) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                for (int i = 0; i < n; i++) if (nk_combo_item_label(ctx, o[i].label, NK_TEXT_LEFT)) app_select_src(cur->name, o[i].comp, 0);
+                nk_combo_end(ctx);
+            }
+        }
+    }
+    nk_layout_row_push(ctx, 24 * s);
+    uii_vsep(ctx);
+    nk_layout_row_push(ctx, 64 * s);
+    tip(ctx, "Look from a side, or the isometric view (keys 1-6, R)");
+    if (nk_combo_begin_label(ctx, "View", nk_vec2(90 * s, 7 * row + 20 * s))) {
+        static const char* vn[7] = { "Iso", "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (int v = 0; v < 7; v++) if (nk_combo_item_label(ctx, vn[v], NK_TEXT_LEFT)) app_view(v);
+        nk_combo_end(ctx);
+    }
+    nk_layout_row_push(ctx, 60 * s);
+    tip(ctx, "Parallel projection: no perspective, distances compare directly");
+    nk_checkbox_label(ctx, "ortho", &G.cam.ortho);
+    nk_layout_row_push(ctx, 54 * s);
+    tip(ctx, "Cut the drawing at the clip plane (View > Clip & crop: axis, position, fill)");
+    nk_checkbox_label(ctx, "Clip", &G.clip_on);
+    nk_layout_row_push(ctx, 24 * s);
+    uii_vsep(ctx);
+    nk_layout_row_push(ctx, 50 * s);
+    tip(ctx, "Save a PNG of the view beside the model (Ctrl+E)");
+    if (nk_button_label(ctx, "PNG")) app_export_png();
+    nk_layout_row_push(ctx, 60 * s);
+    {   /* a white background with dark text for a picture on a page; off brings the colour back */
+        static float keep[3] = { 0.33f, 0.32f, 0.31f };
+        nk_bool white = G.bg[0] > 0.9f && G.bg[1] > 0.9f && G.bg[2] > 0.9f;
+        tip(ctx, "White background, for pictures on a page; off: your background again (View > Colours & legend)");
+        if (nk_checkbox_label(ctx, "white", &white)) {   /* a soft white, as the usual FE viewers: pure white glares */
+            if (white) { memcpy(keep, G.bg, sizeof keep); G.bg[0] = 0.96f; G.bg[1] = 0.96f; G.bg[2] = 0.95f; }
+            else memcpy(G.bg, keep, sizeof keep);
+        }
     }
     nk_layout_row_end(ctx);
 }
@@ -197,7 +268,7 @@ static void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f,
                      const char* txt, struct nk_color c) {
     int n = (int)strlen(txt);
     float tw = CV_MIN(f->width(f->userdata, f->height, txt, n), w);
-    nk_fill_rect(cv, nk_rect(x - 2, y, tw + 4, f->height), 3, uii_bg(110));
+    if (!G.legend_box) nk_fill_rect(cv, nk_rect(x - 2, y, tw + 4, f->height), 3, uii_bg(110));   /* a plate of the background: no need on the box */
     nk_draw_text(cv, nk_rect(x, y, w, f->height), txt, n, f, nk_rgba(0, 0, 0, 0), c);
 }
 
@@ -206,11 +277,14 @@ static void ink_label_c(struct nk_context* ctx, const char* txt, struct nk_color
     struct nk_rect b = nk_widget_bounds(ctx);
     const struct nk_user_font* f = ctx->style.font;
     float px = ctx->style.text.padding.x, tw = f->width(f->userdata, f->height, txt, (int)strlen(txt));
-    nk_fill_rect(nk_window_get_canvas(ctx), nk_rect(b.x + px - 2, b.y + (b.h - f->height) * 0.5f, CV_MIN(tw + 4, b.w), f->height),
+    if (!G.legend_box) nk_fill_rect(nk_window_get_canvas(ctx), nk_rect(b.x + px - 2, b.y + (b.h - f->height) * 0.5f, CV_MIN(tw + 4, b.w), f->height),
                  3, uii_bg(110));
     nk_label_colored(ctx, txt, NK_TEXT_LEFT, c);
 }
-static void ink_label(struct nk_context* ctx, const char* txt) { ink_label_c(ctx, txt, uii_on_bg()); }
+/* the legend's text colour: against the background, or dark on its white box */
+static struct nk_color legend_ink(void) { return G.legend_box ? nk_rgb(25, 25, 25) : uii_on_bg(); }
+static struct nk_color legend_dim(void) { return G.legend_box ? nk_rgb(110, 110, 110) : uii_on_bg_dim(); }
+static void ink_label(struct nk_context* ctx, const char* txt) { ink_label_c(ctx, txt, legend_ink()); }
 
 /* ---- the legend's title: the field, its component, its unit (G.legend_lines), each
    on a line of its own and wrapped when wider than the legend */
@@ -281,7 +355,7 @@ static void panel_group_legend(struct nk_context* ctx, float s, float row) {
         if (nk_widget(&r, ctx) != NK_WIDGET_INVALID) {
             struct nk_rect sw = nk_rect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
             nk_fill_rect(nk_window_get_canvas(ctx), sw, 0, nk_rgb_f(c[0], c[1], c[2]));
-            nk_stroke_rect(nk_window_get_canvas(ctx), sw, 0, 1, uii_on_bg());   /* a swatch of the background's colour */
+            nk_stroke_rect(nk_window_get_canvas(ctx), sw, 0, 1, legend_ink());   /* a swatch of the background's colour */
         }
         char lab[64];
         if (a == CV_AXIS_TYPE) snprintf(lab, sizeof lab, "%s", cv_frd_type_name((int)ax->value[i]));
@@ -321,7 +395,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
                 legend_title.w = CV_MAX(legend_title.w, b.x + b.w - legend_title.x);
                 legend_title.h = b.y + b.h - legend_title.y;
             }
-            ink_label_c(ctx, piece, k == 2 ? uii_on_bg_dim() : uii_on_bg());
+            ink_label_c(ctx, piece, k == 2 ? legend_dim() : legend_ink());
             nrow++;
         }
     }
@@ -331,7 +405,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
     if (nk_widget(&area, ctx) == NK_WIDGET_INVALID) return;
     struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
     const struct nk_user_font* font = ctx->style.font;
-    const struct nk_color ink = uii_on_bg(), dim = uii_on_bg_dim();
+    const struct nk_color ink = legend_ink(), dim = legend_dim();
 
     if (!(G.rmax > G.rmin)) {                     /* constant field: one value, not 13 equal labels */
         char txt[48], num[32];
@@ -583,6 +657,8 @@ void window_legend_settings(struct nk_context* ctx, float s, float row) {
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         legend_controls(ctx, s, row);
         nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "A white box with a border behind the legend, for a picture on a page");
+        nk_checkbox_label(ctx, "white box behind the legend", &G.legend_box);
         tip(ctx, "Back to the defaults: legend top-right, gizmo bottom-left. Both are moved by dragging them");
         if (nk_button_label(ctx, "Reset legend and gizmo positions")) G.legend_pos.set = G.gizmo_pos.set = false;
         if (nk_button_label(ctx, "close")) G.legend_edit = false;
@@ -674,8 +750,9 @@ void window_legend(struct nk_context* ctx, float s, float row) {
             r = nk_rect(lb.x, lb.y, lb.w, lb.h);
             if (nk_window_find(ctx, "Legend")) nk_window_set_bounds(ctx, "Legend", r);
             /* no box, no frame: the text takes its colour from G.bg (uii_on_bg); the colour bar stays opaque */
-            nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(nk_rgba(0, 0, 0, 0)));
-            nk_style_push_float(ctx, &ctx->style.window.border, 0);
+            nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(G.legend_box ? nk_rgba(255, 255, 255, 235) : nk_rgba(0, 0, 0, 0)));
+            nk_style_push_float(ctx, &ctx->style.window.border, G.legend_box ? 1.f : 0.f);
+            nk_style_push_color(ctx, &ctx->style.window.border_color, nk_rgb(90, 90, 90));
             nk_flags lf = by_group ? 0 : NK_WINDOW_NO_SCROLLBAR;
             if (lh > 80 * s && nk_begin(ctx, "Legend", r, lf)) {
                 struct nk_rect b = nk_window_get_bounds(ctx);
@@ -693,6 +770,7 @@ void window_legend(struct nk_context* ctx, float s, float row) {
                     G.show_units = true;
             }
             if (lh > 80 * s) nk_end(ctx);
+            nk_style_pop_color(ctx);
             nk_style_pop_float(ctx);
             nk_style_pop_style_item(ctx);
         }

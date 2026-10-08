@@ -658,11 +658,18 @@ static int unit_shown_now(int q) {
 }
 static const char* unit_label(const cv_unit* u) { return u ? (u->name[0] ? u->name : "ratio") : "?"; }
 
+/* "mm, MPa"; when shown in other units than the file's: "mm, MPa -> in, psi" */
 void units_summary(char* out, size_t n) {
     int l = unit_shown_now(CV_Q_LEN), p = unit_shown_now(CV_Q_STRESS);
     if (l < 0 && p < 0) { snprintf(out, n, "not set"); return; }
-    snprintf(out, n, "%s, %s", l < 0 ? "?" : unit_label(cv_unit_get(CV_Q_LEN, l)),
-             p < 0 ? "?" : unit_label(cv_unit_get(CV_Q_STRESS, p)));
+    int temp = cv_sys_temp(G.units);
+    int li = G.unit_in[CV_Q_LEN] >= 0 ? G.unit_in[CV_Q_LEN] : cv_sys_unit(G.units, temp, CV_Q_LEN);
+    int pi = G.unit_in[CV_Q_STRESS] >= 0 ? G.unit_in[CV_Q_STRESS] : cv_sys_unit(G.units, temp, CV_Q_STRESS);
+    if (li == l && pi == p)
+        snprintf(out, n, "%s, %s", l < 0 ? "?" : unit_label(cv_unit_get(CV_Q_LEN, l)), p < 0 ? "?" : unit_label(cv_unit_get(CV_Q_STRESS, p)));
+    else
+        snprintf(out, n, "%s, %s -> %s, %s", li < 0 ? "?" : unit_label(cv_unit_get(CV_Q_LEN, li)), pi < 0 ? "?" : unit_label(cv_unit_get(CV_Q_STRESS, pi)),
+                 l < 0 ? "?" : unit_label(cv_unit_get(CV_Q_LEN, l)), p < 0 ? "?" : unit_label(cv_unit_get(CV_Q_STRESS, p)));
 }
 
 /* the input side: true when some quantity was chosen apart from the set */
