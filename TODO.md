@@ -67,11 +67,6 @@ limits good / warning / bad, and a tolerated percentage of bad elements
 https://github.com/eigemx/neatmesh. Headless module (quality.c + t_quality.h),
 a Fields entry "Mesh quality", a report window.
 
-## #7 Command line like cgx
-xyont asks for cgx-style commands driving the view; Sergio notes it would
-duplicate the UI; xyont settles for a simple text editor for the .fbd. Park:
-at most a text box to run one cgx command on the loaded .fbd.
-
 ## #2 Keywords and results coverage
 Supports and loads follow the step on screen, with a symbol per kind
 (docs/keywords.md, samples/symbols). Still to do: *SUBMODEL (mark the driven
