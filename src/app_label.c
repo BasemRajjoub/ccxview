@@ -563,7 +563,7 @@ void app_label_frame(cv_draw* d) {
         memcpy(pts, pin, npin * sizeof *pin);
         np += npin;
     }
-    uint32_t max_out = 20000;                     /* more than fits any screen: a cap for spacing 0 */
+    uint32_t max_out = 500000;                    /* gap 0 shows every one; the cap only keeps a huge model from a GB of quads */
     uint32_t n = cv_label_thin(pts, np, npin, bx, by, (float)d->vp_x, (float)d->vp_y, (float)d->vp_w, (float)d->vp_h, chosen, max_out);
     /* lay the chosen out: text a little right of and above the point */
     cv_fvec gly = {0}, box = {0};
