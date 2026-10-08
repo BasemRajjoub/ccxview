@@ -30,6 +30,13 @@ same reader as the settings), loaded when the .frd opens, saved on change.
 
 Dropped: animation once, solid undeformed ghost, set area / volume / mass summary.
 
+## #14 Top bar
+Right of Fit: a View list (Iso, +X .. -Z), ortho, Clip on/off, Section only (while
+clipped), Undeformed, a PNG button, a "white" box (white background, dark text).
+Second row: the field and component lists. Status bar: the units button also shows
+the display units when they differ. Mirror, replicate, cyclic, compare, background
+picker, probe tools stay in the panels. Plan posted in the issue, 8 Oct 2026.
+
 ## #19 Shell section forces
 A Fields subgroup "Shell forces": Nxx Nyy Nxy, Mxx Myy Mxy, Qx Qy per unit width,
 from the nodal stresses of the expanded shell elements (cv_elemmap gives the
