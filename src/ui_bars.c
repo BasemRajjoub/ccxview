@@ -178,22 +178,27 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     nk_layout_row_push(ctx, 60 * s);
     tip(ctx, "Parallel projection: no perspective, distances compare directly");
     nk_checkbox_label(ctx, "ortho", &G.cam.ortho);
-    nk_layout_row_push(ctx, 54 * s);
-    tip(ctx, "Cut the drawing at the clip plane (View > Clip & crop: axis, position, fill)");
-    nk_checkbox_label(ctx, "Clip", &G.clip_on);
     nk_layout_row_push(ctx, 24 * s);
     uii_vsep(ctx);
-    nk_layout_row_push(ctx, 50 * s);
-    tip(ctx, "Save a PNG of the view beside the model (Ctrl+E)");
-    if (nk_button_label(ctx, "PNG")) app_export_png();
-    nk_layout_row_push(ctx, 60 * s);
-    {   /* a white background with dark text for a picture on a page; off brings the colour back */
-        static float keep[3] = { 0.33f, 0.32f, 0.31f };
-        nk_bool white = G.bg[0] > 0.9f && G.bg[1] > 0.9f && G.bg[2] > 0.9f;
-        tip(ctx, "White background, for pictures on a page; off: your background again (View > Colours & legend)");
-        if (nk_checkbox_label(ctx, "white", &white)) {   /* a soft white, as the usual FE viewers: pure white glares */
-            if (white) { memcpy(keep, G.bg, sizeof keep); G.bg[0] = 0.96f; G.bg[1] = 0.96f; G.bg[2] = 0.95f; }
-            else memcpy(G.bg, keep, sizeof keep);
+    nk_layout_row_push(ctx, 84 * s);
+    {   /* the label kinds as boxes in a list: ids, values, names ... any mix (Fields > Labels: size, colours, gap) */
+        char lab[24];
+        int n = 0;
+        for (int k = 1; k < CV_LABEL_N; k++) n += app_label_on(k);
+        if (n) snprintf(lab, sizeof lab, "Labels %d", n); else snprintf(lab, sizeof lab, "Labels");
+        tip(ctx, "Labels on the model: ids, values, set and material names, loads, supports, the extremes; any mix (Fields > Labels: size, colours)");
+        if (nk_combo_begin_label(ctx, lab, nk_vec2(170 * s, (CV_LABEL_N - 1) * row + 20 * s))) {
+            nk_layout_row_dynamic(ctx, row, 1);
+            for (int k = 1; k < CV_LABEL_N; k++) {
+                nk_bool on = app_label_on(k);
+                if (nk_checkbox_label(ctx, app_label_name(k), &on)) {
+                    G.label_kinds = on ? G.label_kinds | 1 << k : G.label_kinds & ~(1 << k);
+                    if (on && (k == CV_LABEL_GPVALUE || k == CV_LABEL_GPID) && !G.show_gp) { G.show_gp = true; app_gauss_changed(); }
+                    if (on && k == CV_LABEL_MINMAX) G.show_markers = true;
+                    app_label_changed();
+                }
+            }
+            nk_combo_end(ctx);
         }
     }
     nk_layout_row_end(ctx);

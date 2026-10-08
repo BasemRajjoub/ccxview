@@ -134,7 +134,7 @@ and what is drawn for it; `samples/symbols/` shows them all.
 - The top bar holds what is used all the time: deformation on / off and its scale
   (auto and multiples of it, true scale), animation, fit, all symbol layers in
   one box, the colour map and bands, the field and its component, the standard
-  views, orthographic, the clip plane, a PNG of the view, a white background.
+  views, orthographic, the label kinds.
 - Compare two runs (A minus B).
 - Clip plane with the cut filled, crop box, mirror symmetry, cyclic symmetry,
   replicate (rows of copies of a periodic model).

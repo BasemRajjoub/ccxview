@@ -295,10 +295,6 @@ static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != w
 static void first_field(struct nk_context* ctx) { app_select_src("DISP", CV_COMP_MAG, 0); }
 static bool ortho_on(struct nk_context* ctx) { return G.cam.ortho; }
 static bool ortho_off(struct nk_context* ctx) { return !G.cam.ortho; }
-static bool clip_on(struct nk_context* ctx) { return G.clip_on; }
-static bool clip_off(struct nk_context* ctx) { return !G.clip_on; }
-static bool bg_white(struct nk_context* ctx) { return G.bg[0] > 0.9f && G.bg[2] > 0.9f; }
-static bool bg_back(struct nk_context* ctx) { return G.bg[0] < 0.9f; }
 static bool field_other(struct nk_context* ctx) { return G.field_src == 0 && strcmp(G.field_name, "DISP") != 0; }
 static bool field_disp(struct nk_context* ctx) { return G.field_src == 0 && !strcmp(G.field_name, "DISP"); }
 static bool comp_changed(struct nk_context* ctx) { return G.comp != was.comp; }
@@ -488,10 +484,10 @@ static const step script[] = {
     AT_TIP("Toolbar", "Every symbol layer at once"), CLICK, WAIT(2), EXPECT(symbols_off, "one box hides every symbol layer"),
     AT_TIP("Toolbar", "Every symbol layer at once"), CLICK, WAIT(2), EXPECT(symbols_on, "and shows them all again"),
 
-    CASE("toolbar: ortho, clip and white boxes, the view list, the field and component lists"),
+    CASE("toolbar: the ortho box, the view, labels, field and component lists"),
     AT_TIP("Toolbar", "Parallel projection"), CLICK, WAIT(2), EXPECT(ortho_on, "ortho on"), AT_TIP("Toolbar", "Parallel projection"), CLICK, WAIT(2), EXPECT(ortho_off, "ortho off"),
-    AT_TIP("Toolbar", "Cut the drawing at the clip plane"), CLICK, WAIT(4), EXPECT(clip_on, "clip on"), AT_TIP("Toolbar", "Cut the drawing at the clip plane"), CLICK, WAIT(4), EXPECT(clip_off, "clip off"),
-    AT_TIP("Toolbar", "White background"), CLICK, WAIT(2), EXPECT(bg_white, "white background"), AT_TIP("Toolbar", "White background"), CLICK, WAIT(2), EXPECT(bg_back, "the colour is back"),
+    AT_TIP("Toolbar", "Labels on the model"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the labels list opens"), AT_POPUP("Toolbar", 0.5f, 0.06f), CLICK, WAIT(3), EXPECT(labels_node, "node ids ticked from the bar"),
+    AT_VIEW(0.5f, 0.6f), CLICK, WAIT(2), DO(labels_off), WAIT(2),
     AT_TIP("Toolbar", "Look from a side"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the view list opens"), AT_POPUP("Toolbar", 0.5f, 0.21f), CLICK, WAIT(3), EXPECT(toolbar_no_popup, "the list closes on a pick"),
     AT_TIP("Toolbar", "The result field shown"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the field list opens"), AT_POPUP("Toolbar", 0.5f, 0.5f), CLICK, WAIT(3), EXPECT(field_other, "another field picked from the list"),
     DO(snapshot), AT_TIP("Toolbar", "The component or invariant"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the component list opens"), AT_POPUP("Toolbar", 0.5f, 0.5f), CLICK, WAIT(3), EXPECT(comp_changed, "another component picked"),
