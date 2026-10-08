@@ -255,6 +255,13 @@ static bool sel_hidden(struct nk_context* ctx) {
     return n > 1 && !G.sel_n;
 }
 static bool all_shown(struct nk_context* ctx) { return !G.hide; }
+static void display_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_DISPLAY;
+    struct nk_window* w = nk_window_find(ctx, "Scene");
+    if (w) w->scrollbar.y = 0;
+}
+static bool ui_smaller(struct nk_context* ctx) { return ui_get_zoom() < 0.99f; }
+static bool ui_normal(struct nk_context* ctx) { return fabsf(ui_get_zoom() - 1.f) < 0.01f; }
 static void symbols_open(struct nk_context* ctx) {
     for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_SYMBOLS;
     struct nk_window* w = nk_window_find(ctx, "Scene");
@@ -554,6 +561,10 @@ static const step script[] = {
     AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Hide the"), CLICK, WAIT(10), EXPECT(sel_hidden, "the selection is hidden"),
     AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Show all"), CLICK, WAIT(10), EXPECT(all_shown, "everything shown again"),
     PANELS_ANSWER,
+
+    CASE("display: the UI size buttons shrink the interface and reset it"),
+    DO(display_open), WAIT(3), AT_TIP("Scene", "The whole interface a step smaller"), CLICK, WAIT(4), EXPECT(ui_smaller, "the UI shrinks"),
+    AT_TIP("Scene", "Click: back to 100 %"), CLICK, WAIT(4), EXPECT(ui_normal, "back to 100 %"), DO(sections_open), WAIT(2), PANELS_ANSWER,
 
     CASE("symbol sizes: thin crowded symbols"),
     DO(symbols_open), WAIT(3), AT_TIP("Scene", "Where supports or loads crowd"), CLICK, EXPECT(thin_on, "thinning turns on"),

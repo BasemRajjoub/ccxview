@@ -920,11 +920,13 @@ static void event(const sapp_event* ev) {
                 case SAPP_KEYCODE_4: case SAPP_KEYCODE_5: case SAPP_KEYCODE_6:
                     if (!ctrl) app_view(CV_VIEW_PX + (ev->key_code - SAPP_KEYCODE_1));
                     break;
-                case SAPP_KEYCODE_EQUAL: case SAPP_KEYCODE_KP_ADD:
-                    if (ctrl) ui_zoom(+1); else { G.deform_scale *= 1.25f; G.deform_auto = false; }
+                /* Windows and the web name keys by their place on a US keyboard: on a German
+                   one the + key arrives as ] and the - key as /, so those count too */
+                case SAPP_KEYCODE_EQUAL: case SAPP_KEYCODE_KP_ADD: case SAPP_KEYCODE_RIGHT_BRACKET:
+                    if (ctrl) ui_zoom(+1); else if (ev->key_code != SAPP_KEYCODE_RIGHT_BRACKET) { G.deform_scale *= 1.25f; G.deform_auto = false; }
                     break;
-                case SAPP_KEYCODE_MINUS: case SAPP_KEYCODE_KP_SUBTRACT:
-                    if (ctrl) ui_zoom(-1); else { G.deform_scale /= 1.25f; G.deform_auto = false; }
+                case SAPP_KEYCODE_MINUS: case SAPP_KEYCODE_KP_SUBTRACT: case SAPP_KEYCODE_SLASH:
+                    if (ctrl) ui_zoom(-1); else if (ev->key_code != SAPP_KEYCODE_SLASH) { G.deform_scale /= 1.25f; G.deform_auto = false; }
                     break;
                 case SAPP_KEYCODE_O: if (ctrl) app_open_dialog(); break;
                 case SAPP_KEYCODE_L: if (ctrl) ui_focus_open(); break;

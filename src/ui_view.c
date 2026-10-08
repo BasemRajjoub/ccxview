@@ -304,6 +304,23 @@ void section_view(struct nk_context* ctx, float s, float row) {
                 pend = -1;
             }
         }
+        {   /* the whole interface scaled, for a small screen or a far one (Ctrl +/-/0 do the same) */
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_static(ctx, 84 * s);
+            nk_layout_row_template_push_static(ctx, 32 * s);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 32 * s);
+            nk_layout_row_template_end(ctx);
+            nk_label(ctx, "UI size", NK_TEXT_LEFT);
+            tip(ctx, "The whole interface a step smaller (Ctrl -)");
+            if (nk_button_label(ctx, "-")) ui_zoom(-1);
+            char z[16];
+            snprintf(z, sizeof z, "%.0f %%", ui_get_zoom() * 100.f);
+            tip(ctx, "Click: back to 100 % (Ctrl 0)");
+            if (nk_button_label(ctx, z)) ui_zoom(0);
+            tip(ctx, "The whole interface a step larger (Ctrl +)");
+            if (nk_button_label(ctx, "+")) ui_zoom(+1);
+        }
         nk_tree_state_pop(ctx);
     }
 
