@@ -74,7 +74,12 @@ void ui_sel_what(struct nk_context* ctx, float row) {
     tip(ctx, "Nodes inside the box; the max and min are then taken over them");
     nk_checkbox_label(ctx, "nodes", &G.sel_nodes);
     if (!G.sel_elems && !G.sel_nodes) { if (e) G.sel_nodes = true; else G.sel_elems = true; }   /* never nothing */
-    if (e != G.sel_elems || n != G.sel_nodes) app_box_reselect();
+    bool vis = G.sel_visible;
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "Only the side facing you: nodes on faces turned toward the camera, elements with such a face.\n"
+             "Off: everything inside the box, through the model");
+    nk_checkbox_label(ctx, "facing side only", &G.sel_visible);
+    if (e != G.sel_elems || n != G.sel_nodes || vis != G.sel_visible) app_box_reselect();
 }
 
 void window_probe(struct nk_context* ctx, float s, float row) {
@@ -108,7 +113,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     float tw = 0;
     for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
     float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
-    float h = row * (n + 5.8f + (G.sel_n || G.seln_n ? 1.1f : 0.f));
+    float h = row * (n + 5.8f + (G.sel_n || G.seln_n ? 2.2f : 0.f));
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);

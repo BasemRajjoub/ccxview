@@ -199,9 +199,11 @@ static bool scale_true(struct nk_context* ctx) { return G.deform_scale == 1.f &&
 static bool box_armed(struct nk_context* ctx) { return G.box_arm; }
 static void arm_box(struct nk_context* ctx) { G.box_arm = true; }
 static bool nodes_selected(struct nk_context* ctx) { return G.sel_nodes && G.seln_n > 0 && G.boxq.on; }
-static void nodes_off(struct nk_context* ctx) { G.sel_nodes = false; G.sel_elems = true; }
+static void nodes_off(struct nk_context* ctx) { G.sel_nodes = false; G.sel_elems = true; G.sel_visible = true; }
 /* the nodes a box took stay its nodes: the camera turned, elements unticked, the same count */
 static uint32_t seln_was;
+static void remember_nodes(struct nk_context* ctx) { seln_was = G.seln_n; }
+static bool nodes_more(struct nk_context* ctx) { return !G.sel_visible && G.seln_n > seln_was; }
 static void remember_nodes_turn(struct nk_context* ctx) { seln_was = G.seln_n; G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }
 static bool nodes_kept(struct nk_context* ctx) { return !G.sel_elems && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
 static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
@@ -408,6 +410,8 @@ static const step script[] = {
     DO(arm_box), AT_VIEW(0.6f, 0.6f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.4f, 0.4f), RELEASE, WAIT(2),
     EXPECT(box_crossing, "a crossing selection, the probe on its max"),
     AT_TIP("Probe", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
+    DO(remember_nodes), AT_TIP("Probe", "Only the side facing you"), CLICK, WAIT(2), EXPECT(nodes_more, "through the model: more nodes"),
+    AT_TIP("Probe", "Only the side facing you"), CLICK, WAIT(2),
     DO(remember_nodes_turn), WAIT(2), AT_TIP("Probe", "Elements: drag left to right"), CLICK, WAIT(2),
     EXPECT(nodes_kept, "unticking elements after a turn keeps the same nodes, no elements"),
     DO(nodes_off), WAIT(2),

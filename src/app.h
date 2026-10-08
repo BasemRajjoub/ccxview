@@ -326,7 +326,10 @@ typedef struct {
     uint32_t* seln;                  /* the selected nodes (indices), seln_n of them */
     uint32_t  seln_n;
     bool      sel_elems, sel_nodes;  /* what a box selects: elements, nodes, or both */
+    bool      sel_visible;           /* only the side facing the camera: nodes on faces turned toward it, elements with such a face */
     uint8_t*  sel_inside;            /* per node, 1: it was in the last box (as dragged), to select again when they change */
+    uint8_t*  sel_front;             /* per node, 1: on a face turned toward the camera as the box was dragged; NULL: not judged */
+    uint8_t*  sel_front_e;           /* per element: 1 such a face, 0 none turned this way, 2 no face on the skin */
     bool      sel_crossing;          /* ... by a crossing box (else a window) */
     uint8_t*  hide;                  /* per element, 1: hidden by hand (context menu), NULL none */
     /* the context menu (right click in the view): where, and what was under it */

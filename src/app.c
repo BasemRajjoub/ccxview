@@ -94,7 +94,7 @@ static void init(void) {
     G.anim_factor = 1.f;
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
-    G.sel_elems = true;
+    G.sel_elems = true; G.sel_visible = true;
     G.label_px = 13.f; G.minmax_n = 1; G.oor_mode[0] = G.oor_mode[1] = 1;
     G.oor_rgb[0][0] = 0.9f; G.oor_rgb[0][1] = 0.1f; G.oor_rgb[0][2] = 0.1f; G.oor_rgb[1][0] = 0.1f; G.oor_rgb[1][1] = 0.2f; G.oor_rgb[1][2] = 0.9f; G.label_spacing = 10.f; G.label_front = true;
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;

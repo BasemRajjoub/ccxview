@@ -19,6 +19,7 @@ void app_sel_clear(void) {
     free(G.sel); G.sel = NULL; G.sel_n = 0;
     free(G.seln); G.seln = NULL; G.seln_n = 0;
     free(G.sel_inside); G.sel_inside = NULL;
+    free(G.sel_front); G.sel_front = NULL; free(G.sel_front_e); G.sel_front_e = NULL;
     if (G.label_sel_only) app_label_changed();
     G.boxq.on = false;
     sel_upload_none();
@@ -78,8 +79,7 @@ void app_sel_refresh(void) {
     }
     cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(val);
     if (G.boxq.on && G.boxq.gen == G.field_gen) {
-        marker(CV_AUX_SELMAX, G.boxq.max_at, G.boxq.elem);
-        marker(CV_AUX_SELMIN, G.boxq.min_at, G.boxq.elem);
+        marker(CV_AUX_SELMAX, G.boxq.max_at, G.boxq.elem);   /* the min stays in the Details: it sits on the selection's rim */
     }
 }
 
@@ -112,12 +112,53 @@ static uint8_t* box_nodes(float x0, float y0, float x1, float y1) {
     return inside;
 }
 
+/* the side facing the camera: per node 1 when a skin triangle of its turns toward the
+   eye, per element 1 when one of its does; a shell counts from both sides, and an element
+   without a face on the skin (a beam, an interior one) is left as 2: "no face to judge by".
+   Triangles are oriented outward from the element's centre, as drawn (deformed). */
+static void facing(uint8_t* node, uint8_t* elem) {
+    const cv_frd* f = &G.frd;
+    const cv_skin* s = &G.skin;
+    uint32_t N = f->n_nodes, E = f->n_elems;
+    memset(node, 0, N); memset(elem, 2, E);
+    float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    bool persp = !G.cam.ortho;
+    for (size_t t = 0; t < s->n_tri; t++) {
+        uint32_t e = s->tri_elem[t];
+        const uint32_t* c = s->tri + 3 * t;
+        if (e >= E || c[0] >= N || c[1] >= N || c[2] >= N) continue;
+        if (elem[e] == 2) elem[e] = 0;
+        float a[3], b[3], d[3], n[3], ec[3] = { 0, 0, 0 }, mid[3], to[3];
+        shown_pos(c[0], sc, sc2, a); shown_pos(c[1], sc, sc2, b); shown_pos(c[2], sc, sc2, d);
+        float e1[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, e2[3] = { d[0] - a[0], d[1] - a[1], d[2] - a[2] };
+        n[0] = e1[1] * e2[2] - e1[2] * e2[1]; n[1] = e1[2] * e2[0] - e1[0] * e2[2]; n[2] = e1[0] * e2[1] - e1[1] * e2[0];
+        for (int k = 0; k < 3; k++) mid[k] = (a[k] + b[k] + d[k]) / 3;
+        to[0] = persp ? eye.x - mid[0] : -fwd.x; to[1] = persp ? eye.y - mid[1] : -fwd.y; to[2] = persp ? eye.z - mid[2] : -fwd.z;
+        float dot = n[0] * to[0] + n[1] * to[1] + n[2] * to[2];
+        int ty = f->etype[e];
+        if (!(ty >= 7 && ty <= 10)) {                /* a solid: outward is away from the element's centre */
+            uint32_t m = f->eoff[e + 1] - f->eoff[e]; float q[3];
+            for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) { shown_pos(f->conn[j], sc, sc2, q); for (int k = 0; k < 3; k++) ec[k] += q[k] / m; }
+            float out = n[0] * (mid[0] - ec[0]) + n[1] * (mid[1] - ec[1]) + n[2] * (mid[2] - ec[2]);
+            if (out < 0) dot = -dot;
+            if (dot <= 0) continue;
+        }
+        node[c[0]] = node[c[1]] = node[c[2]] = 1; elem[e] = 1;
+    }
+}
+
 /* the selection from the nodes a box held (taken over: freed with the selection):
    the elements and / or nodes asked for, the extremes over them, the probe on the max */
 static bool select_from(uint8_t* inside, bool crossing) {
-    if (G.sel_inside == inside) G.sel_inside = NULL;  /* a reselect: keep it through the clear */
+    uint8_t* front = NULL; uint8_t* front_e = NULL;
+    if (G.sel_inside == inside) {                    /* a reselect: the box's masks are kept through the clear */
+        front = G.sel_front; front_e = G.sel_front_e;
+        G.sel_inside = NULL; G.sel_front = G.sel_front_e = NULL;
+    }
     app_sel_clear();
-    G.sel_inside = inside;
+    G.sel_inside = inside; G.sel_front = front; G.sel_front_e = front_e;
     bool want_e = G.sel_elems || !G.sel_nodes, want_n = G.sel_nodes;   /* never nothing */
     uint32_t N = G.frd.n_nodes, E = G.frd.n_elems;
     uint32_t* sel = malloc((size_t)CV_MAX(E, 1) * sizeof *sel);
@@ -125,10 +166,31 @@ static bool select_from(uint8_t* inside, bool crossing) {
     uint8_t* seen = calloc(CV_MAX(N, 1), 1);
     if (!sel || (want_n && !seln) || !seen) { free(sel); free(seln); free(seen); return false; }
     uint32_t n = want_e ? cv_box_elems(&G.frd, G.vis, inside, crossing, sel) : 0, nn = 0;
-    if (want_n) {                                    /* nodes of shown elements */
-        for (uint32_t e = 0; e < E; e++)
-            if (!G.vis || G.vis[e]) for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) seen[G.frd.conn[j]] = 1;
-        for (uint32_t i = 0; i < N; i++) if (inside[i] && seen[i]) seln[nn++] = i;
+    /* the side facing the camera, when only that is wanted: judged as the box was dragged
+       and kept with it, so a reselect after a turn takes the same nodes */
+    if (G.sel_visible && !G.sel_front) {
+        G.sel_front = malloc(CV_MAX(N, 1)); G.sel_front_e = malloc(CV_MAX(E, 1));
+        if (G.sel_front && G.sel_front_e) facing(G.sel_front, G.sel_front_e);
+        else { free(G.sel_front); free(G.sel_front_e); G.sel_front = G.sel_front_e = NULL; }
+    }
+    uint8_t* nface = G.sel_visible ? G.sel_front : NULL; uint8_t* eface = G.sel_visible ? G.sel_front_e : NULL;
+    if (eface) {                                     /* elements with a face turned toward the eye; faceless ones stay */
+        uint32_t m = 0;
+        for (uint32_t k = 0; k < n; k++) if (eface[sel[k]]) sel[m++] = sel[k];
+        n = m;
+    }
+    if (want_n) {                                    /* nodes of shown elements; on the facing side when asked:
+                                                        a node of an element with faces needs one of them turned this way */
+        for (uint32_t e = 0; e < E; e++) {
+            if (G.vis && !G.vis[e]) continue;
+            uint8_t v = eface ? (eface[e] == 2 ? 2 : 1) : 1;   /* 2: an element without a face on the skin */
+            for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) seen[G.frd.conn[j]] |= v;
+        }
+        for (uint32_t i = 0; i < N; i++) {
+            if (!inside[i] || !seen[i]) continue;
+            if (nface && !nface[i] && (seen[i] & 1)) continue;   /* on a faced element, but no face of it turned this way */
+            seln[nn++] = i;
+        }
     }
     if (!n && !nn) { free(sel); free(seln); free(seen); return false; }
     if (n) { G.sel = sel; G.sel_n = n; } else free(sel);
