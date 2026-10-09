@@ -737,7 +737,7 @@ static bool unit_row_in(struct nk_context* ctx, float s, float row, float cw, in
     int sysu = cv_sys_unit(G.units, cv_sys_temp(G.units), q), cur = unit_in_now(q);
     bool own = G.unit_in[q] >= 0 && G.unit_in[q] != sysu;
     unit_row_head(ctx, s, row, q, here, own ? "   - changed" : "");
-    const char* lab[32];
+    const char* lab[32] = {0};
     int n = CV_MIN(cv_unit_count(q), 32);
     for (int i = 0; i < n; i++) lab[i] = unit_label(cv_unit_get(q, i));
     chip_rows(ctx, s, row, cw, lab, n);
