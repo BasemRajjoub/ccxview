@@ -367,6 +367,7 @@ static void section_groups(struct nk_context* ctx, float s, float row) {
         }
         if (geo_loaded()) panel_geo_sets(ctx, row);   /* cgx sets drive the mesh's too */
         else panel_deck_sets(ctx, s, row);
+        section_stl(ctx, s, row);
         nk_tree_pop(ctx);
     }
 

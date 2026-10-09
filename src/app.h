@@ -25,7 +25,7 @@ enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
 /* the side panel's sections and sub-sections: open or closed, kept in the settings */
 enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
        CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
-       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_N };
+       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_IMPORT, CV_TREE_N };
 
 /* the title block's automatic lines (app_title.c), in the order shown */
 enum { CV_TB_TITLE, CV_TB_FILE, CV_TB_SOLVER, CV_TB_ANALYSIS, CV_TB_STEP, CV_TB_SCALE, CV_TB_UNITS,
@@ -250,6 +250,7 @@ typedef struct {
     char      cmp_path[1024];
     bool      diff_mode;
     bool      dlg_for_compare;       /* the open dialog picks the comparison file */
+    bool      dlg_for_stl;           /* ... a geometry file to import (app_stl_add) */
     float     rmin, rmax;
     bool      range_lock;
     int       oor_mode[2];           /* a locked range: values above [0] and below [1]: 0 the map's end colour, 1 grey, 2 oor_rgb, 3 hidden */
@@ -669,6 +670,31 @@ void geo_set_toggled(int i);
 void geo_show_all(void);
 void geo_sets_into_deck(const cv_fbd* g, cv_inp* d);
 void app_eval_cgx(void);             /* re-open the .fbd, evaluated by cgx */
+
+/* app_stl.c: imported geometry, STL files shown beside the results (parts of the
+   assembly that were not analysed): never deformed, not picked, not on the mirror
+   copies. They belong to the model: kept on a reload, cleared when another model
+   opens. A layer as the sidecar keeps it: */
+typedef struct {
+    char  path[1024];        /* absolute */
+    bool  visible;
+    float alpha;             /* opacity 0..1, 1 opaque (default) */
+    float rgb[3];
+    float scale;             /* the file's lengths times this (0.001 .. 1000: files in other units) */
+} cv_stl_layer;
+/* read and listed (CV_MESH_N at most); false, with a message, when it cannot be read
+   or no model is open; true without a second copy when the path is listed already */
+bool app_stl_add(const char* path);
+int  app_stl_count(void);
+bool app_stl_get(int i, cv_stl_layer* out);
+void app_stl_set(int i, const cv_stl_layer* in);    /* everything but the path */
+const char* app_stl_name(int i);                    /* the file's base name */
+uint32_t app_stl_tris(int i);
+void app_stl_remove(int i);
+void app_stl_clear(void);
+bool app_stl_bounds(v3* lo, v3* hi);                /* the shown layers, scaled; false: none */
+void app_stl_draw(cv_draw* d);                      /* d->mesh from the layers */
+void app_dialog_done(const char* path);             /* the open dialog's pick: a model, the comparison or a geometry file */
 
 /* app_settings.c: the ini file */
 void settings_load(void);                    /* into G, before the first frame */

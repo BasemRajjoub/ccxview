@@ -25,6 +25,7 @@ What ccxview does, in full. The short version is in the [README](../README.md).
 - Results of other solvers that write `.frd` (FEMaster) are read too, including
   their tensor order and shell top / bottom fields.
 - Damaged records are skipped and listed in the message window, never a crash.
+- `.stl` geometry (binary and ASCII) imported beside the results: see below.
 
 ## Elements
 
@@ -203,6 +204,19 @@ and what is drawn for it; `samples/symbols/` shows them all.
 - Convergence plot from `.sta` / `.cvg`.
 - Groups by element type, material and set; named sets and surfaces from the
   deck, highlighted on the model.
+- Imported geometry (#23): parts of the assembly that were not analysed (a pin, a
+  clamp, the housing) added from STL files for a picture of the whole: Groups >
+  Imported geometry > Import STL..., View > File > Import STL..., a `.stl` dropped
+  on the window, or `--stl`. Each file is a layer with a box to show or hide it, its
+  colour, an opacity slider (see-through: the results show behind it, blended over
+  the model, back faces then front faces; two see-through layers over each other
+  blend in list order, not by depth) and a unit scale (x0.001 .. x1000, for a file
+  in metres beside a model in mm). Lit like the faces when Shading is on, with its
+  outline at the model's crease angle while Outline is on, cut by the clip plane,
+  in the PNG and the videos, taken in by Fit. It never moves with the
+  deformation, is not on the mirror and replicate copies, and the probe passes
+  through it. The layers belong to the model: a reload keeps them, opening another
+  model clears them.
 
 ## cgx geometry
 

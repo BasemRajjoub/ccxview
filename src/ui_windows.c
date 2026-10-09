@@ -306,7 +306,7 @@ static bool has_ext(const char* n, const char* ext) {
     size_t l = strlen(n);
     return l > 4 && n[l - 4] == '.' && (n[l - 3] | 32) == ext[0] && (n[l - 2] | 32) == ext[1] && (n[l - 1] | 32) == ext[2];
 }
-static bool is_frd(const char* n) { return has_ext(n, "frd") || has_ext(n, "inp") || has_ext(n, "dat") || has_ext(n, "fbd"); }
+static bool is_frd(const char* n) { return has_ext(n, "frd") || has_ext(n, "inp") || has_ext(n, "dat") || has_ext(n, "fbd") || has_ext(n, "stl"); }
 
 static void fmt_size(char* out, size_t n, uint64_t b) {
     if (b >= (1ull << 30)) snprintf(out, n, "%.1f GB", b / 1073741824.0);
@@ -400,8 +400,7 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
     nk_end(ctx);
     if (open_path[0]) {
         G.browser_open = false;
-        if (G.dlg_for_compare) app_compare_open(open_path); else app_open(open_path);
-        G.dlg_for_compare = false;
+        app_dialog_done(open_path);
     }
 }
 

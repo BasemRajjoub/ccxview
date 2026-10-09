@@ -15,6 +15,7 @@
 #include <stdarg.h>
 #include "ui_int.h"
 #include "app_mesh.h"
+#include "stl.h"
 
 enum { OP_END, OP_CASE, OP_AT_TIP, OP_AT_WIN, OP_AT_POPUP, OP_AT_CLOSE, OP_AT_TITLE, OP_AT_VIEW, OP_AT_MODEL, OP_CLICK, OP_PRESS, OP_RELEASE,
        OP_WHEEL, OP_WAIT, OP_DO, OP_EXPECT };
@@ -397,6 +398,23 @@ static void meas_add_ids(struct nk_context* ctx) {
     uint32_t id[3] = { G.frd.node_id[0], G.frd.node_id[G.frd.n_nodes - 1], 0 };
     meas_clear(ctx); app_measure_add(CV_MEAS_DIST, id);
 }
+/* imported geometry: a tetrahedron written under build/, listed, Groups > Imported geometry in sight */
+static void stl_add(struct nk_context* ctx) {
+    static const float t[36] = { 0, 0, 0, 0, 60, 0, 60, 0, 0,  0, 0, 0, 60, 0, 0, 0, 0, 60,
+                                 0, 0, 0, 0, 0, 60, 0, 60, 0,  60, 0, 0, 0, 60, 0, 0, 0, 60 };
+    cv_stl_write("build/ui-test/tet.stl", t, 4);
+    app_stl_clear();
+    app_stl_add("build/ui-test/tet.stl");
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_GROUPS || k == CV_TREE_IMPORT;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+static cv_stl_layer stl_l(void) { cv_stl_layer l = { 0 }; app_stl_get(0, &l); return l; }
+static bool stl_listed(struct nk_context* ctx) { return app_stl_count() == 1 && stl_l().visible; }
+static bool stl_hidden(struct nk_context* ctx) { return app_stl_count() == 1 && !stl_l().visible; }
+static void stl_faint(struct nk_context* ctx) { cv_stl_layer l = stl_l(); l.alpha = 0.1f; app_stl_set(0, &l); }
+static bool stl_more_opaque(struct nk_context* ctx) { return stl_l().alpha > 0.5f; }
+static bool stl_scaled(struct nk_context* ctx) { return stl_l().scale > 1.5f && !popup_open(ctx, "Scene"); }
+static bool stl_gone(struct nk_context* ctx) { return app_stl_count() == 0; }
 static bool tip_cmap(struct nk_context* ctx) { return !strncmp(uii_tip_shown(), "Colour map", 10); }
 static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 
@@ -674,6 +692,17 @@ static const step script[] = {
     DO(open_mesh), WAIT(5), AT_TIP("Mesh quality", "Set your own limits"), CLICK, WAIT(2),
     AT_TIP_X("Mesh quality", "The limit for every element type", 0.95f), CLICK, EXPECT(mesh_limit_set, "the aspect limit changes"),
     DO(mesh_limits_usual), WAIT(3), PANELS_ANSWER,
+
+    CASE("imported geometry: listed in Groups; shown, opacity, scale list, colour, removed"),
+    DO(stl_add), WAIT(3), EXPECT(stl_listed, "the STL is listed and shown"),
+    AT_TIP("Scene", "Show this imported file"), CLICK, WAIT(2), EXPECT(stl_hidden, "its box hides it"),
+    DO(stl_faint), WAIT(2), AT_TIP_X("Scene", "Opacity: 1 solid", 0.95f), CLICK, WAIT(2), EXPECT(stl_more_opaque, "the opacity slider answers"),
+    AT_TIP("Scene", "Its lengths times this"), WAIT(30), CLICK, EXPECT(scene_popup, "the scale list opens"),
+    AT_POPUP("Scene", 0.5f, 0.92f), CLICK, WAIT(2), EXPECT(stl_scaled, "a larger scale picked, the list closed"),
+    AT_TIP("Scene", "Its colour"), CLICK, WAIT(2), EXPECT(scene_popup, "the colour picker opens"),
+    AT_TIP("Scene", "Its colour"), CLICK, WAIT(2),
+    AT_TIP("Scene", "Remove this file"), CLICK, WAIT(2), EXPECT(stl_gone, "the remove button takes it out"),
+    DO(sections_open), WAIT(2), PANELS_ANSWER,
 
     CASE("a window closed by the program (OK, Escape), the panels still answer"),
     DO(open_formula), WAIT(3), AT_TITLE("Formula"), CLICK, DO(close_all), WAIT(1), PANELS_ANSWER,

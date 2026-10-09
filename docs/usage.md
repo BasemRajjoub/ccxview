@@ -1,7 +1,9 @@
 # Using ccxview
 
 Open a file from the command line, with Open... (Ctrl+O), by dropping it on the
-window, or by typing a path in the box.
+window, or by typing a path in the box. A `.stl` dropped on the window (or picked
+with Import STL... in Groups > Imported geometry or View > File) is added to the
+open model as imported geometry instead.
 
 ## Command line
 
@@ -28,6 +30,8 @@ ccxview model.frd --measure dist:16,71 --measure circle:16,419,1171 --measure-wi
                                             #   circle:A,B,C; --opt meas_show=0|1|2: their labels give
                                             #   undeformed -> deformed, the undeformed, the deformed value
 ccxview run2.frd --compare run1.frd         # difference of two runs
+ccxview model.frd --stl pin.stl --stl alt.stl --stl-alpha 0.4   # geometry that was not analysed, shown with
+                                            #   the results (repeatable), see-through
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
@@ -79,7 +83,7 @@ ccxview --version
 
 - **Layers** (left panel): faces, edges, outline, nodes, Gauss points, vectors,
   tensor glyphs, stress trajectories, supports, loads, springs.
-- **Groups**: element types, materials, sets and surfaces of the deck.
+- **Groups**: element types, materials, sets and surfaces of the deck; Imported geometry: STL files shown with the results, each with show / hide, colour, opacity and unit scale.
 - **Fields**: the results of the step, their components and invariants,
   the shell section forces (SHELL, with the deck), calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).

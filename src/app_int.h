@@ -47,6 +47,9 @@ typedef struct {
     const char* view_file;      /* --view FILE: a saved view state, applied after load */
     bool        watch;          /* --watch: reload when the file changes */
     const char* compare;        /* --compare FILE */
+    const char* stl[CV_MESH_N]; /* --stl FILE: imported geometry, after load */
+    int         nstl;
+    float       stl_alpha;      /* --stl-alpha A: their opacity, < 0 unset (1) */
     const char* path_ids;       /* --path A,B: node ids to plot between */
     const char* measure[16];    /* --measure dist:A,B | angle:A,B,C | circle:A,B,C (node ids) */
     int         nmeasure;

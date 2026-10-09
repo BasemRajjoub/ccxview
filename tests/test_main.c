@@ -1523,6 +1523,7 @@ static void test_localsys_requests(void) {
 #include "t_failure.h"
 #include "t_quality.h"
 #include "t_shell.h"
+#include "t_stl.h"
 
 int main(void) {
     test_gpu_env();
@@ -1541,6 +1542,7 @@ int main(void) {
     test_export();
     test_fprintf();
     test_path();
+    test_stl();
     test_anchor();
     test_measure();
     test_feature_edges();
