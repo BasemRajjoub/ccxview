@@ -1,9 +1,12 @@
 /* app_seltools.c -- the ways to select besides the box (app.h): a click on an
-   element or node, inverting, elements to nodes and back, deck sets, surfaces,
-   element types and materials by name, an id list, and --select. Each goes in
+   element or node, the faces up to the feature edges, a chain of feature edges,
+   the connected part, inverting, elements to nodes and back, a layer more or
+   less, the boundary, deck sets, surfaces, element types and materials by name,
+   an id list, and --select. Each goes in
    through app_sel_apply (app_select.c), which does the rest. */
 #include "app_int.h"
 #include "idlist.h"
+#include "seltopo.h"
 #include <math.h>
 #include <stdio.h>
 #include <strings.h>
@@ -65,6 +68,66 @@ static bool click_one(const cv_pick* p) {
     return app_sel_apply(&p->elem, 1, &p->node, 1, mode, which) || mode == CV_SEL_REMOVE;
 }
 
+/* the skin faces from face k up to the creases: their elements, the nodes of the faces */
+static bool take_faces(uint32_t k, int mode) {
+    uint32_t nf = 0;
+    uint32_t* fc = cv_sel_face_flood(&G.frd, &G.skin, k, G.outline_angle, &nf);
+    uint32_t* el = malloc((size_t)CV_MAX(nf, 1) * sizeof *el);
+    uint32_t* nd = malloc((size_t)CV_MAX(nf, 1) * 8 * sizeof *nd);
+    bool ok = false;
+    if (fc && el && nd) {
+        uint32_t nn = 0;
+        for (uint32_t i = 0; i < nf; i++) {
+            uint32_t e = G.skin.face[fc[i]] >> 3;
+            el[i] = e;
+            nn += (uint32_t)cv_elem_face_nodes(&G.frd, e, (int)(G.skin.face[fc[i]] & 7), nd + nn);
+        }
+        ok = take_both(el, nf, nd, nn, mode);
+        snprintf(G.sel_note, sizeof G.sel_note, "%u faces up to the feature edges (crease %g deg)", nf, G.outline_angle);
+    }
+    free(fc); free(el); free(nd);
+    return ok;
+}
+
+/* the feature edge nearest p, as drawn: its index in G.skin.fedge, or n_fedge */
+static size_t nearest_fedge(const float p[3]) {
+    float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
+    size_t best = G.skin.n_fedge;
+    float bd = INFINITY;
+    for (size_t k = 0; k < G.skin.n_fedge; k++) {
+        float a[3], b[3], d[3], t = 0, l = 0;
+        for (int q = 0; q < 3; q++) {
+            uint32_t i = G.skin.fedge[2 * k], j = G.skin.fedge[2 * k + 1];
+            a[q] = G.frd.xyz[3 * i + q] + (G.disp ? sc * G.disp[3 * i + q] : 0) + (G.disp2 ? sc2 * G.disp2[3 * i + q] : 0);
+            b[q] = G.frd.xyz[3 * j + q] + (G.disp ? sc * G.disp[3 * j + q] : 0) + (G.disp2 ? sc2 * G.disp2[3 * j + q] : 0);
+        }
+        for (int q = 0; q < 3; q++) { d[q] = b[q] - a[q]; t += (p[q] - a[q]) * d[q]; l += d[q] * d[q]; }
+        t = l > 0 ? CV_MIN(CV_MAX(t / l, 0.f), 1.f) : 0.f;
+        float e = 0;
+        for (int q = 0; q < 3; q++) { float x = a[q] + t * d[q] - p[q]; e += x * x; }
+        if (e < bd) { bd = e; best = k; }
+    }
+    return best;
+}
+
+static bool take_chain(size_t k, int mode) {
+    uint32_t nn = 0;
+    uint32_t* nd = cv_sel_edge_chain(&G.frd, &G.skin, k, G.outline_angle, &nn);
+    bool ok = nd && app_sel_take_nodes(nd, nn, mode);
+    if (nd) snprintf(G.sel_note, sizeof G.sel_note, "%u nodes along the feature edges", nn);
+    free(nd);
+    return ok;
+}
+
+static bool take_part(uint32_t e, int mode) {
+    uint32_t ne = 0;
+    uint32_t* el = cv_sel_part(&G.frd, G.vis, e, &ne);
+    bool ok = el && app_sel_take_elems(el, ne, mode);
+    if (el) snprintf(G.sel_note, sizeof G.sel_note, "a part of %u elements", ne);
+    free(el);
+    return ok;
+}
+
 bool app_sel_click(float px, float py) {
     if (!G.loaded || G.sel_tool == CV_ST_NONE) return false;
     cv_pick p;
@@ -72,6 +135,18 @@ bool app_sel_click(float px, float py) {
     if (!app_pick(px, py, &p, o, d) || !p.hit) { say("nothing under the cursor%s", ""); return false; }
     switch (G.sel_tool) {
     case CV_ST_CLICK: return click_one(&p);
+    case CV_ST_FACE: {
+        uint32_t k = cv_skin_face_of_tri(&G.frd, &G.skin, p.tri);
+        if (k == UINT32_MAX) { say("no outer face there%s", ""); return false; }
+        return take_faces(k, G.sel_mode);
+    }
+    case CV_ST_CHAIN: {
+        float h[3] = { o[0] + d[0] * p.t, o[1] + d[1] * p.t, o[2] + d[2] * p.t };
+        size_t k = nearest_fedge(h);
+        if (k >= G.skin.n_fedge) { say("no feature edges%s", ""); return false; }
+        return take_chain(k, G.sel_mode);
+    }
+    case CV_ST_PART: return take_part(p.elem, G.sel_mode);
     default: return false;
     }
 }
@@ -110,6 +185,30 @@ bool app_sel_to_elems(bool any) {
     bool ok = app_sel_apply(el, ne, NULL, 0, CV_SEL_NEW, 1);
     if (!ok) say(any ? "no shown element has a selected node%s" : "no shown element has every node selected%s", "");
     free(el);
+    return ok;
+}
+
+bool app_sel_grow(bool shrink) {
+    if (!G.sel_n && !G.seln_n) { say("nothing selected%s", ""); return false; }
+    uint32_t ne = 0, nn = 0;
+    uint32_t* el = !G.sel_n ? NULL : shrink ? cv_sel_shrink_elems(&G.frd, G.vis, G.sel, G.sel_n, &ne)
+                                            : cv_sel_grow_elems(&G.frd, G.vis, G.sel, G.sel_n, &ne);
+    uint32_t* nd = !G.seln_n ? NULL : shrink ? cv_sel_shrink_nodes(&G.frd, G.vis, G.seln, G.seln_n, &nn)
+                                             : cv_sel_grow_nodes(&G.frd, G.vis, G.seln, G.seln_n, &nn);
+    int which = (G.sel_n ? 1 : 0) | (G.seln_n ? 2 : 0);
+    G.sel_note[0] = 0;
+    bool ok = app_sel_apply(el, ne, nd, nn, CV_SEL_NEW, which);
+    free(el); free(nd);
+    return ok;
+}
+
+bool app_sel_boundary(void) {
+    if (!G.sel_n) { say("no elements selected%s", ""); return false; }
+    uint32_t *nd = NULL, *el = NULL, nn = 0, ne = 0;
+    if (!cv_sel_boundary(&G.frd, G.sel, G.sel_n, &nd, &nn, &el, &ne)) return false;
+    G.sel_note[0] = 0;
+    bool ok = app_sel_apply(el, ne, nd, nn, CV_SEL_NEW, 3);
+    free(el); free(nd);
     return ok;
 }
 
@@ -243,6 +342,45 @@ bool app_sel_spec(const char* spec) {
     if (!strcasecmp(spec, "elements") || !strcasecmp(spec, "elems")) return app_sel_to_elems(false);
     if (!strcasecmp(spec, "elements-any") || !strcasecmp(spec, "elems-any")) return app_sel_to_elems(true);
     if (!strcasecmp(spec, "clear")) { app_sel_clear(); return true; }
+    if (!strncasecmp(spec, "lasso:", 6)) {               /* lasso:x,y,x,y,...: fractions of the view */
+        float xy[64];
+        int n = 0;
+        for (const char* p = spec + 6; *p && n < 64;) {
+            char* end;
+            float v = strtof(p, &end);
+            if (end == p) break;
+            xy[n] = n % 2 ? G.vp_y + v * G.vp_h : G.vp_x + v * G.vp_w; n++;
+            p = *end == ',' ? end + 1 : end;
+        }
+        if (n < 6) { say("lasso: three points or more, x,y fractions of the view%s", ""); return false; }
+        int m = G.sel_mode;
+        G.sel_mode = mode;
+        bool ok = app_lasso_select(xy, n / 2);
+        G.sel_mode = m;
+        return ok;
+    }
+    if (!strcasecmp(spec, "grow")) return app_sel_grow(false);
+    if (!strcasecmp(spec, "shrink")) return app_sel_grow(true);
+    if (!strcasecmp(spec, "boundary")) return app_sel_boundary();
+    if (!strncasecmp(spec, "part:", 5) || !strncasecmp(spec, "face:", 5)) {   /* part:EID, face:EID:N (the deck's face SN) */
+        unsigned id = 0, fn = 0;
+        int k = sscanf(spec + 5, "%u:S%u", &id, &fn);
+        if (k < 2) k = sscanf(spec + 5, "%u:%u", &id, &fn);
+        uint32_t e = k >= 1 ? cv_frd_elem_index(&G.frd, id) : UINT32_MAX;
+        if (e == UINT32_MAX) { say("no element %s", spec + 5); return false; }
+        if (spec[0] == 'p' || spec[0] == 'P') return take_part(e, mode);
+        for (size_t q = 0; q < G.skin.n_face; q++)
+            if (G.skin.face[q] >> 3 == e && (k < 2 || (G.skin.face[q] & 7) + 1 == fn)) return take_faces((uint32_t)q, mode);
+        say("element %s has no outer face like that", spec + 5);
+        return false;
+    }
+    if (!strncasecmp(spec, "chain:", 6)) {               /* chain:NID: the feature edges through that node */
+        uint32_t v = cv_frd_node_index(&G.frd, (uint32_t)strtoul(spec + 6, NULL, 10));
+        for (size_t q = 0; v != UINT32_MAX && q < G.skin.n_fedge; q++)
+            if (G.skin.fedge[2 * q] == v || G.skin.fedge[2 * q + 1] == v) return take_chain(q, mode);
+        say("node %s is on no feature edge", spec + 6);
+        return false;
+    }
     if (!strncasecmp(spec, "takes:", 6)) {               /* what the next ones take */
         const char* w = spec + 6;
         G.sel_elems = !strcasecmp(w, "elements") || !strcasecmp(w, "both");

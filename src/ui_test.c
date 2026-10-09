@@ -240,6 +240,16 @@ static bool sel_mode_and(struct nk_context* ctx) { return G.sel_mode == CV_SEL_A
 static bool select_popup(struct nk_context* ctx) { return popup_open(ctx, "Selection"); }
 /* a box in add mode keeps what was there: more than the first box alone */
 static bool box_added(struct nk_context* ctx) { return G.sel_n > sel_was && sel_was > 0; }
+static bool lasso_armed(struct nk_context* ctx) { return G.sel_tool == CV_ST_LASSO; }
+static bool tool_down(struct nk_context* ctx) { return G.sel_tool == CV_ST_NONE && G.show_select; }
+static bool lasso_took(struct nk_context* ctx) { return G.sel_n > 0 && G.sel_n < G.frd.n_elems && G.boxq.on; }
+static bool faces_took(struct nk_context* ctx) { return G.sel_tool == CV_ST_FACE && G.sel_n > 0 && G.sel_note[0]; }
+static bool chain_took(struct nk_context* ctx) { return G.sel_tool == CV_ST_CHAIN && G.seln_n > 1 && !G.sel_n; }
+static bool part_took(struct nk_context* ctx) { return G.sel_tool == CV_ST_PART && G.sel_n == G.frd.n_elems; }   /* one part */
+static bool sel_grew(struct nk_context* ctx) { return G.sel_n > sel_was; }
+static bool sel_shrank(struct nk_context* ctx) { return G.sel_n < sel_was && G.sel_n > 0; }
+static bool sel_boundary(struct nk_context* ctx) { return G.sel_n > 0 && G.seln_n > 0; }
+static void ids_some(struct nk_context* ctx) { uii_select_ids("100-110", false); }
 static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
 static void ids_on(struct nk_context* ctx) { G.label_kinds = 1 << CV_LABEL_NODE; G.label_probe_only = true; app_label_changed(); }
 static void ids_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_probe_only = false; app_label_changed(); }
@@ -617,6 +627,30 @@ static const step script[] = {
     AT_TIP("Selection", "Elements to nodes"), CLICK, WAIT(2),
     AT_TIP("Selection", "Nodes to elements: the shown elements with any node"), CLICK, WAIT(2), EXPECT(sel_touching, "touching: more elements"),
     AT_TIP("Selection", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "clear"),
+
+    CASE("selection: the lasso takes what it is drawn round, Esc puts it down"),
+    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Selection", "Draw round what you want"), CLICK, WAIT(2),
+    EXPECT(lasso_armed, "the lasso armed"),
+    AT_VIEW(0.45f, 0.3f), PRESS, AT_VIEW(0.65f, 0.28f), AT_VIEW(0.85f, 0.35f), AT_VIEW(0.88f, 0.6f), AT_VIEW(0.8f, 0.8f),
+    AT_VIEW(0.6f, 0.82f), AT_VIEW(0.46f, 0.7f), RELEASE, WAIT(2), EXPECT(lasso_took, "elements inside it, with their extremes"),
+    AT_TIP("Selection", "Draw round what you want"), CLICK, WAIT(2), EXPECT(tool_down, "the tool put down, the window stays"),
+    DO(sel_none), WAIT(2),
+
+    CASE("selection: faces up to the feature edges, an edge chain, the part"),
+    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Selection", "Click an outer face"), CLICK, WAIT(2),
+    AT_MODEL, CLICK, WAIT(2), EXPECT(faces_took, "the faces' elements"),
+    DO(sel_none), AT_TIP("Selection", "Click near a feature edge"), CLICK, WAIT(2), AT_MODEL, CLICK, WAIT(2),
+    EXPECT(chain_took, "the nodes along a feature edge"),
+    DO(sel_none), AT_TIP("Selection", "Click an element: every shown element"), CLICK, WAIT(2), AT_MODEL, CLICK, WAIT(2),
+    EXPECT(part_took, "the whole part"),
+    DO(sel_none), WAIT(2),
+
+    CASE("selection: grow, shrink, boundary"),
+    DO(sel_none), DO(open_select), WAIT(3), DO(ids_some), WAIT(2), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
+    DO(sel_remember), AT_TIP("Selection", "Grow: one layer more"), CLICK, WAIT(2), EXPECT(sel_grew, "grow: more elements"),
+    DO(sel_remember), AT_TIP("Selection", "Shrink: one layer less"), CLICK, WAIT(2), EXPECT(sel_shrank, "shrink: fewer"),
+    AT_TIP("Selection", "Boundary: the nodes on the outside"), CLICK, WAIT(2), EXPECT(sel_boundary, "its boundary nodes and elements"),
+    DO(sel_none), WAIT(2),
 
     CASE("selection: a name from the list, the click tool toggles an element"),
     DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Selection", "A deck element or node set"), CLICK, WAIT(2),

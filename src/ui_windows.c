@@ -162,8 +162,8 @@ void window_probe(struct nk_context* ctx, float s, float row) {
    drag lasts: gone with the button. The box of a box zoom always. */
 void window_nav(struct nk_context* ctx, float s) {
     if (!G.loaded || !G.nav_live || G.nav_mode == CV_NAV_NONE) return;
-    bool box = G.nav_mode == CV_NAV_BOX;
-    if (!box && !G.show_pivot) return;
+    bool box = G.nav_mode == CV_NAV_BOX, lasso = G.nav_mode == CV_NAV_LASSO;
+    if (!box && !lasso && !G.show_pivot) return;
     struct nk_rect wr = nk_rect(G.vp_x, G.vp_y, G.vp_w, G.vp_h);
     nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(nk_rgba(0, 0, 0, 0)));
     nk_style_push_float(ctx, &ctx->style.window.border, 0);
@@ -173,7 +173,13 @@ void window_nav(struct nk_context* ctx, float s) {
         const nk_byte al = 255;
         struct nk_color ink = nk_rgba(255, 220, 60, al), shade = nk_rgba(0, 0, 0, (nk_byte)(al * 0.6f));
         float sx, sy;
-        if (box) {
+        if (lasso) {                                     /* the lasso: its line, closed back to the start */
+            struct nk_color c = nk_rgba(100, 160, 255, 230);
+            for (int i = 0; i + 1 < G.lasso_n; i++)
+                nk_stroke_line(cv, G.lasso[2 * i], G.lasso[2 * i + 1], G.lasso[2 * i + 2], G.lasso[2 * i + 3], 1.5f * s, c);
+            if (G.lasso_n > 2)
+                nk_stroke_line(cv, G.lasso[2 * G.lasso_n - 2], G.lasso[2 * G.lasso_n - 1], G.lasso[0], G.lasso[1], 1.f * s, nk_rgba(c.r, c.g, c.b, 110));
+        } else if (box) {
             float x0 = CV_MIN(G.nav_box[0], G.nav_box[2]), y0 = CV_MIN(G.nav_box[1], G.nav_box[3]);
             struct nk_rect r = nk_rect(x0, y0, fabsf(G.nav_box[2] - G.nav_box[0]), fabsf(G.nav_box[3] - G.nav_box[1]));
             /* a selection: window (left to right) blue, crossing (right to left) green; a box zoom grey */

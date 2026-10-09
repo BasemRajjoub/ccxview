@@ -361,6 +361,8 @@ typedef struct {
     int       sel_tool;              /* CV_ST_*: what a click in the view does (the Selection window's tools) */
     bool      show_select;           /* the Selection window */
     char      sel_note[160];         /* what the last selection step did or why it did nothing */
+    float     lasso[2 * 512];        /* the lasso being drawn: window pixels, lasso_n points */
+    int       lasso_n;
     uint8_t*  hide;                  /* per element, 1: hidden by hand (context menu), NULL none */
     /* the context menu (right click in the view): where, and what was under it */
     bool      menu_on;
@@ -521,6 +523,7 @@ bool app_sel_apply(const uint32_t* el, uint32_t ne, const uint32_t* nd, uint32_t
 int  app_sel_which(void);                       /* what the ticks say a pick takes: 1 elements | 2 nodes */
 bool app_box_select(float x_start, float y_start, float x_end, float y_end);
 bool app_box_reselect(void);                    /* the last box again (G.sel_elems / sel_nodes changed) */
+bool app_lasso_select(const float* xy, int n);  /* the lasso: the elements wholly inside it (window pixels) */
 void app_sel_clear(void);
 void app_sel_refresh(void);                     /* the outline again: the shape changed */
 void app_sel_field_changed(void);               /* the extremes again: the field changed */
@@ -534,6 +537,8 @@ bool app_sel_click(float px, float py);         /* the armed tool (G.sel_tool) a
 bool app_sel_invert(void);                      /* the ticked kinds: what is shown and not selected */
 bool app_sel_to_nodes(void);                    /* the selected elements' nodes, the elements dropped */
 bool app_sel_to_elems(bool any);                /* the shown elements with every (any) node selected, the nodes dropped */
+bool app_sel_grow(bool shrink);                 /* one layer of neighbours more (fewer), elements and nodes */
+bool app_sel_boundary(void);                    /* the selected elements' boundary: its nodes, the elements on it */
 /* a deck set or surface by name ("set:", "surf:" to say which), "type:C3D20R",
    "mat:NAME" or "mat:N" */
 bool app_sel_by_name(const char* name, int mode);
@@ -620,7 +625,7 @@ void app_sidecar_tick(void);                 /* per frame: written a moment afte
 void app_sidecar_flush(void);                /* written now if it changed (before unload, at quit) */
 void app_sidecar_forget(void);               /* delete the file, open the model afresh */
 void app_view(int preset);
-enum { CV_NAV_NONE, CV_NAV_ROTATE, CV_NAV_PAN, CV_NAV_ZOOM, CV_NAV_ROLL, CV_NAV_BOX, CV_NAV_LOOK };
+enum { CV_NAV_NONE, CV_NAV_ROTATE, CV_NAV_PAN, CV_NAV_ZOOM, CV_NAV_ROLL, CV_NAV_BOX, CV_NAV_LOOK, CV_NAV_LASSO };
 void cam_turn(v3 axis, float a, v3 pivot);       /* the camera turned about a world axis through pivot */
 bool cam_roll(float a);                          /* about the view axis; false: turntable, switched to free */
 bool app_center_at(float px, float py);         /* the point under the pixel to the view centre (and pivot) */

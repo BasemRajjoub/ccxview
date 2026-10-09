@@ -783,6 +783,14 @@ static void drag_move(float dx, float dy, bool shift) {
             G.nav_box[2] = drag.x; G.nav_box[3] = drag.y;
             G.nav_mode = CV_NAV_BOX;
             break;
+        case CV_NAV_LASSO: {                         /* a point every few pixels */
+            const float* l = G.lasso + 2 * (G.lasso_n - 1);
+            if (G.lasso_n < (int)(CV_COUNT(G.lasso) / 2) && fabsf(drag.x - l[0]) + fabsf(drag.y - l[1]) >= 3.f) {
+                G.lasso[2 * G.lasso_n] = drag.x; G.lasso[2 * G.lasso_n + 1] = drag.y; G.lasso_n++;
+            }
+            G.nav_mode = CV_NAV_LASSO;
+            break;
+        }
         case CV_NAV_LOOK: {                          /* flight: turn about the eye, not the target */
             cam_orbit(-dx * 0.004f, dy * 0.004f);
             v3 eye1, f1, r1, u1;
@@ -848,6 +856,10 @@ static void event(const sapp_event* ev) {
                 drag.mode = G.flight ? (left ? CV_NAV_LOOK : CV_NAV_PAN)
                           : left ? (ctrl || G.box_pick ? CV_NAV_BOX : alt ? CV_NAV_ROLL : shift ? CV_NAV_PAN : CV_NAV_ROTATE)
                           : ctrl ? CV_NAV_ZOOM : CV_NAV_PAN;
+                if (drag.mode == CV_NAV_ROTATE && G.show_select && G.sel_tool == CV_ST_LASSO) {   /* the lasso tool: a drag draws it */
+                    drag.mode = CV_NAV_LASSO;
+                    G.lasso[0] = drag.x0; G.lasso[1] = drag.y0; G.lasso_n = 1;
+                }
                 /* rotate about the part of the model that was grabbed; off the model, about the target */
                 bool on = false;
                 drag.pivot_on = false;
@@ -871,6 +883,8 @@ static void event(const sapp_event* ev) {
                 app_view_push();
                 app_center_at(ev->mouse_x, ev->mouse_y);
             }
+            if (drag.down && drag.mode == CV_NAV_LASSO && drag.moved && !app_lasso_select(G.lasso, G.lasso_n))
+                cv_msg_add(&G.msgs, 0, false, "lasso: no shown element lies wholly in it");
             if (drag.down && drag.mode == CV_NAV_BOX && drag.moved) {
                 if (G.box_pick) {
                     G.box_arm = false;
@@ -897,7 +911,7 @@ static void event(const sapp_event* ev) {
                         G.cam = drag.cam0; app_view_push(); G.cam = now;
                     }
                 }
-                if (!drag.moved && drag.mode == CV_NAV_BOX) break;    /* a click, not a box */
+                if (!drag.moved && (drag.mode == CV_NAV_BOX || drag.mode == CV_NAV_LASSO)) break;    /* a click, not a box */
                 G.nav_live = drag.mode != CV_NAV_LOOK;
                 drag_move(dx, dy, (ev->modifiers & SAPP_MODIFIER_SHIFT) != 0);
             }

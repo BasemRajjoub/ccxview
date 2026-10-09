@@ -1,7 +1,9 @@
 /* ui_select.c -- the Selection window (S): what is selected and its extremes, how
    what is picked next goes with it (new / add / remove / intersect), what a pick
-   takes (elements, nodes, the side facing the eye), the tools (box, click), the
-   steps on the selection itself (invert, to nodes, to elements), deck sets,
+   takes (elements, nodes, the side facing the eye), the tools (box, click, lasso,
+   faces up to the feature edges, a chain of feature edges, the connected part),
+   the steps on the selection itself (invert, to nodes, to elements, grow, shrink,
+   boundary), deck sets,
    surfaces, types and materials by name, and an id list. app_select.c and
    app_seltools.c do the work. */
 #include "app.h"
@@ -95,13 +97,21 @@ static void tool(struct nk_context* ctx, const char* label, int t, const char* t
 }
 
 static void tools_rows(struct nk_context* ctx, float s, float row) {
-    row_head(ctx, s, row, "pick", 2);
+    row_head(ctx, s, row, "pick", 3);
     tip(ctx, "Drag a box in the view next (Ctrl+Shift+drag at any time): left to right the elements\n"
              "wholly inside, right to left every one touched; it goes in by the mode");
     nk_bool box = G.box_arm;
-    if (nk_selectable_label(ctx, G.box_arm ? "box: drag one..." : "box", NK_TEXT_CENTERED, &box)) G.box_arm = box;
+    if (nk_selectable_label(ctx, G.box_arm ? "box: drag..." : "box", NK_TEXT_CENTERED, &box)) G.box_arm = box;
     tool(ctx, "click", CV_ST_CLICK, "Click elements (nodes) in the view: each one goes in by the mode;\n"
                                      "with 'select' a click on a selected one takes it out. Esc puts the tool down");
+    tool(ctx, "lasso", CV_ST_LASSO, "Draw round what you want with the left button held: the elements wholly inside\n"
+                                     "(nodes inside, when ticked), by the mode. Esc puts the tool down");
+    row_head(ctx, s, row, "", 3);
+    tool(ctx, "faces", CV_ST_FACE, "Click an outer face: every face reached from it without crossing a feature edge\n"
+                                    "(the outline's crease angle, Layers > Outline): their elements and nodes");
+    tool(ctx, "edge chain", CV_ST_CHAIN, "Click near a feature edge: the nodes along it, on through smooth turns up to\n"
+                                          "a corner (the outline's crease angle)");
+    tool(ctx, "part", CV_ST_PART, "Click an element: every shown element connected to it through shared nodes");
     row_head(ctx, s, row, "turn", 4);
     tip(ctx, "Invert: what is shown and not selected (elements, nodes or both, as selected or ticked)");
     if (nk_button_label(ctx, "invert")) app_sel_invert();
@@ -111,6 +121,14 @@ static void tools_rows(struct nk_context* ctx, float s, float row) {
     if (nk_button_label(ctx, "elements")) app_sel_to_elems(false);
     tip(ctx, "Nodes to elements: the shown elements with any node selected, the nodes dropped");
     if (nk_button_label(ctx, "touching")) app_sel_to_elems(true);
+    row_head(ctx, s, row, "layer", 3);
+    tip(ctx, "Grow: one layer more, the shown elements (nodes) sharing an element's node with the selection");
+    if (nk_button_label(ctx, "grow")) app_sel_grow(false);
+    tip(ctx, "Shrink: one layer less, without the elements (nodes) touching what is shown and not selected");
+    if (nk_button_label(ctx, "shrink")) app_sel_grow(true);
+    tip(ctx, "Boundary: the nodes on the outside of the selected elements (faces no other selected element shares),\n"
+             "and the elements that have such a face");
+    if (nk_button_label(ctx, "boundary")) app_sel_boundary();
 }
 
 /* the deck's sets and surfaces, the element types and materials: a list, the mode's button */
@@ -189,7 +207,7 @@ void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int f
     if (!G.show_select || !G.loaded) { if (was_open) G.sel_tool = CV_ST_NONE; was_open = false; return; }
     if (!was_open) { nk_window_show(ctx, "Selection", NK_SHOWN); G.sel_note[0] = 0; }
     was_open = true;
-    float lines = 11.f;                                  /* the rows below, the title and padding */
+    float lines = 13.f;                                  /* the rows below, the title and padding */
     float w = CV_MIN(430 * s, fw * 0.5f), h = CV_MIN(lines * (row + ctx->style.window.spacing.y) + 2.6f * row, fh * 0.8f);
     if (nk_begin(ctx, "Selection", nk_rect(G.vp_x + 10 * s, G.vp_y + 10 * s, w, h),   /* top left: the legend is top right */
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
@@ -201,7 +219,8 @@ void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int f
         ids_row(ctx, s, row);
         nk_layout_row_dynamic(ctx, row, 1);
         if (G.sel_note[0]) { tip(ctx, G.sel_note); nk_label_colored(ctx, G.sel_note, NK_TEXT_LEFT, P.warn); }
-        else if (G.sel_tool != CV_ST_NONE) nk_label_colored(ctx, "click in the view (Esc: done)", NK_TEXT_LEFT, P.accent);
+        else if (G.sel_tool != CV_ST_NONE)
+            nk_label_colored(ctx, G.sel_tool == CV_ST_LASSO ? "draw in the view (Esc: done)" : "click in the view (Esc: done)", NK_TEXT_LEFT, P.accent);
         else nk_label(ctx, "", NK_TEXT_LEFT);
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "The field integrated over the selected elements at every step (volume integral and average),\n"

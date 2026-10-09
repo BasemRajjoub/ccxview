@@ -164,8 +164,20 @@ elements and nodes:
 - Click: while armed, a click in the view takes the element (and node) under
   the cursor by the mode; with "select" a click on a selected one takes it out.
   Esc puts the tool down.
+- Lasso: drawn round what you want with the left button held, the elements
+  wholly inside (the nodes inside, when ticked).
+- Faces: a click on an outer face takes every face reached from it without
+  crossing a feature edge (the outline's crease angle, a change of material or
+  element type, an edge of one or three faces): a fillet, a hole's wall, a flat
+  side. Their elements and the nodes of the faces.
+- Edge chain: a click near a feature edge takes the nodes along it, on through
+  smooth turns (up to the crease angle) to a corner: a hole's rim, an edge.
+- Part: a click on an element takes every shown element connected to it.
 - Invert (what is shown and not selected), elements to their nodes, nodes to
   the elements with every node selected, or with any ("touching").
+- Grow and shrink by one layer of neighbours; boundary: the nodes on the
+  outside of the selected elements (faces no other selected element shares; a
+  shell's free edges) and the elements that have them.
 - By name: a deck element or node set, a surface (its elements and the nodes of
   its faces), every element of a type or a material; also from a right click on
   a set or surface in Groups.

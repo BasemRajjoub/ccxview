@@ -101,6 +101,11 @@ SPEC may start with a mode, `new:` (the default), `add:`, `remove:` or `and:`
 | `type:C3D20R`, `mat:STEEL`, `mat:2` | every element of a type, of a material (by name or number) |
 | `invert` | what is shown and not selected |
 | `nodes`, `elements`, `elements-any` | the selected elements' nodes; the elements with every (any) node selected |
+| `grow`, `shrink`, `boundary` | one layer more / less; the boundary's nodes and the elements on it |
+| `lasso:x,y,x,y,...` | a lasso through those points (fractions of the view), the elements wholly inside |
+| `part:EID` | every element connected to element EID |
+| `face:EID:S3`, `face:EID` | the outer faces from that face of the element (any of its outer faces) up to the feature edges |
+| `chain:NID` | the nodes along the feature edges through node NID, up to the corners |
 | `takes:elements\|nodes\|both`, `facing:on\|off` | what the next steps take |
 | `clear` | nothing |
 
@@ -114,7 +119,7 @@ It prints what it selected and the field's max and min over it.
 | X / Y / Z held + drag | orbit about that world axis only |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
 | Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection window's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
-| S | the Selection window: mode, box and click tools, invert, conversions, by name, by id |
+| S | the Selection window: mode, box, click, lasso, faces, edge chain and part tools, invert, conversions, grow, shrink, boundary, by name, by id |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre) |
 | right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |

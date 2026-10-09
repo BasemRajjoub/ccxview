@@ -4,6 +4,7 @@
    a clip through it, its ids and CSV. The other ways to select are in app_seltools.c. */
 #include "app_int.h"
 #include "selset.h"
+#include "seltopo.h"
 #include "web.h"
 #include <math.h>
 #include <stdio.h>
@@ -323,6 +324,17 @@ bool app_box_select(float x0, float y0, float x1, float y1) {
     uint8_t* inside = box_nodes(x0, y0, x1, y1);
     if (!inside) return false;
     return select_from(inside, x1 < x0);             /* right to left: a crossing */
+}
+
+bool app_lasso_select(const float* poly, int np) {
+    if (!G.loaded || np < 3) return false;
+    uint8_t* inside = NULL;
+    float* xy = project_nodes(&inside);
+    if (!xy) return false;
+    for (uint32_t i = 0; i < G.frd.n_nodes; i++)
+        if (inside[i]) inside[i] = cv_point_in_poly(xy[2 * i], xy[2 * i + 1], poly, np);
+    free(xy);
+    return select_from(inside, false);
 }
 
 /* the same nodes again, whatever the camera does now: only what is taken of them changes */
