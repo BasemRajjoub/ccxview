@@ -551,6 +551,25 @@ bool app_sel_spec(const char* spec);            /* --select: "ids:1-100", "set:E
    remove: what passes leaves */
 bool app_sel_filter(const cv_selfilter* q, int mode);
 bool app_sel_filter_facing(int mode);
+/* app_seluse.c: what is done with the selection. Named selections hold file ids
+   (sorted) and live in the model's .ccxview; the deck lines are a separate small
+   file to *INCLUDE, never the solver input itself */
+typedef struct { char name[48]; uint32_t* eid; uint32_t ne; uint32_t* nid; uint32_t nn; } cv_namedsel;
+void app_sel_sets_overlap(char* out, size_t n);  /* "EHOLE 40/40, EALL 48/240": deck sets it shares members with */
+int  app_nsel_count(void);
+const cv_namedsel* app_nsel_at(int i);
+int  app_nsel_save(const char* name);            /* the selection under this name (replacing one so named): its index, -1 */
+bool app_nsel_add_ids(const char* name, const uint32_t* eid, uint32_t ne, const uint32_t* nid, uint32_t nn);
+bool app_nsel_take(int i, int mode);
+bool app_nsel_rename(int i, const char* name);
+void app_nsel_delete(int i);
+void app_nsel_clear(void);
+char* app_sel_inp_text(const char* name);        /* *ELSET / *NSET lines of the selection, malloc'd */
+void app_sel_inp_path(const char* name, char* out, size_t n);   /* <model>_<name>.inp */
+bool app_sel_inp_save(const char* name);
+bool app_sel_crop(void);                         /* the crop box round the selection */
+bool app_sel_clip(void);                         /* the clip plane through its centre, across the clip axis */
+void app_sel_drop_hidden(void);                  /* what is shown changed: the hidden part leaves the selection */
 void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
 /* what lies under the pixel (mirror and replicate copies too), the probe untouched;
    o, d: the ray in the model's frame */

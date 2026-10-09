@@ -195,6 +195,16 @@ elements and nodes:
   (over the selected nodes, or the selected elements' nodes; per element over
   the elements), kept up to date when the field or step changes; the probe sits
   on the max.
+- What it is: the count, the extremes with their ids, the deck sets it shares
+  members with ("EHOLE 40/40").
+- What is done with it: hide it, show only it, put the crop box round it or the
+  clip plane through its centre; its rows as CSV; its ids as `*ELSET` /
+  `*NSET` lines, to the clipboard or to `<model>_<name>.inp` beside the model to
+  `*INCLUDE` in a deck (a file of its own: the model's input is never
+  touched); labels on it alone; its history over the steps (the Integrals
+  window over the selection).
+- Kept by name: a list in the window (select, add, remove, rename, forget),
+  stored as id ranges in the model's `.ccxview` and back when the model opens.
 - `--select SPEC` (repeatable, in order) does the same from the command line.
 
 ## Looking at results
@@ -313,11 +323,11 @@ per-element, coordinates, deformation, locked range, clip, crop, mirror,
 replicate, cyclic, layers, colour map and bands), units, groups switched off,
 element sets ticked and hidden, node sets and surfaces ticked, elements hidden
 by hand, the path and the history node, the kept linearization lines, the
-comparison run, the labels and the symbols. It is written a moment after a change
+named selections, the comparison run, the labels and the symbols. It is written a moment after a change
 (not while dragging the camera, not while a file loads), before another file
 opens and at quit; only when something changed, so opening a model to look at it
 leaves no file behind. Reload and Watch file keep it all: what a reload starts afresh
-(sets, paths, kept lines) is read back from the file.
+(sets, paths, kept lines, named selections) is read back from the file.
 
 ccxview never writes the solver's files (a `.frd` may still be being written).
 A file from an older run, or one edited by hand, is read for what still fits

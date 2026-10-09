@@ -188,6 +188,20 @@ bool app_sel_apply(const uint32_t* el, uint32_t ne, const uint32_t* nd, uint32_t
     return apply(el, ne, nd, nn, mode, which);
 }
 
+void app_sel_drop_hidden(void) {
+    if (!G.sel_n && !G.seln_n) return;
+    uint8_t* sn = cv_sel_shown_nodes(&G.frd, G.vis);
+    if (!sn) { app_sel_clear(); return; }
+    uint32_t* el = dup_list(G.sel, G.sel_n);
+    uint32_t* nd = dup_list(G.seln, G.seln_n);
+    uint32_t ne = 0, nn = 0;
+    for (uint32_t k = 0; el && k < G.sel_n; k++) if (!G.vis || G.vis[el[k]]) el[ne++] = el[k];
+    for (uint32_t k = 0; nd && k < G.seln_n; k++) if (sn[nd[k]]) nd[nn++] = nd[k];
+    if (ne == G.sel_n && nn == G.seln_n) app_sel_refresh();     /* all still there: the outline on the new skin */
+    else app_sel_apply(el, ne, nd, nn, CV_SEL_NEW, 3);
+    free(el); free(nd); free(sn);
+}
+
 /* what the ticks say a pick takes: 1 elements, 2 nodes, never neither */
 int app_sel_which(void) { return (G.sel_elems || !G.sel_nodes ? 1 : 0) | (G.sel_nodes ? 2 : 0); }
 

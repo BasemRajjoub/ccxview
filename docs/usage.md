@@ -85,6 +85,7 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | compare | `compare` (the other run's path), `compare_diff` |
 | paths | `path` (`38, 54`: two node ids, or `38, normal` / `x` / `y` / `z`), `path_surface`, `path_open`, `path_lin`, `history`, `history_elem` |
 | scl | `scl1`, `scl2` ...: `name; ax,ay,az; bx,by,bz; node; node or normal / x / y / z` (the nodes rebuild the line, the points are for reading) |
+| selections | `selection1`, `selection2` ...: a kept selection's name; `selection1_elems`, `selection1_nodes`: its element and node ids as ranges |
 
 A long value continues in `key_2`, `key_3` ... .
 
@@ -112,6 +113,9 @@ SPEC may start with a mode, `new:` (the default), `add:`, `remove:` or `and:`
 | `axis:z@x,y,z` | the axis r, theta and axial are about (through 0,0,0 when no point is given) |
 | `field>100`, `field<5`, `top:5` | keep what the field shown puts above, below 100 / 5, in its top 5 % |
 | `filter:type:C3D20R`, `filter:mat:STEEL`, `facing` | keep one element type, one material, the side facing the camera |
+| `keep:NAME`, `named:NAME` | keep the selection under NAME (in model.ccxview); take a kept one (by the mode) |
+| `hide`, `isolate`, `crop`, `clip`, `labels` | hide it, show only it, the crop box round it, the clip plane through its centre, labels on it only |
+| `csv`, `inp:NAME` | `<model>_selection.csv`; `<model>_NAME.inp` with its `*ELSET` / `*NSET` lines named NAME |
 | `clear` | nothing |
 
 It prints what it selected and the field's max and min over it.

@@ -202,5 +202,6 @@ void uii_window_integrals(struct nk_context* ctx, float s, float row, int fw, in
 /* ---- ui_select.c: the Selection window */
 void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh);
 void uii_select_ids(const char* text, bool nodes);    /* the id box's text (the interface test) */
+void uii_select_name(const char* text);               /* the name box's text (the interface test) */
 
 #endif

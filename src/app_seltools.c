@@ -399,6 +399,28 @@ bool app_sel_spec(const char* spec) {
         G.sel_mode = m;
         return ok;
     }
+    /* using it: keep:NAME, named:NAME, hide, isolate, crop, clip, csv, inp:NAME, labels */
+    if (!strncasecmp(spec, "keep:", 5)) return app_nsel_save(spec + 5) >= 0;
+    if (!strncasecmp(spec, "named:", 6)) {
+        for (int i = 0; i < app_nsel_count(); i++) if (!strcasecmp(app_nsel_at(i)->name, spec + 6)) return app_nsel_take(i, mode);
+        say("no selection kept as %s", spec + 6);
+        return false;
+    }
+    if (!strcasecmp(spec, "hide") || !strcasecmp(spec, "isolate")) {
+        if (!G.sel_n) { say("no elements selected%s", ""); return false; }
+        if (spec[0] == 'h' || spec[0] == 'H') app_hide_elems(G.sel, G.sel_n); else app_isolate_elems(G.sel, G.sel_n);
+        return true;
+    }
+    if (!strcasecmp(spec, "crop")) return app_sel_crop();
+    if (!strcasecmp(spec, "clip")) return app_sel_clip();
+    if (!strcasecmp(spec, "csv")) return app_sel_csv();
+    if (!strncasecmp(spec, "inp:", 4)) return app_sel_inp_save(spec + 4);
+    if (!strcasecmp(spec, "labels")) {
+        G.label_sel_only = true;
+        if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE;
+        app_label_changed();
+        return true;
+    }
     bool done;
     bool fok = filter_spec(spec, mode, &done);
     if (done) return fok;
