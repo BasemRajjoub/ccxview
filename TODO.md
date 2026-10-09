@@ -2,7 +2,8 @@
 
 Open points left after the 9 Oct 2026 batch (sidecar #5, hide sets #25, title block
 #15, keywords #2, shell forces #19, STL layers #23, measurements, integrals, movable
-labels, the Selection window #16). Pre-processing stays out of scope.
+labels, the Selection window #16) and the fixes after it. Pre-processing stays out
+of scope.
 
 ## Shell forces (#19)
 - Reinforcement design from the section forces (Wood-Armer / Capra-Maury, as
@@ -13,20 +14,21 @@ labels, the Selection window #16). Pre-processing stays out of scope.
   the thickness only.
 
 ## Deck (#2)
-- TIME DELAY= and LOAD CASE= on load cards are ignored.
-- *CLOAD, SUBMODEL and *TEMPERATURE, SUBMODEL are not read.
 - The ramp of a load inside a static step is not drawn (the end value is).
-- PDISP components are all converted as lengths; the help text for ZZS does not
-  match the block name ZZSTR.
+- LOAD CASE=2 (the imaginary part of a steady state dynamics load) is left out;
+  a switch to show it instead of load case 1 could follow.
 
 ## Integrals
-- The headless `--integrate-csv` ignores the unit settings.
 - Surfaces defined on shell elements use the shell's face numbers, which may not
   be the expanded solid's.
+- The moment point (nodes:SET@x,y,z) is in model coordinates, not in the length
+  shown.
 
 ## Display
-- See-through STL layers are not sorted against each other.
-- The History plot labels the display unit but shows the file's numbers.
-- The Selection window is tall with every section shown: some sections could fold.
-- Crop to the selection does not refit the view (the skin rebuilds in the
-  background): press F.
+- See-through STL layers are sorted as wholes, by their box centres: one layer
+  inside another's box, or two interleaved, can still blend the wrong way
+  (sorting triangles would fix it, at a cost per frame).
+- The History plot was reported to show the file's numbers under the shown unit:
+  not reproduced (DISP in m, by --opt and by the .ccxview, plots and writes the
+  converted values). The Integrals window did mix units (fixed): if it comes back,
+  note the field, the units and how the history was opened.
