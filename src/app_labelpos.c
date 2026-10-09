@@ -72,7 +72,8 @@ bool app_label_grab(float x, float y) {
 void app_label_drag(float dx, float dy) {
     if (!DR.on) return;
     float s = CV_MAX(ui_scale(), 0.1f);          /* kept before the interface scale, as the label size */
-    DR.key.dx += dx / s; DR.key.dy += dy / s;
+    DR.key.dx = CV_MAX(-10000.f, CV_MIN(DR.key.dx + dx / s, 10000.f));     /* as app_label_move keeps it */
+    DR.key.dy = CV_MAX(-10000.f, CV_MIN(DR.key.dy + dy / s, 10000.f));
     app_label_move(DR.key.kind, DR.key.id, DR.key.dx, DR.key.dy);
 }
 

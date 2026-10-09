@@ -634,7 +634,10 @@ bool label_hit(float x, float y, cv_label_off* key) {
     if (k < 0) return false;
     uint32_t i = H.anc.a[k];
     anchor_key(i, key);
-    if (R.of && R.of[i]) { key->dx = label_moved(R.of[i] - 1)->dx; key->dy = label_moved(R.of[i] - 1)->dy; }
+    if (R.of && R.of[i] && R.gen == label_moved_gen()) { key->dx = label_moved(R.of[i] - 1)->dx; key->dy = label_moved(R.of[i] - 1)->dy; }
+    else                                                   /* the entries changed since the last frame: by the key */
+        for (int j = 0; j < label_moved_n(); j++)
+            if (!strcmp(label_moved(j)->kind, key->kind) && !strcmp(label_moved(j)->id, key->id)) { key->dx = label_moved(j)->dx; key->dy = label_moved(j)->dy; break; }
     return key->kind[0] != 0;
 }
 

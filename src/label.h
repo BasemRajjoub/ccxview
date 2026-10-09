@@ -26,7 +26,10 @@ float cv_label_layout(const cv_label_metrics* m, const float anchor[9], const ch
 float cv_label_width(const cv_label_metrics* m, const char* text);
 /* a leader: a 1 px wide line from (x0, y0) to (x1, y1) px off the anchor's point, to
    boxes: one box when it is upright or level, else a box per pixel row (or column, the
-   shorter way) of the slant, each spanning its part of the line */
+   shorter way) of the slant, each spanning its part of the line; a long slant in at most
+   CV_LABEL_LEADER_STEPS steps, each a row (column) and a 1 px riser to the next, so a
+   leader is at most 2 * CV_LABEL_LEADER_STEPS - 1 boxes however far it reaches */
+enum { CV_LABEL_LEADER_STEPS = 48 };
 void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x0, float y0, float x1, float y1, float pull, cv_fvec* boxes);
 
 /* the point on a box (x, y, w, h) nearest to (px, py): where a leader meets it */
@@ -35,7 +38,7 @@ void cv_label_nearest(float x, float y, float w, float h, float px, float py, fl
 /* a moved label: its key (a kind and an id, a number or a name) and its offset in px
    from where it would be, x right, y down. As text "node 940 12 -30": the kind, the
    id (it may hold spaces), the two numbers last. */
-typedef struct { char kind[16]; char id[64]; float dx, dy; } cv_label_off;
+typedef struct { char kind[16]; char id[256]; float dx, dy; } cv_label_off;
 bool cv_label_off_parse(const char* s, cv_label_off* o);      /* false: not two numbers after a kind and an id */
 void cv_label_off_format(const cv_label_off* o, char* out, size_t n);
 /* the command line's KIND:ID:DX,DY ("set:EHOLE:40,-20"; the id may hold ':') */

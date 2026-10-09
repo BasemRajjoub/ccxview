@@ -40,15 +40,18 @@ void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x0,
     if (dy == 0) { quad(boxes, anchor, fminf(x0, x1), y0 - 0.5f, fabsf(dx), 1.f, u, v, u, v, pull); return; }
     bool steep = fabsf(dy) > fabsf(dx);
     int n = (int)ceilf(steep ? fabsf(dx) : fabsf(dy));          /* a box per pixel across the slant */
-    if (n > 4096) n = 4096;
+    bool riser = n > CV_LABEL_LEADER_STEPS;                      /* a long one: fewer, longer steps, joined by risers */
+    if (riser) n = CV_LABEL_LEADER_STEPS;
     for (int k = 0; k < n; k++) {
-        float t0 = (float)k / n, t1 = (float)(k + 1) / n, tm = 0.5f * (t0 + t1);
+        float t0 = (float)k / n, t1 = (float)(k + 1) / n, tm = 0.5f * (t0 + t1), tn = tm + 1.f / n;
         if (steep) {                                              /* a column: the y run of this step */
             float a = y0 + t0 * dy, b = y0 + t1 * dy;
             quad(boxes, anchor, x0 + tm * dx - 0.5f, fminf(a, b), 1.f, fabsf(b - a), u, v, u, v, pull);
+            if (riser && k + 1 < n) quad(boxes, anchor, x0 + fminf(tm * dx, tn * dx) - 0.5f, b - 0.5f, fabsf((tn - tm) * dx) + 1.f, 1.f, u, v, u, v, pull);
         } else {                                                  /* a row: the x run */
             float a = x0 + t0 * dx, b = x0 + t1 * dx;
             quad(boxes, anchor, fminf(a, b), y0 + tm * dy - 0.5f, fabsf(b - a), 1.f, u, v, u, v, pull);
+            if (riser && k + 1 < n) quad(boxes, anchor, b - 0.5f, y0 + fminf(tm * dy, tn * dy) - 0.5f, 1.f, fabsf((tn - tm) * dy) + 1.f, u, v, u, v, pull);
         }
     }
 }

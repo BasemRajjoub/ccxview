@@ -58,6 +58,22 @@ static void test_label(void) {
     cv_label_leader(&m, anchor, 0, 0, -3, 40, 0.5f, &box);        /* steep: a column per pixel across */
     CHECK_EQ(box.n, (size_t)3 * CV_LABEL_FLOATS);
     CHECK_NEAR(box.a[11], 1.f, 0); CHECK_NEAR(box.a[12] * 3, 40.f, 1e-3);
+    box.n = 0;
+    cv_label_leader(&m, anchor, 0, 0, 3000, 2000, 0.5f, &box);    /* a long slant: capped steps joined by risers */
+    CHECK_EQ(box.n, (size_t)(2 * CV_LABEL_LEADER_STEPS - 1) * CV_LABEL_FLOATS);
+    {
+        float run = 0, rise = 0;                                  /* rows then risers: the whole way across and down, unbroken */
+        for (int k = 0; k < 2 * CV_LABEL_LEADER_STEPS - 1; k++) {
+            const float* q = box.a + k * CV_LABEL_FLOATS;
+            if (k % 2 == 0) { CHECK_NEAR(q[9], run, 1e-2); CHECK_NEAR(q[12], 1.f, 0); run += q[11]; }
+            else { CHECK_NEAR(q[9] + 0.5f, run, 1e-2); CHECK_NEAR(q[11], 1.f, 0); rise += q[12] - 1.f; }
+        }
+        CHECK_NEAR(run, 3000.f, 1e-1);
+        CHECK_NEAR(rise, 2000.f * (CV_LABEL_LEADER_STEPS - 1) / CV_LABEL_LEADER_STEPS, 1e-1);
+    }
+    box.n = 0;
+    cv_label_leader(&m, anchor, 0, 0, -500, 4000, 0.5f, &box);    /* steep and long: the same cap */
+    CHECK_EQ(box.n, (size_t)(2 * CV_LABEL_LEADER_STEPS - 1) * CV_LABEL_FLOATS);
     {
         float qx, qy;
         cv_label_nearest(10, 10, 20, 8, 0, 0, &qx, &qy);          /* above left: the corner */
@@ -93,6 +109,15 @@ static void test_label(void) {
         CHECK(!cv_label_off_parse_arg("node::1,2", &o));
         CHECK(!cv_label_off_parse_arg(":5:1,2", &o));
         CHECK(!cv_label_off_parse_arg("node:5:1,2x", &o));
+        /* a deck name may be 80 characters: kept whole, through the text and back */
+        char nm[80], line[320];
+        for (int i = 0; i < 79; i++) nm[i] = (char)('A' + i % 26);
+        nm[79] = 0;
+        snprintf(o.kind, sizeof o.kind, "set"); snprintf(o.id, sizeof o.id, "%s", nm); o.dx = 3; o.dy = -4;
+        cv_label_off_format(&o, line, sizeof line);
+        CHECK(cv_label_off_parse(line, &p2) && !strcmp(p2.id, nm) && p2.dx == 3 && p2.dy == -4);
+        snprintf(line, sizeof line, "set:%s:5,6", nm);
+        CHECK(cv_label_off_parse_arg(line, &p2) && !strcmp(p2.id, nm));
     }
 
     /* the hit test: the topmost box under the point */

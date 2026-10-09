@@ -557,6 +557,7 @@ static void measure_get(const cv_cfg* c) {
         char w[16];
         unsigned a = 0, b = 0, d = 0;
         int n = sscanf(c->a[k].val, "%15s %u %u %u", w, &a, &b, &d);
+        if (n < 1) continue;                 /* a blank value: nothing in w */
         for (int kind = 0; kind < CV_MEAS_N; kind++) {
             if (strcasecmp(w, app_measure_kind_name(kind)) || n - 1 != app_measure_nodes(kind)) continue;
             uint32_t ids[3] = { a, b, d };
@@ -570,7 +571,7 @@ static void measure_get(const cv_cfg* c) {
 static void moved_put(cv_cfg* c) {
     for (int i = 0; i < app_label_moved_count(); i++) {
         cv_label_off o;
-        char key[24], v[160];
+        char key[24], v[320];
         if (!app_label_moved_get(i, &o)) continue;
         cv_label_off_format(&o, v, sizeof v);
         snprintf(key, sizeof key, "label%d", i + 1);
