@@ -174,6 +174,20 @@ void settings_load(void) {
     fail_cfg_load(&C);
 }
 
+/* the headless --integrate-csv: the unit keys alone (and whether the model's own file
+   is read), nothing of the window */
+void settings_load_units(void) {
+    char path[1024];
+    cv_cfg c;
+    if (!cv_cfg_default_path(path, sizeof path) || !cv_cfg_load(&c, path)) return;
+    cv_cfg keep = C;
+    bool was = loaded;
+    C = c; loaded = true;
+    for (int i = 0; i < NS; i++) if (S[i].kind != '#' && (!strncmp(S[i].key, "unit", 4) || !strcmp(S[i].key, "sidecar"))) get_one(&S[i]);
+    cv_cfg_free(&C);
+    C = keep; loaded = was;
+}
+
 /* --opt key=value: any settings key, applied on top of the file */
 bool settings_apply(const char* kv) {
     const char* eq = strchr(kv, '=');

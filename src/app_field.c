@@ -133,6 +133,7 @@ void app_units_changed(void) {
     if (!G.loaded) return;
     cache_clear();
     G.hist_key[0] = G.lin_key[0] = 0;
+    integ_stale();
     G.range_lock = false;
     app_set_step(G.step);                  /* decodes again: shape, field, plots */
 }

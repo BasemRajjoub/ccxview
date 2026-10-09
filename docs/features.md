@@ -234,7 +234,10 @@ elements and nodes:
   solids only (hex 8/20, wedge 6/15, tet 4/10), which covers shells, beams and
   plane elements as CalculiX expands them into the .frd. Click the plot to go to
   a step; CSV writes `<model>_integral_<set>.csv` (step, time, volume or area,
-  integral and average per component). A field CalculiX extrapolates from the
+  integral and average per component). Everything is in the units shown: the
+  values as the legend has them, the volume, the area and the lever of a moment
+  in the length shown (MPa and mm give N mm for a volume integral of a stress,
+  Pa and m give N m), the CSV naming the volume's or area's unit. A field CalculiX extrapolates from the
   Gauss points to the nodes integrates with that extrapolation's error: on the
   showcase the stress through the loaded face gives 62 241 of the 64 984 applied
   (the reaction sum and the volume average match the load to 0.01 %).

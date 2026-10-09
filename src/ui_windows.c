@@ -462,7 +462,7 @@ static const char* fb_about(const char* f) {
         { "DISP", "displacement" }, { "STRESS", "stress" }, { "TOSTRAIN", "total strain" },
         { "MESTRAIN", "mechanical strain" }, { "THSTRAIN", "thermal strain" }, { "PE", "equiv. plastic strain" },
         { "FORC", "nodal force" }, { "EXTFORC", "external force" }, { "ENER", "energy density" },
-        { "ERROR", "error estimate" }, { "HERROR", "heat error estimate" }, { "ZZS", "smoothed stress" },
+        { "ERROR", "error estimate" }, { "HERROR", "heat error estimate" }, { "ZZSTR", "smoothed stress" }, { "ZZSTRI", "smoothed stress, imaginary" },
         { "NDTEMP", "temperature" }, { "FLUX", "heat flux" }, { "RFL", "heat reaction" },
         { "CONTACT", "contact" }, { "SDV", "state variables" }, { "VELO", "velocity" },
         { "STRPOS", "stress, shell top" }, { "STRNEG", "stress, shell bottom" }, { "STRMID", "stress, shell middle" },

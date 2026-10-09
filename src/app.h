@@ -665,6 +665,7 @@ bool app_sidecar_path(char* out, size_t n);  /* where the open model's goes; fal
 bool app_sidecar_on(void);                   /* the setting and --no-sidecar allow it */
 bool app_sidecar_save(void);                 /* now, whether it changed or not */
 void app_sidecar_load(bool reload);          /* after a load; reload: the parts a reload keeps stay as they are */
+void app_sidecar_units(void);                /* the units part alone, nothing redrawn (the headless runs) */
 void app_sidecar_tick(void);                 /* per frame: written a moment after a change */
 void app_sidecar_flush(void);                /* written now if it changed (before unload, at quit) */
 void app_sidecar_forget(void);               /* delete the file, open the model afresh */
@@ -847,6 +848,7 @@ void app_dialog_done(const char* path);             /* the open dialog's pick: a
 
 /* app_settings.c: the ini file */
 void settings_load(void);                    /* into G, before the first frame */
+void settings_load_units(void);              /* the unit keys alone, for the headless runs */
 void settings_window_size(int* w, int* h);   /* before the window exists */
 void settings_save(int win_w, int win_h);
 bool settings_apply(const char* key_eq_value);   /* --opt; false for an unknown key */

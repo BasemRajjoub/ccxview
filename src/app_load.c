@@ -800,7 +800,6 @@ bool app_load_headless(const char* path) {
     cv_mutex_init(&j->lock);
     worker_load(j);
     if (!j->ok) { fprintf(stderr, "%s: %s\n", path, j->err[0] ? j->err : "cannot read"); return false; }
-    for (int q = 0; q < CV_Q_N; q++) G.unit_in[q] = G.unit_show[q] = -1;   /* values as the file has them */
     if (j->has_deck) deck_set(&j->deck, j->deck_path);
     j->has_deck = false;
     G.map = j->map;         memset(&j->map, 0, sizeof j->map);

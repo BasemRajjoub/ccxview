@@ -222,15 +222,25 @@ static void units_put(cv_cfg* c) {
     }
 }
 
-static void units_get(const cv_cfg* c) {
-    if (!cv_cfg_get(c, "units", NULL)) return;
+static bool units_read(const cv_cfg* c) {
+    if (!cv_cfg_get(c, "units", NULL)) return false;
     G.units = geti(c, "units", G.units, 0, CV_SYS_N - 1);
     for (int q = 0; q < CV_Q_N; q++) {           /* an unknown name: the system's / as input */
         char key[64];
         snprintf(key, sizeof key, "unit_in_%s", cv_quantity_key(q)); G.unit_in[q] = cv_unit_find(q, cv_cfg_get(c, key, ""));
         snprintf(key, sizeof key, "unit_%s", cv_quantity_key(q)); G.unit_show[q] = cv_unit_find(q, cv_cfg_get(c, key, ""));
     }
-    app_units_changed();
+    return true;
+}
+
+static void units_get(const cv_cfg* c) { if (units_read(c)) app_units_changed(); }
+
+void app_sidecar_units(void) {
+    char p[1100];
+    cv_cfg c;
+    if (!app_sidecar_on() || !app_sidecar_path(p, sizeof p) || !cv_cfg_load(&c, p)) return;
+    units_read(&c);
+    cv_cfg_free(&c);
 }
 
 /* ---- deck sets by name: element sets ticked and hidden, node sets, surfaces ------- */

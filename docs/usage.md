@@ -33,7 +33,9 @@ ccxview model.frd --field STRESS --integrate volume:EALL   # Integrals window: K
                                             #   (surface or a set's outer faces), nodes (a sum); TARGET a set or
                                             #   surface name, selection or shown; nodes:NSET@x,y,z: moment about x,y,z
 ccxview model.frd --field FORC --integrate nodes:NLEFT --integrate-csv rf.csv   # headless: every step's row
-                                            #   to the CSV, no window (field: --field, else STRESS / FORC for nodes)
+                                            #   to the CSV, no window (field: --field, else STRESS / FORC for nodes);
+                                            #   in the units the window would show: ccxview.ini, --opt units=1
+                                            #   --opt unit_length=0 (an index: m) ..., then the model's .ccxview
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --stl pin.stl --stl alt.stl --stl-alpha 0.4   # geometry that was not analysed, shown with
                                             #   the results (repeatable), see-through
