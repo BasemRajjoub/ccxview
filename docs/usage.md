@@ -49,6 +49,9 @@ ccxview model.frd --hide-set EHOLE         # hide a deck element set, the rest s
 ccxview model.frd --title-block --opt "title_text1=Bracket rev B"  # the title block, a project line (title_label1..3 / title_text1..3)
 ccxview model.frd --title-block --opt title_user=0 --opt title_file_date=1   # lines off by key: title_heading file solver analysis step scale units user date
 ccxview model.frd --labels node,value,loads # labels on the model, any mix of: node elem value evalue sets links loads supports materials gpvalue gpid minmax
+ccxview model.frd --labels node,minmax --label-offset max:1:80,-60 --label-offset node:940:-40,30
+                                            # a label moved by hand: KIND:ID:DX,DY px (x right, y down), repeatable;
+                                            #   kinds node elem gp min max measure set link load support material
 ccxview model.inp --opt sym_thin=1          # crowded supports and loads thinned to a pattern
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
 ccxview model.frd --deck-window --step 2    # the Deck window: steps, model changes, submodel, amplitudes
@@ -82,6 +85,9 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | compare | `compare` (the other run's path), `compare_diff` |
 | paths | `path` (`38, 54`: two node ids, or `38, normal` / `x` / `y` / `z`), `path_surface`, `path_open`, `path_lin`, `history`, `history_elem` |
 | scl | `scl1`, `scl2` ...: `name; ax,ay,az; bx,by,bz; node; node or normal / x / y / z` (the nodes rebuild the line, the points are for reading) |
+| stl | `stl1`, `stl2` ...: `shown (1 / 0); opacity; r,g,b; scale; path`, the path relative to the model's folder when the file lies in it or below it, else absolute; a file not found is left out with a message |
+| measure | `measure1`, `measure2` ...: `distance 12 40`, `angle 1 2 3`, `circle 1 2 3` (file node ids) |
+| labels | `label1`, `label2` ...: labels moved by hand, `node 940 12 -30`: the key's kind and id (a name may hold spaces), the offset in px from where the label would be |
 
 A long value continues in `key_2`, `key_3` ... .
 
@@ -91,6 +97,7 @@ A long value continues in `key_2`, `key_3` ... .
 |---|---|
 | left drag / right or middle drag / wheel | orbit / pan / zoom, about the point under the cursor (View panel: up axis Y or Z, turntable or free rotation, cursor pivot on/off, rotation centre mark) |
 | X / Y / Z held + drag | orbit about that world axis only |
+| drag a label | move it (the camera stays); right-click it: Reset label |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
 | Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green); selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
 | Alt+drag, Alt+← → | roll about the line of sight |

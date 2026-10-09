@@ -391,6 +391,7 @@ void app_menu_open(float x, float y) {
     float o[3], d[3];
     G.menu_on = true; G.menu_x = x; G.menu_y = y;
     memset(G.menu_n, 0, sizeof G.menu_n);
+    app_label_menu_at(x, y);                         /* on a moved label: it can be reset */
     if (!app_pick(x, y, &G.menu_pick, o, d)) return;
     for (int k = 0; k < 3; k++) G.menu_p[k] = o[k] + d[k] * G.menu_pick.t;
     if (G.menu_pick.tri < G.skin.n_tri) {             /* the face's normal, as shown */

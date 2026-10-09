@@ -231,6 +231,39 @@ static bool labels_shown(struct nk_context* ctx) { return strstr(G.label_note, "
 static bool labels_none(struct nk_context* ctx) { return strstr(G.label_note, "shown 0 of 0") != NULL; }
 static void probe_close(struct nk_context* ctx) { G.probe_on = false; }
 static void labels_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_px = 13.f; app_label_changed(); sections_open(ctx); }
+/* labels moved by hand: node ids in front, a label found by its box near the view's middle */
+static bool turned(struct nk_context* ctx);
+static void labels_movable(struct nk_context* ctx) {
+    close_all(ctx);
+    G.label_kinds = 1 << CV_LABEL_NODE; G.label_front = true; G.label_spacing = 40.f;
+    app_label_moved_clear(); app_label_changed();
+}
+static bool label_centre(struct nk_context* ctx, bool moved_only, float* x, float* y) {
+    float r[4], best = 1e30f, cx = G.vp_x + 0.5f * G.vp_w, cy = G.vp_y + 0.5f * G.vp_h;
+    bool any = false;
+    for (int k = 0; app_label_box(k, r); k++) {
+        float mx = r[0] + 0.5f * r[2], my = r[1] + 0.5f * r[3], d = (mx - cx) * (mx - cx) + (my - cy) * (my - cy);
+        cv_label_off key;
+        if (d >= best || input_window_at(ctx, mx, my) || r[0] < G.vp_x || r[1] < G.vp_y || r[0] + r[2] > G.vp_x + G.vp_w || r[1] + r[3] > G.vp_y + G.vp_h) continue;
+        if (!app_label_at(mx, my, &key) || (moved_only && key.dx == 0 && key.dy == 0)) continue;
+        best = d; *x = mx; *y = my; any = true;
+    }
+    return any;
+}
+static void at_label(struct nk_context* ctx) { float x, y; if (label_centre(ctx, false, &x, &y)) move_to(x, y); }
+static void at_moved_label(struct nk_context* ctx) { float x, y; if (label_centre(ctx, true, &x, &y)) move_to(x, y); }
+static void nudge(struct nk_context* ctx) { move_to(T.mx + 30, T.my - 20); }
+static bool on_label(struct nk_context* ctx) { cv_label_off k; return app_label_at(T.mx, T.my, &k); }
+static bool label_moved_cam_kept(struct nk_context* ctx) {
+    cv_label_off o;
+    float s = ui_scale();
+    return app_label_moved_count() == 1 && app_label_moved_get(0, &o) && fabsf(o.dx * s - 60) < 2 && fabsf(o.dy * s + 40) < 2 && !turned(ctx) && !app_label_dragging();
+}
+static bool label_reset(struct nk_context* ctx) { return app_label_moved_count() == 0 && !G.menu_on; }
+static void label_move_one(struct nk_context* ctx) { app_label_move("node", "1", 25, 25); }
+static bool labels_moved_one(struct nk_context* ctx) { return app_label_moved_count() == 1; }
+static void labels_back(struct nk_context* ctx) { G.label_spacing = 10.f; labels_off(ctx); }
+
 /* the Details window leaves the view's upper right free: a drag there turns the model */
 static bool details_clear_of_view(struct nk_context* ctx) {
     struct nk_window* w = win_of(ctx, "Details");
@@ -571,6 +604,16 @@ static const step script[] = {
     DO(probe_close), WAIT(3), EXPECT(labels_none, "closing the probe leaves no labels"), AT_MODEL, CLICK, WAIT(3), DO(snapshot),
     AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "the camera turns with the ids overlay on"),
     DO(ids_off), DO(close_all), DO(fit_view), WAIT(2),
+
+    CASE("labels: a label dragged moves, not the camera; the menu and the panel reset it"),
+    DO(fit_view), DO(labels_movable), WAIT(4), DO(at_label), WAIT(2), EXPECT(on_label, "a node label under the cursor"),
+    DO(snapshot), PRESS, WAIT(1), DO(nudge), WAIT(1), DO(nudge), WAIT(1), RELEASE, WAIT(2),
+    EXPECT(label_moved_cam_kept, "the label keeps its offset, the camera stays"),
+    DO(at_moved_label), WAIT(2), RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens on the moved label"),
+    AT_TIP("Menu", "#menu Reset label"), CLICK, WAIT(2), EXPECT(label_reset, "the label goes back, the menu closes"),
+    DO(label_move_one), DO(labels_tree_open), WAIT(3), EXPECT(labels_moved_one, "one label moved"),
+    AT_TIP("Scene", "Every label dragged on the model"), CLICK, WAIT(2), EXPECT(label_reset, "the panel resets them"),
+    DO(labels_back), WAIT(2),
 
     CASE("details: open beside the probe, the model still turns"),
     DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2), AT_TIP("Probe", "Everything about this node"), CLICK, WAIT(3),

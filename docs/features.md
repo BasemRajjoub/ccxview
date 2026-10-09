@@ -215,6 +215,19 @@ model that changes from step to step and a submodel of it.
   size, hidden by the model where it is in front, thinned to a spacing nearest
   first with the count shown; size, colours and spacing to taste; the selection
   or the probed element only.
+- Labels moved by hand: drag a label on the model to where it reads best (the
+  press is the label's, not the camera's). It keeps that pixel offset from its
+  point, so it stays by its point through zoom and turn, with a leader line from
+  the point to it; it is never thinned away, the others keep clear of it, and it is
+  drawn in front of the faces (it still leaves the screen when its point is behind
+  the model). Right-click it: Reset label; Fields > Labels: Reset moved labels.
+  Kept per model in the post-processing file by a key that does not change with
+  the view: node 940, elem 12, gp 12:3 (element : point), min 1, max 2 (the
+  rank), measure 1, set EHOLE (sets and surfaces by name), link and material by
+  name (a link without one by its reference node), load and support by the node,
+  or element and face, they sit at and what they are ("940 dof 2", "12.3 p",
+  "17 UX", "body 1", "bolt 7"). A key no label has any more (after a renumbering)
+  does nothing. `--label-offset KIND:ID:DX,DY` moves one from the command line.
 - Measurements as labels: the distance between two nodes with its dx dy dz, the
   angle at the middle one of three, the circle through three (radius, centre and
   the normal of its plane; three nodes on a hole give the hole's radius). Started
@@ -229,7 +242,7 @@ model that changes from step to step and a submodel of it.
   an arc, the circle and a cross at its centre) move with the shape as drawn. The
   window lists both values of each, deletes one or all, copies them as text and
   saves `<model>_measurements.csv`. Kept by node id: a reload keeps them, another
-  model clears them.
+  model clears them, the post-processing file brings them back.
 - A right-click menu with what fits where you click: the element and node under
   the cursor, the box selection, the view. Hide an element, a material, an
   element type or a set, or show only it; hide or isolate a selection; show all.
@@ -254,7 +267,8 @@ model that changes from step to step and a submodel of it.
   in the PNG and the videos, taken in by Fit. It never moves with the
   deformation, is not on the mirror and replicate copies, and the probe passes
   through it. The layers belong to the model: a reload keeps them, opening another
-  model clears them.
+  model clears them, and the post-processing file brings them back the next time
+  the model opens (a file that is gone is left out, with a message).
 
 ## Post-processing kept with the model
 
@@ -266,7 +280,9 @@ per-element, coordinates, deformation, locked range, clip, crop, mirror,
 replicate, cyclic, layers, colour map and bands), units, groups switched off,
 element sets ticked and hidden, node sets and surfaces ticked, elements hidden
 by hand, the path and the history node, the kept linearization lines, the
-comparison run, the labels and the symbols. It is written a moment after a change
+comparison run, the imported STL files (each with its look; the path relative to
+the model's folder when the file lies in it, so the folder can move), the
+measurements, the labels and the symbols. It is written a moment after a change
 (not while dragging the camera, not while a file loads), before another file
 opens and at quit; only when something changed, so opening a model to look at it
 leaves no file behind. Reload and Watch file keep it all: what a reload starts afresh

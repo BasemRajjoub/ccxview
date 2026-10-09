@@ -259,7 +259,9 @@ static const char* kVSI =
    model hides labels on its far side. u_p: deform scales, viewport w, h.
    u_q: x the pull in view units per unit of clip w (parallel: in view units), y on top
    (then the point is tested against the model's depth: hidden points get no label),
-   z proj[10], w proj[11] (-1 perspective, 0 parallel). */
+   z proj[10], w proj[11] (-1 perspective, 0 parallel). An instance with a negative
+   pull is in front alone (a label moved by hand, and its leader: never cut by a face),
+   its pull the magnitude. */
 static const char* kVSL =
     GLSL_HDR
     "uniform mat4 u_mvp;\n"
@@ -281,11 +283,13 @@ static const char* kVSL =
     "  vec4 c = u_mvp * vec4(p, 1.0);\n"
     /* the point a few label heights nearer the eye, compared with the depth drawn at the
        point's pixel: behind the surface there, the whole label leaves the screen */
-    "  float pv = i_pull > 0.0 ? i_pull : u_q.x * (u_q.w != 0.0 ? c.w : 1.0);\n"   /* its own, or a few pixels' worth */
+    "  bool front = u_q.y > 0.5 || i_pull < 0.0;\n"
+    "  float ip = abs(i_pull);\n"
+    "  float pv = ip > 1e-20 ? ip : u_q.x * (u_q.w != 0.0 ? c.w : 1.0);\n"   /* its own, or a few pixels' worth */
     "  float pl0 = min(pv, 0.5 * max(c.w, 0.0));\n"
     "  vec4 r = c;\n"
     "  if (u_q.w != 0.0) { r.z += u_q.z * pl0; r.w -= pl0; } else r.z += u_q.z * pv;\n"
-    "  if (u_q.y > 0.5 && c.w > 0.0) {\n"
+    "  if (front && c.w > 0.0) {\n"
     "    vec2 uv = c.xy / c.w * 0.5 + 0.5;\n"
     "    float zr = r.z / r.w * 0.5 + 0.5;\n"
     "    if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 && textureLod(u_depth, vec3(uv, zr), 0.0) < 0.5) {\n"
@@ -297,7 +301,7 @@ static const char* kVSL =
     /* toward the eye by a few label heights in view units (as VS_TAIL does for the symbols), so
        the quad, which lies in the screen plane, is not cut by the oblique face it sits on;
        on top: the front 2 % of the depth range, as the markers */
-    "  if (u_q.y > 0.5) c.z = -c.w + (c.z + c.w) * 0.02;\n"
+    "  if (front) c.z = -c.w + (c.z + c.w) * 0.02;\n"
     "  else if (u_q.w != 0.0) {\n"
     "    float pl = min(u_q.x * c.w, 0.5 * max(c.w, 0.0));\n"
     "    float w2 = c.w - pl;\n"

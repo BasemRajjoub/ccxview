@@ -18,7 +18,7 @@ enum {
     M_PROBE, M_DETAILS, M_CENTRE, M_NORMAL, M_ZOOM, M_HIST, M_PATH, M_WALL, M_CLIP, M_COPY,
     M_HIDE_EL, M_HIDE_MAT, M_ONLY_MAT, M_HIDE_TYPE, M_ONLY_TYPE, M_HIDE_SET, M_ONLY_SET, M_INTEG_SET,
     M_SEL_HIDE, M_SEL_ONLY, M_SEL_MAX, M_SEL_MIN, M_SEL_IDS, M_SEL_CSV, M_SEL_INTEG, M_SEL_CLEAR,
-    M_FIT, M_RESET, M_BACK, M_FWD, M_ORTHO, M_FLY, M_SHOW_ALL, M_PNG,
+    M_FIT, M_RESET, M_BACK, M_FWD, M_ORTHO, M_FLY, M_SHOW_ALL, M_PNG, M_LABEL_RESET,
 };
 
 typedef struct { int what; char label[96]; int set; int hide, only; } item;   /* hide, only: an M_PAIR's two */
@@ -59,6 +59,10 @@ static void build(void) {
     ni = 0;
     const cv_pick* p = &G.menu_pick;
     const cv_frd* f = &G.frd;
+    if (app_label_menu_moved()) {                     /* on a label moved by hand */
+        add(M_LABEL_RESET, 0, "Reset label");
+        add(M_SEP, 0, NULL);
+    }
     if (p->hit) {
         uint32_t e = p->elem;
         add(M_PROBE, 0, "Probe here");
@@ -186,6 +190,7 @@ static void act(const item* m) {
     case M_ORTHO:     G.cam.ortho = !G.cam.ortho; break;
     case M_FLY:       app_set_flight(true); break;
     case M_PNG:       app_export_png(); break;
+    case M_LABEL_RESET: app_label_menu_reset(); break;
     }
 }
 

@@ -32,11 +32,79 @@ static void test_label(void) {
     CHECK_NEAR(b[13], 0.99f, 0); CHECK_NEAR(b[15], 0.99f, 0);   /* the white pixel */
     CHECK_NEAR(b[17], 0.5f, 0); CHECK_NEAR(a[17], 0.5f, 0);     /* the pull, on box and glyphs alike */
     box.n = 0;
-    cv_label_leader(&m, anchor, 4, 30, 0, 0.5f, &box);           /* a 1 px line from the point down 30 px */
+    cv_label_leader(&m, anchor, 4, 30, 4, 0, 0.5f, &box);        /* a 1 px line from the point down 30 px */
     CHECK_EQ(box.n, (size_t)CV_LABEL_FLOATS);
     CHECK_NEAR(box.a[9], 3.5f, 0); CHECK_NEAR(box.a[10], 0.f, 0); CHECK_NEAR(box.a[11], 1.f, 0); CHECK_NEAR(box.a[12], 30.f, 0);
     CHECK_NEAR(box.a[13], 0.99f, 0); CHECK_NEAR(box.a[17], 0.5f, 0);
     CHECK_NEAR(cv_label_width(&m, "ABC"), 30, 0);
+    box.n = 0;
+    cv_label_leader(&m, anchor, 0, 0, -25, 0, 0.5f, &box);        /* level: one box, leftward */
+    CHECK_EQ(box.n, (size_t)CV_LABEL_FLOATS);
+    CHECK_NEAR(box.a[9], -25.f, 0); CHECK_NEAR(box.a[10], -0.5f, 0); CHECK_NEAR(box.a[11], 25.f, 0); CHECK_NEAR(box.a[12], 1.f, 0);
+    box.n = 0;
+    cv_label_leader(&m, anchor, 0, 0, 10, -5, 0.5f, &box);        /* a slant, wider than high: a row per pixel up */
+    CHECK_EQ(box.n, (size_t)5 * CV_LABEL_FLOATS);
+    {
+        float x = 0;                                              /* the rows join end to end, 0 .. 10, each 1 px high */
+        for (int k = 0; k < 5; k++) {
+            const float* q = box.a + k * CV_LABEL_FLOATS;
+            CHECK_NEAR(q[9], x, 1e-4); CHECK_NEAR(q[11], 2.f, 1e-4); CHECK_NEAR(q[12], 1.f, 0);
+            CHECK_NEAR(q[10], -(k + 0.5f) - 0.5f, 1e-4);          /* row k centred on y = -(k + 0.5) */
+            x += q[11];
+        }
+        CHECK_NEAR(x, 10.f, 1e-4);
+    }
+    box.n = 0;
+    cv_label_leader(&m, anchor, 0, 0, -3, 40, 0.5f, &box);        /* steep: a column per pixel across */
+    CHECK_EQ(box.n, (size_t)3 * CV_LABEL_FLOATS);
+    CHECK_NEAR(box.a[11], 1.f, 0); CHECK_NEAR(box.a[12] * 3, 40.f, 1e-3);
+    {
+        float qx, qy;
+        cv_label_nearest(10, 10, 20, 8, 0, 0, &qx, &qy);          /* above left: the corner */
+        CHECK_NEAR(qx, 10, 0); CHECK_NEAR(qy, 10, 0);
+        cv_label_nearest(10, 10, 20, 8, 15, 40, &qx, &qy);        /* below: the bottom edge */
+        CHECK_NEAR(qx, 15, 0); CHECK_NEAR(qy, 18, 0);
+    }
+
+    /* moved labels: the sidecar's lines and the command line's form */
+    {
+        cv_label_off o;
+        char t[128];
+        CHECK(cv_label_off_parse("node 940 12 -30", &o));
+        CHECK(!strcmp(o.kind, "node") && !strcmp(o.id, "940")); CHECK_NEAR(o.dx, 12, 0); CHECK_NEAR(o.dy, -30, 0);
+        CHECK(cv_label_off_parse("  set  MY SET 2  1.5 -0.25\r\n", &o));   /* a name with spaces, a number in it */
+        CHECK(!strcmp(o.kind, "set") && !strcmp(o.id, "MY SET 2")); CHECK_NEAR(o.dx, 1.5f, 0); CHECK_NEAR(o.dy, -0.25f, 0);
+        cv_label_off_format(&o, t, sizeof t);
+        CHECK(!strcmp(t, "set MY SET 2 1.5 -0.2") || !strcmp(t, "set MY SET 2 1.5 -0.3"));   /* a tenth of a pixel */
+        CHECK(!cv_label_off_parse("node 940 12", &o));            /* no id before the numbers */
+        CHECK(!cv_label_off_parse("node 940 x -30", &o));
+        CHECK(!cv_label_off_parse("", &o));
+        o = (cv_label_off){ "max", "2", 40, -12 };
+        cv_label_off_format(&o, t, sizeof t);
+        CHECK(!strcmp(t, "max 2 40 -12"));
+        cv_label_off p2;
+        CHECK(cv_label_off_parse(t, &p2) && !strcmp(p2.kind, "max") && !strcmp(p2.id, "2") && p2.dx == 40 && p2.dy == -12);
+        CHECK(cv_label_off_parse_arg("node:940:12,-30", &o));
+        CHECK(!strcmp(o.kind, "node") && !strcmp(o.id, "940")); CHECK_NEAR(o.dx, 12, 0); CHECK_NEAR(o.dy, -30, 0);
+        CHECK(cv_label_off_parse_arg("gp:12:3:5,6", &o));         /* an id with a colon */
+        CHECK(!strcmp(o.kind, "gp") && !strcmp(o.id, "12:3"));
+        CHECK(!cv_label_off_parse_arg("node:940", &o));
+        CHECK(!cv_label_off_parse_arg("node:940:12", &o));
+        CHECK(!cv_label_off_parse_arg("node::1,2", &o));
+        CHECK(!cv_label_off_parse_arg(":5:1,2", &o));
+        CHECK(!cv_label_off_parse_arg("node:5:1,2x", &o));
+    }
+
+    /* the hit test: the topmost box under the point */
+    {
+        const float b[] = { 0, 0, 10, 10,   5, 5, 10, 10,   100, 100, 4, 4 };
+        CHECK_EQ(cv_label_hit(b, 3, 2, 2), 0);
+        CHECK_EQ(cv_label_hit(b, 3, 7, 7), 1);                    /* both hold it: the later one is on top */
+        CHECK_EQ(cv_label_hit(b, 3, 14, 14), 1);
+        CHECK_EQ(cv_label_hit(b, 3, 15, 15), -1);                 /* the far edge is outside */
+        CHECK_EQ(cv_label_hit(b, 3, 50, 50), -1);
+        CHECK_EQ(cv_label_hit(b, 0, 2, 2), -1);
+    }
 
     /* layout: codepoints outside the table draw as ? */
     gly.n = box.n = 0;

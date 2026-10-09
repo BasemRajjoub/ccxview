@@ -235,6 +235,16 @@ static void pick_default_field(void) {
     }
 }
 
+/* is this measurement listed already (the same kind, the same nodes in order) */
+static bool measure_listed(int kind, const uint32_t ids[3]) {
+    for (int i = 0; i < app_measure_count(); i++) {
+        int k;
+        uint32_t id[3];
+        if (app_measure_get(i, &k, id) && k == kind && id[0] == ids[0] && id[1] == ids[1] && (app_measure_nodes(k) == 2 || id[2] == ids[2])) return true;
+    }
+    return false;
+}
+
 static void apply_load(cv_job* j) {
     bool reload = G.reload_keep;
     unload();
@@ -441,6 +451,15 @@ static void apply_load(cv_job* j) {
             if (m & (1 << CV_LABEL_GPVALUE | 1 << CV_LABEL_GPID)) G.show_gp = true;
         }
     }
+    for (int q = 0; !G.reload_keep && q < O.nlabel_off; q++) {   /* --label-offset KIND:ID:DX,DY */
+        cv_label_off o;
+        if (cv_label_off_parse_arg(O.label_off[q], &o) && app_label_key_kind(o.kind)) app_label_move(o.kind, o.id, o.dx, o.dy);
+        else {
+            char m[200];
+            snprintf(m, sizeof m, "--label-offset %s: KIND:ID:DX,DY, the kind one of node, elem, gp, min, max, measure, set, link, load, support, material", O.label_off[q]);
+            cv_msg_add(&G.msgs, 0, false, m);
+        }
+    }
     app_label_changed();
     if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
@@ -471,6 +490,8 @@ static void apply_load(cv_job* j) {
         if (kind < 0 || n != app_measure_nodes(kind)) {
             snprintf(m, sizeof m, "--measure %s: dist:A,B, angle:A,B,C or circle:A,B,C (node ids)", s);
             cv_msg_add(&G.msgs, 0, false, m);
+        } else if (measure_listed(kind, ids)) {
+            continue;                    /* restored from the post-processing file already */
         } else if (!app_measure_add(kind, ids)) {
             snprintf(m, sizeof m, "--measure %s: node not in this model", s);
             cv_msg_add(&G.msgs, 0, false, m);

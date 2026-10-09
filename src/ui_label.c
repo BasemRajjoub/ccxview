@@ -101,5 +101,12 @@ void section_label(struct nk_context* ctx, float s, float row) {
         tip(ctx, "How solid the box behind the text is; 0 none");
         nk_property_float(ctx, "#box opacity", 0.f, &G.label_box_rgba[3], 1.f, 0.05f, 0.005f);
     }
+    if (app_label_moved_count()) {                   /* labels dragged on the model */
+        char t[48];
+        snprintf(t, sizeof t, "Reset moved labels (%d)", app_label_moved_count());
+        nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "Every label dragged on the model goes back beside its point\n(one alone: right-click it, Reset label)");
+        if (nk_button_label(ctx, t)) app_label_moved_clear();
+    }
     nk_tree_state_pop(ctx);
 }
