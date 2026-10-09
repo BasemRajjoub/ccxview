@@ -392,6 +392,10 @@ typedef struct {
     char      label_note[64];        /* "labels: node id, shown 420 of 18 000"; "" when off */
     /* measurements (app_measure.c): their window, and what their labels show */
     bool      show_measure;
+    /* reinforcement of concrete shells, the field REBAR (app_shell.c, rebar.h): the
+       design values in the model's units (MPa and mm with N and mm), its window */
+    float     rebar_fcd, rebar_fyd, rebar_cover;
+    bool      show_rebar;
     int       meas_show;             /* CV_MSHOW_*: the labels give both values, the undeformed or the deformed one */
     bool      show_about;            /* the About window: author, licence, libraries */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
@@ -459,6 +463,7 @@ extern cv_app G;
 
 const char* app_unit(const char* field, int comp);   /* the unit shown, "" when unknown or no unit set */
 void app_units_changed(void);        /* file or shown units changed: values decoded again */
+void app_rebar_changed(void);        /* the reinforcement's design values changed: REBAR worked out again */
 /* cv_field_options with component names in the chosen coordinate system */
 int  app_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
 

@@ -637,6 +637,7 @@ static const plain PLAIN[] = {
     { "label_box_r", 'f', &G.label_box_rgba[0], 0, 1 }, { "label_box_g", 'f', &G.label_box_rgba[1], 0, 1 },
     { "label_box_b", 'f', &G.label_box_rgba[2], 0, 1 }, { "label_box_a", 'f', &G.label_box_rgba[3], 0, 1 },
     PB(lin_asme), PI(lin_q, 0, 8),
+    PF(rebar_fcd, 1e-12f, 1e30f), PF(rebar_fyd, 1e-12f, 1e30f), PF(rebar_cover, 1e-12f, 1e30f),
 };
 #undef PB
 #undef PI

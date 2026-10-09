@@ -566,10 +566,13 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             for (int f = 0; f < st->nfields; f++) {
                 const cv_field_desc* d = &st->fields[f];
                 bool active = G.field_src == 0 && strcmp(d->name, G.field_name) == 0;
-                bool sf = !strcmp(d->name, "SHELL");       /* worked out from STRESS with the deck (app_shell.c) */
+                bool sf = !strcmp(d->name, "SHELL"), rb = !strcmp(d->name, "REBAR");   /* worked out from STRESS with the deck (app_shell.c) */
                 if (sf) tip(ctx, "Shell section forces per width from the stresses through the thickness, in the shell's axes:\n"
-                                 "N membrane, M bending (positive: the +normal side pulls), Q transverse shear (rough)");
-                if (!nk_tree_push_id(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : d->name, active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
+                                 "N membrane, M bending (positive: the +normal side pulls; about the OFFSET surface), Q transverse shear (rough)");
+                if (rb) tip(ctx, "Reinforcement of a concrete shell from its section forces: the steel per width each face needs\n"
+                                 "in x and y (sandwich model, Wood-Armer), and where the concrete is crushed");
+                if (!nk_tree_push_id(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : rb ? "REBAR (reinforcement)" : d->name,
+                                     active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
                     continue;
                 cv_scalar_opt opts[CV_MAX_OPTS];
                 int n = app_field_options(d, opts, CV_MAX_OPTS);
@@ -577,6 +580,10 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;
                     if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(d->name, opts[i].comp, 0);
+                }
+                if (rb) {
+                    tip(ctx, "The design values: concrete fcd, steel fyd, the cover to the bars");
+                    if (nk_button_label(ctx, "Reinforcement...")) G.show_rebar = !G.show_rebar;
                 }
                 nk_tree_pop(ctx);
             }

@@ -113,6 +113,19 @@ static void test_shell(void) {
         CHECK_NEAR(out[CV_SF_N * m.conn[0] + CV_SF_MXX], 100, 1e-3);
         uint32_t lone = m.conn[m.eoff[2] + 1];        /* only the solid's */
         CHECK(out[CV_SF_N * lone] != out[CV_SF_N * lone]);
+        /* OFFSET: about the surface off t above the middle, M - off t N; the thickness */
+        const float off[2] = { 0.5f, -0.25f };
+        float th[256];
+        CHECK(cv_shell_forces_ref(&f, shell, q, 2, off, s, 6, out, th));
+        const float* a = out + CV_SF_N * m.conn[0];                       /* shell 0 alone */
+        const float* b = out + CV_SF_N * m.conn[m.eoff[1] + 1];           /* shell 1 alone */
+        for (int c = 0; c < 3; c++) {
+            CHECK_NEAR(a[CV_SF_MXX + c], S.M[c] - 0.5 * t * S.N[c], 1e-3 * (1 + fabs(S.N[c])));
+            CHECK_NEAR(b[CV_SF_MXX + c], S.M[c] + 0.25 * t * S.N[c], 1e-3 * (1 + fabs(S.N[c])));
+            CHECK_NEAR(a[CV_SF_NXX + c], S.N[c], 1e-3 * (1 + fabs(S.N[c])));
+        }
+        CHECK_NEAR(th[m.conn[0]], t, 1e-5);
+        CHECK(th[lone] != th[lone]);
     }
 
     /* three layers of C3D20, 0.5, 1.0 and 0.7 thick, one shell: stress linear over the

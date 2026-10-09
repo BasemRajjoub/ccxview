@@ -183,6 +183,9 @@ typedef struct {
     char      (*outsys)[CV_OUT_N]; int nsteps;
     uint8_t*    proc;                           /* per *STEP: its procedure, CV_PROC_* */
     uint32_t*   shells;     uint32_t nshells;   /* ids of the shell elements (S3..S8R), sorted */
+    float*      shell_off;                      /* per element (mesh order): *SHELL SECTION OFFSET=, in
+                                                   thicknesses (0.5: the nodes on the +normal face);
+                                                   NULL when no section has one */
     cv_layered* comps;      uint32_t ncomps;    /* composite shells, by id */
     int32_t*    layer_ori;                      /* per layer: orientation, -2 none, -1 cannot be rebuilt */
     int32_t*    layer_mat;                      /* per layer: material index, -1 none */

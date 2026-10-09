@@ -19,6 +19,9 @@ ccxview model.frd --field STRESS --trajectories both  # principal stress traject
 ccxview model.frd --field DISP --history 17 # node 17 over all steps
 ccxview model.frd --field STRESS:SXX        # a field and its component, as the Fields tree names it
 ccxview plate.frd --field SHELL:Mxx         # shell section forces (with the deck): Nxx Nyy Nxy Mxx Myy Mxy Qx Qy
+ccxview slab.frd --field REBAR:As_x_bot --opt rebar_fcd=20 --opt rebar_fyd=435 --opt rebar_cover=40 --rebar-window
+                                            # concrete shell reinforcement per width: As_x_top As_x_bot As_y_top
+                                            #   As_y_bot As_max As_total Conc_ratio Crushing (model units)
 ccxview model.frd --calc "S1 - S3"          # a calculated field (Tresca)
 ccxview model.frd --fail auto               # failure, per material; built-in presets where none assigned
 ccxview model.frd --fail larc05:rf          # a failure criterion (strength materials in ccxview.ini)
@@ -161,7 +164,8 @@ It prints what it selected and the field's max and min over it.
   it, the tick shows only the ticked sets; Imported geometry: STL files shown with
   the results, each with show / hide, colour, opacity and unit scale.
 - **Fields**: the results of the step, their components and invariants,
-  the shell section forces (SHELL, with the deck), integrate... (the field's integrals over a set at every step),
+  the shell section forces (SHELL, with the deck) and the reinforcement of
+  concrete shells from them (REBAR; Reinforcement... for fcd, fyd, cover), integrate... (the field's integrals over a set at every step),
   calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: camera, colours and legend, symbol sizes, mirror, replicate, cyclic

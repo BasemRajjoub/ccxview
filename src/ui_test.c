@@ -158,6 +158,7 @@ static void close_all(struct nk_context* ctx) {
     G.hist_open = G.path_open = false;
     G.title_edit = false;
     G.show_measure = false; app_measure_cancel();
+    G.show_rebar = false;
     G.show_select = false; G.sel_tool = CV_ST_NONE; G.sel_mode = CV_SEL_NEW;
 }
 static void snapshot(struct nk_context* ctx) {
@@ -482,6 +483,11 @@ static bool fly_hides(struct nk_context* ctx) { return G.fly_clip == CV_EYE_HIDE
 static void fly_depth_low(struct nk_context* ctx) { G.fly_clip_depth = 0.f; }
 static bool fly_depth_up(struct nk_context* ctx) { return G.fly_clip_depth > 0.f; }
 static bool scene_still(struct nk_context* ctx) { return !scene_scrolled(ctx); }
+/* the Reinforcement window: its design values */
+static void open_rebar(struct nk_context* ctx) { G.show_rebar = true; }
+static bool rebar_gone(struct nk_context* ctx) { return !G.show_rebar; }
+static void rebar_usual(struct nk_context* ctx) { G.rebar_fcd = 20.f; G.rebar_fyd = 435.f; G.rebar_cover = 40.f; app_rebar_changed(); }
+static bool rebar_cover_up(struct nk_context* ctx) { return G.rebar_cover > 40.f; }
 /* measurements: armed from the probe, the menu or their window; picked by clicks */
 static void open_measure(struct nk_context* ctx) { G.show_measure = true; }
 static bool measure_gone(struct nk_context* ctx) { return !G.show_measure; }
@@ -886,6 +892,7 @@ static const step script[] = {
     CLOSED_THEN_PANELS("About", open_about, about_gone),
     CLOSED_THEN_PANELS("Title block", open_title_settings, title_settings_gone),
     CLOSED_THEN_PANELS("Measurements", open_measure, measure_gone),
+    CLOSED_THEN_PANELS("Reinforcement", open_rebar, rebar_gone),
 
     CASE("measurements: armed from the probe, a second click on the model makes a distance"),
     DO(close_all), DO(meas_clear), DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2),
@@ -1002,6 +1009,11 @@ static const step script[] = {
     DO(open_mesh), WAIT(5), AT_TIP("Mesh quality", "Set your own limits"), CLICK, WAIT(2),
     AT_TIP_X("Mesh quality", "The limit for every element type", 0.95f), CLICK, EXPECT(mesh_limit_set, "the aspect limit changes"),
     DO(mesh_limits_usual), WAIT(3), PANELS_ANSWER,
+
+    CASE("reinforcement: its window opens, the cover answers"),
+    DO(close_all), DO(rebar_usual), DO(open_rebar), WAIT(5),
+    AT_TIP_X("Reinforcement", "c: from each face", 0.95f), CLICK, WAIT(2), EXPECT(rebar_cover_up, "the cover changes"),
+    DO(rebar_usual), DO(close_all), WAIT(3), PANELS_ANSWER,
 
     CASE("imported geometry: listed in Groups; shown, opacity, scale list, colour, removed"),
     DO(stl_add), WAIT(3), EXPECT(stl_listed, "the STL is listed and shown"),

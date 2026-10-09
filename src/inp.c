@@ -141,6 +141,7 @@ int32_t find_idix(const cv_idix* v, uint32_t n, uint32_t id) {
 typedef struct { char name[64]; bool is_elem; CV_VEC(uint32_t) ids; } vset;
 typedef struct { char name[64]; CV_VEC(uint32_t) elem; CV_VEC(uint8_t) face; CV_VEC(uint32_t) nodes; } vsurf;
 typedef struct { char elset[64]; char mat[64]; } section;
+typedef struct { char elset[64]; float off; } shoff;     /* *SHELL SECTION, OFFSET= */
 typedef struct { cv_link l; CV_VEC(uint32_t) nodes; CV_VEC(uint32_t) elems; } vlink;   /* elems: a rigid ELSET, expanded at the end */
 typedef struct { char name[64]; cv_csys cs; bool bad; } vorient;
 /* a section's orientation, by name; the layers of a composite shell may each name one */
@@ -171,6 +172,7 @@ typedef struct {
     CV_VEC(vset) sets;
     CV_VEC(vsurf) surfs;
     CV_VEC(section) sects;
+    CV_VEC(shoff) shoffs;
     CV_VEC(char*) mats;
     CV_VEC(cv_matprop) mprop;           /* per *MATERIAL, as mats */
     CV_VEC(cv_bc) bcs;
@@ -503,6 +505,14 @@ static void do_keyword(P* p, const char* s, const char* e) {
             snprintf(sc.elset, sizeof sc.elset, "%s", es); upcase(sc.elset);
             snprintf(sc.mat, sizeof sc.mat, "%s", ma); upcase(sc.mat);
             if (!cv_push(p->sects, sc)) p->oom = true;
+        }
+        const char* of = pget(prm, np, "OFFSET");
+        double ov;
+        if (es && of && !strcmp(kw, "SHELLSECTION") && to_f(of, &ov)) {
+            shoff so;
+            snprintf(so.elset, sizeof so.elset, "%s", es); upcase(so.elset);
+            so.off = (float)ov;
+            if (!cv_push(p->shoffs, so)) p->oom = true;
         }
         bool comp = pget(prm, np, "COMPOSITE") != NULL;
         if (es && ((oi && oi[0]) || comp)) {
@@ -1297,6 +1307,16 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
             if (e != UINT32_MAX) f->emat[e] = (uint32_t)mi;
         }
     }
+    /* shell offsets: per element, the last section that names it */
+    for (size_t i = 0; i < p.shoffs.n; i++) {
+        const cv_set* es = cv_inp_set(d, p.shoffs.a[i].elset, true);
+        if (!es || (!d->shell_off && !p.shoffs.a[i].off)) continue;
+        if (!d->shell_off && !(d->shell_off = calloc(CV_MAX(f->n_elems, 1), sizeof(float)))) goto oom;
+        for (uint32_t j = 0; j < es->n; j++) {
+            uint32_t e = cv_frd_elem_index(f, es->ids[j]);
+            if (e != UINT32_MAX) d->shell_off[e] = p.shoffs.a[i].off;
+        }
+    }
     /* transforms: per node the last one that names it */
     d->transforms = p.trs.a; d->ntransforms = (int)p.trs.n; p.trs.a = NULL;
     if (p.node_tr.n) qsort(p.node_tr.a, p.node_tr.n, sizeof(cv_idix), cmp_idix);
@@ -1418,7 +1438,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     d->shells = p.shells.a; d->nshells = (uint32_t)p.shells.n; p.shells.a = NULL;
 
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
-    cv_free_vec(p.mats); cv_free_vec(p.mprop); cv_free_vec(p.sects); cv_free_vec(p.sdofs);
+    cv_free_vec(p.mats); cv_free_vec(p.mprop); cv_free_vec(p.sects); cv_free_vec(p.shoffs); cv_free_vec(p.sdofs);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
     cv_free_vec(p.links);
     for (size_t i = 0; i < p.sets.n; i++) cv_free_vec(p.sets.a[i].ids);
@@ -1429,7 +1449,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
 
 oom:
     cv_free_vec(p.node_id); cv_free_vec(p.xyz); cv_free_vec(p.eid); cv_free_vec(p.eoff);
-    cv_free_vec(p.conn); cv_free_vec(p.etype); cv_free_vec(p.sects);
+    cv_free_vec(p.conn); cv_free_vec(p.etype); cv_free_vec(p.sects); cv_free_vec(p.shoffs);
     cv_free_vec(p.trs); cv_free_vec(p.node_tr); cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
     cv_free_vec(p.shells); cv_free_vec(p.sinfo); cv_free_vec(p.mchg);
     for (size_t i = 0; i < p.amps.n; i++) cv_free_vec(p.amps.a[i].tv);
@@ -1466,7 +1486,7 @@ void cv_inp_free(cv_inp* d) {
     for (int i = 0; i < d->namps; i++) { free(d->amps[i].t); free(d->amps[i].v); }
     for (int i = 0; i < d->nsubs; i++) { free(d->subs[i].nodes); free(d->subs[i].surf); }
     free(d->amps); free(d->subs); free(d->stepinfo); free(d->mchg);
-    free(d->shells); free(d->comps); free(d->layer_ori); free(d->layer_mat); free(d->layer_t); free(d->mprop);
+    free(d->shells); free(d->shell_off); free(d->comps); free(d->layer_ori); free(d->layer_mat); free(d->layer_t); free(d->mprop);
     cv_msgs keep = d->msgs;
     memset(d, 0, sizeof *d);
     d->msgs = keep;
