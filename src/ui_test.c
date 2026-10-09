@@ -250,6 +250,9 @@ static bool sel_grew(struct nk_context* ctx) { return G.sel_n > sel_was; }
 static bool sel_shrank(struct nk_context* ctx) { return G.sel_n < sel_was && G.sel_n > 0; }
 static bool sel_boundary(struct nk_context* ctx) { return G.sel_n > 0 && G.seln_n > 0; }
 static void ids_some(struct nk_context* ctx) { uii_select_ids("100-110", false); }
+static void filters_on(struct nk_context* ctx) { G.sel_filters = true; }
+static void filters_off(struct nk_context* ctx) { G.sel_filters = false; app_sel_clear(); }
+static bool sel_some(struct nk_context* ctx) { return G.sel_n > sel_was && G.sel_n < G.frd.n_elems; }
 static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
 static void ids_on(struct nk_context* ctx) { G.label_kinds = 1 << CV_LABEL_NODE; G.label_probe_only = true; app_label_changed(); }
 static void ids_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_probe_only = false; app_label_changed(); }
@@ -651,6 +654,18 @@ static const step script[] = {
     DO(sel_remember), AT_TIP("Selection", "Shrink: one layer less"), CLICK, WAIT(2), EXPECT(sel_shrank, "shrink: fewer"),
     AT_TIP("Selection", "Boundary: the nodes on the outside"), CLICK, WAIT(2), EXPECT(sel_boundary, "its boundary nodes and elements"),
     DO(sel_none), WAIT(2),
+
+    CASE("selection: filters select where, add the field's top %, drop a type"),
+    DO(sel_none), DO(filters_on), DO(open_select), WAIT(3),
+    AT_TIP("Selection", "Keep what lies in this range"), CLICK, WAIT(2), EXPECT(sel_all, "nothing selected: every element in the range"),
+    DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), DO(sel_remember),
+    AT_TIP("Selection", "What you pick next joins the selection"), CLICK, WAIT(2),
+    AT_TIP("Selection", "The field shown: above or below"), CLICK, WAIT(2), EXPECT(select_popup, "the field list opens"),
+    AT_POPUP("Selection", 0.5f, 0.82f), CLICK, WAIT(2),
+    AT_TIP("Selection", "Keep what the field puts there"), CLICK, WAIT(2), EXPECT(sel_some, "add: the field's top 5 % joins"),
+    AT_TIP("Selection", "What you pick next leaves the selection"), CLICK, WAIT(2),
+    AT_TIP("Selection", "Keep the elements of this type"), CLICK, WAIT(2), EXPECT(sel_empty, "remove: every Hex20 leaves"),
+    DO(filters_off), WAIT(2),
 
     CASE("selection: a name from the list, the click tool toggles an element"),
     DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Selection", "A deck element or node set"), CLICK, WAIT(2),

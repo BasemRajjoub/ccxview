@@ -42,7 +42,8 @@ ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of i
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
 ccxview model.frd --select set:EHOLE --select add:ids:1-20 --selection-window
-                                            # selection steps, in order (see Selection below)
+                                            # selection steps, in order (see Selection below);
+                                            #   --opt sel_filters=1: the window's filter rows open
 ccxview model.frd --find 120 --details      # probe node 120, its Details window open
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
@@ -107,6 +108,10 @@ SPEC may start with a mode, `new:` (the default), `add:`, `remove:` or `and:`
 | `face:EID:S3`, `face:EID` | the outer faces from that face of the element (any of its outer faces) up to the feature edges |
 | `chain:NID` | the nodes along the feature edges through node NID, up to the corners |
 | `takes:elements\|nodes\|both`, `facing:on\|off` | what the next steps take |
+| `filter:x>10`, `filter:10<y<20`, `filter:r<5`, `filter:theta>30`, `filter:axial<2` | keep what lies there (of the selection, or of everything shown when nothing is) |
+| `axis:z@x,y,z` | the axis r, theta and axial are about (through 0,0,0 when no point is given) |
+| `field>100`, `field<5`, `top:5` | keep what the field shown puts above, below 100 / 5, in its top 5 % |
+| `filter:type:C3D20R`, `filter:mat:STEEL`, `facing` | keep one element type, one material, the side facing the camera |
 | `clear` | nothing |
 
 It prints what it selected and the field's max and min over it.

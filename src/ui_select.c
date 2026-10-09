@@ -3,7 +3,8 @@
    takes (elements, nodes, the side facing the eye), the tools (box, click, lasso,
    faces up to the feature edges, a chain of feature edges, the connected part),
    the steps on the selection itself (invert, to nodes, to elements, grow, shrink,
-   boundary), deck sets,
+   boundary), filters (a range of x y z or r theta z, the field, a type, a
+   material, the facing side), deck sets,
    surfaces, types and materials by name, and an id list. app_select.c and
    app_seltools.c do the work. */
 #include "app.h"
@@ -202,12 +203,138 @@ static void ids_row(struct nk_context* ctx, float s, float row) {
     if (nk_button_label(ctx, mode_verb[G.sel_mode]) || (ev & NK_EDIT_COMMITED)) app_sel_by_ids(buf, nodes == 1, G.sel_mode);
 }
 
+/* ---- filters: keep what passes of the selection (of everything shown when it is empty) ---- */
+
+static const char* filter_verb(void) {
+    static const char* v[CV_SEL_MODES] = { "keep", "add", "drop", "keep" };
+    return v[G.sel_mode];
+}
+
+/* the range a coordinate spans over the model, to start from */
+static void coord_span(const cv_selfilter* q, float* lo, float* hi) {
+    const float b0[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, b1[3] = { G.bmax.x, G.bmax.y, G.bmax.z };
+    if (q->coord <= CV_SC_Z) { *lo = b0[q->coord]; *hi = b1[q->coord]; return; }
+    if (q->coord == CV_SC_THETA) { *lo = -180; *hi = 180; return; }
+    *lo = INFINITY; *hi = -INFINITY;
+    for (int c = 0; c < 8; c++) {                      /* the box's corners */
+        float p[3] = { c & 1 ? b1[0] : b0[0], c & 2 ? b1[1] : b0[1], c & 4 ? b1[2] : b0[2] };
+        float v = cv_selfilter_coord(q, p);
+        *lo = CV_MIN(*lo, v); *hi = CV_MAX(*hi, v);
+    }
+    if (q->coord == CV_SC_R) *lo = 0;
+}
+
+static int filter_rows(struct nk_context* ctx, float s, float row) {
+    static cv_selfilter q = { .axis = 2 };
+    static int coord = -1, field_kind;
+    static float value = 0, top = 5;
+    static int tm;
+    int rows = 0;
+    if (coord != q.coord || !(q.hi >= q.lo)) { coord = q.coord; coord_span(&q, &q.lo, &q.hi); }
+    float step = (q.hi - q.lo) * 0.01f + 1e-6f;
+    /* a coordinate in a range */
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 60 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label_colored(ctx, "where", NK_TEXT_LEFT, P.dim);
+    static const char* coords[CV_SC_N] = { "x", "y", "z", "r", "theta", "axial" };
+    tip(ctx, "The coordinate: x y z, or r, theta (degrees) and the axial one about the axis below (undeformed;\n"
+             "an element by its centre)");
+    q.coord = nk_combo(ctx, coords, CV_SC_N, q.coord, (int)row, nk_vec2(110 * s, CV_SC_N * row + 20 * s));
+    tip(ctx, "From");
+    q.lo = nk_propertyf(ctx, "#from", -1e30f, q.lo, 1e30f, step, step * 0.2f);
+    tip(ctx, "To");
+    q.hi = nk_propertyf(ctx, "#to", -1e30f, q.hi, 1e30f, step, step * 0.2f);
+    tip(ctx, "Keep what lies in this range (add: what lies in it anywhere joins; remove: it leaves)");
+    if (nk_button_label(ctx, filter_verb())) { cv_selfilter f = q; f.kind = CV_SQ_COORD; app_sel_filter(&f, G.sel_mode); }
+    rows++;
+    if (q.coord >= CV_SC_R) {                          /* the axis r, theta and the axial coordinate are about */
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_static(ctx, 70 * s);
+        nk_layout_row_template_push_static(ctx, 70 * s);
+        for (int k = 0; k < 3; k++) nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_end(ctx);
+        nk_label_colored(ctx, "about", NK_TEXT_LEFT, P.dim);
+        static const char* axes[3] = { "X axis", "Y axis", "Z axis" };
+        tip(ctx, "The axis, through the point beside it; theta turns from the next axis (X: from Y, Y: from Z, Z: from X)");
+        int a = nk_combo(ctx, axes, 3, q.axis, (int)row, nk_vec2(110 * s, 3 * row + 20 * s));
+        if (a != q.axis) { q.axis = a; coord_span(&q, &q.lo, &q.hi); }
+        static const char* nm[3] = { "#x", "#y", "#z" };
+        float st = G.diag * 0.01f + 1e-6f;
+        for (int k = 0; k < 3; k++) { tip(ctx, "The point the axis goes through"); q.at[k] = nk_propertyf(ctx, nm[k], -1e30f, q.at[k], 1e30f, st, st * 0.2f); }
+        rows++;
+    }
+    /* the field */
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_static(ctx, 100 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 60 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label_colored(ctx, "field", NK_TEXT_LEFT, P.dim);
+    static const char* fk[3] = { "above", "below", "top %" };
+    tip(ctx, "The field shown: above or below a value, or its top N % (an element by its highest node, its lowest for below)");
+    field_kind = nk_combo(ctx, fk, 3, field_kind, (int)row, nk_vec2(120 * s, 3 * row + 20 * s));
+    float* v = field_kind == 2 ? &top : &value;
+    float vs = field_kind == 2 ? 1.f : (G.data_max - G.data_min) * 0.01f + 1e-6f;
+    tip(ctx, field_kind == 2 ? "Percent of the entries, the highest values" : "The value");
+    *v = nk_propertyf(ctx, field_kind == 2 ? "#%" : "#value", field_kind == 2 ? 0.f : -1e30f, *v, field_kind == 2 ? 100.f : 1e30f, vs, vs * 0.2f);
+    tip(ctx, "Keep what the field puts there (add: from everything shown; remove: drop it)");
+    if (nk_button_label(ctx, filter_verb())) {
+        cv_selfilter f = { .kind = field_kind == 0 ? CV_SQ_ABOVE : field_kind == 1 ? CV_SQ_BELOW : CV_SQ_TOP, .value = *v };
+        app_sel_filter(&f, G.sel_mode);
+    }
+    rows++;
+    /* an element type or a material */
+    enum { NT = 128 };
+    const char* names[NT];
+    static char lab[NT][64];
+    int kind[NT], nt = 0;
+    uint32_t code[NT];
+    for (int a = CV_AXIS_TYPE; a <= CV_AXIS_MAT; a++)
+        for (int i = 0; i < G.groups.axis[a].n && nt < NT; i++, nt++) {
+            uint32_t c = G.groups.axis[a].value[i];
+            const char* mn = a == CV_AXIS_MAT ? deck_material_name(c) : NULL;
+            if (a == CV_AXIS_TYPE) snprintf(lab[nt], 64, "type %s", cv_frd_type_name((int)c));
+            else if (mn) snprintf(lab[nt], 64, "material %s", mn);
+            else snprintf(lab[nt], 64, "material %u", c);
+            names[nt] = lab[nt]; kind[nt] = a == CV_AXIS_TYPE ? CV_SQ_TYPE : CV_SQ_MAT; code[nt] = c;
+        }
+    if (tm >= nt) tm = 0;
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 60 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label_colored(ctx, "of", NK_TEXT_LEFT, P.dim);
+    tip(ctx, "An element type or a material");
+    if (nt) tm = nk_combo(ctx, names, nt, tm, (int)row, nk_vec2(220 * s, CV_MIN(nt, 10) * row + 20 * s));
+    else nk_label(ctx, "", NK_TEXT_LEFT);
+    tip(ctx, "Keep the elements of this type or material (the nodes stay)");
+    if (nk_button_label(ctx, filter_verb()) && nt) { cv_selfilter f = { .kind = kind[tm], .code = code[tm] }; app_sel_filter(&f, G.sel_mode); }
+    rows++;
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 60 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label_colored(ctx, "facing", NK_TEXT_LEFT, P.dim);
+    nk_label(ctx, "the side facing you now", NK_TEXT_LEFT);
+    tip(ctx, "Keep the side facing the camera now: nodes on faces turned toward it, elements with such a face");
+    if (nk_button_label(ctx, filter_verb())) app_sel_filter_facing(G.sel_mode);
+    return rows + 1;
+}
+
 void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open;
     if (!G.show_select || !G.loaded) { if (was_open) G.sel_tool = CV_ST_NONE; was_open = false; return; }
     if (!was_open) { nk_window_show(ctx, "Selection", NK_SHOWN); G.sel_note[0] = 0; }
     was_open = true;
-    float lines = 13.f;                                  /* the rows below, the title and padding */
+    float lines = 14.f + (G.sel_filters ? 5.f : 0.f);   /* the rows below, the title and padding */
     float w = CV_MIN(430 * s, fw * 0.5f), h = CV_MIN(lines * (row + ctx->style.window.spacing.y) + 2.6f * row, fh * 0.8f);
     if (nk_begin(ctx, "Selection", nk_rect(G.vp_x + 10 * s, G.vp_y + 10 * s, w, h),   /* top left: the legend is top right */
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
@@ -217,6 +344,15 @@ void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int f
         tools_rows(ctx, s, row);
         names_row(ctx, s, row);
         ids_row(ctx, s, row);
+        nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "Filters: keep what lies in a range of x y z (or r theta z about an axis), what the field puts above\n"
+                 "or below a value or in its top N %, a type, a material, the side facing you; of the selection, or\n"
+                 "of everything shown when nothing is selected");
+        if (nk_checkbox_label(ctx, "filters", &G.sel_filters)) {   /* the window grows or shrinks with them */
+            float nh = (14.f + (G.sel_filters ? 5.f : 0.f)) * (row + ctx->style.window.spacing.y) + 2.6f * row;
+            nk_window_set_size(ctx, "Selection", nk_vec2(nk_window_get_width(ctx), CV_MIN(nh, fh * 0.9f)));
+        }
+        if (G.sel_filters) filter_rows(ctx, s, row);
         nk_layout_row_dynamic(ctx, row, 1);
         if (G.sel_note[0]) { tip(ctx, G.sel_note); nk_label_colored(ctx, G.sel_note, NK_TEXT_LEFT, P.warn); }
         else if (G.sel_tool != CV_ST_NONE)

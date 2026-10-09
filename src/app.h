@@ -16,6 +16,7 @@
 #include "anchor.h"
 #include "units.h"
 #include "selset.h"
+#include "selfilter.h"
 
 /* what the faces are coloured by */
 enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
@@ -360,6 +361,7 @@ typedef struct {
     int       sel_mode;              /* CV_SEL_* (selset.h): how what is picked next goes with the selection */
     int       sel_tool;              /* CV_ST_*: what a click in the view does (the Selection window's tools) */
     bool      show_select;           /* the Selection window */
+    bool      sel_filters;           /* ... with its filter rows open */
     char      sel_note[160];         /* what the last selection step did or why it did nothing */
     float     lasso[2 * 512];        /* the lasso being drawn: window pixels, lasso_n points */
     int       lasso_n;
@@ -544,6 +546,11 @@ bool app_sel_boundary(void);                    /* the selected elements' bounda
 bool app_sel_by_name(const char* name, int mode);
 bool app_sel_by_ids(const char* text, bool nodes, int mode);   /* "1-100, 205"; bad tokens in G.sel_note */
 bool app_sel_spec(const char* spec);            /* --select: "ids:1-100", "set:EHOLE", "add:...", "invert", ... */
+/* app_selfilter.c: keep what passes q (or what faces the camera) of the selection, or
+   of everything shown when nothing is selected; add: what passes anywhere joins,
+   remove: what passes leaves */
+bool app_sel_filter(const cv_selfilter* q, int mode);
+bool app_sel_filter_facing(int mode);
 void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
 /* what lies under the pixel (mirror and replicate copies too), the probe untouched;
    o, d: the ray in the model's frame */

@@ -178,6 +178,14 @@ elements and nodes:
 - Grow and shrink by one layer of neighbours; boundary: the nodes on the
   outside of the selected elements (faces no other selected element shares; a
   shell's free edges) and the elements that have them.
+- Filters (the "filters" box): keep what lies in a range of x, y or z, or of
+  r, theta and the axial coordinate about an X, Y or Z axis through a point
+  (undeformed; an element by its centre); what the field shown puts above or
+  below a value, or in its top N % (an element by its highest node, its lowest
+  for "below"); one element type or material; the side facing the camera. They
+  look through the selection, or through everything shown when nothing is
+  selected ("select where"); in add mode what passes anywhere joins, in remove
+  mode what passes leaves.
 - By name: a deck element or node set, a surface (its elements and the nodes of
   its faces), every element of a type or a material; also from a right click on
   a set or surface in Groups.

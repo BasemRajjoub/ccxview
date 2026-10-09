@@ -10,6 +10,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <strings.h>
+#include <ctype.h>
 
 static bool shown(uint32_t e) { return !G.vis || G.vis[e]; }
 
@@ -326,6 +327,45 @@ bool app_sel_by_ids(const char* text, bool nodes, int mode) {
 
 /* ---- --select ------------------------------------------------------------------------ */
 
+static int cyl_axis = 2;                                /* axis:Z@x,y,z for r, theta, axial */
+static float cyl_at[3];
+
+/* filter:x>10, filter:10<r<20, filter:type:C3D20R, filter:mat:2, field>100, field<5, top:5, facing */
+static bool filter_spec(const char* spec, int mode, bool* done) {
+    cv_selfilter q;
+    memset(&q, 0, sizeof q);
+    q.axis = cyl_axis; memcpy(q.at, cyl_at, sizeof q.at);
+    *done = true;
+    if (!strncasecmp(spec, "axis:", 5)) {
+        char a = (char)tolower((unsigned char)spec[5]);
+        if (a < 'x' || a > 'z') { say("axis: x, y or z, then @x,y,z if not through 0,0,0 (%s)", spec); return false; }
+        cyl_axis = a - 'x';
+        memset(cyl_at, 0, sizeof cyl_at);
+        const char* p = strchr(spec, '@');
+        if (p && sscanf(p + 1, "%f,%f,%f", &cyl_at[0], &cyl_at[1], &cyl_at[2]) != 3) { say("axis: x,y,z after @ (%s)", spec); return false; }
+        return true;
+    }
+    if (!strcasecmp(spec, "facing")) return app_sel_filter_facing(mode);
+    if (!strncasecmp(spec, "top:", 4)) { q.kind = CV_SQ_TOP; q.value = strtof(spec + 4, NULL); return app_sel_filter(&q, mode); }
+    if (!strncasecmp(spec, "field>", 6) || !strncasecmp(spec, "field<", 6)) {
+        q.kind = spec[5] == '>' ? CV_SQ_ABOVE : CV_SQ_BELOW;
+        q.value = strtof(spec + 6, NULL);
+        return app_sel_filter(&q, mode);
+    }
+    if (strncasecmp(spec, "filter:", 7)) { *done = false; return false; }
+    const char* w = spec + 7;
+    if (!strncasecmp(w, "type:", 5) || !strncasecmp(w, "mat:", 4)) {
+        int axis = tolower((unsigned char)w[0]) == 't' ? CV_AXIS_TYPE : CV_AXIS_MAT;
+        int i = axis_find(axis, strchr(w, ':') + 1);
+        if (i < 0) { say("no such type or material: %s", w); return false; }
+        q.kind = axis == CV_AXIS_TYPE ? CV_SQ_TYPE : CV_SQ_MAT;
+        q.code = G.groups.axis[axis].value[i];
+        return app_sel_filter(&q, mode);
+    }
+    if (!cv_selfilter_parse(w, &q)) { say("filter: x>10, 10<y<20, r<5, theta>30, axial<2, type:NAME or mat:NAME, not %s", w); return false; }
+    return app_sel_filter(&q, mode);
+}
+
 bool app_sel_spec(const char* spec) {
     static const struct { const char* key; int mode; } modes[] = {
         { "new:", CV_SEL_NEW }, { "add:", CV_SEL_ADD }, { "remove:", CV_SEL_REMOVE }, { "sub:", CV_SEL_REMOVE },
@@ -359,6 +399,9 @@ bool app_sel_spec(const char* spec) {
         G.sel_mode = m;
         return ok;
     }
+    bool done;
+    bool fok = filter_spec(spec, mode, &done);
+    if (done) return fok;
     if (!strcasecmp(spec, "grow")) return app_sel_grow(false);
     if (!strcasecmp(spec, "shrink")) return app_sel_grow(true);
     if (!strcasecmp(spec, "boundary")) return app_sel_boundary();
