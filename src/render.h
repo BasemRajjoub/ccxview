@@ -66,6 +66,8 @@ typedef struct {
     float geo_size;
     int   vp_x, vp_y, vp_w, vp_h; /* viewport in framebuffer pixels, origin top-left */
     struct { bool on; float rgb[3], alpha; } mesh[CV_MESH_N];   /* imported geometry: shown, its colour, 0..1 */
+    int   mesh_order[CV_MESH_N];   /* the see-through ones drawn in this order, back to front (mesh_n_order of them; 0: as listed) */
+    int   mesh_n_order;
 } cv_draw;
 
 void cv_render_init(void);

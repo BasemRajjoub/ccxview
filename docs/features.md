@@ -323,8 +323,9 @@ it was left, and at first the filters and the kept ones are folded:
   Imported geometry > Import STL..., View > File > Import STL..., a `.stl` dropped
   on the window, or `--stl`. Each file is a layer with a box to show or hide it, its
   colour, an opacity slider (see-through: the results show behind it, blended over
-  the model, back faces then front faces; two see-through layers over each other
-  blend in list order, not by depth) and a unit scale (x0.001 .. x1000, for a file
+  the model, back faces then front faces; see-through layers drawn back to front
+  by the distance of their boxes' centres from the eye, so a near one blends over
+  a far one) and a unit scale (x0.001 .. x1000, for a file
   in metres beside a model in mm). Lit like the faces when Shading is on, with its
   outline at the model's crease angle while Outline is on, cut by the clip plane,
   in the PNG and the videos, taken in by Fit. It never moves with the

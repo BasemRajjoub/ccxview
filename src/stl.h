@@ -28,6 +28,10 @@ void cv_stl_free(cv_stl* s);
    those of more than two faces, as vertex pairs (meaningful on a welded mesh);
    *out malloc'd, *n pairs. false: out of memory */
 bool cv_stl_edges(const cv_stl* s, float deg, uint32_t** out, uint32_t* n);
+/* the order to draw n see-through layers in, back to front: by the distance of
+   each one's bounding-box centre (lo, hi: 3 floats each per layer) to the eye,
+   the farthest first; ties keep their order. order: n indices */
+void cv_stl_order_far(const float* lo, const float* hi, int n, const float eye[3], int* order);
 /* a binary STL of n triangles (9 floats each), normals from the vertices; for tests and fixtures */
 bool cv_stl_write(const char* path, const float* tri9, uint32_t n);
 

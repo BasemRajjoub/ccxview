@@ -220,6 +220,18 @@ void cv_stl_free(cv_stl* s) {
 static void wr_u32(unsigned char* p, uint32_t u) { p[0] = (unsigned char)u; p[1] = (unsigned char)(u >> 8); p[2] = (unsigned char)(u >> 16); p[3] = (unsigned char)(u >> 24); }
 static void wr_f32(unsigned char* p, float f) { uint32_t u; memcpy(&u, &f, 4); wr_u32(p, u); }
 
+void cv_stl_order_far(const float* lo, const float* hi, int n, const float eye[3], int* order) {
+    double d[64];
+    for (int i = 0; i < n; i++) {
+        order[i] = i;
+        double s = 0;
+        for (int k = 0; k < 3; k++) { double c = 0.5 * ((double)lo[3 * i + k] + hi[3 * i + k]) - eye[k]; s += c * c; }
+        if (i < 64) d[i] = s;
+    }
+    for (int i = 1; i < n && n <= 64; i++)            /* insertion: a handful of layers, stable */
+        for (int j = i; j > 0 && d[order[j]] > d[order[j - 1]]; j--) { int t = order[j]; order[j] = order[j - 1]; order[j - 1] = t; }
+}
+
 bool cv_stl_write(const char* path, const float* tri9, uint32_t n) {
     FILE* o = fopen(path, "wb");
     if (!o) return false;
