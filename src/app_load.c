@@ -235,6 +235,16 @@ static void pick_default_field(void) {
     }
 }
 
+/* is this measurement listed already (the same kind, the same nodes in order) */
+static bool measure_listed(int kind, const uint32_t ids[3]) {
+    for (int i = 0; i < app_measure_count(); i++) {
+        int k;
+        uint32_t id[3];
+        if (app_measure_get(i, &k, id) && k == kind && id[0] == ids[0] && id[1] == ids[1] && (app_measure_nodes(k) == 2 || id[2] == ids[2])) return true;
+    }
+    return false;
+}
+
 static void apply_load(cv_job* j) {
     bool reload = G.reload_keep;
     unload();
@@ -470,6 +480,8 @@ static void apply_load(cv_job* j) {
         if (kind < 0 || n != app_measure_nodes(kind)) {
             snprintf(m, sizeof m, "--measure %s: dist:A,B, angle:A,B,C or circle:A,B,C (node ids)", s);
             cv_msg_add(&G.msgs, 0, false, m);
+        } else if (measure_listed(kind, ids)) {
+            continue;                    /* restored from the post-processing file already */
         } else if (!app_measure_add(kind, ids)) {
             snprintf(m, sizeof m, "--measure %s: node not in this model", s);
             cv_msg_add(&G.msgs, 0, false, m);

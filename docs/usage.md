@@ -82,6 +82,8 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | compare | `compare` (the other run's path), `compare_diff` |
 | paths | `path` (`38, 54`: two node ids, or `38, normal` / `x` / `y` / `z`), `path_surface`, `path_open`, `path_lin`, `history`, `history_elem` |
 | scl | `scl1`, `scl2` ...: `name; ax,ay,az; bx,by,bz; node; node or normal / x / y / z` (the nodes rebuild the line, the points are for reading) |
+| stl | `stl1`, `stl2` ...: `shown (1 / 0); opacity; r,g,b; scale; path`, the path relative to the model's folder when the file lies in it or below it, else absolute; a file not found is left out with a message |
+| measure | `measure1`, `measure2` ...: `distance 12 40`, `angle 1 2 3`, `circle 1 2 3` (file node ids) |
 
 A long value continues in `key_2`, `key_3` ... .
 

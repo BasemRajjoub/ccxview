@@ -2,8 +2,8 @@
    (model.frd -> model.ccxview; a deck opened alone: beside the .inp): the view
    (camera, step, field, clip, crop, symmetry, layers, colours), units, groups
    switched off, ticked and hidden sets, hand-hidden elements, the path, the kept
-   stress classification lines, the history node, the comparison run, labels and
-   symbols. Restored when the model opens, written a moment after it changes
+   stress classification lines, the history node, the comparison run, imported
+   STL files, measurements, labels and symbols. Restored when the model opens, written a moment after it changes
    (and before another file opens, and at quit). ccxview never writes the
    solver's own files: a .frd may still be being written. The view state files
    (Export > save view state) are the view part alone, with the same keys.
@@ -438,6 +438,108 @@ static void scl_get(const cv_cfg* c) {
     }
 }
 
+/* ---- imported geometry: stl1 = visible; alpha; r,g,b; scale; path ---------------
+   The path last (it may hold ';'), relative to the model's folder when the file lies
+   in it or below it (the folder can move with its models), else absolute. */
+
+/* the model's folder, absolute, with its separator at the end; false when unknown */
+static bool model_dir(char* out, size_t n) {
+    if (!cv_abs_path(G.path, out, n)) return false;
+    char* b = (char*)cv_basename(out);
+    if (b == out) return false;
+    *b = 0;
+    return true;
+}
+
+static bool is_abs(const char* p) {
+    return p[0] == '/' || p[0] == '\\' || (p[0] && p[1] == ':');
+}
+
+static void stl_put(cv_cfg* c) {
+    char dir[1024] = "", key[16], v[1400];
+    bool have = model_dir(dir, sizeof dir);
+    size_t dn = strlen(dir);
+    for (int i = 0; i < app_stl_count(); i++) {
+        cv_stl_layer l;
+        if (!app_stl_get(i, &l)) continue;
+        const char* p = have && !strncmp(l.path, dir, dn) && l.path[dn] ? l.path + dn : l.path;
+        snprintf(v, sizeof v, "%d; %g; %g,%g,%g; %g; %s", l.visible, l.alpha, l.rgb[0], l.rgb[1], l.rgb[2], l.scale, p);
+        snprintf(key, sizeof key, "stl%d", i + 1);
+        cv_cfg_set(c, key, v);
+    }
+}
+
+/* a key that is prefix and a number: stl1, measure12 ... */
+static bool numbered(const char* key, const char* prefix) {
+    size_t n = strlen(prefix);
+    return !strncmp(key, prefix, n) && key[n] && strspn(key + n, "0123456789") == strlen(key + n);
+}
+
+static int stl_missing, stl_kept;      /* files the last load did not find, and found */
+
+static void stl_get(const cv_cfg* c) {
+    char dir[1024] = "";
+    bool have = model_dir(dir, sizeof dir);
+    for (int k = 0; k < c->n; k++) {    /* in file order */
+        if (!numbered(c->a[k].key, "stl")) continue;
+        cv_stl_layer l = {0};
+        int vis = 1, at = 0;
+        if (sscanf(c->a[k].val, "%d; %f; %f,%f,%f; %f; %n", &vis, &l.alpha, &l.rgb[0], &l.rgb[1], &l.rgb[2], &l.scale, &at) < 6 || !at) continue;
+        const char* p = c->a[k].val + at;
+        char path[1100];
+        if (!is_abs(p) && have) snprintf(path, sizeof path, "%s%s", dir, p); else snprintf(path, sizeof path, "%s", p);
+        if (!p[0]) continue;
+        if (cv_file_size(path) == 0) {
+            char m[1200];
+            snprintf(m, sizeof m, "post-processing file: the imported %s is not there any more, left out", path);
+            cv_msg_add(&G.msgs, 0, false, m);
+            stl_missing++;
+            continue;
+        }
+        if (!app_stl_add(path)) continue;
+        stl_kept++;
+        int n = app_stl_count();
+        for (int i = 0; i < n; i++) {   /* listed now (or from the command line already): its look as kept */
+            cv_stl_layer o;
+            char ab[1024];
+            if (!app_stl_get(i, &o) || (strcmp(o.path, path) && (!cv_abs_path(path, ab, sizeof ab) || strcmp(o.path, ab)))) continue;
+            l.visible = vis != 0;
+            memcpy(l.path, o.path, sizeof l.path);
+            app_stl_set(i, &l);
+        }
+    }
+}
+
+/* ---- measurements: measure1 = distance 12 40 | angle 1 2 3 | circle 1 2 3 (file node ids) */
+
+static void measure_put(cv_cfg* c) {
+    for (int i = 0; i < app_measure_count(); i++) {
+        int kind;
+        uint32_t id[3];
+        if (!app_measure_get(i, &kind, id)) continue;
+        char key[24], v[96];
+        if (app_measure_nodes(kind) == 2) snprintf(v, sizeof v, "%s %u %u", app_measure_kind_name(kind), id[0], id[1]);
+        else snprintf(v, sizeof v, "%s %u %u %u", app_measure_kind_name(kind), id[0], id[1], id[2]);
+        snprintf(key, sizeof key, "measure%d", i + 1);
+        cv_cfg_set(c, key, v);
+    }
+}
+
+static void measure_get(const cv_cfg* c) {
+    app_measure_clear();
+    for (int k = 0; k < c->n; k++) {
+        if (!numbered(c->a[k].key, "measure")) continue;
+        char w[16];
+        unsigned a = 0, b = 0, d = 0;
+        int n = sscanf(c->a[k].val, "%15s %u %u %u", w, &a, &b, &d);
+        for (int kind = 0; kind < CV_MEAS_N; kind++) {
+            if (strcasecmp(w, app_measure_kind_name(kind)) || n - 1 != app_measure_nodes(kind)) continue;
+            uint32_t ids[3] = { a, b, d };
+            app_measure_add(kind, ids);      /* a node gone from the model: left out */
+        }
+    }
+}
+
 /* ---- plain values of G: symbols, overlays, legend look, labels, linearization ---- */
 
 typedef struct { const char* key; char kind; void* p; float lo, hi; } plain;
@@ -496,6 +598,8 @@ static const part PARTS[] = {
     { "compare", compare_put, compare_get, false },
     { "paths",   path_put,    path_get,    false },
     { "scl",     scl_put,     scl_get,     true  },
+    { "stl",     stl_put,     stl_get,     true  },
+    { "measure", measure_put, measure_get, true  },
 };
 
 /* ---- the file ----------------------------------------------------------------------- */
@@ -616,17 +720,24 @@ void app_sidecar_load(bool reload) {
     }
     if (!app_sidecar_on() || !app_sidecar_path(SC.path, sizeof SC.path)) return;
     cv_cfg c = {0};
+    stl_missing = stl_kept = 0;
     if (cv_file_size(SC.path) > 0 && cv_cfg_load(&c, SC.path) && c.n) {
         for (size_t i = 0; i < CV_COUNT(PARTS); i++)
             if (!(reload && PARTS[i].kept)) PARTS[i].get(&c);
         if (!app_busy()) app_groups_changed();     /* the view starts it; a reload does not read the view */
         app_symbol_size();                          /* also the highlights of the sets */
         app_label_changed();
-        if (!reload) { snprintf(G.note, sizeof G.note, "restored %s", cv_basename(SC.path)); G.note_t = cv_now(); }
+        if (!reload) {
+            if (stl_missing) snprintf(G.note, sizeof G.note, "restored %s; %d imported STL file%s not found (Messages)",
+                                      cv_basename(SC.path), stl_missing, stl_missing > 1 ? "s" : "");
+            else snprintf(G.note, sizeof G.note, "restored %s", cv_basename(SC.path));
+            G.note_t = cv_now();
+        }
     }
     cv_cfg_free(&c);
     SC.armed = true;
     if (!reload || !SC.last) { free(SC.last); SC.last = serialise(); }
+    if (!reload && app_stl_count() > stl_kept) { free(SC.last); SC.last = NULL; }   /* --stl: an import is kept even with nothing else set up */
 }
 
 void app_sidecar_forget(void) {
