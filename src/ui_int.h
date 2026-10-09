@@ -36,6 +36,7 @@
 #define window_mesh             uii_window_mesh
 #define section_mesh            uii_section_mesh
 #define section_label           uii_section_label
+#define section_stl             uii_section_stl
 #define units_summary           uii_units_summary
 #define window_probe            uii_window_probe
 #define ui_sel_what             uii_sel_what
@@ -115,6 +116,9 @@ void calc_draft_set(const char* t);
 extern const char* const calc_examples[][3];   /* { formula, needs S/E/D, what it is } */
 extern const int calc_example_count;
 bool calc_example_ok(int i);                   /* this file has the fields it needs */
+
+/* ---- ui_stl.c: Groups > Imported geometry */
+void section_stl(struct nk_context* ctx, float s, float row);
 
 /* ---- ui_bars.c */
 void cmap_combo(struct nk_context* ctx, float s, float row);

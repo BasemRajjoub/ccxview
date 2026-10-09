@@ -468,10 +468,10 @@ static int portal_open(const char* parent, const char* start_dir, char* out, siz
     w_align(&body, 8); w_s(&body, "filters"); w_g(&body, "a(sa(us))");
     {
         /* one filter can hold several globs: (name, [(0, glob), ...]) */
-        static const char* names[2] = { "CalculiX (*.frd, *.inp, *.dat, *.fbd)", "All files" };
-        static const char* globs[2][5] = { { "*.frd", "*.inp", "*.dat", "*.fbd", NULL }, { "*", NULL } };
+        static const char* names[3] = { "CalculiX (*.frd, *.inp, *.dat, *.fbd)", "STL geometry (*.stl)", "All files" };
+        static const char* globs[3][5] = { { "*.frd", "*.inp", "*.dat", "*.fbd", NULL }, { "*.stl", NULL }, { "*", NULL } };
         warr fl = w_abegin(&body, 8);
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 3; i++) {
             w_align(&body, 8);
             w_s(&body, names[i]);
             warr pats = w_abegin(&body, 8);
@@ -558,8 +558,8 @@ static int native_open(const char* parent, const char* start_dir, char* out, siz
         snprintf(def, sizeof def, "%s/", start_dir);
 #endif
     }
-    const char* pats[4] = { "*.frd", "*.inp", "*.dat", "*.fbd" };
-    const char* r = tinyfd_openFileDialog("Open CalculiX model or results", def, 4, pats, "CalculiX files", 0);
+    const char* pats[5] = { "*.frd", "*.inp", "*.dat", "*.fbd", "*.stl" };
+    const char* r = tinyfd_openFileDialog("Open CalculiX model or results", def, 5, pats, "CalculiX files, STL geometry", 0);
     if (!r) return 0;
     snprintf(out, n, "%s", r);
     return 1;

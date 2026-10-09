@@ -284,6 +284,7 @@ static void apply_load(cv_job* j) {
     G.groups = j->groups;   memset(&j->groups, 0, sizeof j->groups);
     G.skin = j->skin;       memset(&j->skin, 0, sizeof j->skin);
     gp_localize();                             /* needs the deck and G.frd */
+    if (strcmp(G.path, j->path)) app_stl_clear();   /* imported geometry belongs to the model: a reload keeps it */
     snprintf(G.path, sizeof G.path, "%s", j->path);
     G.load_seconds = j->seconds;
     settings_add_recent(j->path);
@@ -410,6 +411,7 @@ static void apply_load(cv_job* j) {
         refresh_field();
         deck_refresh_highlight();             /* no steps: an unsolved deck shows its last step's loads */
     }
+    if (!G.reload_keep) for (int i = 0; i < O.nstl; i++) app_stl_add(O.stl[i]);   /* before the first fit, which takes them in */
     if (G.reload_keep) { view_bounds(); G.cam = G.keep_cam; G.reload_keep = false; }
     else app_view(CV_VIEW_ISO);
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
@@ -648,6 +650,7 @@ static void open_dat(const char* path) {
 void app_open(const char* path) {
     if (!path || !path[0]) return;
     if (cv_ends_with_ci(path, ".dat")) { open_dat(path); return; }
+    if (cv_ends_with_ci(path, ".stl")) { app_stl_add(path); return; }   /* geometry joins the open model */
     if (app_busy()) {               /* finish whatever runs; a load supersedes it */
         cv_thread_join(&G.job.thread);
         if (G.job.kind == JOB_LOAD) {
@@ -881,6 +884,14 @@ void app_open_dialog(void) {
     G.dlg_running = true;
 }
 
+void app_dialog_done(const char* path) {
+    bool cmp = G.dlg_for_compare, stl = G.dlg_for_stl;     /* a .stl picked to open joins the model too (app_open) */
+    G.dlg_for_compare = G.dlg_for_stl = false;
+    if (stl) app_stl_add(path);
+    else if (cmp) app_compare_open(path);
+    else app_open(path);
+}
+
 void poll_dialog(void) {
     if (!G.dlg_running) return;
     char path[1024];
@@ -888,13 +899,12 @@ void poll_dialog(void) {
     if (st == CV_DLG_RUNNING || st == CV_DLG_IDLE) return;
     G.dlg_running = false;
     if (st == CV_DLG_DONE) {
-        if (G.dlg_for_compare) app_compare_open(path); else app_open(path);
-        G.dlg_for_compare = false;
+        app_dialog_done(path);
     } else if (st == CV_DLG_UNAVAILABLE) {      /* remember, and fall back to ours */
         G.native_dlg_missing = true;
         app_open_dialog();
     } else {
-        G.dlg_for_compare = false;
+        G.dlg_for_compare = G.dlg_for_stl = false;
     }
 }
 

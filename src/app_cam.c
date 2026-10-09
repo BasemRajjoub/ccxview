@@ -409,6 +409,14 @@ void app_sym_toggled(int k) {
 
 /* View box: the drawn shape united with the undeformed one. It sets the depth
    range, so results that carry a part far from where it started stay visible. */
+/* the box grown by the imported geometry shown */
+static void stl_extend(v3* lo, v3* hi) {
+    v3 a, b;
+    if (!app_stl_bounds(&a, &b)) return;
+    lo->x = fminf(lo->x, a.x); lo->y = fminf(lo->y, a.y); lo->z = fminf(lo->z, a.z);
+    hi->x = fmaxf(hi->x, b.x); hi->y = fmaxf(hi->y, b.y); hi->z = fmaxf(hi->z, b.z);
+}
+
 void view_bounds(void) {
     v3 lo = G.bmin, hi = G.bmax, dl, dh;
     if (drawn_box(&dl, &dh)) {
@@ -416,6 +424,7 @@ void view_bounds(void) {
         hi.x = fmaxf(hi.x, dh.x); hi.y = fmaxf(hi.y, dh.y); hi.z = fmaxf(hi.z, dh.z);
     }
     sym_extend(&lo, &hi);
+    stl_extend(&lo, &hi);
     G.vmin = lo; G.vmax = hi;
     v3 e = v3_sub(hi, lo);
     G.vdiag = sqrtf(v3_dot(e, e));
@@ -428,6 +437,7 @@ void app_fit(void) {
     v3 lo, hi;                                   /* frame the shape as drawn */
     if (!drawn_box(&lo, &hi)) { lo = G.bmin; hi = G.bmax; }
     sym_extend(&lo, &hi);
+    stl_extend(&lo, &hi);
     G.cam.target = v3_scale(v3_add(lo, hi), 0.5f);
     v3 e = v3_sub(hi, lo);
     float r = 0.5f * sqrtf(v3_dot(e, e));

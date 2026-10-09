@@ -18,6 +18,7 @@ void cv_colormap_rgb(int cmap, float t, float rgb[3]);
 #define CV_OOR_BELOW 0.48f
 
 enum { CV_COLOR_SOLID = 0, CV_COLOR_NODAL = 1, CV_COLOR_ELEM = 2, CV_COLOR_GROUP = 3 };
+enum { CV_MESH_N = 16 };     /* imported geometry: layers (cv_render_mesh) */
 
 typedef struct {
     float mvp[16], mv[16];
@@ -64,6 +65,7 @@ typedef struct {
     int   vectors_color;       /* CV_COLOR_SOLID or CV_COLOR_NODAL */
     float geo_size;
     int   vp_x, vp_y, vp_w, vp_h; /* viewport in framebuffer pixels, origin top-left */
+    struct { bool on; float rgb[3], alpha; } mesh[CV_MESH_N];   /* imported geometry: shown, its colour, 0..1 */
 } cv_draw;
 
 void cv_render_init(void);
@@ -134,5 +136,15 @@ void cv_render_labels(const float* box, uint32_t nb, const float* gly, uint32_t 
 void cv_render_label_depth(const cv_draw* d);   /* before the frame's pass, while labels are on: the faces' depth for their test */
 
 void cv_render_draw(const cv_draw* d);
+
+/* Imported geometry (STL, app_stl.c): triangles that never move, lit like the faces,
+   one solid colour, not on the mirror copies; with their outline (vertex pairs), drawn
+   darker while d->outline is on. A slot per layer; NULL / 0 clears it. */
+void cv_render_mesh(int slot, const float* xyz, uint32_t n_vert, const uint32_t* tri, uint32_t n_tri,
+                    const uint32_t* edge, uint32_t n_edge);
+/* the shown slots: the opaque ones (alpha 1), or with transparent those see-through,
+   blended over what is drawn, back faces then front faces, leaving the depth as it is
+   (not sorted: two see-through layers overlapping blend in the order they are listed) */
+void cv_render_meshes(const cv_draw* d, bool transparent);
 
 #endif

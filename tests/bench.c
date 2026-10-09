@@ -11,6 +11,7 @@
 #include "../src/fbd.h"
 #include "../src/sta.h"
 #include "../src/label.h"
+#include "../src/stl.h"
 
 /* --labels N: thin N random anchors on a 1600 x 1000 view at 24 px, and the coarse pass over N random points */
 static int bench_labels(uint32_t N) {
@@ -58,6 +59,7 @@ static int fuzz(const char* path, int iters) {
         else if (!strcmp(ext, ".dat")) { cv_dat d; cv_dat_parse(&d, w, n); cv_dat_free(&d); free(d.msgs.a); }
         else if (!strcmp(ext, ".fbd")) { cv_fbd g; cv_fbd_parse(&g, w, n); cv_fbd_free(&g); free(g.msgs.a); }
         else if (!strcmp(ext, ".sta")) { cv_sta t = {0}; cv_sta_parse(&t, w, n); cv_sta_free(&t); }
+        else if (!strcmp(ext, ".stl")) { cv_stl s; char err[128]; cv_stl_parse(&s, w, n, it & 1, err, sizeof err); cv_stl_free(&s); }
         else if (!strcmp(ext, ".cvg")) { cv_sta t = {0}; cv_cvg_parse(&t, w, n); cv_sta_free(&t); }
         else {
             cv_frd f;

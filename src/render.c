@@ -446,11 +446,12 @@ static const char* kFS =
     "#ifdef SPHERE\n"
     "  c *= 0.72 + 0.28 * nz;\n"               /* a touch of rim darkening: reads as a ball */
     "#endif\n"
-    "  frag = vec4(c, 1.0);\n"
+    "  frag = vec4(c, u_color.a);\n"
     "}\n";
 
 typedef struct { float mvp[16]; float mv[16]; float p[4]; float q[4]; } vs_params;
 static float g_tint;                         /* the next layers are the selection: toned toward yellow (u_flags.w) */
+static float g_alpha = 1.f;                  /* the next layers' opacity (imported geometry): u_color.a */
 typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; float oora[4]; float oorb[4]; } fs_params;
 
 /* ---- state ------------------------------------------------------------------- */
@@ -461,6 +462,7 @@ static struct {
     sg_shader   shd, shd_prim, shd_pt;
     sg_pipeline pip_tri, pip_tri_prim, pip_line, pip_pt;
     sg_pipeline pip_tri_ni, pip_line_ni, pip_pt_ni;   /* non-indexed: the aux vertex sets */
+    sg_pipeline pip_see[2];           /* imported geometry see-through: back faces, front faces */
     sg_shader   shd_inst;
     sg_pipeline pip_inst;             /* the instanced symbol bodies */
     sg_shader   shd_glyph;
@@ -688,6 +690,18 @@ void cv_render_init(void) {
     R.pip_line_ni = sg_make_pipeline(&pd);
     pd.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
     R.pip_tri_ni = sg_make_pipeline(&pd);
+    /* imported geometry see-through: indexed, blended, the depth tested but left as it
+       is; STL triangles turn counter-clockwise seen from outside */
+    pd.index_type = SG_INDEXTYPE_UINT32;
+    pd.depth.write_enabled = false;
+    pd.face_winding = SG_FACEWINDING_CCW;
+    pd.colors[0].blend = (sg_blend_state){ .enabled = true,
+        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA, .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+        .src_factor_alpha = SG_BLENDFACTOR_ONE, .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA };
+    pd.cull_mode = SG_CULLMODE_FRONT;
+    R.pip_see[0] = sg_make_pipeline(&pd);
+    pd.cull_mode = SG_CULLMODE_BACK;
+    R.pip_see[1] = sg_make_pipeline(&pd);
 
     {   /* instanced symbols: the unit body per vertex, 15 floats per instance */
         static const char* const attr[8] = { "a_m", "i_a", "i_b", "i_r", "i_disp", "i_disp2", "i_dispb", "i_disp2b" };
@@ -907,7 +921,7 @@ static void uniforms(const cv_draw* d, bool has_disp, bool has_disp2, int mode, 
     vs.q[2] = d->proj[10]; vs.q[3] = d->proj[11];
     sg_apply_uniforms(0, &SG_RANGE(vs));
     fs_params fs = {
-        .color = { rgb[0], rgb[1], rgb[2], 1 },
+        .color = { rgb[0], rgb[1], rgb[2], g_alpha },
         .rng = { d->rmin, d->rmax, (float)d->bands, (float)mode },
         .flags = { 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
         .pz = { d->proj[10], d->proj[14], d->proj[11], d->proj[15] },
@@ -1251,4 +1265,42 @@ static void clear_aux(void) {
     for (int i = 0; i < CV_INST_N; i++) cv_render_inst(i, NULL, 0);
     cv_render_glyphs(NULL, 0);
     for (int i = 0; i < CV_AUX_N; i++) cv_render_aux(i, NULL, NULL, NULL, 0);
+}
+
+/* ---- imported geometry ------------------------------------------------------- */
+
+static struct { sg_buffer pos, ib, ie; uint32_t n_tri, n_edge; } MESH[CV_MESH_N];
+
+void cv_render_mesh(int slot, const float* xyz, uint32_t n_vert, const uint32_t* tri, uint32_t n_tri,
+                    const uint32_t* edge, uint32_t n_edge) {
+    if (slot < 0 || slot >= CV_MESH_N) return;
+    kill_buf(&MESH[slot].pos); kill_buf(&MESH[slot].ib); kill_buf(&MESH[slot].ie);
+    MESH[slot].n_tri = MESH[slot].n_edge = 0;
+    if (!xyz || !tri || !n_vert || !n_tri) return;
+    MESH[slot].pos = make_buf(xyz, (size_t)n_vert * 12, false);
+    MESH[slot].ib = make_buf(tri, (size_t)n_tri * 12, true);
+    MESH[slot].ie = make_buf(edge, (size_t)n_edge * 8, true);
+    MESH[slot].n_tri = MESH[slot].pos.id && MESH[slot].ib.id ? n_tri : 0;
+    MESH[slot].n_edge = MESH[slot].n_tri && MESH[slot].ie.id ? n_edge : 0;
+}
+
+void cv_render_meshes(const cv_draw* d, bool transparent) {
+    if (d->vp_w <= 0 || d->vp_h <= 0) return;
+    sg_apply_viewport(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
+    sg_apply_scissor_rect(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
+    for (int i = 0; i < CV_MESH_N; i++) {
+        float a = d->mesh[i].alpha;
+        if (!d->mesh[i].on || !MESH[i].n_tri || !(a > 0) || (a < 1) != transparent) continue;
+        vset v = { MESH[i].pos, {0}, {0}, {0} };
+        g_alpha = transparent ? a : 1.f;
+        for (int pass = transparent ? 0 : 1; pass < 2; pass++)
+            draw_layer(transparent ? R.pip_see[pass] : R.pip_tri, v, MESH[i].ib, (int)MESH[i].n_tri * 3,
+                       CV_COLOR_SOLID, d->mesh[i].rgb, d->shade, d, 1, false, 0.f, 0);
+        g_alpha = 1.f;
+        if (d->outline && MESH[i].n_edge) {   /* as the model's: darker than its faces, a hair in front */
+            const float* c = d->mesh[i].rgb;
+            const float rgb[3] = { c[0] * 0.4f, c[1] * 0.4f, c[2] * 0.4f };
+            draw_layer(R.pip_line, v, MESH[i].ie, (int)MESH[i].n_edge * 2, CV_COLOR_SOLID, rgb, false, d, 1, false, PULL, 0);
+        }
+    }
 }

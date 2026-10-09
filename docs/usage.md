@@ -1,7 +1,9 @@
 # Using ccxview
 
 Open a file from the command line, with Open... (Ctrl+O), by dropping it on the
-window, or by typing a path in the box.
+window, or by typing a path in the box. A `.stl` dropped on the window (or picked
+with Import STL... in Groups > Imported geometry or View > File) is added to the
+open model as imported geometry instead.
 
 ## Command line
 
@@ -22,6 +24,8 @@ ccxview model.frd --mesh quality            # mesh quality: scores quality hmqi 
                                             #   edgemin edgemax aspect sjac jratio skew anglemin anglemax warp shape
 ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38 to 54
 ccxview run2.frd --compare run1.frd         # difference of two runs
+ccxview model.frd --stl pin.stl --stl alt.stl --stl-alpha 0.4   # geometry that was not analysed, shown with
+                                            #   the results (repeatable), see-through
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
@@ -69,7 +73,7 @@ ccxview --version
 
 - **Layers** (left panel): faces, edges, outline, nodes, Gauss points, vectors,
   tensor glyphs, stress trajectories, supports, loads, springs.
-- **Groups**: element types, materials, sets and surfaces of the deck.
+- **Groups**: element types, materials, sets and surfaces of the deck; Imported geometry: STL files shown with the results, each with show / hide, colour, opacity and unit scale.
 - **Fields**: the results of the step, their components and invariants,
   calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).

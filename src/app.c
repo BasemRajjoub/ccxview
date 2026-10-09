@@ -48,7 +48,7 @@ cv_app G;
 static struct nk_context* g_nk;
 static void app_log(const char* tag, uint32_t level, uint32_t item, const char* msg, uint32_t line,
                     const char* file, void* user);
-cv_opts O = { .faces = -1, .tensor = -1, .traj = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30 };
+cv_opts O = { .stl_alpha = -1, .faces = -1, .tensor = -1, .traj = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30 };
 static struct nk_context* g_nk;
 
 /* ---- sokol callbacks --------------------------------------------------------------- */
@@ -461,6 +461,7 @@ static void frame(void) {
         float fc[3] = { 0.74f, 0.76f, 0.80f }, ec[3] = { 0.07f, 0.07f, 0.08f }, pc[3] = { 0.10f, 0.10f, 0.14f };
         memcpy(d.face_rgb, fc, sizeof fc); memcpy(d.edge_rgb, ec, sizeof ec); memcpy(d.point_rgb, pc, sizeof pc);
         d.vp_x = G.vp_x; d.vp_y = G.vp_y; d.vp_w = G.vp_w; d.vp_h = G.vp_h;
+        app_stl_draw(&d);
     }
     app_marks_sync();
     if (G.loaded) {
@@ -474,6 +475,8 @@ static void frame(void) {
         .swapchain = sglue_swapchain(),
     });
     if (G.loaded) {
+        cv_draw d0 = d;                        /* the model's own frame: imported geometry */
+        cv_render_meshes(&d0, false);          /* opaque: before the labels, which leave the depth as it is */
         cv_render_draw(&d);
         int nc = app_copies();
         d.labels = false;                      /* labels belong to the file's nodes: not on the copies */
@@ -487,6 +490,7 @@ static void frame(void) {
                 cv_render_draw(&d);
             }
         }
+        cv_render_meshes(&d0, true);           /* see-through: over everything drawn */
         sg_apply_viewport(0, 0, sapp_width(), sapp_height(), true);
         sg_apply_scissor_rect(0, 0, sapp_width(), sapp_height(), true);
     }
@@ -806,7 +810,7 @@ static void event(const sapp_event* ev) {
 #ifdef __EMSCRIPTEN__
             cv_web_fetch_drops();
 #else
-            if (sapp_get_num_dropped_files() > 0) app_open(sapp_get_dropped_file_path(0));
+            if (sapp_get_num_dropped_files() > 0) app_open(sapp_get_dropped_file_path(0));   /* a .stl joins the model */
 #endif
             break;
         case SAPP_EVENTTYPE_MOUSE_DOWN:
@@ -1080,6 +1084,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--view") && i + 1 < argc) O.view_file = argv[++i];
         else if (!strcmp(argv[i], "--watch")) O.watch = true;
         else if (!strcmp(argv[i], "--compare") && i + 1 < argc) O.compare = argv[++i];
+        else if (!strcmp(argv[i], "--stl") && i + 1 < argc) { if (O.nstl < CV_MESH_N) O.stl[O.nstl++] = argv[i + 1]; i++; }
+        else if (!strcmp(argv[i], "--stl-alpha") && i + 1 < argc) O.stl_alpha = fminf(fmaxf((float)atof(argv[++i]), 0.f), 1.f);
         else if (!strcmp(argv[i], "--path") && i + 1 < argc) O.path_ids = argv[++i];
         else if (!strcmp(argv[i], "--history") && i + 1 < argc) O.hist_id = atol(argv[++i]);
         else if (!strcmp(argv[i], "--linearize") && i + 1 < argc) O.lin_ids = argv[++i];

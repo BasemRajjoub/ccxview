@@ -425,7 +425,8 @@ void section_view(struct nk_context* ctx, float s, float row) {
             if (G.cmp_on) { app_compare_close(); app_select(G.field_name, G.comp); }
             else { G.dlg_for_compare = true; app_open_dialog(); }
         }
-        nk_spacing(ctx, 1);
+        tip(ctx, "Import geometry that was not analysed (an STL file) to show with the results; listed in Groups");
+        if (nk_button_label(ctx, "Import STL...")) { G.dlg_for_stl = true; app_open_dialog(); }
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Reload when the file changes on disk (a running solver): camera, step and field stay");
         nk_checkbox_label(ctx, "Watch file", &G.watch);
