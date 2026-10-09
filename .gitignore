@@ -23,3 +23,6 @@ samples/*/*.csv
 samples/*/*.vtk
 samples/*/*.nam
 dist/
+
+# post-processing kept beside a model by ccxview
+*.ccxview

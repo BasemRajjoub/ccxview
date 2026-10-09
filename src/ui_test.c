@@ -362,6 +362,33 @@ static void groups_open(struct nk_context* ctx) {
 static void groups_close(struct nk_context* ctx) { memcpy(G.tree, groups_tree, sizeof groups_tree); }
 static bool set_hidden(struct nk_context* ctx) { return deck_any_elset_hidden() && G.vis && !app_busy(); }
 static bool sets_shown(struct nk_context* ctx) { return !deck_any_elset_hidden(); }
+/* a linearization line between two nodes of the model, its Path window open */
+static void lin_open(struct nk_context* ctx) {
+    app_scl_clear();
+    G.path_lin = true; G.path_surface = false;
+    app_path_start(0); app_path_end(G.frd.n_nodes / 2);
+}
+static bool lin_kept(struct nk_context* ctx) { return G.scl_n == 1 && app_scl_current() == 0; }
+static void lin_other(struct nk_context* ctx) { app_path_start(0); app_path_end(G.frd.n_nodes / 3); }
+static bool lin_other_shown(struct nk_context* ctx) { return G.path_n && app_scl_current() < 0; }
+static bool lin_list_open(struct nk_context* ctx) { return popup_open(ctx, "Path"); }
+static bool lin_back(struct nk_context* ctx) { return G.path_n && G.path_open && app_scl_current() == 0; }
+static bool lin_forgotten(struct nk_context* ctx) { return G.scl_n == 0 && G.path_n; }
+static void lin_close(struct nk_context* ctx) { app_path_clear(); app_scl_clear(); }
+/* View > File alone open, the model's .ccxview written */
+static int file_tree[CV_TREE_N];
+static void file_open(struct nk_context* ctx) {
+    memcpy(file_tree, G.tree, sizeof file_tree);
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_FILE;
+    struct nk_window* w = win_of(ctx, "Scene");
+    if (w) w->scrollbar.y = 0;
+    app_sidecar_save();
+}
+static void file_close(struct nk_context* ctx) { memcpy(G.tree, file_tree, sizeof file_tree); }
+static bool sidecar_gone(struct nk_context* ctx) {
+    char p[1100];
+    return app_sidecar_path(p, sizeof p) && cv_file_size(p) == 0 && G.loaded && !app_busy();
+}
 static bool tip_cmap(struct nk_context* ctx) { return !strncmp(uii_tip_shown(), "Colour map", 10); }
 static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 
@@ -597,6 +624,14 @@ static const step script[] = {
     AT_TIP("Scene", "Hidden: click to show"), CLICK, WAIT(10), EXPECT(sets_shown, "every set shown again"),
     DO(groups_close), WAIT(2), PANELS_ANSWER,
 
+    CASE("linearization: a line kept, another shown, the kept one picked from the list, forgotten"),
+    DO(lin_open), WAIT(3), AT_TIP("Path", "Keep this line"), CLICK, WAIT(2), EXPECT(lin_kept, "the line is kept, the list shows it"),
+    DO(lin_other), WAIT(3), EXPECT(lin_other_shown, "another line is not a kept one"),
+    AT_TIP("Path", "Kept stress classification lines"), CLICK, WAIT(2), EXPECT(lin_list_open, "the list of kept lines opens"),
+    AT_POPUP("Path", 0.5f, 0.3f), CLICK, WAIT(3), EXPECT(lin_back, "the kept line is shown again"),
+    AT_TIP("Path", "Forget this kept line"), CLICK, WAIT(2), EXPECT(lin_forgotten, "forgotten, the line still shown"),
+    DO(lin_close), WAIT(2), PANELS_ANSWER,
+
     CASE("display: the UI size buttons shrink the interface and reset it"),
     DO(display_open), WAIT(3), AT_TIP("Scene", "The whole interface a step smaller"), CLICK, WAIT(4), EXPECT(ui_smaller, "the UI shrinks"),
     AT_TIP("Scene", "Click: back to 100 %"), CLICK, WAIT(4), EXPECT(ui_normal, "back to 100 %"), DO(sections_open), WAIT(2), PANELS_ANSWER,
@@ -613,6 +648,10 @@ static const step script[] = {
     DO(open_mesh), WAIT(5), AT_TIP("Mesh quality", "Set your own limits"), CLICK, WAIT(2),
     AT_TIP_X("Mesh quality", "The limit for every element type", 0.95f), CLICK, EXPECT(mesh_limit_set, "the aspect limit changes"),
     DO(mesh_limits_usual), WAIT(3), PANELS_ANSWER,
+
+    CASE("file: forget post-processing deletes the model's .ccxview and opens it afresh"),
+    DO(file_open), WAIT(3), AT_TIP("Scene", "Forget what was set up"), CLICK, WAIT(20), EXPECT(sidecar_gone, "the file is gone, the model open"),
+    DO(file_close), WAIT(2), DO(sections_open), WAIT(2), PANELS_ANSWER,
 
     CASE("a window closed by the program (OK, Escape), the panels still answer"),
     DO(open_formula), WAIT(3), AT_TITLE("Formula"), CLICK, DO(close_all), WAIT(1), PANELS_ANSWER,

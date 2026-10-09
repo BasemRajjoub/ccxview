@@ -33,6 +33,14 @@ void  cv_cfg_set_int(cv_cfg* c, const char* key, int v);
 void  cv_cfg_set_float(cv_cfg* c, const char* key, float v);
 void  cv_cfg_set_bool(cv_cfg* c, const char* key, bool v);
 void  cv_cfg_unset(cv_cfg* c, const char* key);                        /* drops the key; absent: nothing */
+/* A value longer than a line (an id list, many names) over several keys: key,
+   key_2, key_3 ..., each piece cut after a ", ". The get joins them with ", "
+   again: a malloc'd string, NULL when the key is absent. */
+void  cv_cfg_set_long(cv_cfg* c, const char* key, const char* text);
+char* cv_cfg_get_long(const cv_cfg* c, const char* key);
+/* the keys as "key = value" lines in their order (the layout is ignored): a
+   malloc'd string, NULL when out of memory */
+char* cv_cfg_text(const cv_cfg* c);
 /* The file's layout for the next save: its lines replace the file as read
    (comments, blank lines, key order); keys not in it follow at the end. */
 void  cv_cfg_set_layout(cv_cfg* c, const char* text);

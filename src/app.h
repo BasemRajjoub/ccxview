@@ -29,6 +29,15 @@ enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXP
 
 enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
 
+/* a kept stress classification line (Path window > keep): from node a to node b, or
+   from a along a direction (dir 1 the inward normal, 2..4 X, Y, Z; b UINT32_MAX) */
+typedef struct {
+    char     name[32];
+    uint32_t a, b;           /* node indices */
+    int      dir;
+    float    p[2][3];        /* the ends when it was kept */
+} cv_scl;
+
 typedef struct {
     v3    target;
     float dist, yaw, pitch, fovy;    /* turntable: yaw / pitch about the up axis */
@@ -234,6 +243,9 @@ typedef struct {
     int       lin_q;                 /* shown: 0 von Mises, 1 Tresca, 2..7 a component, 8 S1+S2+S3 */
     bool      lin_asme;              /* bending from the components normal to the line only (5-A.4.1.2) */
     char      lin_key[200];
+    cv_scl*   scl;                   /* kept lines, scl_n of them; restored from the model's .ccxview */
+    int       scl_n;
+    char      scl_name[32];          /* the name the next kept line gets (the Path window's box) */
     /* comparison: a second results file on the same mesh, shown as A - B */
     cv_map    cmp_map;
     cv_frd    cmp;
@@ -409,6 +421,7 @@ typedef struct {
     float     csys_o[3];             /* ... through this point */
     bool      legend_edit;           /* the legend settings window is open */
     cv_anchor legend_pos, gizmo_pos;  /* dragged to: view corner + gap (unset: top-right, bottom-left) */
+    bool      sidecar;               /* keep each model's post-processing in <model>.ccxview (app_sidecar.c) */
 } cv_app;
 
 extern cv_app G;
@@ -428,6 +441,13 @@ void app_lin_open(const float A[3], const float B[3], uint32_t na, uint32_t nb);
 /* membrane and bending of the sampled line, the bending masked as lin_asme asks; false if no line */
 bool app_lin_mb(double m[6], double b[6]);
 void app_lin_close(void);
+/* kept stress classification lines (G.scl) */
+int  app_scl_keep(const char* name);        /* the shown straight path, under this name; its index, -1 none */
+void app_scl_show(int i);                   /* make kept line i the path, linearized */
+void app_scl_delete(int i);
+int  app_scl_current(void);                 /* the kept line the path is, -1 none */
+void app_scl_clear(void);
+bool app_scl_add(const cv_scl* l);          /* append one (read from the model's .ccxview); false: out of memory */
 void app_pick_cancel(void);                 /* drop a pending second click */
 void app_marks_sync(void);                  /* the picked-node markers, redrawn when the picks change */
 /* the cap of the clip plane n . x = d through the solid elements, deformed by f1 DISP
@@ -512,6 +532,16 @@ bool app_compare_open(const char* path); /* second .frd on the same mesh; false 
 void app_compare_close(void);
 bool app_view_save(const char* path);    /* camera, step, field, layers -> a small INI */
 bool app_view_load(const char* path);
+/* app_sidecar.c -- each model's post-processing (view, units, hidden sets, paths,
+   kept lines, labels ...) in <model>.ccxview beside it, restored on open and
+   written when it changes; never the solver's own files */
+bool app_sidecar_path(char* out, size_t n);  /* where the open model's goes; false: none (web, nothing open) */
+bool app_sidecar_on(void);                   /* the setting and --no-sidecar allow it */
+bool app_sidecar_save(void);                 /* now, whether it changed or not */
+void app_sidecar_load(bool reload);          /* after a load; reload: the parts a reload keeps stay as they are */
+void app_sidecar_tick(void);                 /* per frame: written a moment after a change */
+void app_sidecar_flush(void);                /* written now if it changed (before unload, at quit) */
+void app_sidecar_forget(void);               /* delete the file, open the model afresh */
 void app_view(int preset);
 enum { CV_NAV_NONE, CV_NAV_ROTATE, CV_NAV_PAN, CV_NAV_ZOOM, CV_NAV_ROLL, CV_NAV_BOX, CV_NAV_LOOK };
 void cam_turn(v3 axis, float a, v3 pivot);       /* the camera turned about a world axis through pivot */

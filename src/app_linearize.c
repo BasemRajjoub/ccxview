@@ -237,3 +237,78 @@ bool app_lin_csv(const char* path) {
     }
     return fclose(o) == 0;
 }
+
+/* ---- kept lines: several stress classification lines in one model ------------------
+   Each is the path that made it (two nodes, or a node and a direction), so showing
+   it again rebuilds the same straight line on whatever step is shown. */
+
+/* "SCL n" for the first n no kept line is called */
+static void scl_next_name(void) {
+    for (int k = 1;; k++) {
+        char nm[32];
+        snprintf(nm, sizeof nm, "SCL %d", k);
+        int i = 0;
+        while (i < G.scl_n && strcmp(G.scl[i].name, nm)) i++;
+        if (i == G.scl_n) { snprintf(G.scl_name, sizeof G.scl_name, "%s", nm); return; }
+    }
+}
+
+int app_scl_current(void) {
+    if (!G.path_n || G.path_surface) return -1;
+    for (int i = 0; i < G.scl_n; i++) {
+        const cv_scl* l = &G.scl[i];
+        if (l->a == G.path_end[0] && l->dir == G.path_dir && (l->dir || l->b == G.path_end[1])) return i;
+    }
+    return -1;
+}
+
+int app_scl_keep(const char* name) {
+    if (!G.loaded || !G.path_n || G.path_surface || G.path_end[0] >= G.frd.n_nodes) return -1;
+    int i = app_scl_current();
+    if (i < 0) {                                         /* new; the same line again is only renamed */
+        cv_scl* n = realloc(G.scl, (size_t)(G.scl_n + 1) * sizeof *n);
+        if (!n) return -1;
+        G.scl = n;
+        i = G.scl_n++;
+    }
+    cv_scl* l = &G.scl[i];
+    char nm[32];
+    if (!G.scl_name[0]) scl_next_name();                 /* the box emptied */
+    snprintf(nm, sizeof nm, "%s", name && *name ? name : G.scl_name);   /* name may be G.scl_name */
+    snprintf(l->name, sizeof l->name, "%s", nm);
+    l->a = G.path_end[0]; l->b = G.path_dir ? UINT32_MAX : G.path_end[1]; l->dir = G.path_dir;
+    memcpy(l->p, G.path_p, sizeof l->p);
+    scl_next_name();
+    return i;
+}
+
+void app_scl_show(int i) {
+    if (i < 0 || i >= G.scl_n || !G.loaded) return;
+    const cv_scl l = G.scl[i];
+    if (l.a >= G.frd.n_nodes || (!l.dir && l.b >= G.frd.n_nodes)) return;
+    G.path_surface = false;
+    G.path_lin = true;
+    if (l.dir) app_path_ray(l.a, l.dir);
+    else { app_path_start(l.a); app_path_end(l.b); }
+}
+
+void app_scl_delete(int i) {
+    if (i < 0 || i >= G.scl_n) return;
+    memmove(&G.scl[i], &G.scl[i + 1], (size_t)(G.scl_n - i - 1) * sizeof *G.scl);
+    G.scl_n--;
+    scl_next_name();
+}
+
+bool app_scl_add(const cv_scl* l) {
+    cv_scl* n = realloc(G.scl, (size_t)(G.scl_n + 1) * sizeof *n);
+    if (!n) return false;
+    G.scl = n;
+    G.scl[G.scl_n++] = *l;
+    scl_next_name();
+    return true;
+}
+
+void app_scl_clear(void) {
+    free(G.scl); G.scl = NULL; G.scl_n = 0;
+    scl_next_name();
+}

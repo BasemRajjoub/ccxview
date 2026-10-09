@@ -257,6 +257,58 @@ void cv_cfg_unset(cv_cfg* c, const char* key) {
         }
 }
 
+/* ---- values longer than a line: key, key_2, key_3 ... cut after a ", " -------- */
+enum { LONG_PIECE = 960 };
+void cv_cfg_set_long(cv_cfg* c, const char* key, const char* text) {
+    size_t n = strlen(text), o = 0;
+    for (int k = 1; o < n || k == 1; k++) {
+        size_t m = n - o;
+        if (m > LONG_PIECE) {
+            m = LONG_PIECE;
+            while (m > 1 && !(text[o + m - 2] == ',' && text[o + m - 1] == ' ')) m--;
+            if (m <= 1) m = LONG_PIECE;            /* no comma: cut anyway */
+        }
+        char kk[80], piece[LONG_PIECE + 1];
+        if (k == 1) snprintf(kk, sizeof kk, "%s", key); else snprintf(kk, sizeof kk, "%s_%d", key, k);
+        memcpy(piece, text + o, m); piece[m] = 0;
+        size_t e = m;
+        while (e && (piece[e - 1] == ' ' || piece[e - 1] == ',')) piece[--e] = 0;
+        cv_cfg_set(c, kk, piece);
+        o += m;
+    }
+}
+
+char* cv_cfg_get_long(const cv_cfg* c, const char* key) {
+    const char* v = cv_cfg_get(c, key, NULL);
+    if (!v) return NULL;
+    size_t cap = strlen(v) + 1, o;
+    char* s = malloc(cap);
+    if (!s) return NULL;
+    memcpy(s, v, cap); o = cap - 1;
+    for (int k = 2;; k++) {
+        char kk[80];
+        snprintf(kk, sizeof kk, "%s_%d", key, k);
+        const char* p = cv_cfg_get(c, kk, NULL);
+        if (!p) break;
+        size_t m = strlen(p);
+        char* t = realloc(s, cap + m + 2);
+        if (!t) break;
+        s = t; cap += m + 2;
+        memcpy(s + o, ", ", 2); memcpy(s + o + 2, p, m + 1); o += m + 2;
+    }
+    return s;
+}
+
+char* cv_cfg_text(const cv_cfg* c) {
+    size_t cap = 1, o = 0;
+    for (int i = 0; i < c->n; i++) cap += strlen(c->a[i].key) + strlen(c->a[i].val) + 4;
+    char* t = malloc(cap);
+    if (!t) return NULL;
+    t[0] = 0;
+    for (int i = 0; i < c->n; i++) o += (size_t)snprintf(t + o, cap - o, "%s = %s\n", c->a[i].key, c->a[i].val);
+    return t;
+}
+
 void cv_cfg_set_layout(cv_cfg* c, const char* text) {
     if (!c || !text) return;
     size_t n = strlen(text);

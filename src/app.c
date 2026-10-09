@@ -100,6 +100,8 @@ static void init(void) {
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
+    G.sidecar = true;                    /* each model's post-processing kept beside it */
+    app_scl_clear();                     /* the first kept line's name */
     G.lin_asme = true;
     G.path_to = UINT32_MAX;
     G.show_gp = false;                   /* off by default, like nodes */
@@ -373,6 +375,7 @@ static void frame(void) {
     }
 
     app_traj_tick();
+    app_sidecar_tick();
     ui_test_frame(g_nk);                 /* --ui-test: the script's next step, as events */
     g_nk = snk_new_frame();
     ui_frame(g_nk, sapp_width(), sapp_height());
@@ -1078,6 +1081,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--opt") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = argv[++i];
         else if (!strcmp(argv[i], "--find") && i + 1 < argc) O.find = argv[++i];
         else if (!strcmp(argv[i], "--view") && i + 1 < argc) O.view_file = argv[++i];
+        else if (!strcmp(argv[i], "--no-sidecar")) O.no_sidecar = true;
         else if (!strcmp(argv[i], "--watch")) O.watch = true;
         else if (!strcmp(argv[i], "--compare") && i + 1 < argc) O.compare = argv[++i];
         else if (!strcmp(argv[i], "--path") && i + 1 < argc) O.path_ids = argv[++i];

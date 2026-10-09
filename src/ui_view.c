@@ -431,6 +431,15 @@ void section_view(struct nk_context* ctx, float s, float row) {
         nk_checkbox_label(ctx, "Watch file", &G.watch);
         tip(ctx, "Reopen the file now, keeping camera, step and field");
         if (nk_button_label(ctx, "Reload")) app_reload();
+        if (app_sidecar_on()) {
+            char p[1100], t[1300];
+            app_sidecar_path(p, sizeof p);
+            snprintf(t, sizeof t, "Forget what was set up for this model (views, sets, paths, kept lines ...):\n"
+                                  "delete %s and open the model afresh", cv_basename(p));
+            nk_layout_row_dynamic(ctx, row, 1);
+            tip(ctx, t);
+            if (nk_button_label(ctx, "Forget post-processing")) app_sidecar_forget();
+        }
 
         nk_tree_state_pop(ctx);
     }

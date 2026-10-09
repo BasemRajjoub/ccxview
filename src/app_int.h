@@ -45,6 +45,7 @@ typedef struct {
     bool        menu_set;
     bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */
     const char* view_file;      /* --view FILE: a saved view state, applied after load */
+    bool        no_sidecar;     /* --no-sidecar: neither read nor write <model>.ccxview this run */
     bool        watch;          /* --watch: reload when the file changes */
     const char* compare;        /* --compare FILE */
     const char* path_ids;       /* --path A,B: node ids to plot between */

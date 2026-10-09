@@ -532,7 +532,7 @@ bool app_hist_csv(const char* path) {
     FILE* o = fopen(path, "wb");
     if (!o) return false;
     cv_fprintf(o, "step,time,%s %s %u\n", G.field_label, G.elem_mode ? "element" : "node",
-            G.elem_mode ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node]);
+            G.elem_mode && G.hist_elem < G.frd.n_elems ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node]);
     for (int i = 0; i < G.hist_n; i++) {
         cv_fprintf(o, "%d,%.9g,", G.hist_step[i] + 1, G.hist_t[i]);
         if (G.hist_v[i] == G.hist_v[i]) cv_fprintf(o, "%.9g\n", G.hist_v[i]); else cv_fprintf(o, "nan\n");

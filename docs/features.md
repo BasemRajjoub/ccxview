@@ -125,7 +125,9 @@ and what is drawn for it; `samples/symbols/` shows them all.
 - ASME VIII-2 stress linearization along a line through the wall: membrane,
   membrane + bending, peak and total at both ends and their largest value on the
   line; bending from the components normal to the line as 5-A.4.1.2 asks, or
-  from all six.
+  from all six. Several lines in one model: "keep" in the Path window stores the
+  line under a name (SCL 1, SCL 2 ... or your own), the list beside it shows a
+  kept line again, "forget" drops it; they are saved with the model.
 - A locked legend range keeps min / max across steps and components; the values past
   either end in grey to stand out, in the map's end colour to blend in, in a colour
   of yours, or not drawn at all. Fifteen colour maps (Fast, cool-warm, viridis,
@@ -158,6 +160,29 @@ and what is drawn for it; `samples/symbols/` shows them all.
   (to look at what it covers); a hidden set wins over a ticked one, its name is
   dimmed, and "show everything" or Show all brings it back. Hide set in the
   right-click menu does the same.
+
+## Post-processing kept with the model
+
+What is set up for a model is kept in a small file beside it, `model.ccxview`
+for `model.frd` (a deck opened alone: beside the `.inp`), and comes back the
+next time the model is opened ("restored model.ccxview" in the status bar): the
+view (camera, step, field and component, a formula, failure or mesh field,
+per-element, coordinates, deformation, locked range, clip, crop, mirror,
+replicate, cyclic, layers, colour map and bands), units, groups switched off,
+element sets ticked and hidden, node sets and surfaces ticked, elements hidden
+by hand, the path and the history node, the kept linearization lines, the
+comparison run, the labels and the symbols. It is written a moment after a change
+(not while dragging the camera, not while a file loads), before another file
+opens and at quit; only when something changed, so opening a model to look at it
+leaves no file behind. Reload and Watch file keep it all: what a reload starts afresh
+(sets, paths, kept lines) is read back from the file.
+
+ccxview never writes the solver's files (a `.frd` may still be being written).
+A file from an older run, or one edited by hand, is read for what still fits
+(sets, nodes and fields that are gone are skipped). View > File > Forget
+post-processing deletes it and opens the model afresh; `--no-sidecar` leaves it
+alone for one run, `sidecar = 0` in `ccxview.ini` (or `--opt sidecar=0`) for good.
+The browser version keeps none. The keys are listed in [usage.md](usage.md).
 
 ## cgx geometry
 

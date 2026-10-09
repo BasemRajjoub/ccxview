@@ -224,6 +224,49 @@ static void test_cfg(void) {
         cv_cfg_free(&g);
     }
 
+    /* the keys as text, in order, the layout ignored */
+    {
+        cv_cfg t = {0};
+        char* e = cv_cfg_text(&t);
+        CHECK(e && !strcmp(e, ""));
+        free(e);
+        cv_cfg_set(&t, "b", "2"); cv_cfg_set(&t, "a", "one two"); cv_cfg_set_layout(&t, "# ignored\n");
+        e = cv_cfg_text(&t);
+        CHECK(e && !strcmp(e, "b = 2\na = one two\n"));
+        free(e);
+        cv_cfg_free(&t);
+    }
+
+    /* long values: split under the line length, through a file and back */
+    {
+        char* big = malloc(20000);
+        size_t o = 0;
+        for (int i = 0; i < 2000; i++) o += (size_t)snprintf(big + o, 20000 - o, "%s%d", i ? ", " : "", i * 3);
+        cv_cfg t = {0};
+        snprintf(t.path, sizeof t.path, "build/t_cfg_long.ini");
+        cv_cfg_set_long(&t, "ids", big);
+        cv_cfg_set_long(&t, "short", "1, 2");
+        cv_cfg_set_long(&t, "empty", "");
+        for (int i = 0; i < t.n; i++) CHECK(strlen(t.a[i].val) < sizeof t.a[i].val - 1);
+        CHECK(t.n > 3);                                        /* ids took several keys */
+        CHECK(cv_cfg_save(&t));
+        cv_cfg_free(&t);
+        CHECK(cv_cfg_load(&t, "build/t_cfg_long.ini"));
+        char* back = cv_cfg_get_long(&t, "ids");
+        CHECK(back && !strcmp(back, big));
+        free(back);
+        back = cv_cfg_get_long(&t, "short");
+        CHECK(back && !strcmp(back, "1, 2"));
+        free(back);
+        back = cv_cfg_get_long(&t, "empty");
+        CHECK(back && !strcmp(back, ""));
+        free(back);
+        CHECK(cv_cfg_get_long(&t, "absent") == NULL);
+        cv_cfg_free(&t);
+        remove("build/t_cfg_long.ini");
+        free(big);
+    }
+
     /* default path resolves to something non-empty when HOME/XDG/APPDATA exist */
     char dp[1024];
     bool got = cv_cfg_default_path(dp, sizeof dp);
