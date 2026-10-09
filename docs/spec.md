@@ -50,7 +50,10 @@ src/
   inp_int.h     what the inp*.c files share
   dat.c/.h      .dat reader: integration-point blocks (headless)
   sta.c/.h      .sta / .cvg readers: increments and iterations (headless)
-  gauss.c/.h    integration points and shape functions (headless)
+  gauss.c/.h    integration points, shape functions and their derivatives, Gauss rules (headless)
+  integ.c/.h    volume / surface integrals of a nodal field, sums over nodes (headless)
+  app_integ.c   integrals over a set, step by step: the Integrals window's rows, its CSV, --integrate
+  ui_integ.c    the Integrals window
   app_field.c   decoded-field cache, colourings, displacement, vectors, markers, path, compare
   app_cam.c     camera, fit, symmetry copies, picking, find
   app_load.c    background loading, skin job, applying a load, reload, view state, --check

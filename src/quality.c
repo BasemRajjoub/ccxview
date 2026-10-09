@@ -259,8 +259,7 @@ static const int kWedgeCorner[][3] = { {1,2,3},{2,0,4},{0,1,5},{5,4,0},{3,5,1},{
 static const int kTetCorner[][3]   = { {1,2,3},{2,0,3},{0,1,3},{2,1,0} };
 
 /* ---- shape function derivatives: at a few integration points (size) and every node
-   (Jacobian ratio), per element kind and node count. Central differences are exact:
-   the shape functions are at most quadratic in each coordinate. */
+   (Jacobian ratio), per element kind and node count. */
 
 enum { MAXN = 20, MAXP = 8 };
 typedef struct {
@@ -273,17 +272,10 @@ typedef struct {
 
 static dtab gTab[16][2];             /* [frd type][quadratic] */
 
+/* dN/dxi from gauss.c; a surface element has no third direction */
 static void deriv(int t, int nn, const double xi[3], int dim, double d[MAXN][3]) {
-    const double h = 0.25;
-    double Np[MAXN], Nm[MAXN];
-    for (int a = 0; a < 3; a++) {
-        if (a >= dim) { for (int i = 0; i < nn; i++) d[i][a] = 0; continue; }
-        double p[3] = { xi[0], xi[1], xi[2] }, m[3] = { xi[0], xi[1], xi[2] };
-        p[a] += h; m[a] -= h;
-        cv_shape(t, nn, p, Np);
-        cv_shape(t, nn, m, Nm);
-        for (int i = 0; i < nn; i++) d[i][a] = (Np[i] - Nm[i]) / (2 * h);
-    }
+    cv_shape_d(t, nn, xi, d);
+    for (int i = 0; i < nn && dim < 3; i++) d[i][2] = 0;
 }
 
 static const dtab* table(int t, int nn) {

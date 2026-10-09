@@ -533,6 +533,40 @@ void app_refresh_range(void);
 bool app_busy(void);
 size_t app_total_msgs(void);
 
+/* app_integ.c: integrals of the field shown, step by step, over a region: a volume
+   (elements), a surface (element faces) or nodes (a sum). The region is taken when
+   the window opens: a deck set or surface by name, "selection" (G.sel / G.seln) or
+   "shown" (the shown elements, their outer faces, their nodes). */
+enum { CV_IK_VOLUME, CV_IK_SURFACE, CV_IK_NODES, CV_IK_N };
+enum { CV_IQ_MAX = 40 };
+enum { CV_IQ_INTEG, CV_IQ_SUM, CV_IQ_FORCE };   /* an integral (with its average), a sum over nodes, a force or moment */
+typedef struct {
+    bool    open;
+    int     kind;                     /* CV_IK_* */
+    char    target[64];               /* the set's name, "selection", "shown" */
+    char    what[200];                /* "volume of set EALL: 240 elements" */
+    char    note[200];                /* what was left out and why, "" none */
+    double  about[3];                 /* nodes: the point the moment is taken about */
+    int     nq;                       /* quantities: components, the shown scalar, forces, moments */
+    char    name[CV_IQ_MAX][24];
+    int     how[CV_IQ_MAX];           /* CV_IQ_* */
+    int     n;                        /* rows: the steps that have the field */
+    int*    step;  float* t;
+    double* size;                     /* volume, area or nodes counted, per row */
+    double* val;                      /* n * nq: the integrals (sums) */
+} app_integ_t;
+extern app_integ_t GI;
+const char* app_integ_kind(int kind);                    /* "volume", "surface", "nodes" */
+/* opens the window over that region; false (G.note says why) when there is none */
+bool app_integ_open(int kind, const char* target);
+bool app_integ_open_spec(const char* spec);               /* "KIND:TARGET[@x,y,z]" (--integrate) */
+void app_integ_close(void);
+void app_integ_refresh(void);                             /* GI.about changed: the rows again */
+bool app_integ_csv(const char* path);
+void app_integ_csv_path(char* out, size_t n);             /* <model>_integral_<what>.csv */
+/* --integrate-csv: read the model here, write the CSV, no window; exit code */
+int  app_integ_headless(const char* model, const char* spec, const char* field, const char* out);
+
 /* app_gauss.c: integration-point fields from a .dat */
 void gp_set(cv_dat* d, const char* path);
 void gp_localize(void);                /* records in local systems to global, with the deck */

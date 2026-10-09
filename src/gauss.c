@@ -244,6 +244,68 @@ bool cv_shape(int t, int nn, const double x[3], double* N) {
     }
 }
 
+bool cv_shape_d(int t, int nn, const double xi[3], double (*dN)[3]) {
+    const double h = 0.25;
+    double Np[20], Nm[20];
+    if (nn > 20) return false;
+    for (int a = 0; a < 3; a++) {
+        double p[3] = { xi[0], xi[1], xi[2] }, m[3] = { xi[0], xi[1], xi[2] };
+        p[a] += h; m[a] -= h;
+        if (!cv_shape(t, nn, p, Np) || !cv_shape(t, nn, m, Nm)) return false;
+        for (int i = 0; i < nn; i++) dN[i][a] = (Np[i] - Nm[i]) / (2 * h);
+    }
+    return true;
+}
+
+/* ---- integration rules -------------------------------------------------------- */
+
+static const double kGw3[3] = { 5.0 / 9, 8.0 / 9, 5.0 / 9 };
+/* Dunavant's degree 5 triangle weights in the order of the 7 points above (sum 1/2) */
+static const double kTri7w[7] = {
+    0.1125, 0.0629695902724135, 0.0629695902724135, 0.0629695902724135,
+    0.0661970763942530, 0.0661970763942530, 0.0661970763942530,
+};
+/* the 15 tet points (kTet15's order, Keast's degree 5 rule), the weight of each
+   family: 8/405, (2665 +- 14 sqrt 15)/226800, 5/567 (sum 1/6) */
+static double tet15_w(int ip) {
+    return ip == 0 ? 0.0197530864197531 : ip < 5 ? 0.0119895139631698 : ip < 9 ? 0.0115113678710454 : 0.0088183421516755;
+}
+
+int cv_solid_rule(int t, double xi[][3], double* w) {
+    int n = 0;
+    switch (kind_of(t)) {
+    case K_HEX:
+        for (int k = 0; k < 27; k++, n++) {
+            cv_ip_param(t, 27, k, xi[n]);
+            w[n] = kGw3[k % 3] * kGw3[k / 3 % 3] * kGw3[k / 9];
+        }
+        return n;
+    case K_TET:
+        for (int k = 0; k < 15; k++, n++) { cv_ip_param(t, 15, k, xi[n]); w[n] = tet15_w(k); }
+        return n;
+    case K_WEDGE:
+        for (int l = 0; l < 3; l++)
+            for (int k = 0; k < 7; k++, n++) {
+                cv_ip_param(7, 7, k, xi[n]);
+                xi[n][2] = g1d(3, l);
+                w[n] = kTri7w[k] * kGw3[l];
+            }
+        return n;
+    default: return 0;
+    }
+}
+
+int cv_face_rule(bool tri, double ab[][2], double* w) {
+    int n = 0;
+    for (int k = 0; k < (tri ? 7 : 9); k++, n++) {
+        double x[3];
+        if (tri) { cv_ip_param(7, 7, k, x); w[n] = kTri7w[k]; }
+        else { x[0] = g1d(3, k % 3); x[1] = g1d(3, k / 3); w[n] = kGw3[k % 3] * kGw3[k / 3]; }
+        ab[n][0] = x[0]; ab[n][1] = x[1];
+    }
+    return n;
+}
+
 /* ---- .frd node order ----------------------------------------------------------- */
 
 int cv_frd_node_pos(int t, int nn, int i) {

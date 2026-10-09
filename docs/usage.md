@@ -21,6 +21,11 @@ ccxview model.frd --fail larc05:rf          # a failure criterion (strength mate
 ccxview model.frd --mesh quality            # mesh quality: scores quality hmqi ansys abaqus; measures size
                                             #   edgemin edgemax aspect sjac jratio skew anglemin anglemax warp shape
 ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38 to 54
+ccxview model.frd --field STRESS --integrate volume:EALL   # Integrals window: KIND volume (element set), surface
+                                            #   (surface or a set's outer faces), nodes (a sum); TARGET a set or
+                                            #   surface name, selection or shown; nodes:NSET@x,y,z: moment about x,y,z
+ccxview model.frd --field FORC --integrate nodes:NLEFT --integrate-csv rf.csv   # headless: every step's row
+                                            #   to the CSV, no window (field: --field, else STRESS / FORC for nodes)
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
@@ -53,7 +58,7 @@ ccxview --version
 | Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green); selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre) |
-| right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, clip here, copy, hide this element / material / type / set or show only it; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
+| right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
 | N | look normal to the face under the cursor |
 | Ctrl+← → ↑ ↓ | turn the view 15° (with Shift 90°) |
 | Ctrl+Z / Ctrl+Y | view back / forward |
@@ -69,8 +74,10 @@ ccxview --version
 
 - **Layers** (left panel): faces, edges, outline, nodes, Gauss points, vectors,
   tensor glyphs, stress trajectories, supports, loads, springs.
-- **Groups**: element types, materials, sets and surfaces of the deck.
+- **Groups**: element types, materials, sets and surfaces of the deck (right
+  click a set or surface: integrate over it).
 - **Fields**: the results of the step, their components and invariants,
+  integrate... (the field's integrals over a set at every step),
   calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: camera, colours and legend, symbol sizes, mirror, replicate, cyclic

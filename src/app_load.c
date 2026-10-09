@@ -179,6 +179,7 @@ static bool job_done(void) {
 void unload(void) {
     app_path_clear();
     app_hist_close();
+    app_integ_close();
     app_lin_close();
     app_compare_close();
     cache_clear();
@@ -833,6 +834,27 @@ int app_check(const char* path) {
     printf("%s: %u nodes, %u elements, %d steps, %zu skin triangles, %zu message%s, %.3f s\n", path,
            j->frd_out.n_nodes, j->frd_out.n_elems, j->frd_out.n_steps, j->skin.n_tri, n, n == 1 ? "" : "s", j->seconds);
     return n ? 2 : 0;
+}
+
+/* --integrate-csv: the model read here and now, no window, nothing drawn: the mesh,
+   the steps, the skin and the deck into G as a load would put them */
+bool app_load_headless(const char* path) {
+    cv_job* j = &G.job;
+    memset(j, 0, sizeof *j);
+    snprintf(j->path, sizeof j->path, "%s", path);
+    cv_mutex_init(&j->lock);
+    worker_load(j);
+    if (!j->ok) { fprintf(stderr, "%s: %s\n", path, j->err[0] ? j->err : "cannot read"); return false; }
+    for (int q = 0; q < CV_Q_N; q++) G.unit_in[q] = G.unit_show[q] = -1;   /* values as the file has them */
+    if (j->has_deck) deck_set(&j->deck, j->deck_path);
+    j->has_deck = false;
+    G.map = j->map;         memset(&j->map, 0, sizeof j->map);
+    G.frd = j->frd_out;     memset(&j->frd_out, 0, sizeof j->frd_out);
+    G.groups = j->groups;   memset(&j->groups, 0, sizeof j->groups);
+    G.skin = j->skin;       memset(&j->skin, 0, sizeof j->skin);
+    snprintf(G.path, sizeof G.path, "%s", path);
+    G.loaded = true;
+    return true;
 }
 
 void app_eval_cgx(void) {

@@ -28,6 +28,23 @@ static void axis_label(char* out, size_t n, int axis, uint32_t v, uint32_t count
 
 static int g_pick_axis = -1, g_pick_idx = -1;   /* open colour picker (group swatch) */
 
+/* A right click on a set's row (laid out next): integrate over it. kind: what the
+   set holds (elements: a volume, faces: a surface, nodes: a sum). */
+static void set_menu(struct nk_context* ctx, float s, float row, int kind, const char* name) {
+    struct nk_rect b = nk_widget_bounds(ctx);
+    uii_test_mark(ctx, "#set menu");
+    static const char* what[CV_IK_N] = { "Integrate over set %s", "Integrate over surface %s", "Sum over set %s" };
+    char lab[96];
+    snprintf(lab, sizeof lab, what[kind], name);
+    if (nk_contextual_begin(ctx, 0, nk_vec2(240 * s, 3 * row + 10 * s), b)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        if (nk_contextual_item_label(ctx, lab, NK_TEXT_LEFT)) app_integ_open(kind, name);
+        if (kind == CV_IK_VOLUME && nk_contextual_item_label(ctx, "... its outer faces (surface)", NK_TEXT_LEFT)) app_integ_open(CV_IK_SURFACE, name);
+        if (kind != CV_IK_NODES && nk_contextual_item_label(ctx, "... sum over its nodes", NK_TEXT_LEFT)) app_integ_open(CV_IK_NODES, name);
+        nk_contextual_end(ctx);
+    }
+}
+
 /* The deck's named sets: element sets are a display group (tick to show only
    them; none ticked = everything), node sets and surfaces are highlights. */
 static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
@@ -49,6 +66,7 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
             if (!d->sets[i].is_elem) continue;
             k++;
             snprintf(lab, sizeof lab, "%s  (%u)", d->sets[i].name, d->sets[i].n);
+            set_menu(ctx, s, row, CV_IK_VOLUME, d->sets[i].name);
             if (nk_checkbox_label(ctx, lab, &on[i])) app_groups_changed();
         }
         nk_tree_pop(ctx);
@@ -60,6 +78,7 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
             if (d->sets[i].is_elem) continue;
             k++;
             snprintf(lab, sizeof lab, "%s  (%u)", d->sets[i].name, d->sets[i].n);
+            set_menu(ctx, s, row, CV_IK_NODES, d->sets[i].name);
             if (nk_checkbox_label(ctx, lab, &on[i])) { G.show_hl = true; deck_refresh_highlight(); }
         }
         nk_tree_pop(ctx);
@@ -87,6 +106,7 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
         nk_layout_row_dynamic(ctx, row, 1);
         for (int i = 0; i < d->nsurfs && i < 500; i++) {
             snprintf(lab, sizeof lab, "%s  (%u)", d->surfs[i].name, d->surfs[i].n ? d->surfs[i].n : d->surfs[i].nn);
+            set_menu(ctx, s, row, d->surfs[i].n ? CV_IK_SURFACE : CV_IK_NODES, d->surfs[i].name);
             if (nk_checkbox_label(ctx, lab, &son[i])) { G.show_hl = true; deck_refresh_highlight(); }
         }
         nk_tree_pop(ctx);
@@ -525,6 +545,16 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                     if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(d->name, opts[i].comp, 0);
                 }
                 nk_tree_pop(ctx);
+            }
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 100 * s);
+            nk_layout_row_template_end(ctx);
+            nk_spacing(ctx, 1);
+            tip(ctx, "The field integrated over the shown elements at every step: volume integral and average\n"
+                     "(the homogenised <S>, <E> of an RVE); in its window a set, a surface or node sums instead");
+            if (nk_button_label(ctx, "integrate...")) {
+                if (GI.open) app_integ_close(); else app_integ_open(CV_IK_VOLUME, "shown");
             }
             section_calc(ctx, s, row);
             section_failure(ctx, s, row);

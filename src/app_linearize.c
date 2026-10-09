@@ -34,15 +34,13 @@ bool elem_locate(uint32_t e, const double p[3], double N[20]) {
     bool tet = t == 3 || t == 6, wedge = t == 2 || t == 5;
     xi[0] = xi[1] = tet ? 0.25 : wedge ? 1.0 / 3 : 0; xi[2] = tet ? 0.25 : 0;
     for (int it = 0; it < 30; it++) {
-        double f[3], J[3][3];
-        for (int c = -1; c < 3; c++) {                  /* x(xi) and its derivatives */
-            double y[3] = { xi[0], xi[1], xi[2] }, x[3] = { 0, 0, 0 };
-            if (c >= 0) y[c] += 1e-6;
-            if (!cv_shape(t, (int)nn, y, N)) return false;
-            for (uint32_t i = 0; i < nn; i++) for (int k = 0; k < 3; k++) x[k] += N[i] * X[i][k];
-            if (c < 0) for (int k = 0; k < 3; k++) f[k] = x[k] - p[k];
-            else for (int k = 0; k < 3; k++) J[k][c] = (x[k] - p[k] - f[k]) / 1e-6;
-        }
+        double f[3] = { -p[0], -p[1], -p[2] }, J[3][3] = { { 0 } }, dN[20][3];
+        if (!cv_shape(t, (int)nn, xi, N) || !cv_shape_d(t, (int)nn, xi, dN)) return false;
+        for (uint32_t i = 0; i < nn; i++)                /* x(xi) - p and its derivatives */
+            for (int k = 0; k < 3; k++) {
+                f[k] += N[i] * X[i][k];
+                for (int c = 0; c < 3; c++) J[k][c] += dN[i][c] * X[i][k];
+            }
         double det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1]) - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
                    + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
         if (!(fabs(det) > 1e-300)) return false;

@@ -290,6 +290,26 @@ static bool box_found(struct nk_context* ctx) {
     return !G.box_arm && G.boxq.on && G.probe_on && G.boxq.vmax == G.data_max && G.boxq.vmin <= G.boxq.vmax &&
            G.probe_value == G.boxq.vmax;
 }
+static void open_integrals(struct nk_context* ctx) { app_integ_open(CV_IK_VOLUME, "shown"); }
+static bool integrals_gone(struct nk_context* ctx) { return !GI.open; }
+static bool integrals_shown(struct nk_context* ctx) { return GI.open && win_of(ctx, "Integrals") && GI.n > 0; }
+static bool integrals_popup(struct nk_context* ctx) { return popup_open(ctx, "Integrals"); }
+static bool integrals_nodes(struct nk_context* ctx) { return GI.open && GI.kind == CV_IK_NODES && GI.n > 0; }
+static bool integrals_set(struct nk_context* ctx) { return GI.open && GI.kind == CV_IK_VOLUME && !strcasecmp(GI.target, "EALL") && GI.n > 0; }
+static bool integrals_sel(struct nk_context* ctx) { return GI.open && !strcmp(GI.target, "selection") && GI.n > 0; }
+static void integrals_close(struct nk_context* ctx) { app_integ_close(); }
+/* only Fields open, the panel at its top: the integrate button in sight */
+static void fields_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+/* only Groups open: the element sets' rows */
+static void groups_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_GROUPS;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+static void app_sel_clear_ctx(struct nk_context* ctx) { app_sel_clear(); G.probe_on = false; }
+static void integrals_end(struct nk_context* ctx) { app_integ_close(); app_sel_clear(); sections_open(ctx); }
 static bool deform_toggled(struct nk_context* ctx) { return G.deform != was.deform; }
 static bool markers_toggled(struct nk_context* ctx) { return G.show_markers != was.markers; }
 static void first_field(struct nk_context* ctx) { app_select_src("DISP", CV_COMP_MAG, 0); }
@@ -547,6 +567,26 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
     CLOSED_THEN_PANELS("Details", open_details, details_gone),
     CLOSED_THEN_PANELS("About", open_about, about_gone),
+    CLOSED_THEN_PANELS("Integrals", open_integrals, integrals_gone),
+
+    CASE("integrals: opened from Fields, the kind list picks the nodes, closed again"),
+    DO(close_all), DO(fields_open), WAIT(3), AT_TIP("Scene", "The field integrated over the shown elements"), CLICK, WAIT(3),
+    EXPECT(integrals_shown, "the Integrals window opens with rows"),
+    AT_TIP("Integrals", "Volume: the elements' volume"), CLICK, WAIT(2), EXPECT(integrals_popup, "the kind list opens"),
+    AT_POPUP("Integrals", 0.5f, 0.85f), CLICK, WAIT(3), EXPECT(integrals_nodes, "a sum over the nodes"),
+    DO(integrals_close), WAIT(2),
+
+    CASE("integrals: a right click on an element set integrates over it"),
+    DO(groups_open), WAIT(3), AT_TIP("Scene", "#set menu"), RCLICK, WAIT(2), EXPECT(scene_popup, "the set's menu opens"),
+    AT_POPUP("Scene", 0.5f, 0.15f), CLICK, WAIT(3), EXPECT(integrals_set, "the volume of set EALL"),
+    DO(integrals_close), DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("integrals: from the probe over a box selection, and from the menu over a set"),
+    DO(close_all), DO(fit_view), WAIT(2), DO(arm_box), AT_VIEW(0.3f, 0.3f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.7f, 0.7f), RELEASE, WAIT(2),
+    AT_TIP("Probe", "The field integrated over the selected elements"), CLICK, WAIT(3), EXPECT(integrals_sel, "over the selection"),
+    DO(integrals_close), DO(app_sel_clear_ctx), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu Integrate over set"), CLICK, WAIT(3),
+    EXPECT(integrals_set, "the volume of the element's set"),
+    DO(integrals_end), WAIT(2), PANELS_ANSWER,
 
     CASE("menu: a right click on the model opens it, an item acts and closes it"),
     DO(close_all), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),

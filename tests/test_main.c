@@ -1446,6 +1446,7 @@ static void test_localsys_requests(void) {
 #include "t_traj.h"
 #include "t_failure.h"
 #include "t_quality.h"
+#include "t_integ.h"
 
 int main(void) {
     test_gpu_env();
@@ -1458,6 +1459,7 @@ int main(void) {
     test_traj();
     test_failure();
     test_quality();
+    test_integ();
     test_video();
     test_cfg();
     test_export();

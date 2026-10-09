@@ -118,7 +118,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     float tw = 0;
     for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
     float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
-    float h = row * (n + 5.8f + (G.sel_n || G.seln_n ? 2.2f : 0.f));
+    float h = row * (n + 5.8f + (G.sel_n || G.seln_n ? 3.3f : 0.f));
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -130,7 +130,14 @@ void window_probe(struct nk_context* ctx, float s, float row) {
         if (tips[i]) tip(ctx, tips[i]);
         nk_label(ctx, ln[i], NK_TEXT_LEFT);
     }
-    if (G.sel_n || G.seln_n) ui_sel_what(ctx, row);
+    if (G.sel_n || G.seln_n) {
+        ui_sel_what(ctx, row);
+        nk_layout_row_dynamic(ctx, row, 3);
+        nk_spacing(ctx, 2);
+        tip(ctx, "The field integrated over the selected elements at every step (volume integral and average),\n"
+                 "or summed over the selected nodes (reaction forces)");
+        if (nk_button_label(ctx, "integrate...")) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");
+    }
     nk_layout_row_dynamic(ctx, row, 3);
     nk_bool lb = G.label_probe_only && G.label_kinds;
     tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");

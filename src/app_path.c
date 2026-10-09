@@ -427,12 +427,10 @@ bool app_path_csv(const char* path) {
    Each step's field is decoded into a scratch buffer (not the cache, which holds
    what is on screen); rebuilt only when the field, component, node or system change. */
 
-/* a step's field for the history: from the cache when there, else decoded into a
-   scratch buffer, so the history does not push out what is on screen */
-typedef struct { float* buf; size_t cap; } hist_scratch;
-
-static const float* hist_get(void* ud, int s, int fi) {
-    hist_scratch* h = ud;
+/* a step's field for the history (and the integrals): from the cache when there,
+   else decoded into a scratch buffer, so it does not push out what is on screen */
+const float* step_field_get(void* ud, int s, int fi) {
+    step_scratch* h = ud;
     for (int i = 0; i < CV_CACHE_N; i++)
         if (G.cache[i].vals && G.cache[i].step == s && G.cache[i].field == fi) return G.cache[i].vals;
     const cv_field_desc* d = &G.frd.steps[s].fields[fi];
@@ -465,10 +463,10 @@ void refresh_hist(void) {
         nn = G.frd.eoff[G.hist_elem + 1] - G.frd.eoff[G.hist_elem];
     }
     if (G.field_src == 2) {                             /* the formula at those nodes, step by step */
-        hist_scratch h = { NULL, 0 };
+        step_scratch h = { NULL, 0 };
         float* x = malloc((size_t)CV_MAX(nn, 1) * sizeof(float));
         for (int s = 0; x && s < ns; s++) {
-            if (!cv_calc_eval(G.calc, &G.frd, s, hist_get, &h, nodes, nn, x)) continue;
+            if (!cv_calc_eval(G.calc, &G.frd, s, step_field_get, &h, nodes, nn, x)) continue;
             double sum = 0; int cnt = 0;
             for (uint32_t j = 0; j < nn; j++) if (x[j] == x[j]) { sum += x[j]; cnt++; }
             G.hist_t[G.hist_n] = G.frd.steps[s].time;
