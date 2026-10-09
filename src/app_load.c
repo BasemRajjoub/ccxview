@@ -439,6 +439,7 @@ static void apply_load(cv_job* j) {
     if (O.fly) app_set_flight(true);
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
     if (O.measure_window) G.show_measure = true;
+    if (O.rebar_window) G.show_rebar = true;
     if (O.select_window) G.show_select = true;
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;

@@ -36,4 +36,12 @@ const char* cv_shell_comp(int c);   /* "Nxx" .. "Qy" */
 bool cv_shell_forces(const cv_frd* f, const uint32_t* shell, const float* q, uint32_t nshell,
                      const float* s, int nc, float* out);
 
+/* The same, with the moments about each shell's reference surface and the
+   thickness. off: per shell, its *SHELL SECTION OFFSET (NULL: all 0): CalculiX puts
+   the reference surface, the one through the shell's nodes, off * t from the
+   middle along e3 (0.5: the nodes on the +e3 face), so M = M(middle) - off t N.
+   thick: NULL, or per node the section's thickness (NaN at nodes of no shell). */
+bool cv_shell_forces_ref(const cv_frd* f, const uint32_t* shell, const float* q, uint32_t nshell,
+                         const float* off, const float* s, int nc, float* out, float* thick);
+
 #endif

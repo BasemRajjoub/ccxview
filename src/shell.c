@@ -63,13 +63,19 @@ static void local(const float* s, const float* q, double v[CV_SF_N]) {
 
 bool cv_shell_forces(const cv_frd* f, const uint32_t* shell, const float* q, uint32_t nshell,
                      const float* s, int nc, float* out) {
+    return cv_shell_forces_ref(f, shell, q, nshell, NULL, s, nc, out, NULL);
+}
+
+bool cv_shell_forces_ref(const cv_frd* f, const uint32_t* shell, const float* q, uint32_t nshell,
+                         const float* off, const float* s, int nc, float* out, float* thick) {
     size_t N = f->n_nodes, NL = (size_t)nshell * LINES_MAX;
     for (size_t i = 0; i < N * CV_SF_N; i++) out[i] = NAN;
+    if (thick) for (size_t i = 0; i < N; i++) thick[i] = NAN;
     if (!nshell || nc < 6) return true;
     double* zlo = malloc(NL * sizeof(double));
     double* zhi = malloc(NL * sizeof(double));
     double* acc = calloc(NL * CV_SF_N, sizeof(double));
-    double* sum = calloc(N * CV_SF_N + 1, sizeof(double));
+    double* sum = calloc(N * (CV_SF_N + 1) + 1, sizeof(double));   /* the forces, then the thickness */
     uint32_t* cnt = calloc(N + 1, sizeof(uint32_t));
     if (!zlo || !zhi || !acc || !sum || !cnt) { free(zlo); free(zhi); free(acc); free(sum); free(cnt); return false; }
     for (size_t i = 0; i < NL; i++) { zlo[i] = INFINITY; zhi[i] = -INFINITY; }
@@ -115,6 +121,14 @@ bool cv_shell_forces(const cv_frd* f, const uint32_t* shell, const float* q, uin
             }
         }
     }
+    /* about the reference surface: off t above the middle */
+    if (off)
+        for (size_t k = 0; k < NL; k++) {
+            double r = off[k / LINES_MAX] * (zhi[k] - zlo[k]);
+            if (!(zhi[k] >= zlo[k]) || r == 0) continue;
+            double* a = acc + k * CV_SF_N;
+            for (int c = 0; c < 3; c++) a[CV_SF_MXX + c] -= r * a[CV_SF_NXX + c];
+        }
     /* every node of a line takes its shell's value; a node the mean over its shells */
     for (uint32_t e = 0; e < f->n_elems; e++) {
         if (shell[e] >= nshell) continue;
@@ -132,13 +146,16 @@ bool cv_shell_forces(const cv_frd* f, const uint32_t* shell, const float* q, uin
                 if (at[p] < 0) continue;
                 uint32_t n = cn[at[p]];
                 for (int c = 0; c < CV_SF_N; c++) sum[(size_t)n * CV_SF_N + c] += a[c];
+                sum[N * CV_SF_N + n] += zhi[(size_t)shell[e] * LINES_MAX + j] - zlo[(size_t)shell[e] * LINES_MAX + j];
                 cnt[n]++;
             }
         }
     }
     for (size_t i = 0; i < N; i++)
-        if (cnt[i])
+        if (cnt[i]) {
             for (int c = 0; c < CV_SF_N; c++) out[i * CV_SF_N + c] = (float)(sum[i * CV_SF_N + c] / cnt[i]);
+            if (thick) thick[i] = (float)(sum[N * CV_SF_N + i] / cnt[i]);
+        }
     free(zlo); free(zhi); free(acc); free(sum); free(cnt);
     return true;
 }

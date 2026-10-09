@@ -103,6 +103,7 @@ static void init(void) {
     G.sidecar = true;                    /* each model's post-processing kept beside it */
     app_scl_clear();                     /* the first kept line's name */
     G.lin_asme = true;
+    G.rebar_fcd = 20.f; G.rebar_fyd = 435.f; G.rebar_cover = 40.f;   /* C30/37 and B500 (EC2), mm */
     G.path_to = UINT32_MAX;
     G.show_gp = false;                   /* off by default, like nodes */
     G.gp_colored = true;
@@ -1068,6 +1069,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--measure-window")) O.measure_window = true;
+        else if (!strcmp(argv[i], "--rebar-window")) O.rebar_window = true;
         else if (!strcmp(argv[i], "--selection-window")) O.select_window = true;
         else if (!strcmp(argv[i], "--select") && i + 1 < argc && O.nselect < 32) O.select[O.nselect++] = argv[++i];
         else if (!strcmp(argv[i], "--details")) O.details = true;

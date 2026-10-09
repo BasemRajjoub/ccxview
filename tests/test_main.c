@@ -1121,6 +1121,21 @@ static void test_localsys(void) {
         CHECK_NEAR(dt.b[0].vals[1], 0, 1e-6); CHECK_NEAR(dt.b[0].vals[2], 1, 1e-6);
     }
     cv_dat_free(&dt); free(dt.msgs.a);
+    CHECK(d.shell_off == NULL);
+    cv_inp_free(&d); free(d.msgs.a);
+
+    /* *SHELL SECTION, OFFSET=: per element, the last section naming it; none: NULL */
+    const char* so =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,1,1,0\n4,0,1,0\n5,2,0,0\n6,2,1,0\n"
+        "*ELEMENT, TYPE=S4, ELSET=E\n1,1,2,3,4\n*ELEMENT, TYPE=S4, ELSET=F\n2,2,5,6,3\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1., 0.\n*SHELL SECTION, ELSET=E, MATERIAL=M, OFFSET=0.5\n0.1\n"
+        "*SHELL SECTION, ELSET=F, MATERIAL=M, OFFSET=-.25\n0.1\n*STEP\n*STATIC\n*END STEP\n";
+    CHECK(cv_inp_parse(&d, so, strlen(so), NULL, NULL));
+    CHECK(d.shell_off != NULL);
+    if (d.shell_off) {
+        CHECK_NEAR(d.shell_off[cv_frd_elem_index(&d.mesh, 1)], 0.5, 1e-6);
+        CHECK_NEAR(d.shell_off[cv_frd_elem_index(&d.mesh, 2)], -0.25, 1e-6);
+    }
     cv_inp_free(&d); free(d.msgs.a);
 }
 
@@ -1527,6 +1542,7 @@ static void test_localsys_requests(void) {
 #include "t_failure.h"
 #include "t_quality.h"
 #include "t_shell.h"
+#include "t_rebar.h"
 #include "t_stl.h"
 #include "t_integ.h"
 #include "t_selset.h"
@@ -1546,6 +1562,7 @@ int main(void) {
     test_failure();
     test_quality();
     test_shell();
+    test_rebar();
     test_integ();
     test_selset();
     test_seltopo();

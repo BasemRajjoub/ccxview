@@ -58,6 +58,7 @@ typedef struct {
     int         nlabel_off;
     int         nmeasure;
     bool        measure_window; /* --measure-window: the Measurements window open */
+    bool        rebar_window;   /* --rebar-window: the Reinforcement window open */
     const char* select[32];     /* --select SPEC: selection steps, in order, after load (app_sel_spec) */
     int         nselect;
     bool        select_window;  /* --selection-window: the Selection window open */
@@ -95,14 +96,14 @@ void  units_apply(const char* field, int ncomp, float* v, size_t n);   /* model 
 float units_len_raw(void);           /* shown lengths -> model lengths (the shape) */
 int          find_field(int step, const char* name);
 /* field d of step `step` of G.frd into out[node * ncomp + c], as cv_frd_read_field
-   (not yet turned global nor converted); the SHELL field worked out */
+   (not yet turned global nor converted); SHELL and REBAR worked out */
 void         field_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs);
-/* app_shell.c: shell section forces (shell.h) as the field SHELL, in every step with
-   STRESS when the deck has shells */
+/* app_shell.c: shell section forces (shell.h) as the field SHELL and the reinforcement
+   of concrete shells (rebar.h) as REBAR, in every step with STRESS when the deck has shells */
 void shell_attach(void);                 /* after a load, deck and .frd in place */
 void shell_clear(void);
-bool shell_field(const cv_field_desc* d);   /* the SHELL field: no bytes in the file */
-void shell_read(int step, float* out, cv_msgs* msgs);   /* its values, file units */
+bool shell_field(const cv_field_desc* d);   /* SHELL or REBAR: no bytes in the file */
+void shell_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs);   /* its values, file units */
 /* app_label.c: the loads' and supports' label anchors, recorded while the symbols are built */
 void label_sink_begin(int kinds);                /* the kinds' bits: records when loads or supports are among them */
 /* a load's or a support's label; at: where it sits and what it is, its moved-label key

@@ -5,10 +5,8 @@ Open points left after the 9 Oct 2026 batch (sidecar #5, hide sets #25, title bl
 labels, the Selection window #16). Pre-processing stays out of scope.
 
 ## Shell forces (#19)
-- Reinforcement design from the section forces (Wood-Armer / Capra-Maury, as
-  Code_Aster's CALC_FERRAILLAGE).
-- *SHELL SECTION OFFSET: moments are taken about the middle of the section, not
-  the offset reference surface.
+- Reinforcement: transverse shear (the sandwich's core) and compression steel
+  are not designed; the facet method (Capra-Maury) of Code_Aster is not offered.
 - Qx Qy at the mid-side nodes of quadratic shells come from two points through
   the thickness only.
 

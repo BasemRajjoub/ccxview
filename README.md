@@ -39,7 +39,8 @@ Measured on one desktop PC; `build/bench file.frd` prints the numbers for yours.
 - **True to the element.** Quadratic elements are drawn and cut through their
   mid-side nodes; shells and beams as CalculiX expands them.
 - **Engineering tools.** ASME VIII-2 stress linearization, shell section
-  forces and moments per width (Nxx .. Mxy, Qx Qy) from the expanded shells' stresses, calculated fields
+  forces and moments per width (Nxx .. Mxy, Qx Qy) from the expanded shells' stresses
+  and the reinforcement of concrete shells from them (sandwich model, Wood-Armer), calculated fields
   from a formula (`S1 - S3`, `MISES / 235`), composite and metal failure
   criteria (Hashin, Puck, LaRC05, Tsai-Wu, von Mises, ...) with built-in
   composite, metal and plastic presets, mesh quality

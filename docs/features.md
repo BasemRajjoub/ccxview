@@ -78,8 +78,11 @@ and the shape follow every node; the full list is in
   integral of the transverse shear dz`, z along the shell normal (e3) from the
   middle of the section, so `Mxx` is the moment of `sxx`, positive when the
   side the normal points to pulls (not the moment turning about x); `Mxy` is
-  that of `sxy`. Units are a force and a moment per width (N/mm, N mm/mm), in
-  the units window like any quantity. History, CSV, labels and formulas
+  that of `sxy`. With `*SHELL SECTION, OFFSET=` the moments are taken about
+  the reference surface as CalculiX defines it, the surface through the
+  shell's nodes, `OFFSET x t` from the middle along e3 (0.5: the nodes on the
+  +e3 face): `M = M(middle) - OFFSET t N`. Units are a force and a moment per
+  width (N/mm, N mm/mm), in the units window like any quantity. History, CSV, labels and formulas
   (`SHELL_MXX`, `SHELL_NXX / 2`) work on it as on a field of the file.
   Caveats: Qx and Qy come from the solid's nodal transverse shears, which the
   expansion gives only roughly (the stress is extrapolated to the faces, where
@@ -87,8 +90,35 @@ and the shape follow every node; the full list is in
   CalculiX averages their stresses, so a jump in stiffness is smoothed. The
   sample `samples/shellplate` (an S8R cantilever plate, 100 x 20 x 2 mm) gives
   Nxx = 50 N/mm under a 1000 N pull and Mxx = 100.0 N mm/mm at the root under
-  20 N at the tip (F L / b), integrated over the width. Reinforcement design
-  (Wood-Armer moments) is not done.
+  20 N at the tip (F L / b), integrated over the width.
+- Reinforcement of concrete shells, the field `REBAR` beside `SHELL`: the
+  steel area per width each face needs in the shell's x and y directions,
+  `As_x_top As_x_bot As_y_top As_y_bot` (top: the +e3 face), their largest
+  `As_max` and their sum `As_total`, the concrete's largest compression over
+  fcd `Conc_ratio`, and `Crushing`, 1 where that is above 1. It is the
+  three-layer sandwich model of Eurocode 2 Annex F and the fib Model Code at
+  the ultimate limit state (a standard alternative to the facet method,
+  Capra-Maury, of Code_Aster's CALC_FERRAILLAGE): two outer layers centred on
+  the bars of each face, a cover c from it and z = h - 2c apart, carry
+  `N / 2 +- M / z` (the moments about the middle of the section, whatever the
+  OFFSET); in each layer the Wood-Armer / Nielsen rule with cracks at 45
+  degrees, `Fx = nx + |nxy|`, `Fy = ny + |nxy|`, or, a direction compressed
+  past the shear, no steel that way and `ny + nxy^2 / |nx|` the other; both
+  ways in compression, no steel. `As = F / fyd`; the concrete's force over a
+  layer 2c thick (h / 2 at most) against fcd. So pure bending gives `M / (z
+  fyd)` on the tension face, a pull half to each face, a twist `|Mxy| / (z
+  fyd)` both ways on both faces. The design values are the model's: concrete
+  `fcd`, steel `fyd` and the cover `c` in the Reinforcement window (REBAR in the
+  Fields panel, Reinforcement...), kept per model and as the default in
+  `ccxview.ini` (`rebar_fcd`, `rebar_fyd`, `rebar_cover`; 20 MPa, 435 MPa,
+  40 mm by default: C30/37 and B500 to Eurocode 2). The thickness h is the
+  expanded shell's. With N and mm the areas are mm²/mm; the units window shows
+  them as mm²/m (SI mm preset), cm²/m or in²/ft. Where 2c >= h there is no
+  value. Transverse shear (the core) and compression steel are not designed.
+  The sample `samples/slab` (a 4 x 4 m, 200 mm slab of S8R, simply supported,
+  20 kPa) gives Mxx = -14.7 kN m/m at the middle (Kirchhoff 14.1) and so
+  As_x_bot = 14 745 / (120 x 435) = 282 mm²/m there, and top steel at the
+  corners from the twist.
 - Failure criteria as a field, from the stresses in each element's material
   axes (composite layers, `*ORIENTATION`, cylindrical systems): maximum stress,
   Tsai-Hill, Tsai-Wu, Hashin, Puck (action plane), LaRC03 and LaRC05 for UD

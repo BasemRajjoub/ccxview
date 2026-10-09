@@ -60,7 +60,7 @@ const float* cache_get(int step, int field) {
 }
 
 void field_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs) {
-    if (shell_field(d)) shell_read(step, out, msgs);
+    if (shell_field(d)) shell_read(step, d, out, msgs);
     else cv_frd_read_field(&G.frd, d, out, msgs);
 }
 
