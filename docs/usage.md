@@ -21,6 +21,10 @@ ccxview model.frd --fail larc05:rf          # a failure criterion (strength mate
 ccxview model.frd --mesh quality            # mesh quality: scores quality hmqi ansys abaqus; measures size
                                             #   edgemin edgemax aspect sjac jratio skew anglemin anglemax warp shape
 ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38 to 54
+ccxview model.frd --measure dist:16,71 --measure circle:16,419,1171 --measure-window
+                                            # measurements by node id, repeatable: dist:A,B  angle:A,B,C (at B)
+                                            #   circle:A,B,C; --opt meas_show=0|1|2: their labels give
+                                            #   undeformed -> deformed, the undeformed, the deformed value
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
@@ -53,7 +57,7 @@ ccxview --version
 | Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green); selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre) |
-| right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, clip here, copy, hide this element / material / type / set or show only it; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
+| right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
 | N | look normal to the face under the cursor |
 | Ctrl+← → ↑ ↓ | turn the view 15° (with Shift 90°) |
 | Ctrl+Z / Ctrl+Y | view back / forward |
@@ -64,6 +68,7 @@ ccxview --version
 | H | view only, for screenshots |
 | click the legend's unit / right-click the legend | units / legend settings |
 | Ctrl+O / Ctrl+E / Ctrl+F | open / export PNG / find |
+| Esc | cancel a pending pick (path end, measurement nodes), close the menu, clear the selection |
 
 ## Where things are
 
@@ -74,6 +79,6 @@ ccxview --version
   calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: camera, colours and legend, symbol sizes, mirror, replicate, cyclic
-  symmetry, clip and crop.
+  symmetry, clip and crop; the Measurements window.
 - **Toolbar**: deformation scale, animation, colour map, bands.
 - **Status bar**: units, messages.

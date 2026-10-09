@@ -1159,6 +1159,15 @@ void cv_render_draw(const cv_draw* d) {
         static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
         draw_layer(R.pip_pt_ni, A[CV_AUX_PICKPT].v, NO_IB, (int)A[CV_AUX_PICKPT].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size, true, 0.f, 0);
     }
+    if (A[CV_AUX_MEASLN].n) {                /* the measurements' lines, on top: dots along them make them read thicker */
+        static const float meas_rgb[3] = { 0.1f, 0.85f, 1.0f };
+        draw_layer(R.pip_line_ni, A[CV_AUX_MEASLN].v, NO_IB, (int)A[CV_AUX_MEASLN].n, CV_COLOR_SOLID, meas_rgb, false, d, 1, true, 0.f, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_MEASLN].v, NO_IB, (int)A[CV_AUX_MEASLN].n, CV_COLOR_SOLID, meas_rgb, false, d, d->marker_size * 0.25f, true, 0.f, 0);
+    }
+    if (A[CV_AUX_MEASPT].n) {                /* the measured nodes, and those picked so far */
+        static const float meas_rgb[3] = { 0.1f, 0.85f, 1.0f };
+        draw_layer(R.pip_pt_ni, A[CV_AUX_MEASPT].v, NO_IB, (int)A[CV_AUX_MEASPT].n, CV_COLOR_SOLID, meas_rgb, false, d, d->marker_size * 0.7f, true, 0.f, 0);
+    }
     if (A[CV_AUX_SELPT].n) {                 /* the selected nodes: small magenta dots (balls: a dark rim on any colour) */
         static const float node_rgb[3] = { 0.95f, 0.2f, 0.85f };
         draw_layer(R.pip_pt_ni, A[CV_AUX_SELPT].v, NO_IB, (int)A[CV_AUX_SELPT].n, CV_COLOR_SOLID, node_rgb, false, d, d->marker_size * 0.5f, false, 0.f, 0);

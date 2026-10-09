@@ -146,6 +146,21 @@ and what is drawn for it; `samples/symbols/` shows them all.
   size, hidden by the model where it is in front, thinned to a spacing nearest
   first with the count shown; size, colours and spacing to taste; the selection
   or the probed element only.
+- Measurements as labels: the distance between two nodes with its dx dy dz, the
+  angle at the middle one of three, the circle through three (radius, centre and
+  the normal of its plane; three nodes on a hole give the hole's radius). Started
+  from the probe's "measure" row, the right-click menu on a node, or the
+  Measurements window (View, or Fields > Labels); the next clicks give the other
+  nodes, the status bar says which, Esc cancels. Each has two values: on the
+  undeformed mesh, and deformed by the step's displacement at true scale, whatever
+  the scale on screen. The label reads "d 80.0771 -> 80.0696 mm" (undeformed ->
+  deformed), or one of them with its parts ("d 80.0771 mm (dx 80.0617 dy -1.5692
+  dz 0)", "113.623 deg", "R 20 mm (c 0, 0, 5)"), as the window chooses; a step
+  without displacement gives the one value. Their lines (the segment, the legs and
+  an arc, the circle and a cross at its centre) move with the shape as drawn. The
+  window lists both values of each, deletes one or all, copies them as text and
+  saves `<model>_measurements.csv`. Kept by node id: a reload keeps them, another
+  model clears them.
 - A right-click menu with what fits where you click: the element and node under
   the cursor, the box selection, the view. Hide an element, a material, an
   element type or a set, or show only it; hide or isolate a selection; show all.

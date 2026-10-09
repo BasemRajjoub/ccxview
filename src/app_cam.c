@@ -729,6 +729,7 @@ void do_pick(float px, float py) {
     app_sel_clear();
     G.probe_ip = 0;
     if (G.probe.hit && G.path_arm) app_path_end(G.probe.node);
+    if (G.probe.hit) app_measure_pick(G.probe.node);   /* when one waits for its nodes */
     if (G.probe.hit) {
         G.probe_value = !G.has_field ? NAN
                       : (G.elem_mode || G.field_src == 1) ? G.elem_val[G.probe.elem] : G.scalar[G.probe.node];

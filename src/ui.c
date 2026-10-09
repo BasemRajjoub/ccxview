@@ -314,6 +314,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_legend_settings(ctx, s, row);
     window_nav(ctx, s);
     window_find(ctx, s, row);
+    window_measure(ctx, s, row, fw, fh);
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);

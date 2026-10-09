@@ -67,6 +67,9 @@ void section_label(struct nk_context* ctx, float s, float row) {
             app_label_changed();
         }
     }
+    tip(ctx, "Measurements as labels: the distance between two nodes, the angle through three,\n"
+             "the circle through three; undeformed and deformed. The list, new ones, CSV");
+    if (nk_button_label(ctx, "Measurements...")) G.show_measure = !G.show_measure;
     if (G.label_kinds) {
         const char* shown = strstr(G.label_note, "; ");
         if (shown) nk_label_colored(ctx, shown + 2, NK_TEXT_LEFT, P.dim);   /* "shown 420 of 18 000" */

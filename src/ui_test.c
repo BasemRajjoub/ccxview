@@ -155,6 +155,7 @@ static void close_all(struct nk_context* ctx) {
     G.show_details = false;
     G.label_probe_only = false; G.label_kinds = 0;
     G.hist_open = G.path_open = false;
+    G.show_measure = false; app_measure_cancel();
 }
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
@@ -184,6 +185,7 @@ static bool toolbar_popup(struct nk_context* ctx) { return popup_open(ctx, "Tool
 static bool toolbar_no_popup(struct nk_context* ctx) { return !popup_open(ctx, "Toolbar"); }
 static bool scene_popup(struct nk_context* ctx) { return popup_open(ctx, "Scene"); }
 static bool units_popup(struct nk_context* ctx) { return popup_open(ctx, "Units"); }
+static bool measure_popup(struct nk_context* ctx) { return popup_open(ctx, "Measurements"); }
 static bool cmap_changed(struct nk_context* ctx) { return G.cmap != was.cmap; }
 static bool bands_changed(struct nk_context* ctx) { return G.bands != was.bands; }
 static bool faces_changed(struct nk_context* ctx) { return G.faces_mode != was.faces_mode; }
@@ -351,6 +353,43 @@ static bool fly_hides(struct nk_context* ctx) { return G.fly_clip == CV_EYE_HIDE
 static void fly_depth_low(struct nk_context* ctx) { G.fly_clip_depth = 0.f; }
 static bool fly_depth_up(struct nk_context* ctx) { return G.fly_clip_depth > 0.f; }
 static bool scene_still(struct nk_context* ctx) { return !scene_scrolled(ctx); }
+/* measurements: armed from the probe, the menu or their window; picked by clicks */
+static void open_measure(struct nk_context* ctx) { G.show_measure = true; }
+static bool measure_gone(struct nk_context* ctx) { return !G.show_measure; }
+static bool measure_shown(struct nk_context* ctx) { return G.show_measure && win_of(ctx, "Measurements"); }
+static void meas_clear(struct nk_context* ctx) { app_measure_cancel(); app_measure_clear(); G.meas_show = CV_MSHOW_BOTH; }
+static void meas_turn(struct nk_context* ctx) { G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }   /* the next click on the same pixel hits another node */
+static bool meas_dist_armed(struct nk_context* ctx) { return app_measure_armed() == CV_MEAS_DIST + 1 && strstr(app_measure_prompt(), "(2 of 2"); }
+static bool meas_dist_made(struct nk_context* ctx) {
+    int k; uint32_t id[3];
+    return !app_measure_armed() && app_measure_count() == 1 && app_measure_get(0, &k, id) && k == CV_MEAS_DIST && id[0] != id[1];
+}
+static bool meas_circle_armed(struct nk_context* ctx) { return app_measure_armed() == CV_MEAS_CIRCLE + 1 && strstr(app_measure_prompt(), "(2 of 3") && !G.menu_on; }
+static bool meas_angle_armed(struct nk_context* ctx) { return app_measure_armed() == CV_MEAS_ANGLE + 1 && strstr(app_measure_prompt(), "(1 of 3"); }
+static void meas_cancel(struct nk_context* ctx) { app_pick_cancel(); }      /* as Esc */
+static bool meas_not_armed(struct nk_context* ctx) { return !app_measure_armed(); }
+static bool meas_shows_def(struct nk_context* ctx) { return G.meas_show != CV_MSHOW_BOTH; }
+static bool meas_none(struct nk_context* ctx) { return app_measure_count() == 0; }
+static bool meas_labelled(struct nk_context* ctx) { return app_measure_count() == 1 && !G.label_kinds; }
+/* the CSV beside the model: a header and a row per state of the one measurement */
+static bool meas_csv_saved(struct nk_context* ctx) {
+    char path[1100];
+    snprintf(path, sizeof path, "%s", G.path);
+    char* dot = strrchr(path, '.');
+    if (dot) *dot = 0;
+    strncat(path, "_measurements.csv", sizeof path - strlen(path) - 1);
+    FILE* f = fopen(path, "r");
+    if (!f) return false;
+    int lines = 0, c;
+    while ((c = fgetc(f)) != EOF) lines += c == '\n';
+    fclose(f);
+    remove(path);
+    return lines == 3;
+}
+static void meas_add_ids(struct nk_context* ctx) {
+    uint32_t id[3] = { G.frd.node_id[0], G.frd.node_id[G.frd.n_nodes - 1], 0 };
+    meas_clear(ctx); app_measure_add(CV_MEAS_DIST, id);
+}
 static bool tip_cmap(struct nk_context* ctx) { return !strncmp(uii_tip_shown(), "Colour map", 10); }
 static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 
@@ -547,6 +586,29 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
     CLOSED_THEN_PANELS("Details", open_details, details_gone),
     CLOSED_THEN_PANELS("About", open_about, about_gone),
+    CLOSED_THEN_PANELS("Measurements", open_measure, measure_gone),
+
+    CASE("measurements: armed from the probe, a second click on the model makes a distance"),
+    DO(close_all), DO(meas_clear), DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2),
+    AT_TIP("Probe", "#probe measure distance"), CLICK, WAIT(2), EXPECT(meas_dist_armed, "a distance waits for its second node"),
+    DO(meas_turn), WAIT(2), AT_MODEL, CLICK, WAIT(3), EXPECT(meas_dist_made, "a distance between two nodes"),
+    EXPECT(meas_labelled, "it is there with no label kind on"),
+    DO(fit_view), WAIT(2),
+
+    CASE("measurements: a circle armed from the menu, Esc cancels it"),
+    DO(close_all), DO(meas_clear), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),
+    AT_TIP("Menu", "#menu measure circle"), CLICK, WAIT(2), EXPECT(meas_circle_armed, "the circle waits for two more nodes, the menu closed"),
+    DO(meas_cancel), WAIT(2), EXPECT(meas_not_armed, "Esc cancels it"), PANELS_ANSWER,
+
+    CASE("measurements: the window arms one, its list picks what the labels show, a row is deleted"),
+    DO(close_all), DO(meas_add_ids), DO(open_measure), WAIT(3), EXPECT(measure_shown, "the window opens"),
+    AT_TIP("Measurements", "#meas new angle"), CLICK, WAIT(2), EXPECT(meas_angle_armed, "an angle waits for its first node"),
+    DO(meas_cancel), WAIT(2),
+    AT_TIP("Measurements", "What the labels in the view give"), WAIT(30), CLICK, WAIT(2), EXPECT(measure_popup, "the list opens"),
+    AT_POPUP("Measurements", 0.5f, 0.85f), CLICK, WAIT(2), EXPECT(meas_shows_def, "the labels show one value"),
+    AT_TIP("Measurements", "Save them as"), CLICK, WAIT(2), EXPECT(meas_csv_saved, "the CSV holds both states"),
+    AT_TIP("Measurements", "#meas delete 1"), CLICK, WAIT(2), EXPECT(meas_none, "the row is deleted"),
+    DO(meas_clear), DO(close_all), WAIT(2), PANELS_ANSWER,
 
     CASE("menu: a right click on the model opens it, an item acts and closes it"),
     DO(close_all), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),

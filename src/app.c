@@ -450,7 +450,7 @@ static void frame(void) {
         }
         eye_caps(eye_clip, &d);
         d.hl_size = G.hl_size * ui_scale();
-        d.labels = G.label_kinds != 0;
+        d.labels = G.label_kinds != 0 || app_measure_count() > 0;   /* the measurements are labels too */
         d.labels_on_top = G.label_front || G.label_probe_only ||   /* names, Gauss points and the probe's: inside the model */
                           (G.label_kinds & (1 << CV_LABEL_SETS | 1 << CV_LABEL_LINKS | 1 << CV_LABEL_MATERIALS | 1 << CV_LABEL_GPVALUE | 1 << CV_LABEL_GPID));
         memcpy(d.label_rgb, G.label_rgb, sizeof d.label_rgb); memcpy(d.label_box_rgba, G.label_box_rgba, sizeof d.label_box_rgba);
@@ -463,6 +463,7 @@ static void frame(void) {
         d.vp_x = G.vp_x; d.vp_y = G.vp_y; d.vp_w = G.vp_w; d.vp_h = G.vp_h;
     }
     app_marks_sync();
+    app_measure_sync();
     if (G.loaded) {
         app_label_frame(&d);
         if (d.labels) cv_render_label_depth(&d);  /* its own pass, before the frame's */
@@ -1019,6 +1020,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--browse")) O.browse = true;
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
+        else if (!strcmp(argv[i], "--measure-window")) O.measure_window = true;
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
@@ -1081,6 +1083,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--watch")) O.watch = true;
         else if (!strcmp(argv[i], "--compare") && i + 1 < argc) O.compare = argv[++i];
         else if (!strcmp(argv[i], "--path") && i + 1 < argc) O.path_ids = argv[++i];
+        else if (!strcmp(argv[i], "--measure") && i + 1 < argc && O.nmeasure < 16) O.measure[O.nmeasure++] = argv[++i];
         else if (!strcmp(argv[i], "--history") && i + 1 < argc) O.hist_id = atol(argv[++i]);
         else if (!strcmp(argv[i], "--linearize") && i + 1 < argc) O.lin_ids = argv[++i];
         else if (!strcmp(argv[i], "--look") && i + 1 < argc) {

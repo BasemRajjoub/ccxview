@@ -162,12 +162,14 @@ void app_path_clear(void) {
 
 void app_path_start(uint32_t node) {
     app_path_clear();
+    app_measure_cancel();                           /* one thing at a time waits for a click */
     G.path_a = node;
     G.path_arm = true;
 }
 
 void app_pick_cancel(void) {
     if (G.path_arm) { G.path_arm = false; G.path_a = UINT32_MAX; }
+    app_measure_cancel();
     G.box_arm = false;
     if (G.menu_on) { G.menu_on = false; return; }   /* Esc closes the menu first, the selection stays */
     app_sel_clear();

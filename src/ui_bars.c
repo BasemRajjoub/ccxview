@@ -494,7 +494,9 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
 
 void panel_status(struct nk_context* ctx, float s, float row, float width) {
     char mid[160], badge[48];
-    if (G.note[0] && cv_now() - G.note_t < 5.0)
+    if (app_measure_armed())
+        snprintf(mid, sizeof mid, "%s", app_measure_prompt());
+    else if (G.note[0] && cv_now() - G.note_t < 5.0)
         snprintf(mid, sizeof mid, "%s", G.note);
     else if (G.loaded && G.flight)
         snprintf(mid, sizeof mid, "FREE FLIGHT   WASD move  E/Space up  Q down  Shift fast  drag look  wheel speed  Esc exit");

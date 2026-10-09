@@ -53,6 +53,10 @@ enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye 
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
        CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_GPVALUE, CV_LABEL_GPID, CV_LABEL_MINMAX, CV_LABEL_N };
 
+/* measurements between nodes (app_measure.c): their kinds, what their labels show */
+enum { CV_MEAS_DIST, CV_MEAS_ANGLE, CV_MEAS_CIRCLE, CV_MEAS_N };
+enum { CV_MSHOW_BOTH, CV_MSHOW_UNDEF, CV_MSHOW_DEF };
+
 typedef struct {
     int       kind;
     cv_thread thread;
@@ -357,6 +361,9 @@ typedef struct {
     bool      label_front;           /* drawn in front of everything (nodes facing away are left out anyway) */
     unsigned  label_gen;             /* bumped when the labelled things change (model, step, field, selection) */
     char      label_note[64];        /* "labels: node id, shown 420 of 18 000"; "" when off */
+    /* measurements (app_measure.c): their window, and what their labels show */
+    bool      show_measure;
+    int       meas_show;             /* CV_MSHOW_*: the labels give both values, the undeformed or the deformed one */
     bool      show_about;            /* the About window: author, licence, libraries */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
@@ -495,6 +502,34 @@ int  app_label_parse(const char* keys);        /* "node,value,loads" -> the kind
 static inline bool app_label_on(int kind) { return (G.label_kinds >> kind) & 1; }
 void app_label_changed(void);                  /* the labelled things changed: anchors again next frame */
 void app_label_frame(cv_draw* d);              /* per frame, before cv_render_draw: thin, lay out, upload when needed; sets d->label_px */
+/* app_measure.c: measurements between nodes, kept by file node ids. Cleared when
+   another model opens (app_measure_model), kept on a reload of the same file. */
+int  app_measure_count(void);
+bool app_measure_get(int i, int* kind, uint32_t ids[3]);    /* file node ids; ids[2] 0 for a distance */
+bool app_measure_add(int kind, const uint32_t* node_ids);   /* 2 or 3 file node ids; false when one is not in the model */
+void app_measure_remove(int i);
+void app_measure_clear(void);
+int  app_measure_nodes(int kind);                    /* how many nodes it takes: 2 or 3 */
+const char* app_measure_kind_name(int kind);         /* "distance", "angle", "circle" */
+/* its values: [0] undeformed, [1] deformed (the step's DISP at scale 1; the same when
+   the step has none); v: distance d dx dy dz, angle degrees, circle R cx cy cz nx ny nz.
+   false when its nodes are gone or three are collinear (a circle) */
+bool app_measure_values(int i, double v[2][7], bool* has_def);
+void app_measure_text(int i, int which, char* out, size_t n);   /* which: CV_MSHOW_* (the label's text) */
+void app_measure_line(int i, int state, char* out, size_t n);   /* the window's: state 0 undeformed, 1 deformed */
+size_t app_measure_copy(char* out, size_t n);        /* every one as text, a line per state */
+bool app_measure_csv(void);                          /* to <model>_measurements.csv */
+/* picking: armed with a kind, the clicks give its nodes (first may be a node index,
+   UINT32_MAX none); app_measure_pick takes a click's node and is true when it did */
+void app_measure_arm(int kind, uint32_t first);
+bool app_measure_pick(uint32_t node);
+void app_measure_cancel(void);
+int  app_measure_armed(void);                        /* the kind + 1 being picked, 0 none */
+const char* app_measure_prompt(void);                /* what to click next, "" when not picking */
+bool app_measure_model(const char* path);            /* a model loaded: true and cleared when it is another file */
+void app_measure_sync(void);                         /* per frame: lines and labels follow the changes */
+/* the label anchors: n of them, pos[3] disp[6] each to anc (9 per), texts to txt */
+uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t max);
 /* the shown .frd field's stored components at a node (global, as the file has them);
    names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
 int app_field_comps(uint32_t node, char names[][12], float* vals, int max);
