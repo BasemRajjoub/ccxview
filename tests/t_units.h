@@ -204,6 +204,7 @@ static void test_units(void) {
     CHECK_EQ(cv_field_quantity("FORC", 1), CV_Q_FORCE);
     CHECK_EQ(cv_field_quantity("ENER", 0), CV_Q_ENERGY_D);
     CHECK_EQ(cv_field_quantity("HFL", 0), CV_Q_FLUX);
+    CHECK_EQ(cv_field_quantity("FLUX", 2), CV_Q_FLUX);
     CHECK_EQ(cv_field_quantity("RFL", 0), CV_Q_POWER);
     CHECK_EQ(cv_field_quantity("VELO", 0), CV_Q_VELO);
     CHECK_EQ(cv_field_quantity("CONTACT", 0), CV_Q_LEN);

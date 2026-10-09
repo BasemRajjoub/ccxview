@@ -7,7 +7,7 @@
 #endif
 
 static bool is_stress(const char* name) {
-    return strncmp(name, "STRESS", 6) == 0 || strncmp(name, "ZZS", 3) == 0 ||
+    return strncmp(name, "STRESS", 6) == 0 || strncmp(name, "ZZS", 3) == 0 || strncmp(name, "stresses", 8) == 0 ||   /* .dat */
            !strcmp(name, "STRPOS") || !strcmp(name, "STRNEG") || !strcmp(name, "STRMID");   /* shell faces */
 }
 

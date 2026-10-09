@@ -358,6 +358,8 @@ typedef struct {
     bool      show_mesh;             /* the mesh quality window */
     bool      mesh_limits_open;      /* ... with the user's limits shown */
     bool      show_details;          /* the Details window of the probed node and element */
+    bool      show_deck;             /* the Deck window: steps, amplitudes, model changes, submodel */
+    bool      show_removed;          /* elements removed by *MODEL CHANGE in the step on screen stay drawn */
     /* labels on the model */
     int       label_kinds;           /* bit k set: the labels show kind CV_LABEL_k; any mix (app_label_on) */
     float     label_px;              /* text height, px (before ui scale) */
@@ -676,6 +678,10 @@ void deck_inst2(cv_fvec* v, const float a[3], const float b[3], float ra, float 
 void deck_lines_inst(int which, const cv_fvec* pos, const cv_fvec* disp, float r);
 float deck_stroke(void);             /* the radius of a symbol's stroke: G.sym_len and G.sym_thick */
 void loads_refresh(void);            /* app_loads.c: the support and load glyphs of the step on screen */
+int  deck_step(void);                 /* app_loads.c: the deck's *STEP on screen (0-based), -1 no deck */
+void deck_step_time(int st, double* ts, double* tt);   /* the step time and total time on screen */
+void deck_apply_removed(const cv_frd* f, uint8_t* vis); /* app_deck.c: *MODEL CHANGE, the step on screen */
+const uint32_t* deck_removed(int64_t* n);  /* the element ids removed in the step on screen */
 void app_node_disp6(uint32_t node, float d[6]);
 void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);
 bool app_field_is_vector(void);      /* the selected .frd field has 3 components */

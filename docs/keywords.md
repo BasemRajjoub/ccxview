@@ -5,7 +5,8 @@ sets and what is applied to them, and to name things in the results. Every
 keyword not listed here is skipped without a message. A deck that ccx
 accepts always opens; a deck with a keyword ccxview does not know still
 opens, it just shows less. New solver keywords (a new material model, a new
-step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
+step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here. What it
+does with the results is in [results.md](results.md).
 
 ## Read and shown
 
@@ -25,9 +26,13 @@ step type, `*DAMAGE INITIATION` in ccx 2.23, ...) need no change here.
 | `*CFLUX`, `*DFLUX` | heat into a node or a face (`S1`..`S6`): a red arrow with a zigzag shaft, turned round when it leaves. `BF`: a zigzag block arrow on the element set |
 | `*FILM` | convection on a face: a red zigzag ending in a bar |
 | `*RADIATE` | radiation from a face: a red stem ending in three rays |
-| `*TEMPERATURE` | a temperature given to nodes: red diamonds |
-| `*STEP`, `OP=NEW` | every line above keeps its step. The symbols are those in force in the step on screen: a later value for the same node and DOF, or element face, replaces the earlier one; `OP=NEW` drops all of its kind from earlier steps; supports given before the first step stay |
-| `*TRANSFORM` | also for symbols: supports, forces and moments of a node in a transform point along its local axes |
+| `*TEMPERATURE` | a temperature given to nodes: red diamonds, labelled `T` |
+| `*STEP`, `OP=NEW` | every line above keeps its step. The symbols are those in force in the step on screen (the `.frd` numbers its steps as the deck's `*STEP`s; a deck without results shows its last step): a later value for the same node and DOF, or element face, replaces the earlier one; `OP=NEW` drops all of its kind from earlier steps; supports given before the first step stay |
+| `*STATIC`, `*DYNAMIC`, `*HEAT TRANSFER`, `*COUPLED TEMPERATURE-DISPLACEMENT`, `*UNCOUPLED ...`, `*VISCO`, `*MODAL DYNAMIC`, `*ELECTROMAGNETICS` | the procedure of the step and its time period (the second number of the data line, 1 when not given), for the times of the amplitudes. `*FREQUENCY`, `*BUCKLE`, `*STEADY STATE DYNAMICS`, `*COMPLEX FREQUENCY`, `*GREEN`, `*SENSITIVITY` take no time |
+| `*AMPLITUDE` | `TABULAR` (the default), in step time or with `TIME=TOTAL TIME` in total time, `SHIFTX=`, `SHIFTY=`: straight between its points, constant beyond the ends. `AMPLITUDE=` on `*BOUNDARY`, `*CLOAD`, `*DLOAD`, `*DSLOAD`, `*CFLUX`, `*DFLUX`, `*FILM`, `*RADIATE`, `*TEMPERATURE`: the symbol and its label show the line's value times the amplitude at the time of the increment on screen (the step's end without results), its length follows. Other definitions (`DEFINITION=SMOOTH STEP`, `PERIODIC`, `USER`, ...) keep their name and are not evaluated: their loads keep the line's value and their labels say "not evaluated". Without an amplitude a load is shown with its value at the step's end, where CalculiX's ramp in a static step ends. The Deck window lists the amplitudes and their points |
+| `*MODEL CHANGE` | `TYPE=ELEMENT, REMOVE` / `ADD` with elements or element sets: the elements removed in the step on screen, or before it and not added back, are hidden (their nodes leave the legend's range) and come back on an earlier step; Deck window > "show removed elements" (`--opt show_removed=1`) draws them. `TYPE=CONTACT PAIR`: a removed pair's surfaces are not highlighted in its steps |
+| `*SUBMODEL` | `TYPE=NODE` (node sets or nodes) and `TYPE=SURFACE` (surfaces), `INPUT=`, `GLOBAL ELSET=`: listed in the Deck window. `*BOUNDARY, SUBMODEL, STEP=`: the driven DOFs as support cones in blue, labelled `global UX UY UZ`; `*DSLOAD, SUBMODEL`: a blue arrow on each face, labelled with the global step its pressure comes from |
+| `*TRANSFORM` | also for symbols: supports, forces, moments and prescribed displacements of a node in a transform point along its local axes |
 | `*MPC` | `BEAM`, `PLANE`, `STRAIGHT` and user MPCs: links between their nodes, as `*EQUATION` |
 | `*CYCLIC SYMMETRY MODEL` | `N=` and the axis preset the cyclic view (View > Cyclic symmetry) |
 | `*SPRING`, `*DASHPOT` | the DOF of a one-node spring or dashpot |
@@ -106,7 +111,15 @@ corners only, a third of the triangles, for very large models.
 
 ## Not read
 
-Materials beyond the name, step controls, amplitudes (a load is drawn with the
-value of its line), output requests beyond `GLOBAL=`, contact properties,
-`*SUBMODEL`, `*MODEL CHANGE`, user loads (`P1NU`, ...). The results of all of these come back through the `.frd`
-and `.dat` files, which ccxview reads in full.
+Materials beyond the name and the first elastic constants and yield stress,
+step controls, `TIME DELAY=` and `LOAD CASE=` of a load (shown as if not
+given), `*CLOAD, SUBMODEL` and `*TEMPERATURE, SUBMODEL`, the ramp of a load
+inside a static step (shown at the step's end), output requests beyond
+`GLOBAL=`, contact properties, user loads (`P1NU`, ...). The results of all of
+these come back through the `.frd` and `.dat` files: see
+[results.md](results.md).
+
+`samples/modelchange/` (`scripts/gen_modelchange.py`) is a bar propped near its
+tip whose prop is removed in step 2 and added back in step 3, loaded through
+two amplitudes, and a submodel of its root driven by its displacements (step 1)
+and its stresses (step 2).

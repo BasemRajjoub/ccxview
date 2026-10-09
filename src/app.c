@@ -1037,6 +1037,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
         else if (!strcmp(argv[i], "--title-block") && O.nopts < 32) O.opts[O.nopts++] = "title_on=1";
+        else if (!strcmp(argv[i], "--deck-window")) O.deck_window = true;
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
         else if (!strcmp(argv[i], "--range") && i + 1 < argc) O.range_set = sscanf(argv[++i], "%f,%f", &O.range[0], &O.range[1]) == 2;
         else if (!strcmp(argv[i], "--menu") && i + 1 < argc) O.menu_set = sscanf(argv[++i], "%f,%f", &O.menu[0], &O.menu[1]) == 2;

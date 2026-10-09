@@ -38,6 +38,7 @@ typedef struct {
     bool        box_set;
     bool        details;        /* --details: the Details window of the probe (with --find or --box) */
     bool        about;          /* --about: the About window open */
+    bool        deck_window;    /* --deck-window: the Deck window open (steps, amplitudes, submodel) */
     const char* labels;         /* --labels KIND: what the labels show, by key */
     float       range[2];       /* --range MIN,MAX: the legend's range, locked */
     bool        range_set;

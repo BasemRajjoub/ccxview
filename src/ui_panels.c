@@ -55,6 +55,12 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
     int ne = 0, nn = 0;
     for (int i = 0; i < d->nsets; i++) { if (d->sets[i].is_elem) ne++; else nn++; }
     char lab[96];
+    if (d->nsteps || d->namps || d->nsubs) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "The deck's steps and their times, the elements *MODEL CHANGE takes out,\n"
+                 "what a submodel's global model drives, the amplitudes and their points");
+        if (nk_button_label(ctx, "Steps, amplitudes ...")) G.show_deck = !G.show_deck;
+    }
     if (ne && nk_tree_push_id(ctx, NK_TREE_NODE, "Element sets", NK_MAXIMIZED, 40)) {
         nk_layout_row_dynamic(ctx, row, 1);
         if (deck_any_elset_on() && nk_button_label(ctx, "show everything")) {

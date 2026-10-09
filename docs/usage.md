@@ -50,6 +50,8 @@ ccxview model.frd --title-block --opt title_user=0 --opt title_file_date=1   # l
 ccxview model.frd --labels node,value,loads # labels on the model, any mix of: node elem value evalue sets links loads supports materials gpvalue gpid minmax
 ccxview model.inp --opt sym_thin=1          # crowded supports and loads thinned to a pattern
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
+ccxview model.frd --deck-window --step 2    # the Deck window: steps, model changes, submodel, amplitudes
+ccxview model.frd --opt show_removed=1      # elements removed by *MODEL CHANGE drawn all the same
 ccxview model.frd --opt key=value           # any setting of ccxview.ini for this run
 ccxview model.frd --software                # CPU rendering
 ccxview --check model.frd                   # headless parse for CI

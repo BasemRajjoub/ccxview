@@ -23,3 +23,5 @@ samples/*/*.csv
 samples/*/*.vtk
 samples/*/*.nam
 dist/
+!samples/modelchange/modelchange.frd
+!samples/modelchange/submodel.frd

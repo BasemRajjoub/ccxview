@@ -424,6 +424,7 @@ static void apply_load(cv_job* j) {
     if (O.measure_window) G.show_measure = true;
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
+    if (O.deck_window) G.show_deck = true;
     if (O.range_set && !G.reload_keep) { G.range_lock = true; G.rmin = O.range[0]; G.rmax = O.range[1]; }
     if (O.labels && !G.reload_keep) {
         int m = app_label_parse(O.labels);
@@ -581,6 +582,7 @@ static void start_skin_job(void) {
     if (!G.job.vis) { cv_msg_add(&G.msgs, 0, false, "out of memory"); return; }
     cv_groups_mask(&G.groups, G.frd.n_elems, G.job.vis);
     deck_apply_mask(&G.frd, G.job.vis);        /* ticked element sets: a display group */
+    deck_apply_removed(&G.frd, G.job.vis);     /* *MODEL CHANGE: out in the step on screen */
     for (uint32_t e = 0; G.hide && e < G.frd.n_elems; e++) if (G.hide[e]) G.job.vis[e] = 0;   /* hidden by hand */
     G.job.crop = G.crop_on;
     const float lo[3] = { G.bmin.x, G.bmin.y, G.bmin.z }, hi[3] = { G.bmax.x, G.bmax.y, G.bmax.z };

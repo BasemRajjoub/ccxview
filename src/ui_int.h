@@ -52,6 +52,7 @@
 #define ui_sel_what             uii_sel_what
 #define window_details          uii_window_details
 #define window_about            uii_window_about
+#define window_deck             uii_window_deck
 #define window_menu             uii_window_menu
 #define window_nav              uii_window_nav
 #define window_find             uii_window_find
@@ -178,6 +179,7 @@ void window_probe(struct nk_context* ctx, float s, float row);
 void ui_sel_what(struct nk_context* ctx, float row);   /* ui_windows.c: what a box selects */
 void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_info.c */
 void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
+void window_deck(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_deck.c */
 void window_menu(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_menu.c */
 void window_nav(struct nk_context* ctx, float s);
 void window_find(struct nk_context* ctx, float s, float row);

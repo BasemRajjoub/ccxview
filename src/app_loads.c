@@ -382,21 +382,49 @@ static void box_exit(const float lo[3], const float hi[3], const float dir[3], f
 
 /* ---- the step on screen ---------------------------------------------------------- */
 
-static struct { cv_applied a; const cv_inp* deck; int step; bool ok; } S;
+static struct { cv_applied a; const cv_inp* deck; int step; double ts, tt; bool ok; } S;
 
-/* the deck's step of the result on screen (0-based); without results the last one */
-static int shown_step(const cv_inp* dk) {
-    if (G.frd.n_steps && G.step >= 0 && G.step < G.frd.n_steps && G.frd.steps[G.step].step > 0)
+/* the deck's step of the result on screen (0-based); without results the last one.
+   CalculiX numbers the .frd's steps as the deck's *STEPs. */
+int deck_step(void) {
+    const cv_inp* dk = deck_get();
+    if (!dk) return -1;
+    if (G.loaded && G.frd.n_steps && G.step >= 0 && G.step < G.frd.n_steps && G.frd.steps[G.step].step > 0)
         return CV_MIN(G.frd.steps[G.step].step - 1, CV_MAX(dk->nsteps - 1, 0));
     return CV_MAX(dk->nsteps - 1, 0);
 }
+
+/* the time on screen: in the step (*ts) and in total (*tt). The .frd gives the total
+   time of an increment; a modal increment (its time is a frequency) and a deck without
+   results stand at the step's end. */
+void deck_step_time(int st, double* ts, double* tt) {
+    const cv_inp* dk = deck_get();
+    *ts = *tt = 0;
+    if (!dk || st < 0) return;
+    double t0 = cv_inp_step_start(dk, st), per = dk->stepinfo && st < dk->nsteps ? dk->stepinfo[st].period : 1.0;
+    *ts = per;
+    if (G.loaded && G.frd.n_steps && G.step >= 0 && G.step < G.frd.n_steps && !G.frd.steps[G.step].modal && per > 0)
+        *ts = CV_MIN(CV_MAX(G.frd.steps[G.step].time - t0, 0.0), per);
+    *tt = t0 + *ts;
+}
+
 static const cv_applied* applied(const cv_inp* dk) {
-    int st = dk ? shown_step(dk) : -1;
-    if (S.ok && S.deck == dk && S.step == st) return &S.a;
+    int st = dk ? deck_step() : -1;
+    double ts, tt;
+    deck_step_time(st, &ts, &tt);
+    if (S.ok && S.deck == dk && S.step == st && S.ts == ts && S.tt == tt) return &S.a;
     if (S.ok) cv_applied_free(&S.a);
     S.ok = dk && cv_inp_applied(dk, st, &S.a);
-    S.deck = dk; S.step = st;
+    if (S.ok) cv_applied_at(dk, &S.a, ts, tt);      /* the loads with an amplitude at the time on screen */
+    S.deck = dk; S.step = st; S.ts = ts; S.tt = tt;
     return S.ok ? &S.a : NULL;
+}
+
+/* a label's value: with its amplitude's name, or the line's value and "not evaluated" */
+static void val_text(char* t, size_t n, const cv_inp* dk, const char* what, float v, int amp) {
+    if (amp <= 0 || amp > dk->namps) { snprintf(t, n, "%s %g", what, v); return; }
+    const cv_amp* a = &dk->amps[amp - 1];
+    snprintf(t, n, a->tabular ? "%s %g (%s)" : "%s %g (%s not evaluated)", what, v, a->name);
 }
 
 static float rel(float v, float big) { return big > 0 ? 0.5f + 0.5f * fabsf(v) / big : 1.f; }
@@ -456,13 +484,13 @@ static bool bolt_at(const cv_inp* dk, const cv_pretension* t, float cen[3], floa
 }
 
 void loads_refresh(void) {
-    layer bc = {{0}}, ld = {{0}}, mo = {{0}}, ht = {{0}}, bl = {{0}}, bb = {{0}};   /* bl, bb: bolts, drawn in front */
-    layer* all[6] = { &bc, &ld, &mo, &ht, &bl, &bb };
-    for (int k = 0; k < 6; k++) all[k]->T = deck_stroke();
+    layer bc = {{0}}, ld = {{0}}, mo = {{0}}, ht = {{0}}, bl = {{0}}, bb = {{0}}, sb = {{0}};   /* bl, bb: bolts, drawn in front */
+    layer* all[7] = { &bc, &ld, &mo, &ht, &bl, &bb, &sb };                    /* sb: driven by the global model */
+    for (int k = 0; k < 7; k++) all[k]->T = deck_stroke();
     const cv_inp* dk = G.loaded ? deck_get() : NULL;
     const cv_applied* a = applied(dk);
     label_sink_begin(G.label_kinds);
-    char lt[48];                                   /* a label's text */
+    char lt[96];                                   /* a label's text */
     float L = CV_MAX(G.bc_scale, 0.01f) * G.sym_len, LL = 1.5f * CV_MAX(G.load_scale, 0.01f) * G.sym_len;
     if (a) {
         float p[3], d[6], Q[3][3], dir[3];
@@ -475,10 +503,10 @@ void loads_refresh(void) {
             if (a->cloads[i].dof == 11) qmax = fmaxf(qmax, v); else if (a->cloads[i].dof > 3) mmax = fmaxf(mmax, v); else fmax = fmaxf(fmax, v);
         }
         for (uint32_t i = 0; i < a->nbcs; i++) {
-            float v = fabsf(a->bcs[i].value);
+            float v = a->bcs[i].sub ? 0.f : fabsf(a->bcs[i].value);
             if (a->bcs[i].dof_lo <= 3) umax = fmaxf(umax, v); else if (a->bcs[i].dof_lo <= 6) rmax = fmaxf(rmax, v);
         }
-        for (uint32_t i = 0; i < a->ndloads; i++) dmax[a->dloads[i].kind] = fmaxf(dmax[a->dloads[i].kind], fabsf(a->dloads[i].value));
+        for (uint32_t i = 0; i < a->ndloads; i++) if (!a->dloads[i].sub) dmax[a->dloads[i].kind] = fmaxf(dmax[a->dloads[i].kind], fabsf(a->dloads[i].value));
         for (uint32_t i = 0; i < a->nbody; i++) bmax[a->body[i].kind] = fmaxf(bmax[a->body[i].kind], fabsf(a->body[i].value));
 
         /* supports: one symbol per node for its held DOFs; a prescribed value on its own */
@@ -488,7 +516,8 @@ void loads_refresh(void) {
             const cv_bc* b = &a->bcs[i];
             int dof = b->dof_lo;
             if (is_bolt_ref(dk, b->node)) continue;         /* a bolt tightened by a displacement: drawn at its cut */
-            if (dof == 11) m[nm++] = (bc_mask){ b->node, 64 };
+            if (b->sub) { if (dof <= 6 || dof == 11) m[nm++] = (bc_mask){ b->node, (dof == 11 ? 64u : 1u << (dof - 1)) << 8 }; }   /* from the global model */
+            else if (dof == 11) m[nm++] = (bc_mask){ b->node, 64 };
             else if (dof >= 1 && dof <= 6 && b->value == 0) m[nm++] = (bc_mask){ b->node, 1u << (dof - 1) };
             else if (dof >= 1 && dof <= 6 && deck_node_pd(b->node, p, d)) {
                 node_axes(dk, b->node, p, Q);
@@ -497,7 +526,10 @@ void loads_refresh(void) {
                 if (dof > 3) moment(&bc, p, dir, len, d);
                 else { arrow(&bc, p, dir, len, d); tail_bar(&bc, p, dir, len, d); }
                 static const char* dn[6] = { "UX", "UY", "UZ", "URX", "URY", "URZ" };
-                if (app_label_on(CV_LABEL_SUPPORTS)) { snprintf(lt, sizeof lt, "%s= %g", dn[dof - 1], b->value); label_sink_add(p, d, lt); }
+                if (app_label_on(CV_LABEL_SUPPORTS)) {
+                    char w[8]; snprintf(w, sizeof w, "%s=", dn[dof - 1]);
+                    val_text(lt, sizeof lt, dk, w, b->value, b->amp); label_sink_add(p, d, lt);
+                }
             }
         }
         if (nm) qsort(m, nm, sizeof *m, bc_mask_cmp);
@@ -507,13 +539,18 @@ void loads_refresh(void) {
             for (; i < nm && m[i].node == node; i++) bits |= m[i].mask;
             if (!deck_node_pd(node, p, d) || !thin_take(&th, p, 0.7f * L, bits)) continue;
             node_axes(dk, node, p, Q);
-            if (bits & 64) cross(&bc, p, 0.25f * L, d);
-            support(&bc, p, d, bits, L, Q);
-            if (app_label_on(CV_LABEL_SUPPORTS)) {   /* the held DOFs by name */
-                static const char* dn[7] = { "UX", "UY", "UZ", "URX", "URY", "URZ", "T" };
-                size_t o = 0; lt[0] = 0;
-                for (int k = 0; k < 7 && o < sizeof lt - 5; k++) if (bits & (1u << k)) o += (size_t)snprintf(lt + o, sizeof lt - o, "%s%s", o ? " " : "", dn[k]);
-                label_sink_add(p, d, lt);
+            for (int g = 0; g < 2; g++) {            /* held; then driven by the global model (*BOUNDARY, SUBMODEL) */
+                unsigned b8 = (bits >> (8 * g)) & 0xff;
+                layer* l = g ? &sb : &bc;
+                if (!b8) continue;
+                if (b8 & 64) cross(l, p, 0.25f * L, d);
+                support(l, p, d, b8, L, Q);
+                if (app_label_on(CV_LABEL_SUPPORTS)) {   /* the DOFs by name */
+                    static const char* dn[7] = { "UX", "UY", "UZ", "URX", "URY", "URZ", "T" };
+                    size_t o = (size_t)snprintf(lt, sizeof lt, "%s", g ? "global" : "");
+                    for (int k = 0; k < 7 && o < sizeof lt - 5; k++) if (b8 & (1u << k)) o += (size_t)snprintf(lt + o, sizeof lt - o, "%s%s", o ? " " : "", dn[k]);
+                    label_sink_add(p, d, lt);
+                }
             }
         }
         free(m);
@@ -529,7 +566,7 @@ void loads_refresh(void) {
                 float len = LL * rel(c->value, qmax);
                 if (c->value > 0) heat_arrow(&ht, p, dir, len, d);
                 else { float t[3], o[3] = { -dir[0], -dir[1], -dir[2] }; along(p, o, len, t); heat_arrow(&ht, t, o, len, d); }
-                if (app_label_on(CV_LABEL_LOADS)) { snprintf(lt, sizeof lt, "Q %g", c->value); label_sink_add(p, d, lt); }
+                if (app_label_on(CV_LABEL_LOADS)) { val_text(lt, sizeof lt, dk, "Q", c->value, c->amp); label_sink_add(p, d, lt); }
                 continue;
             }
             node_axes(dk, c->node, p, Q);
@@ -537,7 +574,7 @@ void loads_refresh(void) {
             bool drawn = true;
             if (c->dof > 3) moment(&mo, p, dir, LL * rel(c->value, mmax), d);
             else if ((drawn = thin_take(&th, p, 0.4f * LL, 100u + c->dof * 2u + (c->value < 0)))) arrow(&ld, p, dir, LL * rel(c->value, fmax), d);
-            if (drawn && app_label_on(CV_LABEL_LOADS)) { snprintf(lt, sizeof lt, "%s %g", c->dof > 3 ? "M" : "F", c->value); label_sink_add(p, d, lt); }
+            if (drawn && app_label_on(CV_LABEL_LOADS)) { val_text(lt, sizeof lt, dk, c->dof > 3 ? "M" : "F", c->value, c->amp); label_sink_add(p, d, lt); }
         }
 
         /* on faces and edges */
@@ -547,11 +584,18 @@ void loads_refresh(void) {
             bool shell;
             int ty = deck_etype(dk, q->elem, &shell);
             bool edge = q->kind == CV_DL_EDGE || (ty >= 7 && ty <= 10 && !shell);
+            if (q->sub) {                           /* *DSLOAD, SUBMODEL: the pressure of the global stresses */
+                if (!face_at(q->elem, q->face, edge, cen, out, cd) || !thin_take(&th, cen, 0.4f * LL, 300u)) continue;
+                for (int k = 0; k < 3; k++) in[k] = -out[k];
+                arrow(&sb, cen, in, LL, cd);
+                if (app_label_on(CV_LABEL_LOADS)) { snprintf(lt, sizeof lt, "p global step %d", q->sub); label_sink_add(cen, cd, lt); }
+                continue;
+            }
             if (q->value == 0 || !face_at(q->elem, q->face, edge, cen, out, cd)) continue;
             if (!thin_take(&th, cen, 0.4f * LL, 200u + (uint32_t)q->kind)) continue;
             if (app_label_on(CV_LABEL_LOADS)) {
                 static const char* ln[CV_DL_N] = { "p", "p", "q", "h", "rad" };   /* pressure, edge, flux, film, radiation */
-                snprintf(lt, sizeof lt, "%s %g", q->kind < CV_DL_N ? ln[q->kind] : "?", q->value); label_sink_add(cen, cd, lt);
+                val_text(lt, sizeof lt, dk, q->kind < CV_DL_N ? ln[q->kind] : "?", q->value, q->amp); label_sink_add(cen, cd, lt);
             }
             float len = LL * rel(q->value, dmax[q->kind]);
             float sgn = q->value < 0 ? 1.f : -1.f;              /* positive: into the face */
@@ -594,7 +638,7 @@ void loads_refresh(void) {
             if (norm3(dir) <= 0) continue;
             box_exit(lo, hi, dir, from);
             block_arrow(b->kind == CV_BL_HEAT ? &ht : &ld, from, dir, len, cd, b->kind == CV_BL_HEAT);
-            if (app_label_on(CV_LABEL_LOADS)) { snprintf(lt, sizeof lt, "%s %g", b->kind == CV_BL_HEAT ? "Q" : "g", b->value); label_sink_add(from, cd, lt); }
+            if (app_label_on(CV_LABEL_LOADS)) { val_text(lt, sizeof lt, dk, b->kind == CV_BL_HEAT ? "Q" : "g", b->value, b->amp); label_sink_add(from, cd, lt); }
         }
         free(th.k);
 
@@ -644,11 +688,14 @@ void loads_refresh(void) {
         }
 
         /* given temperatures */
-        for (uint32_t i = 0; i < a->ntemps; i++)
-            if (deck_node_pd(a->temps[i].node, p, d)) diamond(&ht, p, 0.3f * L, d);
+        for (uint32_t i = 0; i < a->ntemps; i++) {
+            if (!deck_node_pd(a->temps[i].node, p, d)) continue;
+            diamond(&ht, p, 0.3f * L, d);
+            if (app_label_on(CV_LABEL_LOADS)) { val_text(lt, sizeof lt, dk, "T", a->temps[i].value, a->temps[i].amp); label_sink_add(p, d, lt); }
+        }
     }
-    static const int which[6] = { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_BOLTLD, CV_INST_BOLTBC };
-    for (int k = 0; k < 6; k++) {
+    static const int which[7] = { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_BOLTLD, CV_INST_BOLTBC, CV_INST_SUB };
+    for (int k = 0; k < 7; k++) {
         cv_render_inst(which[k], all[k]->in.a, (uint32_t)(all[k]->in.n / CV_INST_FLOATS));
         cv_free_vec(all[k]->in);
     }

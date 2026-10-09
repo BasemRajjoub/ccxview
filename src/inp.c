@@ -147,11 +147,13 @@ typedef struct { char name[64]; cv_csys cs; bool bad; } vorient;
 typedef struct { char elset[64]; char ori[64]; bool mixed; uint32_t lay0, nlay; } osect;
 typedef struct { char ori[64], mat[64]; float t; } vlayer;
 typedef struct { char f[CV_OUT_N]; uint8_t proc; } outsys;   /* per *STEP: output systems, procedure */
+typedef struct { cv_amp a; CV_VEC(float) tv; } vamp;
+typedef struct { cv_submodel s; CV_VEC(uint32_t) nodes; CV_VEC(int) surf; } vsub;
 
 enum { S_SKIP, S_NODE, S_ELEM, S_NSET, S_ELSET, S_SURF, S_HEADING, S_BOUNDARY, S_CLOAD, S_DLOAD, S_SPRINGDOF,
        S_CFLUX, S_DFLUX, S_FILM, S_RADIATE, S_TEMP, S_PRETENSION, S_MPC, S_CYCLIC,
        S_EQUATION, S_DCOUP, S_TIE, S_CONTACT, S_TRANSFORM, S_ORIENT, S_OUTREQ, S_COMPOSITE,
-       S_ELASTIC, S_PLASTIC };
+       S_ELASTIC, S_PLASTIC, S_AMP, S_PROC, S_MCHANGE, S_SUBMODEL };
 
 typedef struct {
     cv_inp* d;
@@ -186,6 +188,12 @@ typedef struct {
     CV_VEC(osect) osects;
     CV_VEC(vlayer) layers;              /* of the composite sections, in order */
     CV_VEC(outsys) steps;
+    CV_VEC(cv_stepinfo) sinfo;          /* as steps */
+    CV_VEC(vamp) amps;
+    CV_VEC(cv_mchange) mchg;
+    CV_VEC(vsub) subs;
+    int16_t camp, csub;                 /* AMPLITUDE= and SUBMODEL, STEP= of the open load card */
+    bool mc_add, mc_pair;               /* the open *MODEL CHANGE: ADD, TYPE=CONTACT PAIR */
     CV_VEC(uint32_t) shells;            /* ids of S3..S8R elements */
     bool cshell;                        /* the open *ELEMENT block is shells */
     bool nodefile, elfile;              /* this step already had a *NODE FILE / *EL FILE */
@@ -313,14 +321,14 @@ static int16_t cur_step(const P* p) { return (int16_t)CV_MIN((int)p->steps.n - 1
 static void op_new(P* p, int st) {
     int16_t s = cur_step(p);
     bool ok = true;
-    if (st == S_BOUNDARY) { cv_bc b = { 0, 0, 0, s, 0 }; ok = cv_push(p->bcs, b); }
-    else if (st == S_CLOAD || st == S_CFLUX) { cv_cload c = { 0, (uint8_t)(st == S_CLOAD ? 1 : 11), s, 0 }; ok = cv_push(p->cloads, c); }
-    else if (st == S_TEMP) { cv_ntemp t = { 0, s, 0 }; ok = cv_push(p->temps, t); }
+    if (st == S_BOUNDARY) { cv_bc b = { 0, 0, 0, s, 0, 0, 0 }; ok = cv_push(p->bcs, b); }
+    else if (st == S_CLOAD || st == S_CFLUX) { cv_cload c = { 0, (uint8_t)(st == S_CLOAD ? 1 : 11), s, 0, 0 }; ok = cv_push(p->cloads, c); }
+    else if (st == S_TEMP) { cv_ntemp t = { 0, s, 0, 0 }; ok = cv_push(p->temps, t); }
     else {
-        cv_dload d = { 0, 0, (uint8_t)(st == S_DLOAD ? CV_DL_P : st == S_DFLUX ? CV_DL_FLUX : st == S_FILM ? CV_DL_FILM : CV_DL_RAD), s, 0 };
+        cv_dload d = { 0, 0, (uint8_t)(st == S_DLOAD ? CV_DL_P : st == S_DFLUX ? CV_DL_FLUX : st == S_FILM ? CV_DL_FILM : CV_DL_RAD), s, 0, 0, 0 };
         ok = cv_push(p->dloads, d);
         if (ok && (st == S_DLOAD || st == S_DFLUX)) {
-            cv_body b = { (uint8_t)(st == S_DLOAD ? CV_BL_GRAV : CV_BL_HEAT), s, -2, 0, 0, { 0 } };
+            cv_body b = { (uint8_t)(st == S_DLOAD ? CV_BL_GRAV : CV_BL_HEAT), s, -2, 0, 0, { 0 }, 0 };
             ok = cv_push(p->body, b);
         }
     }
@@ -339,6 +347,81 @@ static const char* const proc_names[CV_PROC_N] = {
     "Coupled thermomechanical", "Visco", "Electromagnetics", "Sensitivity", "Green functions",
 };
 const char* cv_inp_proc_name(int proc) { return proc > 0 && proc < CV_PROC_N ? proc_names[proc] : ""; }
+/* AMPLITUDE=name of a load card: index + 1, 0 none */
+static int16_t find_amp(P* p, const char* raw) {
+    if (!raw || !raw[0]) return 0;
+    char nm[64]; snprintf(nm, sizeof nm, "%s", raw); upcase(nm);
+    for (size_t i = 0; i < p->amps.n; i++) if (!strcmp(p->amps.a[i].a.name, nm)) return (int16_t)CV_MIN(i + 1, 32767u);
+    note(p, "AMPLITUDE=%s is not defined before it is used", nm);
+    return 0;
+}
+
+/* *AMPLITUDE, the procedure of a step, *MODEL CHANGE, *SUBMODEL. true: taken */
+static bool step_keyword(P* p, const char* kw, const param* prm, int np) {
+    if (!strcmp(kw, "AMPLITUDE")) {
+        const char *nm = pget(prm, np, "NAME"), *tm = pget(prm, np, "TIME"), *df = pget(prm, np, "DEFINITION");
+        const char *sx = pget(prm, np, "SHIFTX"), *sy = pget(prm, np, "SHIFTY");
+        vamp v;
+        memset(&v, 0, sizeof v);
+        snprintf(v.a.name, sizeof v.a.name, "%s", nm ? nm : ""); upcase(v.a.name);
+        snprintf(v.a.def, sizeof v.a.def, "%s", df && df[0] ? df : pget(prm, np, "USER") ? "USER" : "TABULAR"); upcase(v.a.def);
+        v.a.tabular = !strcmp(v.a.def, "TABULAR");
+        char tu[32] = "";
+        if (tm) { snprintf(tu, sizeof tu, "%s", tm); upcase(tu); }
+        v.a.total = strstr(tu, "TOTAL") != NULL;                  /* TIME=TOTAL TIME; else step time */
+        double x = 0, y = 0;            /* SHIFTX, SHIFTY: kept in the first pair until the end */
+        if (sx) to_f(sx, &x);
+        if (sy) to_f(sy, &y);
+        if (!cv_push(v.tv, (float)x) || !cv_push(v.tv, (float)y) || !cv_push(p->amps, v)) { cv_free_vec(v.tv); p->oom = true; return true; }
+        p->st = S_AMP;
+        return true;
+    }
+    static const char* timed[] = { "STATIC", "DYNAMIC", "HEATTRANSFER", "COUPLEDTEMPERATURE-DISPLACEMENT",
+                                   "UNCOUPLEDTEMPERATURE-DISPLACEMENT", "VISCO", "MODALDYNAMIC", "ELECTROMAGNETICS" };
+    static const char* untimed[] = { "FREQUENCY", "BUCKLE", "STEADYSTATEDYNAMICS", "COMPLEXFREQUENCY", "GREEN", "SENSITIVITY" };
+    for (int pass = 0; pass < 2 && p->sinfo.n; pass++) {
+        int n = pass ? (int)CV_COUNT(untimed) : (int)CV_COUNT(timed);
+        for (int i = 0; i < n; i++) {
+            const char* k = pass ? untimed[i] : timed[i];
+            if (strcmp(kw, k) != 0) continue;
+            cv_stepinfo* si = &p->sinfo.a[p->sinfo.n - 1];
+            snprintf(si->proc, sizeof si->proc, "%s", k);
+            si->period = pass ? 0.f : 1.f;
+            for (int q = 1; q < CV_PROC_N && p->steps.n; q++)   /* the step's procedure, by CV_PROC_* */
+                if (proc_kw[q] && !strcmp(kw, proc_kw[q])) {
+                    bool steady = q == CV_PROC_HEAT && pget(prm, np, "STEADYSTATE");
+                    p->steps.a[p->steps.n - 1].proc = (uint8_t)(steady ? CV_PROC_HEAT_STEADY : q);
+                }
+            if (!pass) p->st = S_PROC;     /* initial increment, period, ... */
+            return true;
+        }
+    }
+    if (!strcmp(kw, "MODELCHANGE")) {
+        const char* ty = pget(prm, np, "TYPE");
+        p->mc_pair = ty && toupper((unsigned char)ty[0]) == 'C';
+        p->mc_add = pget(prm, np, "ADD") != NULL;
+        if (!p->mc_add && !pget(prm, np, "REMOVE")) { note(p, "*MODEL CHANGE without ADD or REMOVE%s", ""); return true; }
+        p->st = S_MCHANGE;
+        return true;
+    }
+    if (!strcmp(kw, "SUBMODEL")) {
+        const char *ty = pget(prm, np, "TYPE"), *in = pget(prm, np, "INPUT"), *ge = pget(prm, np, "GLOBALELSET");
+        vsub v;
+        memset(&v, 0, sizeof v);
+        v.s.surface = ty && toupper((unsigned char)ty[0]) == 'S';
+        snprintf(v.s.input, sizeof v.s.input, "%s", in ? in : "");
+        snprintf(v.s.gelset, sizeof v.s.gelset, "%s", ge ? ge : ""); upcase(v.s.gelset);
+        if (!cv_push(p->subs, v)) { p->oom = true; return true; }
+        p->st = S_SUBMODEL;
+        return true;
+    }
+    return false;
+}
+
+static void sub_node(P* p, uint32_t n, void* a) {
+    vsub* v = a;
+    if (n && !cv_push(v->nodes, n)) p->oom = true;
+}
 
 static void do_keyword(P* p, const char* s, const char* e) {
     char kw[64];
@@ -490,17 +573,12 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (p->steps.n) o = p->steps.a[p->steps.n - 1];    /* requests carry over */
         else memset(o.f, ' ', sizeof o.f);
         o.proc = CV_PROC_NONE;
-        if (!cv_push(p->steps, o)) p->oom = true;
+        cv_stepinfo si = { "", 1.f };
+        if (!cv_push(p->steps, o) || !cv_push(p->sinfo, si)) p->oom = true;
         p->nodefile = p->elfile = false;
         p->skipped_keywords++;
         return;
     }
-    for (int k = 1; k < CV_PROC_N && p->steps.n; k++)          /* the step's procedure */
-        if (proc_kw[k] && !strcmp(kw, proc_kw[k])) {
-            bool steady = k == CV_PROC_HEAT && pget(prm, np, "STEADYSTATE");
-            p->steps.a[p->steps.n - 1].proc = (uint8_t)(steady ? CV_PROC_HEAT_STEADY : k);
-            return;
-        }
     {   /* output requests; CalculiX ignores the blanks in keywords */
         const char* k2 = kw;
         int kind = !strcmp(k2, "NODEFILE") || !strcmp(k2, "NODEOUTPUT") ? 1 :
@@ -577,6 +655,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (es) { snprintf(p->cur_elset, sizeof p->cur_elset, "%s", es); upcase(p->cur_elset); p->st = S_SPRINGDOF; }
         return;
     }
+    if (step_keyword(p, kw, prm, np)) return;
     /* loads and supports: drawn as glyphs. Every line keeps the step it stands in. */
     {
         const char* kc = kw;
@@ -587,6 +666,14 @@ static void do_keyword(P* p, const char* s, const char* e) {
             const char* op = pget(prm, np, "OP");
             if (op && toupper((unsigned char)op[0]) == 'N') op_new(p, st);
             p->st = st;
+            p->camp = find_amp(p, pget(prm, np, "AMPLITUDE"));
+            p->csub = 0;
+            if (pget(prm, np, "SUBMODEL") && (st == S_BOUNDARY || st == S_DLOAD)) {
+                const char* gs = pget(prm, np, "STEP");
+                uint32_t v = 1;
+                if (gs && (!to_u32(gs, &v) || !v)) v = 1;
+                p->csub = (int16_t)CV_MIN(v, 32767u);
+            }
             return;
         }
         if (!strcmp(kc, "PRE-TENSIONSECTION")) {
@@ -657,7 +744,7 @@ static void do_data(P* p, const char* s, const char* e) {
             if (n > 2 && f[2][0] && (!to_u32(f[2], &hi) || hi < lo || hi > 11)) { p->bad_lines++; return; }
             double v = 0;
             if (n > 3 && f[3][0] && !to_f(f[3], &v)) { p->bad_lines++; return; }
-            cv_bc b = { 0, (uint8_t)lo, (uint8_t)hi, cur_step(p), (float)v };
+            cv_bc b = { 0, (uint8_t)lo, (uint8_t)hi, cur_step(p), (float)v, p->camp, p->csub };
             if (!each_node(p, f[0], add_bc, &b)) p->bad_lines++;
             return;
         }
@@ -665,7 +752,7 @@ static void do_data(P* p, const char* s, const char* e) {
             int n = fields(s, e, f, 3);
             uint32_t dof; double v;
             if (n < 3 || !to_u32(f[1], &dof) || dof < 1 || dof > 6 || !to_f(f[2], &v)) { p->bad_lines++; return; }
-            cv_cload c = { 0, (uint8_t)dof, cur_step(p), (float)v };
+            cv_cload c = { 0, (uint8_t)dof, cur_step(p), (float)v, p->camp };
             if (!each_node(p, f[0], add_cload, &c)) p->bad_lines++;
             return;
         }
@@ -673,7 +760,7 @@ static void do_data(P* p, const char* s, const char* e) {
             int n = fields(s, e, f, 3);
             double v;
             if (n < 3 || !to_f(f[2], &v)) { p->bad_lines++; return; }
-            cv_cload c = { 0, 11, cur_step(p), (float)v };
+            cv_cload c = { 0, 11, cur_step(p), (float)v, p->camp };
             if (!each_node(p, f[0], add_cload, &c)) p->bad_lines++;
             return;
         }
@@ -681,7 +768,7 @@ static void do_data(P* p, const char* s, const char* e) {
             int n = fields(s, e, f, 2);
             double v;
             if (n < 2 || !to_f(f[1], &v)) { p->bad_lines++; return; }
-            cv_ntemp t = { 0, cur_step(p), (float)v };
+            cv_ntemp t = { 0, cur_step(p), (float)v, p->camp };
             if (!each_node(p, f[0], add_temp, &t)) p->bad_lines++;
             return;
         }
@@ -692,13 +779,13 @@ static void do_data(P* p, const char* s, const char* e) {
             if (n < (two ? 4 : 3) || !to_f(f[two ? 3 : 2], &v)) { p->bad_lines++; return; }
             char lab[16]; snprintf(lab, sizeof lab, "%s", f[1]); upcase(lab);
             if (p->st == S_DFLUX && !strcmp(lab, "BF")) {
-                cv_body b = { CV_BL_HEAT, 0, -1, 0, (float)v, { 0 } };
+                cv_body b = { CV_BL_HEAT, 0, -1, 0, (float)v, { 0 }, p->camp };
                 add_body(p, f[0], b);
                 return;
             }
             if (lab[0] != (p->st == S_DFLUX ? 'S' : p->st == S_FILM ? 'F' : 'R')) return;
             cv_dload d = { 0, (uint8_t)label_face(lab), (uint8_t)(p->st == S_DFLUX ? CV_DL_FLUX : p->st == S_FILM ? CV_DL_FILM : CV_DL_RAD),
-                           cur_step(p), (float)v };
+                           cur_step(p), (float)v, p->camp, 0 };
             if (!each_elem(p, f[0], add_dload, &d)) p->bad_lines++;
             return;
         }
@@ -740,9 +827,9 @@ static void do_data(P* p, const char* s, const char* e) {
             double v = 0, w[6] = { 0 };
             if (n < 2) { p->bad_lines++; return; }
             char lab[16]; snprintf(lab, sizeof lab, "%s", f[1]); upcase(lab);
-            if (strcmp(lab, "NEWTON") != 0 && (n < 3 || !to_f(f[2], &v))) { p->bad_lines++; return; }
+            if (strcmp(lab, "NEWTON") != 0 && !p->csub && (n < 3 || !to_f(f[2], &v))) { p->bad_lines++; return; }
             for (int k = 0; k < 6 && 3 + k < n; k++) to_f(f[3 + k], &w[k]);
-            cv_body b = { CV_BL_N, 0, -1, 0, (float)v, { (float)w[0], (float)w[1], (float)w[2], (float)w[3], (float)w[4], (float)w[5] } };
+            cv_body b = { CV_BL_N, 0, -1, 0, (float)v, { (float)w[0], (float)w[1], (float)w[2], (float)w[3], (float)w[4], (float)w[5] }, p->camp };
             if (!strcmp(lab, "GRAV")) b.kind = CV_BL_GRAV;
             else if (!strcmp(lab, "CENTRIF")) b.kind = CV_BL_CENTRIF;
             else if (!strcmp(lab, "NEWTON")) b.kind = CV_BL_NEWTON;
@@ -751,8 +838,8 @@ static void do_data(P* p, const char* s, const char* e) {
                 memset(b.v, 0, sizeof b.v);
                 b.v[lab[1] - 'X'] = 1;
             }
-            if (b.kind != CV_BL_N) { add_body(p, f[0], b); return; }
-            cv_dload d = { 0, 0, CV_DL_P, cur_step(p), (float)v };
+            if (b.kind != CV_BL_N && !p->csub) { add_body(p, f[0], b); return; }
+            cv_dload d = { 0, 0, CV_DL_P, cur_step(p), (float)v, p->camp, p->csub };
             if (!strncmp(lab, "EDNOR", 5) && lab[5] >= '1' && lab[5] <= '4') { d.kind = CV_DL_EDGE; d.face = (uint8_t)(lab[5] - '1'); }
             else if (lab[0] == 'P' && lab[1] >= '1' && lab[1] <= '6') d.face = (uint8_t)(lab[1] - '1');
             else if (strcmp(lab, "P") != 0 && strcmp(lab, "PPOS") != 0 && strcmp(lab, "PNEG") != 0) return;   /* a shell's face */
@@ -967,6 +1054,60 @@ static void do_data(P* p, const char* s, const char* e) {
             int n = fields(s, e, f, 3);
             if (n >= 1 && to_f(f[0], &v)) p->mprop.a[p->mprop.n - 1].sy = (float)v;
             p->st = S_SKIP;
+            return;
+        }
+        case S_AMP: {                         /* time, value pairs, up to four per line */
+            int n = fields(s, e, f, 8);
+            vamp* v = &p->amps.a[p->amps.n - 1];
+            for (int k = 0; k < n; k++) {
+                double x;
+                if (!to_f(f[k], &x)) { p->bad_lines++; return; }
+                if (!cv_push(v->tv, (float)x)) { p->oom = true; return; }
+            }
+            return;
+        }
+        case S_PROC: {                        /* initial increment, time period, ... */
+            int n = fields(s, e, f, 2);
+            double v;
+            if (n > 1 && to_f(f[1], &v) && v > 0) p->sinfo.a[p->sinfo.n - 1].period = (float)v;
+            p->st = S_SKIP;
+            return;
+        }
+        case S_MCHANGE: {                     /* elements and element sets; or slave, master surface */
+            int n = fields(s, e, f, 32);
+            cv_mchange m = { cur_step(p), p->mc_add, -1, 0, -1 };
+            if (p->mc_pair) {
+                int a = n > 1 ? find_surf(p, f[0]) : -1, b = n > 1 ? find_surf(p, f[1]) : -1;
+                for (size_t k = 0; a >= 0 && k < p->links.n; k++) {
+                    const cv_link* l = &p->links.a[k].l;
+                    if (l->kind == CV_LINK_CONTACT && l->surf[0] == a && l->surf[1] == b) m.link = (int)k;
+                }
+                if (m.link < 0) { p->bad_lines++; return; }
+                if (!cv_push(p->mchg, m)) p->oom = true;
+                return;
+            }
+            for (int k = 0; k < n; k++) {
+                m.set = -1; m.elem = 0;
+                if (!to_u32(f[k], &m.elem)) {
+                    char nm[64]; snprintf(nm, sizeof nm, "%s", f[k]); upcase(nm);
+                    if ((m.set = find_set(p, nm, true)) < 0) { p->bad_lines++; continue; }
+                }
+                if (!cv_push(p->mchg, m)) { p->oom = true; return; }
+            }
+            return;
+        }
+        case S_SUBMODEL: {                    /* node sets or nodes; or surfaces */
+            int n = fields(s, e, f, 32);
+            vsub* v = &p->subs.a[p->subs.n - 1];
+            for (int k = 0; k < n; k++) {
+                size_t l = strlen(v->s.names);
+                if (l + strlen(f[k]) + 3 < sizeof v->s.names) snprintf(v->s.names + l, sizeof v->s.names - l, "%s%s", l ? ", " : "", f[k]);
+                if (v->s.surface) {
+                    int si = find_surf(p, f[k]);
+                    if (si < 0) p->bad_lines++;
+                    else if (!cv_push(v->surf, si)) p->oom = true;
+                } else if (!each_node(p, f[k], sub_node, v)) p->bad_lines++;
+            }
             return;
         }
         case S_OUTREQ: {                      /* the variables, any number per line */
@@ -1243,6 +1384,36 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     d->proc = malloc(CV_MAX(p.steps.n, 1));
     if (!d->proc) goto oom;
     for (size_t i = 0; i < p.steps.n; i++) { memcpy(d->outsys[i], p.steps.a[i].f, CV_OUT_N); d->proc[i] = p.steps.a[i].proc; }
+    d->stepinfo = p.sinfo.a; p.sinfo.a = NULL;
+    d->mchg = p.mchg.a; d->nmchg = (uint32_t)p.mchg.n; p.mchg.a = NULL;
+    /* amplitudes: the pairs after the shifts kept in front */
+    d->amps = calloc(CV_MAX(p.amps.n, 1), sizeof *d->amps);
+    if (!d->amps) goto oom;
+    for (size_t i = 0; i < p.amps.n; i++) {
+        vamp* v = &p.amps.a[i];
+        cv_amp* a = &d->amps[d->namps++];
+        *a = v->a;
+        uint32_t n = (uint32_t)(v->tv.n - 2) / 2;
+        a->t = malloc(CV_MAX(n, 1) * sizeof(float));
+        a->v = malloc(CV_MAX(n, 1) * sizeof(float));
+        if (!a->t || !a->v) goto oom;
+        for (uint32_t k = 0; k < n; k++) { a->t[k] = v->tv.a[2 + 2 * k] + v->tv.a[0]; a->v[k] = v->tv.a[3 + 2 * k] + v->tv.a[1]; }
+        a->n = n;
+    }
+    d->subs = calloc(CV_MAX(p.subs.n, 1), sizeof *d->subs);
+    if (!d->subs) goto oom;
+    for (size_t i = 0; i < p.subs.n; i++) {
+        vsub* v = &p.subs.a[i];
+        cv_submodel* t = &d->subs[d->nsubs++];
+        *t = v->s;
+        if (v->nodes.n) qsort(v->nodes.a, v->nodes.n, sizeof(uint32_t), cv_cmp_u32);
+        size_t u = 0;
+        for (size_t j = 0; j < v->nodes.n; j++) if (!u || v->nodes.a[j] != v->nodes.a[u - 1]) v->nodes.a[u++] = v->nodes.a[j];
+        t->nodes = v->nodes.a; t->nn = (uint32_t)u; v->nodes.a = NULL;
+        t->surf = v->surf.a; t->nsurf = (int)v->surf.n; v->surf.a = NULL;
+    }
+    for (size_t i = 0; i < p.amps.n; i++) cv_free_vec(p.amps.a[i].tv);
+    cv_free_vec(p.amps); cv_free_vec(p.subs);
     cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
     if (p.shells.n) qsort(p.shells.a, p.shells.n, sizeof(uint32_t), cv_cmp_u32);
     d->shells = p.shells.a; d->nshells = (uint32_t)p.shells.n; p.shells.a = NULL;
@@ -1261,7 +1432,11 @@ oom:
     cv_free_vec(p.node_id); cv_free_vec(p.xyz); cv_free_vec(p.eid); cv_free_vec(p.eoff);
     cv_free_vec(p.conn); cv_free_vec(p.etype); cv_free_vec(p.sects);
     cv_free_vec(p.trs); cv_free_vec(p.node_tr); cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
-    cv_free_vec(p.shells);
+    cv_free_vec(p.shells); cv_free_vec(p.sinfo); cv_free_vec(p.mchg);
+    for (size_t i = 0; i < p.amps.n; i++) cv_free_vec(p.amps.a[i].tv);
+    cv_free_vec(p.amps);
+    for (size_t i = 0; i < p.subs.n; i++) { cv_free_vec(p.subs.a[i].nodes); cv_free_vec(p.subs.a[i].surf); }
+    cv_free_vec(p.subs);
     cv_free_vec(p.bcs); cv_free_vec(p.cloads); cv_free_vec(p.dloads); cv_free_vec(p.disc); cv_free_vec(p.sdofs);
     cv_free_vec(p.body); cv_free_vec(p.temps); cv_free_vec(p.pret);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
@@ -1289,6 +1464,9 @@ void cv_inp_free(cv_inp* d) {
     free(d->links);
     free(d->mats);
     free(d->transforms); free(d->node_tr); free(d->orients); free(d->orient_names); free(d->elem_ori); free(d->outsys); free(d->proc);
+    for (int i = 0; i < d->namps; i++) { free(d->amps[i].t); free(d->amps[i].v); }
+    for (int i = 0; i < d->nsubs; i++) { free(d->subs[i].nodes); free(d->subs[i].surf); }
+    free(d->amps); free(d->subs); free(d->stepinfo); free(d->mchg);
     free(d->shells); free(d->comps); free(d->layer_ori); free(d->layer_mat); free(d->layer_t); free(d->mprop);
     cv_msgs keep = d->msgs;
     memset(d, 0, sizeof *d);

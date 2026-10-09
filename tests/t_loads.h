@@ -152,3 +152,100 @@ static void test_loads(void) {
         free(buf);
     }
 }
+
+/* amplitudes, step times, *MODEL CHANGE and *SUBMODEL (inp.c, inp_steps.c) */
+static void test_steps(void) {
+    const char* deck =
+        "*NODE, NSET=NALL\n"
+        "1, 0,0,0\n2, 1,0,0\n3, 1,1,0\n4, 0,1,0\n5, 0,0,1\n6, 1,0,1\n7, 1,1,1\n8, 0,1,1\n"
+        "9, 2,0,0\n10, 2,1,0\n11, 2,0,1\n12, 2,1,1\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=EA\n1, 1,2,3,4,5,6,7,8\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=EB\n2, 2,9,10,3,6,11,12,7\n"
+        "*NSET, NSET=NCUT\n1, 4, 5, 8\n"
+        "*SURFACE, NAME=SB\nEB, S4\n"
+        "*SURFACE, NAME=SM\nEA, S3\n"
+        "*SURFACE, NAME=SS\nEB, S3\n"
+        "*CONTACT PAIR, INTERACTION=I1, TYPE=SURFACE TO SURFACE\nSS, SM\n"
+        "*AMPLITUDE, NAME=RAMP\n0., 0., 1., 1., 2., 0.5\n"
+        "*AMPLITUDE, NAME=TOT, TIME=TOTAL TIME, SHIFTY=1.\n0., 0.\n4., 4.\n"
+        "*AMPLITUDE, NAME=SM1, DEFINITION=SMOOTH STEP\n0., 0., 1., 1.\n"
+        "*SUBMODEL, TYPE=NODE, INPUT=global.frd\nNCUT, 12\n"
+        "*SUBMODEL, TYPE=SURFACE, INPUT=global.frd, GLOBAL ELSET=EG\nSB\n"
+        "*STEP\n*STATIC\n0.1, 2.\n"
+        "*BOUNDARY, SUBMODEL, STEP=2\nNCUT, 1, 3\n"
+        "*CLOAD, AMPLITUDE=RAMP\n7, 3, 10.\n"
+        "*CLOAD, AMPLITUDE=TOT\n6, 1, 2.\n"
+        "*DLOAD, AMPLITUDE=SM1\n1, P2, 3.\n"
+        "*DSLOAD, SUBMODEL, STEP=1\nSB, P\n"
+        "*TEMPERATURE, AMPLITUDE=RAMP\n7, 100.\n"
+        "*END STEP\n"
+        "*STEP\n*FREQUENCY\n4\n*END STEP\n"
+        "*STEP\n*STATIC\n"
+        "*MODEL CHANGE, TYPE=ELEMENT, REMOVE\nEB\n"
+        "*MODEL CHANGE, TYPE=CONTACT PAIR, REMOVE\nSS, SM\n"
+        "*END STEP\n"
+        "*STEP\n*HEAT TRANSFER\n0.5, 3.\n"
+        "*MODEL CHANGE, TYPE=ELEMENT, ADD=STRAIN FREE\n2\n"
+        "*MODEL CHANGE, TYPE=ELEMENT, REMOVE\n1\n"
+        "*END STEP\n";
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), NULL, NULL));
+    CHECK_EQ(d.nsteps, 4);
+    CHECK_EQ(d.namps, 3);
+    if (d.namps == 3) {
+        CHECK(d.amps[0].tabular && !d.amps[0].total && d.amps[0].n == 3);
+        CHECK_NEAR(cv_amp_at(&d.amps[0], 0.5), 0.5, 1e-6);
+        CHECK_NEAR(cv_amp_at(&d.amps[0], 1.5), 0.75, 1e-6);
+        CHECK_NEAR(cv_amp_at(&d.amps[0], 9.), 0.5, 1e-6);    /* constant beyond the ends */
+        CHECK_NEAR(cv_amp_at(&d.amps[0], -1.), 0., 1e-6);
+        CHECK(d.amps[1].total && d.amps[1].n == 2);
+        CHECK_NEAR(cv_amp_at(&d.amps[1], 2.), 3., 1e-6);     /* shifted up by 1 */
+        CHECK(!d.amps[2].tabular && !strcmp(d.amps[2].def, "SMOOTH STEP"));
+        CHECK(isnan(cv_amp_at(&d.amps[2], 0.5)));
+    }
+    if (d.stepinfo && d.nsteps == 4) {
+        CHECK(!strcmp(d.stepinfo[0].proc, "STATIC") && d.stepinfo[0].period == 2.f);
+        CHECK(!strcmp(d.stepinfo[1].proc, "FREQUENCY") && d.stepinfo[1].period == 0.f);
+        CHECK(d.stepinfo[2].period == 1.f && !strcmp(d.stepinfo[3].proc, "HEATTRANSFER") && d.stepinfo[3].period == 3.f);
+        CHECK_NEAR(cv_inp_step_start(&d, 3), 3., 1e-9);
+    }
+    /* the values at step time 1 of step 1 (total time 1) */
+    cv_applied a;
+    CHECK(cv_inp_applied(&d, 0, &a));
+    CHECK(t_cload(&a, 7, 3) && t_cload(&a, 7, 3)->amp == 1);
+    cv_applied_at(&d, &a, 1., 1.);
+    CHECK(t_cload(&a, 7, 3) && t_cload(&a, 7, 3)->value == 10.f);
+    CHECK(t_cload(&a, 6, 1) && t_cload(&a, 6, 1)->value == 4.f);                  /* 2 x (1 + 1) */
+    CHECK(a.ntemps == 1 && a.temps[0].value == 100.f);
+    int sub = 0, subp = 0, p = 0;
+    for (uint32_t i = 0; i < a.nbcs; i++) sub += a.bcs[i].sub == 2;
+    for (uint32_t i = 0; i < a.ndloads; i++) { subp += a.dloads[i].sub == 1; p += !a.dloads[i].sub && a.dloads[i].value == 3.f; }
+    CHECK_EQ(sub, 12);                                /* 4 nodes x 3 DOFs */
+    CHECK_EQ(subp, 1);
+    CHECK_EQ(p, 1);                                   /* SMOOTH STEP is not evaluated: the line's value */
+    cv_applied_free(&a);
+    CHECK(cv_inp_applied(&d, 0, &a));
+    cv_applied_at(&d, &a, 0.5, 0.5);
+    CHECK(t_cload(&a, 7, 3) && t_cload(&a, 7, 3)->value == 5.f);
+    cv_applied_free(&a);
+
+    CHECK_EQ(d.nsubs, 2);
+    if (d.nsubs == 2) {
+        CHECK(!d.subs[0].surface && d.subs[0].nn == 5 && !strcmp(d.subs[0].input, "global.frd"));
+        CHECK(d.subs[1].surface && d.subs[1].nsurf == 1 && !strcmp(d.subs[1].gelset, "EG"));
+    }
+    /* *MODEL CHANGE: EB out from step 3, back in step 4 when element 1 goes */
+    uint32_t* ids = NULL;
+    CHECK_EQ(cv_inp_removed(&d, 0, &ids), 0);
+    CHECK_EQ(cv_inp_removed(&d, 1, &ids), 0);
+    CHECK_EQ(cv_inp_removed(&d, 2, &ids), 1);
+    CHECK(ids && ids[0] == 2);
+    free(ids);
+    CHECK_EQ(cv_inp_removed(&d, 3, &ids), 1);
+    CHECK(ids && ids[0] == 1);
+    free(ids);
+    int pair = -1;
+    for (int k = 0; k < d.nlinks; k++) if (d.links[k].kind == CV_LINK_CONTACT) pair = k;
+    CHECK(pair >= 0 && cv_inp_link_active(&d, 1, pair) && !cv_inp_link_active(&d, 2, pair));
+    cv_inp_free(&d); free(d.msgs.a);
+}

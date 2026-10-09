@@ -153,7 +153,7 @@ static void close_all(struct nk_context* ctx) {
     struct nk_window* sc = nk_window_find(ctx, "Scene");     /* every case starts with the sidebar at its top */
     if (sc) sc->scrollbar.y = 0;
     G.show_units = G.show_msgs = G.show_calc_help = G.show_conv = G.legend_edit = G.find_open = G.browser_open = false;
-    G.show_details = false;
+    G.show_details = G.show_deck = false;
     G.label_probe_only = false; G.label_kinds = 0;
     G.hist_open = G.path_open = false;
     G.title_edit = false;
@@ -241,6 +241,11 @@ static bool box_window(struct nk_context* ctx) { return G.sel_n > 0 && !G.sel_cr
 static void open_details(struct nk_context* ctx) { app_probe_at(0, false); G.show_details = true; }
 static bool details_gone(struct nk_context* ctx) { return !G.show_details; }
 static void open_about(struct nk_context* ctx) { G.show_about = true; }
+static void open_deck(struct nk_context* ctx) { G.show_deck = true; }
+static bool deck_gone(struct nk_context* ctx) { return !G.show_deck; }
+static bool deck_shown(struct nk_context* ctx) { return G.show_deck && win_of(ctx, "Deck"); }
+static void groups_first(struct nk_context* ctx) { G.tree[CV_TREE_LAYERS] = 0; G.tree[CV_TREE_GROUPS] = 1; }
+static void layers_first(struct nk_context* ctx) { G.tree[CV_TREE_LAYERS] = 1; G.tree[CV_TREE_GROUPS] = 0; }
 static bool about_gone(struct nk_context* ctx) { return !G.show_about; }
 static bool about_shown(struct nk_context* ctx) { return G.show_about && win_of(ctx, "About"); }
 static bool turned(struct nk_context* ctx);
@@ -682,6 +687,7 @@ static const step script[] = {
     DO(integrals_close), DO(app_sel_clear_ctx), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu Integrate over set"), CLICK, WAIT(3),
     EXPECT(integrals_set, "the volume of the element's set"),
     DO(integrals_end), WAIT(2), PANELS_ANSWER,
+    CLOSED_THEN_PANELS("Deck", open_deck, deck_gone),
 
     CASE("menu: a right click on the model opens it, an item acts and closes it"),
     DO(close_all), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),
@@ -727,6 +733,11 @@ static const step script[] = {
     CASE("about: opened from the status bar"),
     AT_TIP("Status", "Who made ccxview"), CLICK, WAIT(2), EXPECT(about_shown, "the About window opens"),
     AT_CLOSE("About"), CLICK, WAIT(2), EXPECT(about_gone, "About is closed"), PANELS_ANSWER,
+
+    CASE("deck: opened from Groups, its steps listed"),
+    DO(close_all), DO(groups_first), WAIT(3), AT_TIP("Scene", "The deck's steps and their times"), CLICK, WAIT(3),
+    EXPECT(deck_shown, "the Deck window opens"),
+    AT_CLOSE("Deck"), CLICK, WAIT(2), EXPECT(deck_gone, "Deck is closed"), DO(layers_first), WAIT(3), PANELS_ANSWER,
 
     CASE("mesh quality: the limits open, a limit answers"),
     DO(open_mesh), WAIT(5), AT_TIP("Mesh quality", "Set your own limits"), CLICK, WAIT(2),
