@@ -28,6 +28,16 @@
 #define window_legend           uii_window_legend
 #define window_legend_settings  uii_window_legend_settings
 #define window_axes             uii_window_axes
+#define ov_drag                 uii_ov_drag
+#define overlay_drag            uii_overlay_drag
+#define view_box                uii_view_box
+#define ink_text                uii_ink_text
+#define legend_ink              uii_legend_ink
+#define legend_dim              uii_legend_dim
+#define wrap_pieces             uii_wrap_pieces
+#define window_title            uii_window_title
+#define window_title_settings   uii_window_title_settings
+#define title_box               uii_title_box
 #define path_dirs               uii_path_dirs
 #define window_messages         uii_window_messages
 #define window_units            uii_window_units
@@ -125,6 +135,24 @@ void panel_status(struct nk_context* ctx, float s, float row, float width);
 void window_legend(struct nk_context* ctx, float s, float row);
 void window_legend_settings(struct nk_context* ctx, float s, float row);
 void window_axes(struct nk_context* ctx, float s);
+/* overlays on the 3D view (legend, gizmo, title block): moved by a drag from any
+   point of them, kept as a view corner (anchor.h); text in the legend's ink */
+typedef struct { bool down, moving, dropped; float px, py, ox, oy; } ov_drag;
+cv_box view_box(void);
+void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box at, float keep_right,
+                  cv_anchor* pos, float s);
+void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w,
+              const char* txt, struct nk_color c);
+struct nk_color legend_ink(void);
+struct nk_color legend_dim(void);
+/* byte lengths of the pieces txt wraps to in width w (after a blank or comma when
+   one is near the end, never inside a UTF-8 sequence), at most max; the count */
+int wrap_pieces(const struct nk_user_font* f, const char* txt, float w, int* len, int max);
+
+/* ---- ui_title.c: the title block and its settings window */
+void window_title(struct nk_context* ctx, float s, float row);
+void window_title_settings(struct nk_context* ctx, float s, float row);
+bool title_box(cv_box* b);          /* where the block is this frame; false while it is not shown */
 
 /* ---- ui_windows.c */
 extern const char* path_dirs[5];

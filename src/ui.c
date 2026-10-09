@@ -290,6 +290,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
         nk_end(ctx);
 
     }
+    window_title(ctx, s, row);
     window_legend(ctx, s, row);
 
     r = nk_rect(0, H - status_h, W, status_h);
@@ -312,6 +313,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_mesh(ctx, s, row, fw, fh);
     window_convergence(ctx, s, row, fw, fh);
     window_legend_settings(ctx, s, row);
+    window_title_settings(ctx, s, row);
     window_nav(ctx, s);
     window_find(ctx, s, row);
     window_path(ctx, s, row, fw, fh);

@@ -132,6 +132,10 @@ static void init(void) {
     G.cam.fovy = 30.f * 3.14159265f / 180.f;
     G.cam.dist = 3;
     G.legend_decimals = 3;
+    for (int k = 0; k < CV_TB_N; k++) G.title_line[k] = true;
+    snprintf(G.title_free[0][0], sizeof G.title_free[0][0], "Project");
+    snprintf(G.title_free[1][0], sizeof G.title_free[1][0], "Company");
+    snprintf(G.title_free[2][0], sizeof G.title_free[2][0], "Checked");
     for (int q = 0; q < CV_Q_N; q++) G.unit_in[q] = G.unit_show[q] = -1;   /* the system's, as input */
     G.clip_pos = 0.5f;
     G.clip_cap = true;
@@ -1021,6 +1025,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
+        else if (!strcmp(argv[i], "--title-block") && O.nopts < 32) O.opts[O.nopts++] = "title_on=1";
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
         else if (!strcmp(argv[i], "--range") && i + 1 < argc) O.range_set = sscanf(argv[++i], "%f,%f", &O.range[0], &O.range[1]) == 2;
         else if (!strcmp(argv[i], "--menu") && i + 1 < argc) O.menu_set = sscanf(argv[++i], "%f,%f", &O.menu[0], &O.menu[1]) == 2;

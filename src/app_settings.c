@@ -22,7 +22,7 @@ static bool   loaded;
 
 typedef struct {
     const char* key;       /* the section title for kind '#' */
-    char        kind;      /* 'b' bool, 'i' int, 'f' float, 'a' corner anchor (anchor.h), '#' section header */
+    char        kind;      /* 'b' bool, 'i' int, 'f' float, 'a' corner anchor (anchor.h), 's' text (hi: its size), '#' section header */
     void*       p;
     float       lo, hi;    /* accepted range (lo < hi); outside it the default stays */
 } setting;
@@ -32,6 +32,8 @@ typedef struct {
 #define I(k, a, b)        { #k, 'i', &G.k, a, b }
 #define F(k, a, b)        { #k, 'f', &G.k, a, b }
 #define TREE(name, t)     { "open_" name, 'i', &G.tree[t], 0, 1 }
+#define TB(name, k)       { "title_" name, 'b', &G.title_line[k], 0, 0 }
+#define TBFREE(i)         { "title_label" #i, 's', G.title_free[i - 1][0], 0, 64 }, { "title_text" #i, 's', G.title_free[i - 1][1], 0, 64 }
 #define UNIT(name, q)     { "unit_in_" name, 'i', &G.unit_in[q], -1, 64 }, { "unit_" name, 'i', &G.unit_show[q], -1, 64 }
 
 static const setting S[] = {
@@ -71,6 +73,10 @@ static const setting S[] = {
     { "mq_lim_warp", 'f', &G.mq_lim[CV_MQ_WARP], 0, 90 }, { "mq_lim_shape", 'f', &G.mq_lim[CV_MQ_SHAPE], 0, 1 },
     SEC("Legend and axes gizmo: view corner (tl tr bl br), gap x, gap y; auto = default place"),
     { "legend_pos", 'a', &G.legend_pos, 0, 0 }, { "gizmo_pos", 'a', &G.gizmo_pos, 0, 0 },
+    SEC("Title block: on, its lines (1 shown), the date of the result file (0: today), three free lines, its place"),
+    B(title_on), TB("heading", CV_TB_TITLE), TB("file", CV_TB_FILE), TB("solver", CV_TB_SOLVER), TB("analysis", CV_TB_ANALYSIS),
+    TB("step", CV_TB_STEP), TB("scale", CV_TB_SCALE), TB("units", CV_TB_UNITS), TB("user", CV_TB_USER), TB("date", CV_TB_DATE),
+    B(title_file_date), TBFREE(1), TBFREE(2), TBFREE(3), { "title_pos", 'a', &G.title_pos, 0, 0 },
     SEC("Camera"),
     B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor), B(wheel_invert), B(show_pivot),
     { "cam_ortho", 'b', &G.cam.ortho, 0, 0 }, F(fly_speed, 0.005f, 10),
@@ -96,12 +102,14 @@ enum { NS = sizeof S / sizeof S[0] };
 #undef I
 #undef F
 #undef TREE
+#undef TB
+#undef TBFREE
 #undef UNIT
 
 /* keys written apart from the table */
 static const char* const OTHER[] = { "window_w", "window_h", "ui_zoom", "ui_font", "ui_pixel_font", "ui_theme", "last_dir" };
 
-static bool in_range(const setting* e, float v) { return !(e->lo < e->hi) || (v >= e->lo && v <= e->hi); }
+static bool in_range(const setting* e, float v) { return e->kind == 's' || !(e->lo < e->hi) || (v >= e->lo && v <= e->hi); }
 
 static bool parse_bool(const char* v) {
     return atoi(v) != 0 || !strcmp(v, "true") || !strcmp(v, "yes") || !strcmp(v, "on");
@@ -114,6 +122,7 @@ static bool set_from_text(const setting* e, const char* v) {
     case 'i': { int x = atoi(v); if (!in_range(e, (float)x)) return false; *(int*)e->p = x; return true; }
     case 'f': { float x = (float)atof(v); if (x != x || !in_range(e, x)) return false; *(float*)e->p = x; return true; }
     case 'a': return cv_anchor_parse(v, (cv_anchor*)e->p, 10);
+    case 's': snprintf((char*)e->p, (size_t)e->hi, "%s", v); return true;
     }
     return false;
 }
@@ -128,6 +137,7 @@ static void put_one(const setting* e) {
     case 'b': cv_cfg_set_bool(&C, e->key, *(bool*)e->p); break;
     case 'i': cv_cfg_set_int(&C, e->key, *(int*)e->p); break;
     case 'f': cv_cfg_set_float(&C, e->key, *(float*)e->p); break;
+    case 's': cv_cfg_set(&C, e->key, (const char*)e->p); break;
     case 'a': {
         char t[64];
         cv_anchor_format((const cv_anchor*)e->p, t, sizeof t);

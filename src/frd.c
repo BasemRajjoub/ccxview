@@ -192,6 +192,59 @@ static bool is_end_line(const char* s, const char* e) {
     return e - s >= 2 && s[0] == '-' && s[1] == '3' && (e - s == 2 || s[2] == ' ');
 }
 
+/* ---- 1U header records ---------------------------------------------------- */
+
+static void copy_trim(char* out, size_t n, const char* s, const char* e) {
+    while (s < e && (*s == ' ' || *s == '\t')) s++;
+    while (e > s && (e[-1] == ' ' || e[-1] == '\t')) e--;
+    size_t k = (size_t)(e - s) < n - 1 ? (size_t)(e - s) : n - 1;
+    memcpy(out, s, k);
+    out[k] = 0;
+}
+
+/* One 1U record, s at the text after "1U": "KEY   value" for the keys CalculiX
+   writes, else the heading (the first such line; a key ends at a blank) */
+static void head_record(cv_frd_head* h, const char* s, const char* e) {
+    static const char* const keys[] = { "USER", "DATE", "TIME", "HOST", "PGM", "VERSION",
+                                        "COMPILETIME", "DIR", "DBN", "MAT" };
+    char* const dst[] = { h->user, h->date, h->time, h->host, h->pgm, h->version };
+    const size_t len[] = { sizeof h->user, sizeof h->date, sizeof h->time, sizeof h->host,
+                           sizeof h->pgm, sizeof h->version };
+    for (int i = 0; i < (int)CV_COUNT(keys); i++) {
+        size_t n = strlen(keys[i]);
+        if ((size_t)(e - s) < n || memcmp(s, keys[i], n) || (s + n < e && s[n] != ' ')) continue;
+        if (i < (int)CV_COUNT(dst)) copy_trim(dst[i], len[i], s + n, e);
+        return;
+    }
+    if (!h->heading[0]) copy_trim(h->heading, sizeof h->heading, s, e);
+}
+
+bool cv_frd_date_iso(const char* date, char* out, size_t n) {
+    static const char* const mon[12] = { "jan", "feb", "mar", "apr", "may", "jun",
+                                         "jul", "aug", "sep", "oct", "nov", "dec" };
+    if (n) out[0] = 0;
+    char* e;
+    long d = strtol(date, &e, 10);
+    if (e == date || *e != '.' || d < 1 || d > 31) return false;
+    const char* m = e + 1;
+    int mi = -1;
+    long mn = strtol(m, &e, 10);
+    if (e != m) mi = (int)mn - 1;
+    else {
+        for (int i = 0; i < 12; i++)
+            if (tolower((unsigned char)m[0]) == mon[i][0] && m[0] && tolower((unsigned char)m[1]) == mon[i][1] &&
+                m[1] && tolower((unsigned char)m[2]) == mon[i][2]) mi = i;
+        e = strchr(m, '.');
+        if (!e) return false;
+    }
+    if (mi < 0 || mi > 11 || *e != '.') return false;
+    const char* ys = e + 1;
+    long y = strtol(ys, &e, 10);
+    if (e == ys || y < 1000 || y > 9999) return false;
+    snprintf(out, n, "%04ld-%02d-%02ld", y, mi + 1, d);
+    return true;
+}
+
 /* ---- id map --------------------------------------------------------------- */
 
 static inline uint32_t hash_u32(uint32_t x, uint32_t mask) {
@@ -397,6 +450,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
 
     int  pend_step = 0, pend_inc = 0;          /* from 1PSTEP, for the next 100CL */
     bool pend_mode = false;                    /* a 1PMODE record since the last 1PSTEP */
+    int  pend_mode_no = 0;                     /* ... its mode number */
     long long cur_numstp = -1;
     double    cur_time = NAN;
     int       res_fmt = 1;
@@ -485,7 +539,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
             memset(&fr, 0, sizeof fr);
             fr.step = (int)steps.n - 1;
             if (fr.step < 0) {                          /* field before any 100CL */
-                cv_step s0 = { 0, 0, 0.f, false, 0, NULL };
+                cv_step s0 = { .ictype = -1 };
                 PUSH(steps, s0);
                 fr.step = 0;
             }
@@ -609,9 +663,14 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
             continue;
         }
         if (ke - k >= 2 && k[0] == '1' && k[1] == 'P') {
-            if (tok_is(k, ke, "1PMODE")) pend_mode = true;
+            if (tok_is(k, ke, "1PMODE")) {
+                long long m;
+                pend_mode = true;
+                if (nt > 1 && tok_int(tb[1], te[1], &m)) pend_mode_no = (int)m;
+            }
             if (tok_is(k, ke, "1PSTEP") && nt > 3) {
                 pend_mode = false;
+                pend_mode_no = 0;
                 long long a, b;
                 if (tok_int(tb[2], te[2], &a)) pend_inc = (int)a;
                 if (tok_int(tb[3], te[3], &b)) pend_step = (int)b;
@@ -637,7 +696,10 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
             if (steps.n == 0 || numstp != cur_numstp || t != cur_time) {
                 /* "MODAL" in the header text (and a 1PMODE record before it) marks a mode shape */
                 bool modal = pend_mode || find_text(ls, le, "MODAL");
-                cv_step s = { pend_step ? pend_step : (int)numstp, pend_inc, (float)t, modal, 0, NULL };
+                cv_step s = { .step = pend_step ? pend_step : (int)numstp, .inc = pend_inc, .time = (float)t,
+                              .modal = modal, .mode = pend_mode ? pend_mode_no : 0, .ictype = -1 };
+                long long ic;                   /* the analysis type: columns 57-58 (%2d after the 20-character text) */
+                if ((le - ls) > 57 && tok_int(ls[56] == ' ' ? ls + 57 : ls + 56, ls + 58, &ic)) s.ictype = (int)ic;
                 PUSH(steps, s);
                 cur_numstp = numstp;
                 cur_time = t;
@@ -646,7 +708,8 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
             continue;
         }
         if (tok_is(k, ke, "9999")) { saw_end = true; break; }
-        /* 1C, 1U and anything unknown: ignored. */
+        if (ke - k >= 2 && k[0] == '1' && k[1] == 'U') { head_record(&f->head, k + 2, le); continue; }
+        /* 1C and anything unknown: ignored. */
     }
     if (in_hdr) {                               /* file ended inside a field header */
         fr.d.data_off = size;
