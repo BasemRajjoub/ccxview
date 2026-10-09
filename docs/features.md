@@ -148,6 +148,65 @@ driven sets, the amplitudes with their points. [results.md](results.md) lists
 the result fields and what is done with each; `samples/modelchange/` shows a
 model that changes from step to step and a submodel of it.
 
+## Selection
+
+One floating window, Selection (S, the top bar's Select, View > Selection...,
+the context menu, or "selection..." in the probe), for everything that picks
+elements and nodes:
+
+- Mode: what is picked next replaces the selection, is added to it, removed
+  from it, or intersected with it. The mode applies to every way of selecting.
+- Takes: elements, nodes or both; only the side facing the camera (nodes on
+  faces turned toward it, elements with such a face) or through the model.
+  Changing a tick takes the last box again with the new ticks.
+- Box, as in CAD (Ctrl+Shift+drag at any time, or the box button): left to
+  right the elements wholly inside, right to left every element touched.
+- Click: while armed, a click in the view takes the element (and node) under
+  the cursor by the mode; with "select" a click on a selected one takes it out.
+  Esc puts the tool down.
+- Lasso: drawn round what you want with the left button held, the elements
+  wholly inside (the nodes inside, when ticked).
+- Faces: a click on an outer face takes every face reached from it without
+  crossing a feature edge (the outline's crease angle, a change of material or
+  element type, an edge of one or three faces): a fillet, a hole's wall, a flat
+  side. Their elements and the nodes of the faces.
+- Edge chain: a click near a feature edge takes the nodes along it, on through
+  smooth turns (up to the crease angle) to a corner: a hole's rim, an edge.
+- Part: a click on an element takes every shown element connected to it.
+- Invert (what is shown and not selected), elements to their nodes, nodes to
+  the elements with every node selected, or with any ("touching").
+- Grow and shrink by one layer of neighbours; boundary: the nodes on the
+  outside of the selected elements (faces no other selected element shares; a
+  shell's free edges) and the elements that have them.
+- Filters (the "filters" box): keep what lies in a range of x, y or z, or of
+  r, theta and the axial coordinate about an X, Y or Z axis through a point
+  (undeformed; an element by its centre); what the field shown puts above or
+  below a value, or in its top N % (an element by its highest node, its lowest
+  for "below"); one element type or material; the side facing the camera. They
+  look through the selection, or through everything shown when nothing is
+  selected ("select where"); in add mode what passes anywhere joins, in remove
+  mode what passes leaves.
+- By name: a deck element or node set, a surface (its elements and the nodes of
+  its faces), every element of a type or a material; also from a right click on
+  a set or surface in Groups.
+- By id: a list as you would write it, "1-100, 205, 300-310"; what is not an id,
+  or not in the model, is reported.
+- The field's max and min over the selection with their node or element ids
+  (over the selected nodes, or the selected elements' nodes; per element over
+  the elements), kept up to date when the field or step changes; the probe sits
+  on the max.
+- What it is: the count, the extremes with their ids, the deck sets it shares
+  members with ("EHOLE 40/40").
+- What is done with it: hide it, show only it, put the crop box round it or the
+  clip plane through its centre; its rows as CSV; its ids as `*ELSET` /
+  `*NSET` lines, to the clipboard or to `<model>_<name>.inp` beside the model to
+  `*INCLUDE` in a deck (a file of its own: the model's input is never
+  touched); labels on it alone; its history over the steps (the Integrals
+  window over the selection).
+- Kept by name: a list in the window (select, add, remove, rename, forget),
+  stored as id ranges in the model's `.ccxview` and back when the model opens.
+- `--select SPEC` (repeatable, in order) does the same from the command line.
+
 ## Looking at results
 
 - Animation: mode shapes, steady-state phases, deformation cycles, step
@@ -156,11 +215,9 @@ model that changes from step to step and a submodel of it.
   plots between nodes or through the wall. Details of the probe: position,
   displacement, every component of the field, the element's material, sets
   and nodes.
-- Box selection as in CAD (Ctrl+Shift+drag): left to right the elements wholly
-  inside, right to left every element touched; by default only the side facing
-  the camera (nodes on faces turned toward it, elements with such a face), or
-  through the model; highlighted, with the field's max over them marked (the min
-  too when asked: compression, the cold spot) and both in the details.
+- Selection of elements and nodes (the Selection window, below), highlighted,
+  with the field's max over it marked (the min too when asked: compression, the
+  cold spot) and both in the window, the probe and the details.
 - Integrals of the field over a set, at every step (Integrals window: Fields >
   integrate..., right click a set in Groups, the view's context menu, or the
   probe's "integrate..." under a box selection). Over a volume (an element set,
@@ -282,11 +339,11 @@ element sets ticked and hidden, node sets and surfaces ticked, elements hidden
 by hand, the path and the history node, the kept linearization lines, the
 comparison run, the imported STL files (each with its look; the path relative to
 the model's folder when the file lies in it, so the folder can move), the
-measurements, the labels and the symbols. It is written a moment after a change
+measurements, the named selections, the labels and the symbols. It is written a moment after a change
 (not while dragging the camera, not while a file loads), before another file
 opens and at quit; only when something changed, so opening a model to look at it
 leaves no file behind. Reload and Watch file keep it all: what a reload starts afresh
-(sets, paths, kept lines) is read back from the file.
+(sets, paths, kept lines, named selections) is read back from the file.
 
 ccxview never writes the solver's files (a `.frd` may still be being written).
 A file from an older run, or one edited by hand, is read for what still fits

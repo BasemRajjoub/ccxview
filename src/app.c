@@ -370,7 +370,16 @@ static void frame(void) {
                     G.boxq.vmax, G.boxq.vmin, G.boxq.n);
     }
 
-    if (O.integ && !O.box_set && G.loaded && !app_busy()) {    /* --integrate: after --box, for a selection */
+    if (O.nselect && !O.box_set && G.loaded && !app_busy() && G.vp_w > 0) {   /* --select: after --box, in order */
+        for (int k = 0; k < O.nselect; k++)
+            if (!app_sel_spec(O.select[k]) || G.sel_note[0])
+                fprintf(stderr, "select %s: %s\n", O.select[k], G.sel_note[0] ? G.sel_note : "nothing selected");
+        fprintf(stderr, "select: %u elements, %u nodes", G.sel_n, G.seln_n);
+        if (G.boxq.on) fprintf(stderr, ", max %g min %g over %u", G.boxq.vmax, G.boxq.vmin, G.boxq.n);
+        fprintf(stderr, "\n");
+        O.nselect = 0;
+    }
+    if (O.integ && !O.box_set && !O.nselect && G.loaded && !app_busy()) {    /* --integrate: after --box and --select, for a selection */
         if (!app_integ_open_spec(O.integ)) cv_msg_add(&G.msgs, 0, false, G.note);
         O.integ = NULL;
     }
@@ -776,6 +785,14 @@ static void drag_move(float dx, float dy, bool shift) {
             G.nav_box[2] = drag.x; G.nav_box[3] = drag.y;
             G.nav_mode = CV_NAV_BOX;
             break;
+        case CV_NAV_LASSO: {                         /* a point every few pixels */
+            const float* l = G.lasso + 2 * (G.lasso_n - 1);
+            if (G.lasso_n < (int)(CV_COUNT(G.lasso) / 2) && fabsf(drag.x - l[0]) + fabsf(drag.y - l[1]) >= 3.f) {
+                G.lasso[2 * G.lasso_n] = drag.x; G.lasso[2 * G.lasso_n + 1] = drag.y; G.lasso_n++;
+            }
+            G.nav_mode = CV_NAV_LASSO;
+            break;
+        }
         case CV_NAV_LOOK: {                          /* flight: turn about the eye, not the target */
             cam_orbit(-dx * 0.004f, dy * 0.004f);
             v3 eye1, f1, r1, u1;
@@ -841,7 +858,11 @@ static void event(const sapp_event* ev) {
                 drag.mode = G.flight ? (left ? CV_NAV_LOOK : CV_NAV_PAN)
                           : left ? (ctrl || G.box_pick ? CV_NAV_BOX : alt ? CV_NAV_ROLL : shift ? CV_NAV_PAN : CV_NAV_ROTATE)
                           : ctrl ? CV_NAV_ZOOM : CV_NAV_PAN;
-                if (drag.mode == CV_NAV_ROTATE && app_label_grab(ev->mouse_x, ev->mouse_y)) { drag.mode = NAV_LABEL; break; }
+                if (drag.mode == CV_NAV_ROTATE && G.show_select && G.sel_tool == CV_ST_LASSO) {   /* the lasso tool: a drag draws it */
+                    drag.mode = CV_NAV_LASSO;
+                    G.lasso[0] = drag.x0; G.lasso[1] = drag.y0; G.lasso_n = 1;
+                }
+                else if (drag.mode == CV_NAV_ROTATE && app_label_grab(ev->mouse_x, ev->mouse_y)) { drag.mode = NAV_LABEL; break; }
                 /* rotate about the part of the model that was grabbed; off the model, about the target */
                 bool on = false;
                 drag.pivot_on = false;
@@ -856,7 +877,8 @@ static void event(const sapp_event* ev) {
             break;
         case SAPP_EVENTTYPE_MOUSE_UP:
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_LEFT && drag.mode != CV_NAV_BOX) {
-                do_pick(ev->mouse_x, ev->mouse_y);
+                if (G.sel_tool == CV_ST_NONE || !G.show_select) do_pick(ev->mouse_x, ev->mouse_y);
+                else app_sel_click(ev->mouse_x, ev->mouse_y);   /* a selection tool is armed: the click is its */
             }
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_RIGHT && !G.flight)   /* a right click: the menu */
                 app_menu_open(ev->mouse_x, ev->mouse_y);
@@ -864,6 +886,8 @@ static void event(const sapp_event* ev) {
                 app_view_push();
                 app_center_at(ev->mouse_x, ev->mouse_y);
             }
+            if (drag.down && drag.mode == CV_NAV_LASSO && drag.moved && !app_lasso_select(G.lasso, G.lasso_n))
+                cv_msg_add(&G.msgs, 0, false, "lasso: no shown element lies wholly in it");
             if (drag.down && drag.mode == CV_NAV_BOX && drag.moved) {
                 if (G.box_pick) {
                     G.box_arm = false;
@@ -892,7 +916,7 @@ static void event(const sapp_event* ev) {
                         G.cam = drag.cam0; app_view_push(); G.cam = now;
                     }
                 }
-                if (!drag.moved && (drag.mode == CV_NAV_BOX || drag.mode == NAV_LABEL)) break;    /* a click, not a box */
+                if (!drag.moved && (drag.mode == CV_NAV_BOX || drag.mode == CV_NAV_LASSO || drag.mode == NAV_LABEL)) break;    /* a click, not a box */
                 if (drag.mode == NAV_LABEL) { app_label_drag(dx, dy); break; }
                 G.nav_live = drag.mode != CV_NAV_LOOK;
                 drag_move(dx, dy, (ev->modifiers & SAPP_MODIFIER_SHIFT) != 0);
@@ -943,6 +967,7 @@ static void event(const sapp_event* ev) {
                     break;
                 case SAPP_KEYCODE_R: if (!ctrl) app_view(CV_VIEW_ISO); break;
                 case SAPP_KEYCODE_H: if (!ctrl) G.hide_panels = !G.hide_panels; break;
+                case SAPP_KEYCODE_S: if (!ctrl && !G.flight) G.show_select = !G.show_select; break;
                 case SAPP_KEYCODE_1: case SAPP_KEYCODE_2: case SAPP_KEYCODE_3:
                 case SAPP_KEYCODE_4: case SAPP_KEYCODE_5: case SAPP_KEYCODE_6:
                     if (!ctrl) app_view(CV_VIEW_PX + (ev->key_code - SAPP_KEYCODE_1));
@@ -1043,6 +1068,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--measure-window")) O.measure_window = true;
+        else if (!strcmp(argv[i], "--selection-window")) O.select_window = true;
+        else if (!strcmp(argv[i], "--select") && i + 1 < argc && O.nselect < 32) O.select[O.nselect++] = argv[++i];
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
         else if (!strcmp(argv[i], "--title-block") && O.nopts < 32) O.opts[O.nopts++] = "title_on=1";

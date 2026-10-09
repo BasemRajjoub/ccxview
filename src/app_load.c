@@ -191,6 +191,7 @@ void unload(void) {
     shell_clear();
     cv_skin_free(&G.skin);
     cv_groups_free(&G.groups);
+    app_nsel_clear();                     /* the model's named selections */
     cv_frd_free(&G.frd);
     free(G.frd.msgs.a);
     memset(&G.frd.msgs, 0, sizeof G.frd.msgs);
@@ -438,6 +439,7 @@ static void apply_load(cv_job* j) {
     if (O.fly) app_set_flight(true);
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
     if (O.measure_window) G.show_measure = true;
+    if (O.select_window) G.show_select = true;
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
     if (O.deck_window) G.show_deck = true;
@@ -682,7 +684,7 @@ void poll_job(void) {
             if (!j->eye_only) {                   /* flying through: the legend and the probe hold */
                 app_refresh_range();              /* the legend covers what is shown */
                 G.probe_on = false;
-                app_sel_clear();                  /* it may hold elements now hidden */
+                app_sel_drop_hidden();            /* it may hold elements now hidden */
             }
             deck_refresh_highlight();
             app_label_changed();                  /* other nodes and faces to label */

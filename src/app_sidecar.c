@@ -2,8 +2,8 @@
    (model.frd -> model.ccxview; a deck opened alone: beside the .inp): the view
    (camera, step, field, clip, crop, symmetry, layers, colours), units, groups
    switched off, ticked and hidden sets, hand-hidden elements, the path, the kept
-   stress classification lines, the history node, the comparison run, imported
-   STL files, measurements, labels and symbols. Restored when the model opens, written a moment after it changes
+   stress classification lines, the named selections, the history node, the
+   comparison run, imported STL files, measurements, labels and symbols. Restored when the model opens, written a moment after it changes
    (and before another file opens, and at quit). ccxview never writes the
    solver's own files: a .frd may still be being written. The view state files
    (Export > save view state) are the view part alone, with the same keys.
@@ -518,6 +518,23 @@ static void stl_get(const cv_cfg* c) {
     }
 }
 
+/* ---- named selections: selection1 = NAME, selection1_elems / _nodes = id ranges ---- */
+
+static void nsel_put(cv_cfg* c) {
+    for (int i = 0; i < app_nsel_count(); i++) {
+        const cv_namedsel* n = app_nsel_at(i);
+        char key[40];
+        snprintf(key, sizeof key, "selection%d", i + 1);
+        cv_cfg_set(c, key, n->name);
+        for (int k = 0; k < 2; k++) {
+            char* t = cv_idlist_format(k ? n->nid : n->eid, k ? n->nn : n->ne);
+            snprintf(key, sizeof key, "selection%d_%s", i + 1, k ? "nodes" : "elems");
+            if (t) cv_cfg_set_long(c, key, t);
+            free(t);
+        }
+    }
+}
+
 /* ---- measurements: measure1 = distance 12 40 | angle 1 2 3 | circle 1 2 3 (file node ids) */
 
 static void measure_put(cv_cfg* c) {
@@ -566,6 +583,38 @@ static void moved_get(const cv_cfg* c) {
     for (int k = 0; k < c->n; k++) {
         cv_label_off o;
         if (numbered(c->a[k].key, "label") && cv_label_off_parse(c->a[k].val, &o)) app_label_move(o.kind, o.id, o.dx, o.dy);
+    }
+}
+
+/* the ids of the list under key that this model has */
+static uint32_t* nsel_ids(const cv_cfg* c, const char* key, bool nodes, uint32_t* n) {
+    *n = 0;
+    char* t = cv_cfg_get_long(c, key);
+    cv_idlist l;
+    if (!t || !cv_idlist_parse(t, &l)) { free(t); return NULL; }
+    free(t);
+    uint32_t* r = l.ids;                            /* kept in place: sorted, each once */
+    for (size_t i = 0; i < l.n; i++)
+        if ((nodes ? cv_frd_node_index(&G.frd, l.ids[i]) : cv_frd_elem_index(&G.frd, l.ids[i])) != UINT32_MAX) r[(*n)++] = l.ids[i];
+    return r;
+}
+
+static void nsel_get(const cv_cfg* c) {
+    app_nsel_clear();
+    for (int i = 1; i < 1000; i++) {
+        char key[40];
+        snprintf(key, sizeof key, "selection%d", i);
+        const char* name = cv_cfg_get(c, key, NULL);
+        if (!name) break;
+        char nm[64];
+        snprintf(nm, sizeof nm, "%s", name);
+        uint32_t ne, nn;
+        snprintf(key, sizeof key, "selection%d_elems", i);
+        uint32_t* e = nsel_ids(c, key, false, &ne);
+        snprintf(key, sizeof key, "selection%d_nodes", i);
+        uint32_t* v = nsel_ids(c, key, true, &nn);
+        if (ne || nn) app_nsel_add_ids(nm, e, ne, v, nn);
+        free(e); free(v);
     }
 }
 
@@ -630,6 +679,7 @@ static const part PARTS[] = {
     { "stl",     stl_put,     stl_get,     true  },
     { "measure", measure_put, measure_get, true  },
     { "labels",  moved_put,   moved_get,   true  },
+    { "selections", nsel_put, nsel_get,    false },
 };
 
 /* ---- the file ----------------------------------------------------------------------- */

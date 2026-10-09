@@ -1,0 +1,15 @@
+ccxview 0.1.8 crashed: abort
+stack (scripts/symbolize.sh turns it into function and file:line):
+/home/basem/Desktop/ccxview/.claude/worktrees/agent-a4db91204aab97da1/build/bin/ccxview(+0x9718a) [0x580fe4c6e18a]
+/lib/libc.so.6(+0x421a0) [0x74f9852421a0]
+/lib/libc.so.6(+0x9eeec) [0x74f98529eeec]
+/lib/libc.so.6(gsignal+0x1e) [0x74f98524206e]
+/lib/libc.so.6(abort+0x26) [0x74f985229350]
+/home/basem/Desktop/ccxview/.claude/worktrees/agent-a4db91204aab97da1/build/bin/ccxview(+0x18a4eb) [0x580fe4d614eb]
+/home/basem/Desktop/ccxview/.claude/worktrees/agent-a4db91204aab97da1/build/bin/ccxview(+0x15ea12) [0x580fe4d35a12]
+/home/basem/Desktop/ccxview/.claude/worktrees/agent-a4db91204aab97da1/build/bin/ccxview(+0x370ed) [0x580fe4c0e0ed]
+/lib/libc.so.6(+0x2b285) [0x74f98522b285]
+/lib/libc.so.6(__libc_start_main+0x88) [0x74f98522b338]
+/home/basem/Desktop/ccxview/.claude/worktrees/agent-a4db91204aab97da1/build/bin/ccxview(+0x37465) [0x580fe4c0e465]
+last log lines:
+  [    0.000] sapp: PANIC LINUX_X11_OPEN_DISPLAY_FAILED: XOpenDisplay() failed (item 52, line 14294)

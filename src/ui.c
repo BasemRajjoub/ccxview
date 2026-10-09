@@ -321,6 +321,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
     uii_window_integrals(ctx, s, row, fw, fh);
+    uii_window_select(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);
     tip_draw(ctx, s, W, H);
 }

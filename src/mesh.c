@@ -43,6 +43,25 @@ int cv_elem_face_corners(const cv_frd* f, uint32_t e, int face, uint32_t out[4])
     return ft[face].n;
 }
 
+static bool face_mids(const cv_frd* f, uint32_t e, const face_t* fc, uint32_t m[4]);
+
+int cv_elem_nfaces(const cv_frd* f, uint32_t e) {
+    const face_t* ft; bool solid;
+    return faces_of(f->etype[e], &ft, &solid);
+}
+
+int cv_elem_face_nodes(const cv_frd* f, uint32_t e, int face, uint32_t out[8]) {
+    const face_t* ft; bool solid;
+    int nf = faces_of(f->etype[e], &ft, &solid);
+    if (!solid && nf > 0) face = 0;
+    if (face < 0 || face >= nf) return 0;
+    int n = cv_elem_face_corners(f, e, face, out);
+    uint32_t m[4];
+    if (face_mids(f, e, &ft[face], m)) for (int i = 0; i < n; i++) out[n + i] = m[i];
+    else return n;
+    return 2 * n;
+}
+
 /* ---- groups ------------------------------------------------------------------ */
 
 const char* cv_axis_name(int a) {

@@ -152,9 +152,11 @@ void section_view(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Parallel projection: no perspective, distances compare directly");
     nk_checkbox_label(ctx, "orthographic", &G.cam.ortho);
     if (nk_button_label(ctx, "Fit (F)")) app_fit();
-    nk_layout_row_dynamic(ctx, row, 1);
+    nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "Distances, angles and circles between nodes, as labels on the model: the list, new ones, CSV");
     if (nk_button_label(ctx, "Measurements...")) G.show_measure = !G.show_measure;
+    tip(ctx, "Select elements and nodes: box, click, by set or id, add / remove / intersect, invert (S)");
+    if (nk_button_label(ctx, "Selection...")) G.show_select = !G.show_select;
 
     if (sub_push(ctx, "Camera", CV_TREE_CAMERA)) {
         nk_layout_row_dynamic(ctx, row, 3);

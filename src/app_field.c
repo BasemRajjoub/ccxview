@@ -578,6 +578,7 @@ void refresh_field(void) {
     refresh_path();
     refresh_hist();
     refresh_integ();
+    app_sel_field_changed();               /* the extremes over the selection, in this field */
     app_label_changed();                  /* values and the field they show */
 }
 

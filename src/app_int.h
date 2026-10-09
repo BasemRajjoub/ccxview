@@ -58,6 +58,9 @@ typedef struct {
     int         nlabel_off;
     int         nmeasure;
     bool        measure_window; /* --measure-window: the Measurements window open */
+    const char* select[32];     /* --select SPEC: selection steps, in order, after load (app_sel_spec) */
+    int         nselect;
+    bool        select_window;  /* --selection-window: the Selection window open */
     long        hist_id;        /* --history N: node id whose history to plot, 0 none */
     const char* lin_ids;        /* --linearize A,B: node ids of the line */
     const char* integ;          /* --integrate KIND:TARGET[@x,y,z]: the Integrals window over it */

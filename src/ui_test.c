@@ -158,6 +158,7 @@ static void close_all(struct nk_context* ctx) {
     G.hist_open = G.path_open = false;
     G.title_edit = false;
     G.show_measure = false; app_measure_cancel();
+    G.show_select = false; G.sel_tool = CV_ST_NONE; G.sel_mode = CV_SEL_NEW;
 }
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
@@ -211,6 +212,73 @@ static bool nodes_more(struct nk_context* ctx) { return !G.sel_visible && G.seln
 static bool min_marked(struct nk_context* ctx) { return G.sel_mark_min && G.boxq.on; }
 static void remember_nodes_turn(struct nk_context* ctx) { seln_was = G.seln_n; G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }
 static bool nodes_kept(struct nk_context* ctx) { return !G.sel_elems && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
+/* the Selection window */
+static void open_select(struct nk_context* ctx) { G.show_select = true; }
+static bool select_gone(struct nk_context* ctx) { return !G.show_select; }
+static bool select_shown(struct nk_context* ctx) { return G.show_select && win_of(ctx, "Selection"); }
+static uint32_t sel_was, seln_was2;
+static void sel_remember(struct nk_context* ctx) { sel_was = G.sel_n; seln_was2 = G.seln_n; }
+static void sel_none(struct nk_context* ctx) { app_sel_clear(); G.sel_elems = true; G.sel_nodes = false; G.sel_visible = true; G.probe_on = false; }
+static void ids_1_20(struct nk_context* ctx) { uii_select_ids("1-20, 9999, x9", false); }
+static void ids_10_30(struct nk_context* ctx) { uii_select_ids("10-30", false); }
+static bool sel_20(struct nk_context* ctx) { return G.sel_n == 20 && !G.seln_n && G.boxq.on && G.sel_note[0]; }   /* 9999 is not there, x9 is no id */
+static bool sel_20k(struct nk_context* ctx) { return G.sel_n == 20 && !G.seln_n; }
+static bool sel_30(struct nk_context* ctx) { return G.sel_n == 30; }      /* 1-20 and 10-30 */
+static bool sel_9(struct nk_context* ctx) { return G.sel_n == 9; }        /* 1-30 without 10-30 */
+static bool sel_11(struct nk_context* ctx) { return G.sel_n == 11; }      /* 10-20: both */
+static bool sel_inverted(struct nk_context* ctx) { return G.sel_n == G.frd.n_elems - sel_was && G.sel_n > 0; }
+static bool sel_to_nodes(struct nk_context* ctx) { return !G.sel_n && G.seln_n > sel_was && G.sel_nodes && !G.sel_elems; }
+static bool sel_back(struct nk_context* ctx) { return G.sel_n == sel_was && !G.seln_n && G.sel_elems; }
+static bool sel_touching(struct nk_context* ctx) { return G.sel_n > sel_was; }
+static bool sel_empty(struct nk_context* ctx) { return !G.sel_n && !G.seln_n && !G.boxq.on; }
+static bool sel_all(struct nk_context* ctx) { return G.sel_n == G.frd.n_elems && !G.seln_n; }
+static void app_nsel_clear_ctx(struct nk_context* ctx) { app_nsel_clear(); }
+static bool sel_any(struct nk_context* ctx) { return (G.sel_n || G.seln_n) && !G.sel_note[0]; }
+static bool sel_one(struct nk_context* ctx) { return G.sel_n == 1 && G.sel_tool == CV_ST_CLICK; }
+static bool click_armed(struct nk_context* ctx) { return G.sel_tool == CV_ST_CLICK; }
+static bool sel_mode_add(struct nk_context* ctx) { return G.sel_mode == CV_SEL_ADD; }
+static bool sel_mode_remove(struct nk_context* ctx) { return G.sel_mode == CV_SEL_REMOVE; }
+static bool sel_mode_and(struct nk_context* ctx) { return G.sel_mode == CV_SEL_AND; }
+static bool select_popup(struct nk_context* ctx) { return popup_open(ctx, "Selection"); }
+/* a box in add mode keeps what was there: more than the first box alone */
+static bool box_added(struct nk_context* ctx) { return G.sel_n > sel_was && sel_was > 0; }
+static bool lasso_armed(struct nk_context* ctx) { return G.sel_tool == CV_ST_LASSO; }
+static bool tool_down(struct nk_context* ctx) { return G.sel_tool == CV_ST_NONE && G.show_select; }
+static bool lasso_took(struct nk_context* ctx) { return G.sel_n > 0 && G.sel_n < G.frd.n_elems && G.boxq.on; }
+static bool faces_took(struct nk_context* ctx) { return G.sel_tool == CV_ST_FACE && G.sel_n > 0 && G.sel_note[0]; }
+static bool chain_took(struct nk_context* ctx) { return G.sel_tool == CV_ST_CHAIN && G.seln_n > 1 && !G.sel_n; }
+static bool chain_armed(struct nk_context* ctx) { return G.sel_tool == CV_ST_CHAIN; }
+static bool part_took(struct nk_context* ctx) { return G.sel_tool == CV_ST_PART && G.sel_n == G.frd.n_elems; }   /* one part */
+static bool sel_grew(struct nk_context* ctx) { return G.sel_n > sel_was; }
+static bool sel_shrank(struct nk_context* ctx) { return G.sel_n < sel_was && G.sel_n > 0; }
+static bool sel_boundary(struct nk_context* ctx) { return G.sel_n > 0 && G.seln_n > 0; }
+static void ids_some(struct nk_context* ctx) { uii_select_ids("100-110", false); }
+static void name_holea(struct nk_context* ctx) { uii_select_name("HOLEA"); }
+static void name_hb(struct nk_context* ctx) { uii_select_name("HB"); }
+static bool kept_one(struct nk_context* ctx) { return app_nsel_count() == 1 && !strcmp(app_nsel_at(0)->name, "HOLEA") && app_nsel_at(0)->ne == 20; }
+static bool renamed(struct nk_context* ctx) { return app_nsel_count() == 1 && !strcmp(app_nsel_at(0)->name, "HB"); }
+static bool none_kept(struct nk_context* ctx) { return app_nsel_count() == 0; }
+static bool cropped(struct nk_context* ctx) { return G.crop_on && G.sel_n > 0; }
+static bool sel_clipped(struct nk_context* ctx) { return G.clip_on; }
+static bool labels_sel(struct nk_context* ctx) { return G.label_sel_only && G.label_kinds; }
+static bool inp_saved(struct nk_context* ctx) {
+    char path[1200];
+    app_sel_inp_path("HOLEA", path, sizeof path);
+    FILE* f = fopen(path, "r");
+    if (!f) return false;
+    char line[200]; int sets = 0;
+    while (fgets(line, sizeof line, f)) sets += !strncmp(line, "*ELSET, ELSET=HOLEA", 19);
+    fclose(f);
+    return sets == 1;
+}
+static bool isolated(struct nk_context* ctx) { uint32_t n = 0; for (uint32_t e = 0; G.hide && e < G.frd.n_elems; e++) n += !G.hide[e]; return G.hide && n == 20; }
+static void use_end(struct nk_context* ctx) {
+    G.crop_on = G.clip_on = G.label_sel_only = false; G.label_kinds = 0; app_label_changed();
+    app_sel_clear(); app_show_all(); app_nsel_clear();
+}
+static void filters_on(struct nk_context* ctx) { G.sel_filters = true; }
+static void filters_off(struct nk_context* ctx) { G.sel_filters = false; app_sel_clear(); }
+static bool sel_some(struct nk_context* ctx) { return G.sel_n > sel_was && G.sel_n < G.frd.n_elems; }
 static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
 static void ids_on(struct nk_context* ctx) { G.label_kinds = 1 << CV_LABEL_NODE; G.label_probe_only = true; app_label_changed(); }
 static void ids_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_probe_only = false; app_label_changed(); }
@@ -580,14 +648,111 @@ static const step script[] = {
     CASE("box selection: right to left is a crossing"),
     DO(arm_box), AT_VIEW(0.6f, 0.6f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.4f, 0.4f), RELEASE, WAIT(2),
     EXPECT(box_crossing, "a crossing selection, the probe on its max"),
-    AT_TIP("Probe", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
-    DO(remember_nodes), AT_TIP("Probe", "Only the side facing you"), CLICK, WAIT(2), EXPECT(nodes_more, "through the model: more nodes"),
-    AT_TIP("Probe", "Only the side facing you"), CLICK, WAIT(2),
-    AT_TIP("Probe", "A blue ball on the selection's minimum"), CLICK, WAIT(2), EXPECT(min_marked, "the min gets its ball"),
-    AT_TIP("Probe", "A blue ball on the selection's minimum"), CLICK, WAIT(2),
-    DO(remember_nodes_turn), WAIT(2), AT_TIP("Probe", "Elements: drag left to right"), CLICK, WAIT(2),
+    DO(open_select), WAIT(3),
+    AT_TIP("Selection", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
+    DO(remember_nodes), AT_TIP("Selection", "Only the side facing you"), CLICK, WAIT(2), EXPECT(nodes_more, "through the model: more nodes"),
+    AT_TIP("Selection", "Only the side facing you"), CLICK, WAIT(2),
+    AT_TIP("Selection", "A blue ball on the selection's minimum"), CLICK, WAIT(2), EXPECT(min_marked, "the min gets its ball"),
+    AT_TIP("Selection", "A blue ball on the selection's minimum"), CLICK, WAIT(2),
+    DO(remember_nodes_turn), WAIT(2), AT_TIP("Selection", "Elements: drag left to right"), CLICK, WAIT(2),
     EXPECT(nodes_kept, "unticking elements after a turn keeps the same nodes, no elements"),
     DO(nodes_off), WAIT(2),
+
+    CLOSED_THEN_PANELS("Selection", open_select, select_gone),
+
+    CASE("selection: the top bar's Select opens it, a box in add mode joins the first"),
+    DO(sel_none), DO(fit_view), AT_TIP("Toolbar", "The Selection window (S)"), CLICK, WAIT(3), EXPECT(select_shown, "the window opens"),
+    DO(arm_box), AT_VIEW(0.48f, 0.4f), PRESS, AT_VIEW(0.56f, 0.6f), AT_VIEW(0.66f, 0.8f), RELEASE, WAIT(2), DO(sel_remember),
+    AT_TIP("Selection", "What you pick next joins the selection"), CLICK, WAIT(2), EXPECT(sel_mode_add, "add mode"),
+    AT_TIP("Selection", "Drag a box in the view next"), CLICK, WAIT(2), EXPECT(box_armed, "the box tool arms the box"),
+    AT_VIEW(0.68f, 0.4f), PRESS, AT_VIEW(0.75f, 0.6f), AT_VIEW(0.85f, 0.8f), RELEASE, WAIT(2), EXPECT(box_added, "the second box adds"),
+    DO(sel_none), WAIT(2),
+
+    CASE("selection: the context menu opens the window"),
+    DO(sel_none), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu Selection..."), CLICK, WAIT(3),
+    EXPECT(select_shown, "the Selection window opens"),
+
+    CASE("selection: by id select, add, remove, intersect; invert; to nodes and back; clear"),
+    DO(sel_none), DO(open_select), WAIT(3), DO(ids_1_20), WAIT(2),
+    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_20, "ids 1-20, the bad ones reported"),
+    AT_TIP("Selection", "What you pick next joins the selection"), CLICK, DO(ids_10_30), WAIT(2),
+    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_30, "add: 1-30"),
+    AT_TIP("Selection", "What you pick next leaves the selection"), CLICK, WAIT(2), EXPECT(sel_mode_remove, "remove mode"),
+    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_9, "remove: 1-9"),
+    DO(ids_1_20), AT_TIP("Selection", "What you pick next replaces"), CLICK, WAIT(2), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
+    DO(ids_10_30), AT_TIP("Selection", "Only what is both selected"), CLICK, WAIT(2), EXPECT(sel_mode_and, "intersect mode"),
+    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_11, "intersect: 10-20"),
+    DO(sel_remember), AT_TIP("Selection", "Invert: what is shown"), CLICK, WAIT(2), EXPECT(sel_inverted, "invert: every other element"),
+    AT_TIP("Selection", "Invert: what is shown"), CLICK, WAIT(2), EXPECT(sel_11, "inverted twice: the same"),
+    DO(sel_remember), AT_TIP("Selection", "Elements to nodes"), CLICK, WAIT(2), EXPECT(sel_to_nodes, "their nodes, the elements dropped"),
+    AT_TIP("Selection", "Nodes to elements: the shown elements with every node"), CLICK, WAIT(2), EXPECT(sel_back, "the same elements back"),
+    AT_TIP("Selection", "Elements to nodes"), CLICK, WAIT(2),
+    AT_TIP("Selection", "Nodes to elements: the shown elements with any node"), CLICK, WAIT(2), EXPECT(sel_touching, "touching: more elements"),
+    AT_TIP("Selection", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "clear"),
+
+    CASE("selection: the lasso takes what it is drawn round, Esc puts it down"),
+    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Selection", "Draw round what you want"), CLICK, WAIT(2),
+    EXPECT(lasso_armed, "the lasso armed"),
+    AT_VIEW(0.45f, 0.3f), PRESS, AT_VIEW(0.65f, 0.28f), AT_VIEW(0.85f, 0.35f), AT_VIEW(0.88f, 0.6f), AT_VIEW(0.8f, 0.8f),
+    AT_VIEW(0.6f, 0.82f), AT_VIEW(0.46f, 0.7f), RELEASE, WAIT(2), EXPECT(lasso_took, "elements inside it, with their extremes"),
+    AT_TIP("Selection", "Draw round what you want"), CLICK, WAIT(2), EXPECT(tool_down, "the tool put down, the window stays"),
+    DO(sel_none), WAIT(2),
+
+    CASE("selection: faces up to the feature edges, an edge chain, the part"),
+    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Selection", "Click an outer face"), CLICK, WAIT(2),
+    AT_MODEL, CLICK, WAIT(2), EXPECT(faces_took, "the faces' elements"),
+    DO(sel_none), AT_TIP("Selection", "Click near a feature edge"), CLICK, WAIT(2), EXPECT(chain_armed, "the edge chain armed"), AT_MODEL, CLICK, WAIT(2),
+    EXPECT(chain_took, "the nodes along a feature edge"),
+    DO(sel_none), AT_TIP("Selection", "Click an element: every shown element"), CLICK, WAIT(2), AT_MODEL, CLICK, WAIT(2),
+    EXPECT(part_took, "the whole part"),
+    DO(sel_none), WAIT(2),
+
+    CASE("selection: grow, shrink, boundary"),
+    DO(sel_none), DO(open_select), WAIT(3), DO(ids_some), WAIT(2), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
+    DO(sel_remember), AT_TIP("Selection", "Grow: one layer more"), CLICK, WAIT(2), EXPECT(sel_grew, "grow: more elements"),
+    DO(sel_remember), AT_TIP("Selection", "Shrink: one layer less"), CLICK, WAIT(2), EXPECT(sel_shrank, "shrink: fewer"),
+    AT_TIP("Selection", "Boundary: the nodes on the outside"), CLICK, WAIT(2), EXPECT(sel_boundary, "its boundary nodes and elements"),
+    DO(sel_none), WAIT(2),
+
+    CASE("selection: filters select where, add the field's top %, drop a type"),
+    DO(sel_none), DO(filters_on), DO(open_select), WAIT(3),
+    AT_TIP("Selection", "Keep what lies in this range"), CLICK, WAIT(2), EXPECT(sel_all, "nothing selected: every element in the range"),
+    DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), DO(sel_remember),
+    AT_TIP("Selection", "What you pick next joins the selection"), CLICK, WAIT(2),
+    AT_TIP("Selection", "The field shown: above or below"), CLICK, WAIT(2), EXPECT(select_popup, "the field list opens"),
+    AT_POPUP("Selection", 0.5f, 0.82f), CLICK, WAIT(2),
+    AT_TIP("Selection", "Keep what the field puts there"), CLICK, WAIT(2), EXPECT(sel_some, "add: the field's top 5 % joins"),
+    AT_TIP("Selection", "What you pick next leaves the selection"), CLICK, WAIT(2),
+    AT_TIP("Selection", "Keep the elements of this type"), CLICK, WAIT(2), EXPECT(sel_empty, "remove: every Hex20 leaves"),
+    DO(filters_off), WAIT(2),
+
+    CASE("selection: kept by name, taken back, renamed, forgotten"),
+    DO(sel_none), DO(app_nsel_clear_ctx), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
+    DO(name_holea), AT_TIP("Selection", "Keep the selection under this name"), CLICK, WAIT(3), EXPECT(kept_one, "kept as HOLEA"),
+    AT_TIP("Selection", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "cleared"),
+    AT_TIP("Selection", "#named sel HOLEA"), CLICK, WAIT(2), EXPECT(sel_20k, "HOLEA selected again"),
+    DO(name_hb), AT_TIP("Selection", "#named ren HOLEA"), CLICK, WAIT(2), EXPECT(renamed, "renamed HB"),
+    AT_TIP("Selection", "#named del HB"), CLICK, WAIT(2), EXPECT(none_kept, "forgotten"),
+    DO(use_end), WAIT(2),
+
+    CASE("selection: crop, clip, labels, deck lines to a file, CSV, isolate"),
+    DO(sel_none), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), DO(name_holea),
+    AT_TIP("Selection", "The clip plane through the selection"), CLICK, WAIT(2), EXPECT(sel_clipped, "the clip plane on"),
+    AT_TIP("Selection", "Labels on the selection only"), CLICK, WAIT(2), EXPECT(labels_sel, "labels on the selection"),
+    AT_TIP("Selection", "The same lines to"), CLICK, WAIT(2), EXPECT(inp_saved, "<model>_HOLEA.inp with its *ELSET"),
+    AT_TIP("Selection", "The selected elements (or nodes) with their place"), CLICK, WAIT(2), EXPECT(csv_saved, "the CSV"),
+    AT_TIP("Selection", "The crop box round the selection"), CLICK, WAIT(10), EXPECT(cropped, "cropped, the selection kept"),
+    AT_TIP("Selection", "Show only the selected elements"), CLICK, WAIT(10), EXPECT(isolated, "only the 20 shown"),
+    DO(use_end), WAIT(10),
+
+    CASE("selection: a name from the list, the click tool toggles an element"),
+    DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Selection", "A deck element or node set"), CLICK, WAIT(2),
+    EXPECT(select_popup, "the name list opens"), AT_POPUP("Selection", 0.5f, 0.25f), CLICK, WAIT(2),
+    AT_TIP("Selection", "Take it by the mode"), CLICK, WAIT(2), EXPECT(sel_any, "the name picked is selected"),
+    DO(sel_none), DO(fit_view), WAIT(2), AT_TIP("Selection", "Click elements (nodes) in the view"), CLICK, WAIT(2), EXPECT(click_armed, "the click tool armed"),
+    AT_MODEL, CLICK, WAIT(2), EXPECT(sel_one, "a click selects the element under it"),
+    AT_MODEL, CLICK, WAIT(2), EXPECT(sel_empty, "a second click takes it out"),
+    DO(sel_none), WAIT(2),
 
     CASE("labels: the tree picks a kind, labels show, the size answers, a drag still turns the model"),
     DO(labels_tree_open), WAIT(3), AT_TIP("Scene", "Every node of the surface"), CLICK, WAIT(3), EXPECT(labels_node, "node ids chosen"),
@@ -754,8 +919,13 @@ static const step script[] = {
 
     CASE("integrals: a right click on an element set integrates over it"),
     DO(groups_open), WAIT(3), AT_TIP("Scene", "#set menu"), RCLICK, WAIT(2), EXPECT(scene_popup, "the set's menu opens"),
-    AT_POPUP("Scene", 0.5f, 0.15f), CLICK, WAIT(3), EXPECT(integrals_set, "the volume of set EALL"),
+    AT_POPUP("Scene", 0.5f, 0.08f), CLICK, WAIT(3), EXPECT(integrals_set, "the volume of set EALL"),
     DO(integrals_close), DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("selection: a right click on an element set selects it"),
+    DO(sel_none), DO(groups_open), WAIT(3), AT_TIP("Scene", "#set menu"), RCLICK, WAIT(2), EXPECT(scene_popup, "the set's menu opens"),
+    AT_POPUP("Scene", 0.5f, 0.6f), CLICK, WAIT(3), EXPECT(sel_all, "set EALL selected"),
+    DO(sel_none), DO(sections_open), WAIT(2), PANELS_ANSWER,
 
     CASE("integrals: from the probe over a box selection, and from the menu over a set"),
     DO(close_all), DO(fit_view), WAIT(2), DO(arm_box), AT_VIEW(0.3f, 0.3f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.7f, 0.7f), RELEASE, WAIT(2),

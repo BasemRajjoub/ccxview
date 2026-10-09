@@ -41,6 +41,9 @@ ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
+ccxview model.frd --select set:EHOLE --select add:ids:1-20 --selection-window
+                                            # selection steps, in order (see Selection below);
+                                            #   --opt sel_filters=1: the window's filter rows open
 ccxview model.frd --find 120 --details      # probe node 120, its Details window open
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
@@ -88,8 +91,40 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | stl | `stl1`, `stl2` ...: `shown (1 / 0); opacity; r,g,b; scale; path`, the path relative to the model's folder when the file lies in it or below it, else absolute; a file not found is left out with a message |
 | measure | `measure1`, `measure2` ...: `distance 12 40`, `angle 1 2 3`, `circle 1 2 3` (file node ids) |
 | labels | `label1`, `label2` ...: labels moved by hand, `node 940 12 -30`: the key's kind and id (a name may hold spaces), the offset in px from where the label would be |
+| selections | `selection1`, `selection2` ...: a kept selection's name; `selection1_elems`, `selection1_nodes`: its element and node ids as ranges |
 
 A long value continues in `key_2`, `key_3` ... .
+
+## Selection
+
+`--select SPEC` is repeatable and runs in order once the model has loaded (after
+`--box`, before `--integrate`, so `--integrate volume:selection` works on it). A
+SPEC may start with a mode, `new:` (the default), `add:`, `remove:` or `and:`
+(intersect), then:
+
+| SPEC | What it selects |
+|---|---|
+| `ids:1-100,205` / `nids:1-100` | element ids / node ids |
+| `set:NAME`, `surf:NAME`, `NAME` | a deck set or surface (a bare name: a set, else a surface) |
+| `type:C3D20R`, `mat:STEEL`, `mat:2` | every element of a type, of a material (by name or number) |
+| `invert` | what is shown and not selected |
+| `nodes`, `elements`, `elements-any` | the selected elements' nodes; the elements with every (any) node selected |
+| `grow`, `shrink`, `boundary` | one layer more / less; the boundary's nodes and the elements on it |
+| `lasso:x,y,x,y,...` | a lasso through those points (fractions of the view), the elements wholly inside |
+| `part:EID` | every element connected to element EID |
+| `face:EID:S3`, `face:EID` | the outer faces from that face of the element (any of its outer faces) up to the feature edges |
+| `chain:NID` | the nodes along the feature edges through node NID, up to the corners |
+| `takes:elements\|nodes\|both`, `facing:on\|off` | what the next steps take |
+| `filter:x>10`, `filter:10<y<20`, `filter:r<5`, `filter:theta>30`, `filter:axial<2` | keep what lies there (of the selection, or of everything shown when nothing is) |
+| `axis:z@x,y,z` | the axis r, theta and axial are about (through 0,0,0 when no point is given) |
+| `field>100`, `field<5`, `top:5` | keep what the field shown puts above, below 100 / 5, in its top 5 % |
+| `filter:type:C3D20R`, `filter:mat:STEEL`, `facing` | keep one element type, one material, the side facing the camera |
+| `keep:NAME`, `named:NAME` | keep the selection under NAME (in model.ccxview); take a kept one (by the mode) |
+| `hide`, `isolate`, `crop`, `clip`, `labels` | hide it, show only it, the crop box round it, the clip plane through its centre, labels on it only |
+| `csv`, `inp:NAME` | `<model>_selection.csv`; `<model>_NAME.inp` with its `*ELSET` / `*NSET` lines named NAME |
+| `clear` | nothing |
+
+It prints what it selected and the field's max and min over it.
 
 ## Mouse and keys
 
@@ -99,7 +134,8 @@ A long value continues in `key_2`, `key_3` ... .
 | X / Y / Z held + drag | orbit about that world axis only |
 | drag a label | move it (the camera stays); right-click it: Reset label |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
-| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green); selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
+| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection window's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
+| S | the Selection window: mode, box, click, lasso, faces, edge chain and part tools, invert, conversions, grow, shrink, boundary, by name, by id |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre) |
 | right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
@@ -114,7 +150,7 @@ A long value continues in `key_2`, `key_3` ... .
 | click the legend's unit / right-click the legend | units / legend settings |
 | right-click the title block | its lines, date and free text (drag it to move it, like the legend) |
 | Ctrl+O / Ctrl+E / Ctrl+F | open / export PNG / find |
-| Esc | cancel a pending pick (path end, measurement nodes), close the menu, clear the selection |
+| Esc | cancel a pending pick (path end, measurement nodes), close the menu, put a selection tool down, clear the selection |
 
 ## Where things are
 

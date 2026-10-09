@@ -17,7 +17,7 @@ enum {
     M_SEP, M_LOOK, M_PAIR, M_MEAS,                     /* a separator, the look-from buttons, a hide | only row, the measure buttons */
     M_PROBE, M_DETAILS, M_CENTRE, M_NORMAL, M_ZOOM, M_HIST, M_PATH, M_WALL, M_CLIP, M_COPY,
     M_HIDE_EL, M_HIDE_MAT, M_ONLY_MAT, M_HIDE_TYPE, M_ONLY_TYPE, M_HIDE_SET, M_ONLY_SET, M_INTEG_SET,
-    M_SEL_HIDE, M_SEL_ONLY, M_SEL_MAX, M_SEL_MIN, M_SEL_IDS, M_SEL_CSV, M_SEL_INTEG, M_SEL_CLEAR,
+    M_SEL_HIDE, M_SEL_ONLY, M_SEL_MAX, M_SEL_MIN, M_SEL_IDS, M_SEL_CSV, M_SEL_INTEG, M_SEL_CLEAR, M_SEL_WIN,
     M_FIT, M_RESET, M_BACK, M_FWD, M_ORTHO, M_FLY, M_SHOW_ALL, M_PNG, M_LABEL_RESET,
 };
 
@@ -109,6 +109,7 @@ static void build(void) {
         add(M_SEL_CLEAR, 0, "Clear the selection");
     }
     add(M_SEP, 0, NULL);
+    add(M_SEL_WIN, 0, "Selection... (S)");
     if (any_hidden()) add(M_SHOW_ALL, 0, "Show all");
     add(M_FIT, 0, "Fit (F)");
     add(M_LOOK, 0, NULL);
@@ -182,6 +183,7 @@ static void act(const item* m) {
     }
     case M_SEL_CSV:   app_sel_csv(); break;
     case M_SEL_CLEAR: app_sel_clear(); break;
+    case M_SEL_WIN:   G.show_select = true; break;
     case M_SHOW_ALL:  app_show_all(); break;
     case M_FIT:       app_view_push(); app_fit(); break;
     case M_RESET:     app_view_push(); app_view(CV_VIEW_ISO); break;

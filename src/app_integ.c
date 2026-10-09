@@ -119,7 +119,7 @@ static bool region(int kind, const char* target, char* err, size_t errn) {
             for (uint32_t e = 0; v && R.el && e < G.frd.n_elems; e++) if (v[e]) R.el[R.n++] = e;
             free(v);
         } else if (sel) {
-            if (!G.sel_n) { snprintf(err, errn, "no elements selected (a box selection with elements ticked)"); return false; }
+            if (!G.sel_n) { snprintf(err, errn, "no elements selected (the Selection window, S)"); return false; }
             R.el = malloc(G.sel_n * sizeof *R.el);
             if (R.el) { memcpy(R.el, G.sel, G.sel_n * sizeof *R.el); R.n = G.sel_n; }
         } else if (es >= 0) set_elems(es);
@@ -134,7 +134,7 @@ static bool region(int kind, const char* target, char* err, size_t errn) {
                 memset(v, 0, CV_MAX(G.frd.n_elems, 1));
                 for (uint32_t k = 0; k < G.sel_n; k++) v[G.sel[k]] = 1;
             }
-            if (sel && !G.sel_n) { free(v); snprintf(err, errn, "no elements selected (a box selection with elements ticked)"); return false; }
+            if (sel && !G.sel_n) { free(v); snprintf(err, errn, "no elements selected (the Selection window, S)"); return false; }
             /* the shown skin's faces when it is what is shown; the selection's own outer faces */
             outer_faces(v, shown && !G.eye_hide_on ? &G.skin : NULL);
             free(v);

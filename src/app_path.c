@@ -172,6 +172,7 @@ void app_pick_cancel(void) {
     app_measure_cancel();
     G.box_arm = false;
     if (G.menu_on) { G.menu_on = false; return; }   /* Esc closes the menu first, the selection stays */
+    if (G.sel_tool != CV_ST_NONE) { G.sel_tool = CV_ST_NONE; return; }   /* then a selection tool, the selection stays */
     app_sel_clear();
 }
 
