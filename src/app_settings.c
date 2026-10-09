@@ -55,6 +55,7 @@ static const setting S[] = {
     UNIT("strain", CV_Q_STRAIN), UNIT("velocity", CV_Q_VELO), UNIT("acceleration", CV_Q_ACC),
     UNIT("energy_density", CV_Q_ENERGY_D), UNIT("heat_flux", CV_Q_FLUX), UNIT("power", CV_Q_POWER),
     UNIT("energy", CV_Q_ENERGY), UNIT("mass_flow", CV_Q_MASSFLOW), UNIT("volume", CV_Q_VOLUME), UNIT("mass", CV_Q_MASS),
+    UNIT("force_per_width", CV_Q_FORCE_LEN), UNIT("moment_per_width", CV_Q_MOMENT_LEN),
     SEC("Failure field: criterion (0 max stress .. 6 LaRC05, 7 von Mises, 8 Tresca, 9 Mohr), shown (0 exposure, 1 RF, 2 FI, 3 mode, 4 angle, 5 fibre, 6 matrix)"),
     I(fail_crit, 0, CV_FC_N - 1), I(fail_out, 0, CV_FO_N - 1),
     SEC("Mesh quality field: 0 size, 1 shortest edge, 2 longest edge, 3 aspect ratio, 4 scaled Jacobian, 5 Jacobian ratio, 6 skewness, 7 smallest angle, 8 largest angle, 9 warpage, 10 shape factor"),

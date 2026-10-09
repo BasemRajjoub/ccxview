@@ -225,6 +225,12 @@ int  cv_elemmap_mat(const cv_elemmap* m, const cv_inp* d, uint32_t e, float* thi
    (cylindrical), -1 cannot be rebuilt, -2 no element values (discrete) */
 int  cv_elemmap_axes(const cv_elemmap* m, const cv_inp* d, const cv_frd* f, uint32_t e,
                      const float* x, double Q[3][3]);
+/* .frd element e as part of a shell, for its section forces (shell.h): *shell the
+   deck element (index) of the shell, the layers of a composite all naming theirs;
+   Q its axes, rows e1 e2 e3 (the normal): the shell's *ORIENTATION, else the global
+   x on it, as CalculiX's; a composite's the orientation its layers share, else the
+   global x on it. false: not a shell, or its system cannot be rebuilt */
+bool cv_elemmap_shell(const cv_elemmap* m, const cv_inp* d, uint32_t e, uint32_t* shell, double Q[3][3]);
 /* a .dat record of composite shell `id`, integration point ip (1-based) of nip
    printed: the .frd element of its layer and *lip, the point within it. CalculiX
    prints a composite shell's points layer by layer. UINT32_MAX: not a composite. */

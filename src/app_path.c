@@ -438,7 +438,7 @@ static const float* hist_get(void* ud, int s, int fi) {
     const cv_field_desc* d = &G.frd.steps[s].fields[fi];
     size_t need = (size_t)CV_MAX(G.frd.n_nodes, 1) * (size_t)d->ncomp;
     if (need > h->cap) { float* nb = realloc(h->buf, need * sizeof(float)); if (!nb) return NULL; h->buf = nb; h->cap = need; }
-    cv_frd_read_field(&G.frd, d, h->buf, NULL);
+    field_read(s, d, h->buf, NULL);
     deck_localize(s, d, h->buf);
     units_apply(d->name, d->ncomp, h->buf, G.frd.n_nodes);
     return h->buf;
@@ -490,7 +490,7 @@ void refresh_hist(void) {
         if (!v) {
             size_t need = (size_t)CV_MAX(G.frd.n_nodes, 1) * (size_t)d->ncomp;
             if (need > cap) { float* nb = realloc(buf, need * sizeof(float)); if (!nb) break; buf = nb; cap = need; }
-            cv_frd_read_field(&G.frd, d, buf, NULL);
+            field_read(s, d, buf, NULL);
             deck_localize(s, d, buf);
             units_apply(d->name, d->ncomp, buf, G.frd.n_nodes);
             v = buf;

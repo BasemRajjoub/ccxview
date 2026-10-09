@@ -23,7 +23,7 @@ typedef struct {
     int         traj;           /* --trajectories s1|s3|both: 0 s1, 1 s3, 2 both, -1 = keep */
     bool        conv;           /* --conv: open the convergence window */
     int         win_w, win_h;   /* --size WxH */
-    const char* field;          /* --field NAME: start on that .frd field (first option) */
+    const char* field;          /* --field NAME[:COMP]: start on that .frd field, that option (else the first) */
     const char* calc;           /* --calc FORMULA: start on that calculated field */
     const char* fail;           /* --fail CRIT[:OUT]: start on that failure field */
     const char* mesh;           /* --mesh MEASURE: start on that mesh quality field */
@@ -77,6 +77,15 @@ const float* cache_get(int step, int field);
 void  units_apply(const char* field, int ncomp, float* v, size_t n);   /* model units -> shown */
 float units_len_raw(void);           /* shown lengths -> model lengths (the shape) */
 int          find_field(int step, const char* name);
+/* field d of step `step` of G.frd into out[node * ncomp + c], as cv_frd_read_field
+   (not yet turned global nor converted); the SHELL field worked out */
+void         field_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs);
+/* app_shell.c: shell section forces (shell.h) as the field SHELL, in every step with
+   STRESS when the deck has shells */
+void shell_attach(void);                 /* after a load, deck and .frd in place */
+void shell_clear(void);
+bool shell_field(const cv_field_desc* d);   /* the SHELL field: no bytes in the file */
+void shell_read(int step, float* out, cv_msgs* msgs);   /* its values, file units */
 /* app_label.c: the loads' and supports' label anchors, recorded while the symbols are built */
 void label_sink_begin(int kinds);                /* the kinds' bits: records when loads or supports are among them */
 void label_sink_add(const float p[3], const float d[6], const char* text);

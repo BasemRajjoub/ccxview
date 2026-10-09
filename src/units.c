@@ -1,6 +1,7 @@
 /* units.c -- unit tables and conversions of result fields (units.h). */
 #include "units.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 /* exact definitions (NIST): everything imperial follows from these */
@@ -71,6 +72,14 @@ static const cv_unit VOLUME[] = {
 static const cv_unit MASS[] = {
     { "kg", 1 }, { "g", 1e-3 }, { "t", 1e3 }, { "lb", LB }, { "slug", LBF / FT }, { "lbf·s²/in", LBF / IN },
 };
+static const cv_unit FORCE_LEN[] = {      /* N/mm before kN/m: one value, the first shown */
+    { "N/m", 1 }, { "N/mm", 1e3 }, { "kN/m", 1e3 }, { "kN/mm", 1e6 }, { "MN/m", 1e6 }, { "dyn/cm", 1e-3 },
+    { "lbf/in", LBF / IN }, { "lbf/ft", LBF / FT }, { "kip/in", 1e3 * LBF / IN }, { "kip/ft", 1e3 * LBF / FT },
+};
+static const cv_unit MOMENT_LEN[] = {     /* a moment per width is a force: named by the system's length (cv_sys_unit) */
+    { "N·m/m", 1 }, { "N·mm/mm", 1 }, { "kN·m/m", 1e3 }, { "kN·mm/mm", 1e3 }, { "dyn·cm/cm", 1e-5 },
+    { "lbf·in/in", LBF }, { "lbf·ft/ft", LBF }, { "kip·in/in", 1e3 * LBF }, { "kip·ft/ft", 1e3 * LBF },
+};
 
 #define N_(a) (int)(sizeof a / sizeof a[0])
 static const struct { const char* name; const cv_unit* u; int n; int dim[3]; } Q[CV_Q_N] = {
@@ -89,6 +98,8 @@ static const struct { const char* name; const cv_unit* u; int n; int dim[3]; } Q
     [CV_Q_MASSFLOW] = { "Mass flow",         MASSFLOW, N_(MASSFLOW), {  0, 1, -1 } },
     [CV_Q_VOLUME]   = { "Volume",            VOLUME,   N_(VOLUME),   {  3, 0,  0 } },
     [CV_Q_MASS]     = { "Mass",              MASS,     N_(MASS),     {  0, 1,  0 } },
+    [CV_Q_FORCE_LEN]  = { "Force per width",  FORCE_LEN,  N_(FORCE_LEN),  {  0, 1, -2 } },
+    [CV_Q_MOMENT_LEN] = { "Moment per width", MOMENT_LEN, N_(MOMENT_LEN), {  1, 1, -2 } },
 };
 
 const char* cv_quantity_name(int q) { return q >= 0 && q < CV_Q_N ? Q[q].name : ""; }
@@ -131,6 +142,15 @@ int cv_sys_unit(int sys, int temp, int q) {
     if (sys <= 0 || sys >= CV_SYS_N || q < 0 || q >= CV_Q_N) return -1;
     if (q == CV_Q_TEMP) return temp >= 0 && temp < CV_TEMP_N ? temp : -1;
     double si = cv_sys_si(sys, q);
+    if (q == CV_Q_MOMENT_LEN) {                         /* N·m/m and N·mm/mm are one value: the system's length says */
+        const cv_unit* l = cv_unit_get(CV_Q_LEN, cv_sys_unit(sys, temp, CV_Q_LEN));
+        char per[24];
+        snprintf(per, sizeof per, "·%s/%s", l ? l->name : "", l ? l->name : "");
+        for (int i = 0; i < Q[q].n; i++) {
+            const char* p = strstr(Q[q].u[i].name, per);
+            if (same(Q[q].u[i].si, si) && p && !p[strlen(per)]) return i;
+        }
+    }
     for (int i = 0; i < Q[q].n; i++) if (same(Q[q].u[i].si, si)) return i;
     return -1;
 }
@@ -139,10 +159,10 @@ int cv_sys_unit(int sys, int temp, int q) {
 
 static const struct { const char* name; const char* u[CV_Q_N]; } SHOW[CV_SHOW_N] = {
     [CV_SHOW_FILE]  = { "As input" },
-    [CV_SHOW_SI_M]  = { "SI (m, Pa)", { "m", "Pa", "N", "°C", "", "m/s", "m/s²", "J/m³", "W/m²", "W", "J", "kg/s", "m³", "kg" } },
-    [CV_SHOW_SI_MM] = { "SI (mm, MPa)", { "mm", "MPa", "N", "°C", "", "mm/s", "mm/s²", "mJ/mm³", "mW/mm²", "mW", "mJ", "t/s", "mm³", "t" } },
-    [CV_SHOW_US_IN] = { "US (in, psi)", { "in", "psi", "lbf", "°F", "", "in/s", "in/s²", "in·lbf/in³", "BTU/(h·ft²)", "BTU/h", "in·lbf", "lb/s", "in³", "lb" } },
-    [CV_SHOW_US_FT] = { "US (ft, psf)", { "ft", "psf", "lbf", "°F", "", "ft/s", "ft/s²", "ft·lbf/ft³", "BTU/(h·ft²)", "BTU/h", "ft·lbf", "lb/s", "ft³", "lb" } },
+    [CV_SHOW_SI_M]  = { "SI (m, Pa)", { "m", "Pa", "N", "°C", "", "m/s", "m/s²", "J/m³", "W/m²", "W", "J", "kg/s", "m³", "kg", "N/m", "N·m/m" } },
+    [CV_SHOW_SI_MM] = { "SI (mm, MPa)", { "mm", "MPa", "N", "°C", "", "mm/s", "mm/s²", "mJ/mm³", "mW/mm²", "mW", "mJ", "t/s", "mm³", "t", "N/mm", "N·mm/mm" } },
+    [CV_SHOW_US_IN] = { "US (in, psi)", { "in", "psi", "lbf", "°F", "", "in/s", "in/s²", "in·lbf/in³", "BTU/(h·ft²)", "BTU/h", "in·lbf", "lb/s", "in³", "lb", "lbf/in", "lbf·in/in" } },
+    [CV_SHOW_US_FT] = { "US (ft, psf)", { "ft", "psf", "lbf", "°F", "", "ft/s", "ft/s²", "ft·lbf/ft³", "BTU/(h·ft²)", "BTU/h", "ft·lbf", "lb/s", "ft³", "lb", "lbf/ft", "lbf·ft/ft" } },
 };
 
 const char* cv_show_name(int p) { return p >= 0 && p < CV_SHOW_N ? SHOW[p].name : "Custom"; }
@@ -200,6 +220,7 @@ int cv_field_quantity(const char* f, int comp) {
         { "equivalent plastic strain", CV_Q_STRAIN }, { "volume", CV_Q_VOLUME }, { "mass", CV_Q_MASS },
     };
     if (!f) return -1;
+    if (!strcmp(f, "SHELL")) return comp >= 3 && comp <= 5 ? CV_Q_MOMENT_LEN : comp >= 0 && comp < 8 ? CV_Q_FORCE_LEN : -1;
     if (!strcmp(f, "CONTACT")) return comp >= 0 && comp < 3 ? CV_Q_LEN : CV_Q_STRESS;   /* COPEN CSLIP1 CSLIP2 | CPRESS CSHEAR1 CSHEAR2 */
     for (size_t i = 0; i < sizeof T / sizeof T[0]; i++) {
         size_t n = strlen(T[i].name);

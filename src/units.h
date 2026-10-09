@@ -14,6 +14,7 @@
 enum {
     CV_Q_LEN, CV_Q_STRESS, CV_Q_FORCE, CV_Q_TEMP, CV_Q_STRAIN, CV_Q_VELO, CV_Q_ACC,
     CV_Q_ENERGY_D, CV_Q_FLUX, CV_Q_POWER, CV_Q_ENERGY, CV_Q_MASSFLOW, CV_Q_VOLUME, CV_Q_MASS,
+    CV_Q_FORCE_LEN, CV_Q_MOMENT_LEN,      /* per unit width: shell section forces and moments */
     CV_Q_N
 };
 
@@ -59,7 +60,8 @@ bool cv_unit_conv(int sys, int temp, int in, int q, int show, double* k, double*
 int  cv_unit_shown(int sys, int temp, int in, int q, int show);
 
 /* the quantity of component comp (-1: an invariant) of a .frd field ("STRESS")
-   or .dat block ("stresses"); -1 when it has none (SDV, ERROR, ...) */
+   or .dat block ("stresses"), or of the shell section forces ("SHELL", shell.h:
+   Nxx .. Mxy .. Qy); -1 when it has none (SDV, ERROR, ...) */
 int cv_field_quantity(const char* field, int comp);
 
 #endif
