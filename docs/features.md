@@ -149,6 +149,26 @@ and what is drawn for it; `samples/symbols/` shows them all.
   the camera (nodes on faces turned toward it, elements with such a face), or
   through the model; highlighted, with the field's max over them marked (the min
   too when asked: compression, the cold spot) and both in the details.
+- Integrals of the field over a set, at every step (Integrals window: Fields >
+  integrate..., right click a set in Groups, the view's context menu, or the
+  probe's "integrate..." under a box selection). Over a volume (an element set,
+  the selection, everything shown): the volume and the volume integral and
+  average of every component and of the invariant shown, so a set's homogenised
+  stress and strain <S> = (1/V) ∫ S dV, <E> likewise, come out per step as for
+  an RVE. Over a surface (a deck surface, the outer faces of a set or of what is
+  shown): the area, the integral and area average, and the force a stress
+  carries through the faces, ∫ S n dA (n outward), or the push of a pressure
+  (a scalar field or formula), -∫ p n dA. Over nodes: the sum of each component
+  (reaction forces RF: the total force) and its moment about a point you give.
+  Integrated with each element's shape functions and a Gauss rule exact to degree
+  5, through the mid-side nodes of quadratic elements, on the undeformed shape;
+  solids only (hex 8/20, wedge 6/15, tet 4/10), which covers shells, beams and
+  plane elements as CalculiX expands them into the .frd. Click the plot to go to
+  a step; CSV writes `<model>_integral_<set>.csv` (step, time, volume or area,
+  integral and average per component). A field CalculiX extrapolates from the
+  Gauss points to the nodes integrates with that extrapolation's error: on the
+  showcase the stress through the loaded face gives 62 241 of the 64 984 applied
+  (the reaction sum and the volume average match the load to 0.01 %).
 - ASME VIII-2 stress linearization along a line through the wall: membrane,
   membrane + bending, peak and total at both ends and their largest value on the
   line; bending from the components normal to the line as 5-A.4.1.2 asks, or

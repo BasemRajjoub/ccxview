@@ -1524,6 +1524,7 @@ static void test_localsys_requests(void) {
 #include "t_quality.h"
 #include "t_shell.h"
 #include "t_stl.h"
+#include "t_integ.h"
 
 int main(void) {
     test_gpu_env();
@@ -1537,6 +1538,7 @@ int main(void) {
     test_failure();
     test_quality();
     test_shell();
+    test_integ();
     test_video();
     test_cfg();
     test_export();

@@ -56,6 +56,8 @@ typedef struct {
     bool        measure_window; /* --measure-window: the Measurements window open */
     long        hist_id;        /* --history N: node id whose history to plot, 0 none */
     const char* lin_ids;        /* --linearize A,B: node ids of the line */
+    const char* integ;          /* --integrate KIND:TARGET[@x,y,z]: the Integrals window over it */
+    const char* integ_csv;      /* --integrate-csv OUT: its CSV for every step, no window */
     int         look;           /* --look iso|+x|-x|+y|-y|+z|-z, -1 = default */
     float       bg[3];          /* --bg white|black|r,g,b */
     bool        bg_set;
@@ -115,6 +117,12 @@ void         app_traj_tick(void);       /* each frame: a trace put off during pl
 /* app_path.c: path plot, history */
 void         refresh_path(void);
 void         refresh_hist(void);
+/* a step's .frd field decoded (localized, in the shown units): the cache's when it
+   holds it, else into the scratch buffer; a cv_calc_get_fn */
+typedef struct { float* buf; size_t cap; } step_scratch;
+const float* step_field_get(void* scratch, int step, int field);
+/* app_integ.c: integrals over a set, step by step */
+void         refresh_integ(void);
 
 /* app_linearize.c: stress linearization, locating points in the solid */
 #define line_locate app_line_locate
@@ -137,6 +145,7 @@ void do_pick(float px, float py);
 
 /* app_load.c: background jobs, opening files, dialogs */
 void unload(void);
+bool app_load_headless(const char* path);   /* read a model into G without a window (--integrate-csv) */
 void poll_job(void);
 void poll_dialog(void);
 

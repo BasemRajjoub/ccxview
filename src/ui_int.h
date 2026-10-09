@@ -192,5 +192,11 @@ void uii_test_mark(struct nk_context* ctx, const char* text);
 void window_path(struct nk_context* ctx, float s, float row, int fw, int fh);
 void window_history(struct nk_context* ctx, float s, float row, int fw, int fh);
 void window_convergence(struct nk_context* ctx, float s, float row, int fw, int fh);
+/* val[i] against the time t[i] (or the step number step[i] + 1) in area; hover and click */
+void uii_plot_steps(struct nk_context* ctx, float s, struct nk_rect area, int n, const float* t, const int* step,
+                    const float* val, bool by_step);
+
+/* ---- ui_integ.c: the Integrals window */
+void uii_window_integrals(struct nk_context* ctx, float s, float row, int fw, int fh);
 
 #endif

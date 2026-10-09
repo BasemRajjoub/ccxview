@@ -16,8 +16,8 @@
 enum {
     M_SEP, M_LOOK, M_PAIR, M_MEAS,                     /* a separator, the look-from buttons, a hide | only row, the measure buttons */
     M_PROBE, M_DETAILS, M_CENTRE, M_NORMAL, M_ZOOM, M_HIST, M_PATH, M_WALL, M_CLIP, M_COPY,
-    M_HIDE_EL, M_HIDE_MAT, M_ONLY_MAT, M_HIDE_TYPE, M_ONLY_TYPE, M_HIDE_SET, M_ONLY_SET,
-    M_SEL_HIDE, M_SEL_ONLY, M_SEL_MAX, M_SEL_MIN, M_SEL_IDS, M_SEL_CSV, M_SEL_CLEAR,
+    M_HIDE_EL, M_HIDE_MAT, M_ONLY_MAT, M_HIDE_TYPE, M_ONLY_TYPE, M_HIDE_SET, M_ONLY_SET, M_INTEG_SET,
+    M_SEL_HIDE, M_SEL_ONLY, M_SEL_MAX, M_SEL_MIN, M_SEL_IDS, M_SEL_CSV, M_SEL_INTEG, M_SEL_CLEAR,
     M_FIT, M_RESET, M_BACK, M_FWD, M_ORTHO, M_FLY, M_SHOW_ALL, M_PNG,
 };
 
@@ -87,6 +87,7 @@ static void build(void) {
             pair(M_HIDE_SET, M_ONLY_SET, ns, "set %s", d->sets[i].name);
             ns++;
         }
+        for (int k = 0; k < ns; k++) add(M_INTEG_SET, k, "Integrate over set %s", d->sets[set_ix[k]].name);
     }
     if (G.sel_n || G.seln_n) {
         add(M_SEP, 0, NULL);
@@ -100,6 +101,7 @@ static void build(void) {
         }
         add(M_SEL_IDS, 0, G.sel_n ? "Copy the selected element ids" : "Copy the selected node ids");
         add(M_SEL_CSV, 0, "Save the selection as CSV");
+        add(M_SEL_INTEG, 0, G.sel_n ? "Integrate over the selection" : "Sum over the selected nodes");
         add(M_SEL_CLEAR, 0, "Clear the selection");
     }
     add(M_SEP, 0, NULL);
@@ -153,6 +155,12 @@ static void act(const item* m) {
         if (d) app_hide_set(d->sets[set_ix[m->set]].name, m->what == M_ONLY_SET);
         break;
     }
+    case M_INTEG_SET: {
+        const cv_inp* d = deck_get();
+        if (d) app_integ_open(CV_IK_VOLUME, d->sets[set_ix[m->set]].name);
+        break;
+    }
+    case M_SEL_INTEG: app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection"); break;
     case M_SEL_HIDE: app_hide_elems(G.sel, G.sel_n); break;
     case M_SEL_ONLY: app_isolate_elems(G.sel, G.sel_n); break;
     case M_SEL_MAX: case M_SEL_MIN: {

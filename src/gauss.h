@@ -19,6 +19,21 @@ bool cv_ip_param(int frd_type, int nip, int ip, double xi[3]);
 /* Shape functions of an element with `nn` nodes (8/20, 4/10, 6/15, 4/8, 3/6) at xi. */
 bool cv_shape(int frd_type, int nn, const double xi[3], double* N);
 
+/* Their derivatives dN[i][a] = dN_i / dxi_a at xi (a = 2 is 0 for the surface kinds).
+   Central differences, exact: the shape functions are at most quadratic in each
+   natural coordinate. */
+bool cv_shape_d(int frd_type, int nn, const double xi[3], double (*dN)[3]);
+
+/* A rule for integrating over a solid element's natural domain (FRD types 1..6),
+   exact for polynomials up to degree 5: hex 3x3x3 Gauss, tet 15 points (Keast),
+   wedge 7 triangle points (Dunavant) x 3 Gauss. Up to CV_RULE_MAX points into xi,
+   weights into w (summing to 8, 1/6, 1); returns how many, 0 for another type. */
+enum { CV_RULE_MAX = 27 };
+int  cv_solid_rule(int frd_type, double xi[][3], double* w);
+/* The same over a face: the square [-1,1]^2 (3x3 Gauss, weights sum 4) or the
+   triangle a, b >= 0, a + b <= 1 (7 points, weights sum 1/2); ab[k] = (a, b). */
+int  cv_face_rule(bool tri, double ab[][2], double* w);
+
 /* Natural coordinates of node `k` -- used by the tests (N_i(node_j) = delta_ij). */
 bool cv_node_param(int frd_type, int nn, int k, double xi[3]);
 

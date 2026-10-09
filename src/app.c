@@ -368,6 +368,11 @@ static void frame(void) {
                     G.boxq.vmax, G.boxq.vmin, G.boxq.n);
     }
 
+    if (O.integ && !O.box_set && G.loaded && !app_busy()) {    /* --integrate: after --box, for a selection */
+        if (!app_integ_open_spec(O.integ)) cv_msg_add(&G.msgs, 0, false, G.note);
+        O.integ = NULL;
+    }
+
     if (G.playing && G.loaded && G.frd.n_steps > 1) {
         double now = cv_now();
         if (now - G.last_tick >= 1.0 / CV_MAX(G.fps, 0.1f)) {
@@ -1097,6 +1102,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--measure") && i + 1 < argc && O.nmeasure < 16) O.measure[O.nmeasure++] = argv[++i];
         else if (!strcmp(argv[i], "--history") && i + 1 < argc) O.hist_id = atol(argv[++i]);
         else if (!strcmp(argv[i], "--linearize") && i + 1 < argc) O.lin_ids = argv[++i];
+        else if (!strcmp(argv[i], "--integrate") && i + 1 < argc) O.integ = argv[++i];
+        else if (!strcmp(argv[i], "--integrate-csv") && i + 1 < argc) O.integ_csv = argv[++i];
         else if (!strcmp(argv[i], "--look") && i + 1 < argc) {
             static const char* names[] = { "iso", "+x", "-x", "+y", "-y", "+z", "-z" };
             const char* v = argv[++i];
@@ -1131,6 +1138,10 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else O.argv_path = argv[i];
     }
     if (check) exit(app_check(check));      /* headless: parse, print the messages, no window */
+    if (O.integ_csv) {                       /* headless: the integrals' CSV, no window */
+        if (!O.integ || !O.argv_path) { fprintf(stderr, "--integrate-csv OUT needs a model and --integrate KIND:TARGET\n"); exit(1); }
+        exit(app_integ_headless(O.argv_path, O.integ, O.field, O.integ_csv));
+    }
     if (!size_set && !O.ui_test) settings_window_size(&O.win_w, &O.win_h);
     cv_log_install_crash_handler(".", "ccxview " CV_VERSION);
     if (crash_test) crash_test_a();

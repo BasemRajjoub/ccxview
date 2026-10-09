@@ -577,6 +577,7 @@ void refresh_field(void) {
     refresh_lin();
     refresh_path();
     refresh_hist();
+    refresh_integ();
     app_label_changed();                  /* values and the field they show */
 }
 
