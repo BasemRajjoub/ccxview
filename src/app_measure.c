@@ -436,14 +436,14 @@ void app_measure_sync(void) {
     if (values && M.m.n) app_label_changed();               /* the deformed values with them */
 }
 
-uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t max) {
+uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t* which, uint32_t max) {
     uint32_t n = 0;
     for (size_t i = 0; i < M.m.n && n < max; i++) {
         float p[3], d[6];
         if (!label_at(&M.m.a[i], p, d)) continue;
         memcpy(anc + 9 * n, p, sizeof p); memcpy(anc + 9 * n + 3, d, sizeof d);
         app_measure_text((int)i, G.meas_show, txt[n], sizeof txt[n]);
-        n++;
+        which[n++] = (uint32_t)i;
     }
     return n;
 }

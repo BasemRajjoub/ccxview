@@ -540,6 +540,27 @@ static void measure_get(const cv_cfg* c) {
     }
 }
 
+/* ---- labels moved by hand: label1 = node 940 12 -30 (kind, id, offset in px) ------ */
+
+static void moved_put(cv_cfg* c) {
+    for (int i = 0; i < app_label_moved_count(); i++) {
+        cv_label_off o;
+        char key[24], v[160];
+        if (!app_label_moved_get(i, &o)) continue;
+        cv_label_off_format(&o, v, sizeof v);
+        snprintf(key, sizeof key, "label%d", i + 1);
+        cv_cfg_set(c, key, v);
+    }
+}
+
+static void moved_get(const cv_cfg* c) {
+    app_label_moved_clear();
+    for (int k = 0; k < c->n; k++) {
+        cv_label_off o;
+        if (numbered(c->a[k].key, "label") && cv_label_off_parse(c->a[k].val, &o)) app_label_move(o.kind, o.id, o.dx, o.dy);
+    }
+}
+
 /* ---- plain values of G: symbols, overlays, legend look, labels, linearization ---- */
 
 typedef struct { const char* key; char kind; void* p; float lo, hi; } plain;
@@ -600,6 +621,7 @@ static const part PARTS[] = {
     { "scl",     scl_put,     scl_get,     true  },
     { "stl",     stl_put,     stl_get,     true  },
     { "measure", measure_put, measure_get, true  },
+    { "labels",  moved_put,   moved_get,   true  },
 };
 
 /* ---- the file ----------------------------------------------------------------------- */
@@ -717,6 +739,7 @@ void app_sidecar_load(bool reload) {
         free(SC.pending); SC.pending = NULL;
         SC.said = false;
         app_scl_clear();
+        app_label_moved_clear();
     }
     if (!app_sidecar_on() || !app_sidecar_path(SC.path, sizeof SC.path)) return;
     cv_cfg c = {0};
@@ -747,6 +770,7 @@ void app_sidecar_forget(void) {
     SC.armed = false;                       /* the reopen must not write it back */
     bool gone = have && remove(p) == 0;
     app_scl_clear();
+    app_label_moved_clear();
     snprintf(G.note, sizeof G.note, gone ? "forgot %s: the model opened afresh" : "nothing kept for this model (%s): opened afresh",
              have ? cv_basename(p) : "no file");
     G.note_t = cv_now();

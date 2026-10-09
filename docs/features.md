@@ -215,6 +215,19 @@ model that changes from step to step and a submodel of it.
   size, hidden by the model where it is in front, thinned to a spacing nearest
   first with the count shown; size, colours and spacing to taste; the selection
   or the probed element only.
+- Labels moved by hand: drag a label on the model to where it reads best (the
+  press is the label's, not the camera's). It keeps that pixel offset from its
+  point, so it stays by its point through zoom and turn, with a leader line from
+  the point to it; it is never thinned away, the others keep clear of it, and it is
+  drawn in front of the faces (it still leaves the screen when its point is behind
+  the model). Right-click it: Reset label; Fields > Labels: Reset moved labels.
+  Kept per model in the post-processing file by a key that does not change with
+  the view: node 940, elem 12, gp 12:3 (element : point), min 1, max 2 (the
+  rank), measure 1, set EHOLE (sets and surfaces by name), link and material by
+  name (a link without one by its reference node), load and support by the node,
+  or element and face, they sit at and what they are ("940 dof 2", "12.3 p",
+  "17 UX", "body 1", "bolt 7"). A key no label has any more (after a renumbering)
+  does nothing. `--label-offset KIND:ID:DX,DY` moves one from the command line.
 - Measurements as labels: the distance between two nodes with its dx dy dz, the
   angle at the middle one of three, the circle through three (radius, centre and
   the normal of its plane; three nodes on a hole give the hole's radius). Started

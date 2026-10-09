@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 /* ---- layout ---------------------------------------------------------------------- */
 
@@ -33,9 +34,94 @@ static void quad(cv_fvec* v, const float anchor[9], float x, float y, float w, f
     v->n += CV_LABEL_FLOATS;
 }
 
-void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x, float y0, float y1, float pull, cv_fvec* boxes) {
-    float top = y0 < y1 ? y0 : y1, h = fabsf(y1 - y0);
-    quad(boxes, anchor, x - 0.5f, top, 1.f, h, m->white_u, m->white_v, m->white_u, m->white_v, pull);
+void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x0, float y0, float x1, float y1, float pull, cv_fvec* boxes) {
+    float dx = x1 - x0, dy = y1 - y0, u = m->white_u, v = m->white_v;
+    if (dx == 0) { quad(boxes, anchor, x0 - 0.5f, fminf(y0, y1), 1.f, fabsf(dy), u, v, u, v, pull); return; }
+    if (dy == 0) { quad(boxes, anchor, fminf(x0, x1), y0 - 0.5f, fabsf(dx), 1.f, u, v, u, v, pull); return; }
+    bool steep = fabsf(dy) > fabsf(dx);
+    int n = (int)ceilf(steep ? fabsf(dx) : fabsf(dy));          /* a box per pixel across the slant */
+    if (n > 4096) n = 4096;
+    for (int k = 0; k < n; k++) {
+        float t0 = (float)k / n, t1 = (float)(k + 1) / n, tm = 0.5f * (t0 + t1);
+        if (steep) {                                              /* a column: the y run of this step */
+            float a = y0 + t0 * dy, b = y0 + t1 * dy;
+            quad(boxes, anchor, x0 + tm * dx - 0.5f, fminf(a, b), 1.f, fabsf(b - a), u, v, u, v, pull);
+        } else {                                                  /* a row: the x run */
+            float a = x0 + t0 * dx, b = x0 + t1 * dx;
+            quad(boxes, anchor, fminf(a, b), y0 + tm * dy - 0.5f, fabsf(b - a), 1.f, u, v, u, v, pull);
+        }
+    }
+}
+
+void cv_label_nearest(float x, float y, float w, float h, float px, float py, float* qx, float* qy) {
+    *qx = px < x ? x : px > x + w ? x + w : px;
+    *qy = py < y ? y : py > y + h ? y + h : py;
+}
+
+/* ---- moved labels ---------------------------------------------------------------- */
+
+/* the last two space-separated numbers of s[0 .. len), and where the first starts */
+static bool two_numbers(const char* s, size_t len, float* a, float* b, size_t* start) {
+    size_t e = len;
+    float v[2];
+    for (int k = 1; k >= 0; k--) {
+        while (e > 0 && s[e - 1] == ' ') e--;
+        size_t b0 = e;
+        while (b0 > 0 && s[b0 - 1] != ' ') b0--;
+        if (b0 == e) return false;
+        char t[32], *end;
+        if (e - b0 >= sizeof t) return false;
+        memcpy(t, s + b0, e - b0); t[e - b0] = 0;
+        v[k] = strtof(t, &end);
+        if (*end || v[k] != v[k] || isinf(v[k])) return false;
+        e = b0;
+    }
+    *a = v[0]; *b = v[1]; *start = e;
+    return true;
+}
+
+bool cv_label_off_parse(const char* s, cv_label_off* o) {
+    memset(o, 0, sizeof *o);
+    while (*s == ' ') s++;
+    size_t k = strcspn(s, " ");
+    if (!k || k >= sizeof o->kind) return false;
+    memcpy(o->kind, s, k);
+    const char* id = s + k;
+    while (*id == ' ') id++;
+    size_t len = strlen(id), at;
+    while (len && (id[len - 1] == '\n' || id[len - 1] == '\r')) len--;
+    if (!two_numbers(id, len, &o->dx, &o->dy, &at)) return false;
+    while (at && id[at - 1] == ' ') at--;
+    if (!at || at >= sizeof o->id) return false;
+    memcpy(o->id, id, at);
+    return true;
+}
+
+void cv_label_off_format(const cv_label_off* o, char* out, size_t n) {
+    snprintf(out, n, "%s %s %g %g", o->kind, o->id, roundf(o->dx * 10) / 10, roundf(o->dy * 10) / 10);
+}
+
+bool cv_label_off_parse_arg(const char* s, cv_label_off* o) {
+    memset(o, 0, sizeof *o);
+    const char* c1 = strchr(s, ':'), *c2 = strrchr(s, ':');
+    if (!c1 || c2 == c1 || c1 == s || c2 == c1 + 1 || (size_t)(c1 - s) >= sizeof o->kind || (size_t)(c2 - c1 - 1) >= sizeof o->id) return false;
+    char* e;
+    o->dx = strtof(c2 + 1, &e);
+    if (e == c2 + 1 || *e != ',') return false;
+    const char* b = e + 1;
+    o->dy = strtof(b, &e);
+    if (e == b || *e || o->dx != o->dx || o->dy != o->dy || isinf(o->dx) || isinf(o->dy)) return false;
+    memcpy(o->kind, s, (size_t)(c1 - s));
+    memcpy(o->id, c1 + 1, (size_t)(c2 - c1 - 1));
+    return true;
+}
+
+int cv_label_hit(const float* box, uint32_t n, float x, float y) {
+    for (uint32_t i = n; i-- > 0;) {
+        const float* b = box + 4 * (size_t)i;
+        if (x >= b[0] && y >= b[1] && x < b[0] + b[2] && y < b[1] + b[3]) return (int)i;
+    }
+    return -1;
 }
 
 float cv_label_width(const cv_label_metrics* m, const char* text) {

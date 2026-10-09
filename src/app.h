@@ -537,6 +537,23 @@ int  app_label_parse(const char* keys);        /* "node,value,loads" -> the kind
 static inline bool app_label_on(int kind) { return (G.label_kinds >> kind) & 1; }
 void app_label_changed(void);                  /* the labelled things changed: anchors again next frame */
 void app_label_frame(cv_draw* d);              /* per frame, before cv_render_draw: thin, lay out, upload when needed; sets d->label_px */
+bool app_label_key_kind(const char* kind);     /* a kind of label key: node, elem, gp, min, max, measure, set, link, load, support, material */
+bool app_label_box(int k, float r[4]);         /* the k-th label drawn last frame: its box, window px (x, y, w, h); false past the last */
+/* app_labelpos.c: labels moved by hand, an offset in px (before the interface scale)
+   from where each would be, by its key; kept per model in the post-processing file */
+int  app_label_moved_count(void);
+bool app_label_moved_get(int i, cv_label_off* o);
+bool app_label_move(const char* kind, const char* id, float dx, float dy);   /* adds or replaces */
+bool app_label_unmove(const char* kind, const char* id);                     /* false: it was not moved */
+void app_label_moved_clear(void);
+bool app_label_at(float x, float y, cv_label_off* key);   /* the label shown at a window pixel: its key and offset */
+bool app_label_grab(float x, float y);         /* a press: true when on a label, which then follows app_label_drag */
+void app_label_drag(float dx, float dy);       /* px the mouse moved */
+void app_label_release(void);
+bool app_label_dragging(void);
+void app_label_menu_at(float x, float y);      /* the context menu opens here: a moved label under it? */
+bool app_label_menu_moved(void);
+void app_label_menu_reset(void);
 /* app_measure.c: measurements between nodes, kept by file node ids. Cleared when
    another model opens (app_measure_model), kept on a reload of the same file. */
 int  app_measure_count(void);
@@ -563,8 +580,9 @@ int  app_measure_armed(void);                        /* the kind + 1 being picke
 const char* app_measure_prompt(void);                /* what to click next, "" when not picking */
 bool app_measure_model(const char* path);            /* a model loaded: true and cleared when it is another file */
 void app_measure_sync(void);                         /* per frame: lines and labels follow the changes */
-/* the label anchors: n of them, pos[3] disp[6] each to anc (9 per), texts to txt */
-uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t max);
+/* the label anchors: n of them, pos[3] disp[6] each to anc (9 per), texts to txt, the
+   measurement each belongs to (its index) to which */
+uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t* which, uint32_t max);
 /* the shown .frd field's stored components at a node (global, as the file has them);
    names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
 int app_field_comps(uint32_t node, char names[][12], float* vals, int max);

@@ -717,9 +717,11 @@ static void cleanup(void) {
 }
 
 /* A drag and what it does, fixed when the button goes down:
-     left: orbit (shift: pan, ctrl: box zoom, alt: roll; X/Y/Z held: about that world axis)
+     left: orbit (shift: pan, ctrl: box zoom, alt: roll; X/Y/Z held: about that world axis);
+           on a label: the label moves (NAV_LABEL), as a press on a window is the window's
      right / middle: pan (ctrl: zoom by dragging up and down)
    A click without moving: left probes, middle centres the view on the point. */
+enum { NAV_LABEL = 100 };
 static struct { bool down; int button, mode; float x0, y0, x, y; bool moved, pivot_on; v3 pivot; cv_camera cam0; } drag;
 static float g_mx, g_my;                 /* last mouse position, for the keys that act at the cursor */
 static double g_wheel_t;                 /* last wheel zoom: a run of turns is one step of the view history */
@@ -839,6 +841,7 @@ static void event(const sapp_event* ev) {
                 drag.mode = G.flight ? (left ? CV_NAV_LOOK : CV_NAV_PAN)
                           : left ? (ctrl || G.box_pick ? CV_NAV_BOX : alt ? CV_NAV_ROLL : shift ? CV_NAV_PAN : CV_NAV_ROTATE)
                           : ctrl ? CV_NAV_ZOOM : CV_NAV_PAN;
+                if (drag.mode == CV_NAV_ROTATE && app_label_grab(ev->mouse_x, ev->mouse_y)) { drag.mode = NAV_LABEL; break; }
                 /* rotate about the part of the model that was grabbed; off the model, about the target */
                 bool on = false;
                 drag.pivot_on = false;
@@ -874,6 +877,7 @@ static void event(const sapp_event* ev) {
             }
             drag.down = false;
             G.nav_live = false;
+            app_label_release();
             break;
         case SAPP_EVENTTYPE_MOUSE_MOVE:
             g_mx = ev->mouse_x; g_my = ev->mouse_y;
@@ -882,12 +886,14 @@ static void event(const sapp_event* ev) {
                 drag.x = ev->mouse_x; drag.y = ev->mouse_y;
                 if (!drag.moved && fabsf(drag.x - drag.x0) + fabsf(drag.y - drag.y0) > 4) {
                     drag.moved = true;
+                    if (drag.mode == NAV_LABEL) { app_label_drag(drag.x - drag.x0, drag.y - drag.y0); break; }   /* the first move whole */
                     if (drag.mode != CV_NAV_BOX) {       /* the view before the drag, for Ctrl+Z */
                         cv_camera now = G.cam;
                         G.cam = drag.cam0; app_view_push(); G.cam = now;
                     }
                 }
-                if (!drag.moved && drag.mode == CV_NAV_BOX) break;    /* a click, not a box */
+                if (!drag.moved && (drag.mode == CV_NAV_BOX || drag.mode == NAV_LABEL)) break;    /* a click, not a box */
+                if (drag.mode == NAV_LABEL) { app_label_drag(dx, dy); break; }
                 G.nav_live = drag.mode != CV_NAV_LOOK;
                 drag_move(dx, dy, (ev->modifiers & SAPP_MODIFIER_SHIFT) != 0);
             }
@@ -1105,6 +1111,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--stl-alpha") && i + 1 < argc) O.stl_alpha = fminf(fmaxf((float)atof(argv[++i]), 0.f), 1.f);
         else if (!strcmp(argv[i], "--path") && i + 1 < argc) O.path_ids = argv[++i];
         else if (!strcmp(argv[i], "--measure") && i + 1 < argc && O.nmeasure < 16) O.measure[O.nmeasure++] = argv[++i];
+        else if (!strcmp(argv[i], "--label-offset") && i + 1 < argc && O.nlabel_off < 16) O.label_off[O.nlabel_off++] = argv[++i];
         else if (!strcmp(argv[i], "--history") && i + 1 < argc) O.hist_id = atol(argv[++i]);
         else if (!strcmp(argv[i], "--linearize") && i + 1 < argc) O.lin_ids = argv[++i];
         else if (!strcmp(argv[i], "--integrate") && i + 1 < argc) O.integ = argv[++i];

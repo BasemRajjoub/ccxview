@@ -14,7 +14,8 @@ typedef struct { const cv_label_glyph* g; int first, n; float height; float whit
 /* an instance (a glyph quad or a label's box), CV_LABEL_FLOATS numbers:
    pos[3], disp[3], disp2[3], off[2] (px from the anchor's screen point to the quad's
    top-left, y down), size[2] (px), uv0[2], uv1[2], pull (model units the point is moved
-   toward the eye for its visibility test; 0: a couple of pixels) */
+   toward the eye for its visibility test; 0: a couple of pixels; negative: this one is
+   drawn in front of the model, the pull its magnitude) */
 #define CV_LABEL_FLOATS 18
 
 /* the glyph quads of text at the anchor (pos[3] disp[3] disp2[3]), the text's top-left
@@ -23,8 +24,26 @@ typedef struct { const cv_label_glyph* g; int first, n; float height; float whit
 float cv_label_layout(const cv_label_metrics* m, const float anchor[9], const char* text,
                       float dx, float dy, bool box, float pad, float pull, cv_fvec* gly, cv_fvec* boxes);
 float cv_label_width(const cv_label_metrics* m, const char* text);
-/* a leader: a 1 px wide box from (x, y0) to (x, y1) px off the anchor's point, to boxes */
-void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x, float y0, float y1, float pull, cv_fvec* boxes);
+/* a leader: a 1 px wide line from (x0, y0) to (x1, y1) px off the anchor's point, to
+   boxes: one box when it is upright or level, else a box per pixel row (or column, the
+   shorter way) of the slant, each spanning its part of the line */
+void cv_label_leader(const cv_label_metrics* m, const float anchor[9], float x0, float y0, float x1, float y1, float pull, cv_fvec* boxes);
+
+/* the point on a box (x, y, w, h) nearest to (px, py): where a leader meets it */
+void cv_label_nearest(float x, float y, float w, float h, float px, float py, float* qx, float* qy);
+
+/* a moved label: its key (a kind and an id, a number or a name) and its offset in px
+   from where it would be, x right, y down. As text "node 940 12 -30": the kind, the
+   id (it may hold spaces), the two numbers last. */
+typedef struct { char kind[16]; char id[64]; float dx, dy; } cv_label_off;
+bool cv_label_off_parse(const char* s, cv_label_off* o);      /* false: not two numbers after a kind and an id */
+void cv_label_off_format(const cv_label_off* o, char* out, size_t n);
+/* the command line's KIND:ID:DX,DY ("set:EHOLE:40,-20"; the id may hold ':') */
+bool cv_label_off_parse_arg(const char* s, cv_label_off* o);
+
+/* the topmost of n boxes (x, y, w, h, 4 floats each, later ones drawn over earlier)
+   holding the point; -1 none */
+int cv_label_hit(const float* box, uint32_t n, float x, float y);
 
 /* thinning: pts projected to window px with a depth (nearer = smaller, 0 .. 1); those
    inside the viewport, nearest first, no two closer than dx px across and dy px down (the

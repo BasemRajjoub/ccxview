@@ -54,6 +54,8 @@ typedef struct {
     float       stl_alpha;      /* --stl-alpha A: their opacity, < 0 unset (1) */
     const char* path_ids;       /* --path A,B: node ids to plot between */
     const char* measure[16];    /* --measure dist:A,B | angle:A,B,C | circle:A,B,C (node ids) */
+    const char* label_off[16];  /* --label-offset KIND:ID:DX,DY */
+    int         nlabel_off;
     int         nmeasure;
     bool        measure_window; /* --measure-window: the Measurements window open */
     long        hist_id;        /* --history N: node id whose history to plot, 0 none */
@@ -100,7 +102,16 @@ bool shell_field(const cv_field_desc* d);   /* the SHELL field: no bytes in the 
 void shell_read(int step, float* out, cv_msgs* msgs);   /* its values, file units */
 /* app_label.c: the loads' and supports' label anchors, recorded while the symbols are built */
 void label_sink_begin(int kinds);                /* the kinds' bits: records when loads or supports are among them */
-void label_sink_add(const float p[3], const float d[6], const char* text);
+/* a load's or a support's label; at: where it sits and what it is, its moved-label key
+   ("940 dof 2": node and DOF, "12.3 p": element id and face and kind, "bolt 7" ...) */
+void label_sink_add(const float p[3], const float d[6], const char* text, bool support, const char* at);
+/* app_labelpos.c's moved labels, for app_label.c: bumped when they change, how many, one */
+unsigned label_moved_gen(void);
+int label_moved_n(void);
+const cv_label_off* label_moved(int j);
+/* app_label.c: the label drawn last frame at a window pixel (topmost, not hidden by the
+   model): true and its key, with its offset when it is moved */
+bool label_hit(float x, float y, cv_label_off* key);
 void         init_group_colors(void);
 void         refresh_tri_colors(void);
 void         refresh_tri_values(void);

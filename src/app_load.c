@@ -450,6 +450,15 @@ static void apply_load(cv_job* j) {
             if (m & (1 << CV_LABEL_GPVALUE | 1 << CV_LABEL_GPID)) G.show_gp = true;
         }
     }
+    for (int q = 0; !G.reload_keep && q < O.nlabel_off; q++) {   /* --label-offset KIND:ID:DX,DY */
+        cv_label_off o;
+        if (cv_label_off_parse_arg(O.label_off[q], &o) && app_label_key_kind(o.kind)) app_label_move(o.kind, o.id, o.dx, o.dy);
+        else {
+            char m[200];
+            snprintf(m, sizeof m, "--label-offset %s: KIND:ID:DX,DY, the kind one of node, elem, gp, min, max, measure, set, link, load, support, material", O.label_off[q]);
+            cv_msg_add(&G.msgs, 0, false, m);
+        }
+    }
     app_label_changed();
     if (O.fly_clip) { G.fly_clip = O.fly_clip; if (O.fly_depth > 0) G.fly_clip_depth = O.fly_depth; }
     if (O.view_file && !G.reload_keep) app_view_load(O.view_file);
