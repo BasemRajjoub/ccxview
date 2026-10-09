@@ -49,15 +49,20 @@ copy_closure() {
 }
 copy_closure "$BIN" "$LIBDIR"
 
+# set_rpath FILE PATH: only when it differs; patchelf grows a file on every rewrite,
+# and a library rewritten on each build ends up broken (a crash as it loads)
+set_rpath() { command -v patchelf >/dev/null || return 0; [ "$(patchelf --print-rpath "$1" 2>/dev/null)" = "$2" ] || patchelf --set-rpath "$2" "$1" 2>/dev/null || true; }
 if command -v patchelf >/dev/null; then
     # the binary carries no RUNPATH: the system's libraries win, lib/ is the fallback
-    patchelf --remove-rpath "$BIN" 2>/dev/null || true
-    for f in "$LIBDIR"/*.so*; do patchelf --set-rpath '$ORIGIN' "$f" 2>/dev/null || true; done
+    [ -n "$(patchelf --print-rpath "$BIN" 2>/dev/null)" ] && patchelf --remove-rpath "$BIN" 2>/dev/null || true
+    for f in "$LIBDIR"/*.so*; do
+        case "$(basename "$f")" in libGLX.so.*|libGL.so.*) ;; *) set_rpath "$f" '$ORIGIN' ;; esac
+    done
     # GLVND's libGLX dlopen()s the real driver and searches the CALLER's RUNPATH.
     # NixOS keeps drivers only in /run/opengl-driver/lib; elsewhere the entry is
     # simply skipped.
     for f in "$LIBDIR"/libGLX.so.* "$LIBDIR"/libGL.so.*; do
-        [ -e "$f" ] && patchelf --set-rpath '$ORIGIN:/run/opengl-driver/lib' "$f"
+        [ -e "$f" ] && set_rpath "$f" '$ORIGIN:/run/opengl-driver/lib'
     done
 else
     echo "note: patchelf not found; RUNPATH left as linked" >&2
@@ -85,7 +90,7 @@ if [ "$MESA" = 1 ]; then
             chmod u+w "$MDIR/$(basename "$g")"
             copy_closure "$g" "$MDIR"
         done
-        for f in "$MDIR"/*.so*; do patchelf --set-rpath '$ORIGIN:$ORIGIN/..' "$f" 2>/dev/null || true; done
+        for f in "$MDIR"/*.so*; do set_rpath "$f" '$ORIGIN:$ORIGIN/..'; done
         echo "Mesa llvmpipe bundled into $MDIR ($(du -sh "$MDIR" | cut -f1))"
     fi
 fi
