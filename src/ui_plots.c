@@ -256,6 +256,46 @@ static void path_plot(struct nk_context* ctx, float s, float row) {
     nk_label_colored(ctx, txt, NK_TEXT_LEFT, P.dim);
 }
 
+/* Kept lines: the shown line kept under the name in the box (the box renames a kept
+   one), the kept ones in a list to show again, the shown one forgotten. Several
+   stress classification lines in one model, kept in its .ccxview. */
+static void scl_row(struct nk_context* ctx, float s, float row) {
+    int cur = app_scl_current();
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 115 * s);
+    nk_layout_row_template_push_static(ctx, 90 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_end(ctx);
+    tip(ctx, cur >= 0 ? "The name of this kept line" : "The name the line is kept under");
+    nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, cur >= 0 ? G.scl[cur].name : G.scl_name, sizeof G.scl_name, nk_filter_default);
+    if (cur >= 0) {
+        tip(ctx, "Forget this kept line (the line stays shown)");
+        if (nk_button_label(ctx, "forget")) app_scl_delete(cur);
+    } else {
+        tip(ctx, "Keep this line under the name in the box, to show it again later\n"
+                 "(kept lines are saved with the model, in its .ccxview)");
+        if (nk_button_label(ctx, "keep")) app_scl_keep(G.scl_name);
+    }
+    char lab[64];
+    if (cur >= 0) snprintf(lab, sizeof lab, "%s (%d of %d)", G.scl[cur].name, cur + 1, G.scl_n);
+    else snprintf(lab, sizeof lab, G.scl_n ? "kept lines: %d" : "no kept lines", G.scl_n);
+    tip(ctx, "Kept stress classification lines: pick one to show it again");
+    int pick = -1;
+    if (nk_combo_begin_label(ctx, lab, nk_vec2(260 * s, (CV_MIN(G.scl_n, 12) + 1) * (row + ctx->style.window.spacing.y) + 8 * s))) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (int i = 0; i < G.scl_n; i++) {
+            const cv_scl* l = &G.scl[i];
+            char it[96];
+            if (l->dir) snprintf(it, sizeof it, "%s: node %u %s", l->name, l->a < G.frd.n_nodes ? G.frd.node_id[l->a] : 0, path_dirs[CV_MIN(l->dir, 4)]);
+            else snprintf(it, sizeof it, "%s: nodes %u .. %u", l->name, l->a < G.frd.n_nodes ? G.frd.node_id[l->a] : 0,
+                          l->b < G.frd.n_nodes ? G.frd.node_id[l->b] : 0);
+            if (nk_combo_item_label(ctx, it, NK_TEXT_LEFT)) pick = i;
+        }
+        nk_combo_end(ctx);
+    }
+    if (pick >= 0) app_scl_show(pick);
+}
+
 void window_path(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static const char* in_words[] = { "", "along the normal", "along X", "along Y", "along Z" };
     static bool was_open;
@@ -320,6 +360,10 @@ void window_path(struct nk_context* ctx, float s, float row, int fw, int fh) {
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, txt);
         nk_label(ctx, txt, NK_TEXT_LEFT);
+        if (G.path_lin) {
+            scl_row(ctx, s, row);
+            if (!G.path_n || !G.path_open) { nk_end(ctx); return; }
+        }
         if (G.path_lin) lin_body(ctx, s, row);
         else path_plot(ctx, s, row);
     }
@@ -395,7 +439,7 @@ void window_history(struct nk_context* ctx, float s, float row, int fw, int fh) 
         nk_layout_row_template_push_static(ctx, 60 * s);
         nk_layout_row_template_end(ctx);
         snprintf(txt, sizeof txt, "%s at %s %u, %d steps", G.field_label, G.elem_mode ? "element" : "node",
-                 G.elem_mode ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node], G.hist_n);
+                 G.elem_mode && G.hist_elem < G.frd.n_elems ? G.frd.elem_id[G.hist_elem] : G.frd.node_id[G.hist_node], G.hist_n);
         nk_label(ctx, txt, NK_TEXT_LEFT);
         tip(ctx, "x axis: step number instead of time (modal steps store the frequency as time)");
         nk_checkbox_label(ctx, "by step", &G.hist_by_step);

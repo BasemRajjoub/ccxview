@@ -34,6 +34,7 @@ enum { CV_SHOW_FILE, CV_SHOW_SI_M, CV_SHOW_SI_MM, CV_SHOW_US_IN, CV_SHOW_US_FT, 
 typedef struct { const char* name; double si, off; } cv_unit;
 
 const char*    cv_quantity_name(int q);          /* "Length", "Stress / pressure", ... */
+const char*    cv_quantity_key(int q);           /* "length", "stress", "heat_flux", ...: for files */
 int            cv_unit_count(int q);
 const cv_unit* cv_unit_get(int q, int i);         /* NULL when out of range */
 int            cv_unit_find(int q, const char* name);   /* index, -1 when unknown */

@@ -45,6 +45,7 @@ ccxview model.frd --find 120 --details      # probe node 120, its Details window
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
 ccxview model.frd --range 50,150 --opt oor_above=3  # the legend locked to 50 .. 150; values above it hidden (oor_above / oor_below: 0 the map's end colour, 1 grey, 2 a colour, 3 hidden)
+ccxview model.frd --hide-set EHOLE         # hide a deck element set, the rest stays (repeatable; --set NAME ticks one)
 ccxview model.frd --title-block --opt "title_text1=Bracket rev B"  # the title block, a project line (title_label1..3 / title_text1..3)
 ccxview model.frd --title-block --opt title_user=0 --opt title_file_date=1   # lines off by key: title_heading file solver analysis step scale units user date
 ccxview model.frd --labels node,value,loads # labels on the model, any mix of: node elem value evalue sets links loads supports materials gpvalue gpid minmax
@@ -52,6 +53,7 @@ ccxview model.inp --opt sym_thin=1          # crowded supports and loads thinned
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
 ccxview model.frd --deck-window --step 2    # the Deck window: steps, model changes, submodel, amplitudes
 ccxview model.frd --opt show_removed=1      # elements removed by *MODEL CHANGE drawn all the same
+ccxview model.frd --no-sidecar              # neither read nor write model.ccxview this run
 ccxview model.frd --opt key=value           # any setting of ccxview.ini for this run
 ccxview model.frd --software                # CPU rendering
 ccxview --check model.frd                   # headless parse for CI
@@ -61,6 +63,27 @@ ccxview --version
 `--opt` takes every key of `ccxview.ini`, for example `--opt bands=0`,
 `--opt clip_on=1 --opt clip_axis=0 --opt clip_pos=0.4`, `--opt ui_theme="Catppuccin Latte"`,
 `--opt sym_auto=0 --opt sym_size=5`, `--opt mid_faces=0`.
+
+## The model's .ccxview
+
+`model.ccxview` beside the model holds what was set up for it (see
+[features.md](features.md)): an INI like `ccxview.ini`, written by ccxview when
+something changes, in parts with a `# part` line before each. A key that does not
+fit the model is skipped; a missing key leaves that setting as it is.
+
+| Part | Keys |
+|---|---|
+| sets | `elsets_on`, `elsets_hidden`, `nsets_on`, `surfaces_on`: set names, `, ` between |
+| groups | `off_type`, `off_material`, `off_group`: the values switched off, as ranges (`1-4, 9`) |
+| hidden | `hidden_elems`: element ids hidden by hand, as ranges |
+| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q` |
+| units | `units` (the system), `unit_in_<quantity>` and `unit_<quantity>`: unit names (`MPa`), empty for the system's / as input |
+| view | the keys of a view state file: `cam_*`, `step`, `field`, `comp`, `calc`, `gauss_field`, `fail_field`, `mesh_field`, `elem_mode`, `csys*`, `deform*`, `range_lock`, `rmin`, `rmax`, `clip_*`, `crop_*`, `mirror*`, `rep*`, `cyc_*`, the layers, `faces_mode`, `cmap`, `bands` |
+| compare | `compare` (the other run's path), `compare_diff` |
+| paths | `path` (`38, 54`: two node ids, or `38, normal` / `x` / `y` / `z`), `path_surface`, `path_open`, `path_lin`, `history`, `history_elem` |
+| scl | `scl1`, `scl2` ...: `name; ax,ay,az; bx,by,bz; node; node or normal / x / y / z` (the nodes rebuild the line, the points are for reading) |
+
+A long value continues in `key_2`, `key_3` ... .
 
 ## Mouse and keys
 
@@ -91,7 +114,9 @@ ccxview --version
 - **Layers** (left panel): faces, edges, outline, nodes, Gauss points, vectors,
   tensor glyphs, stress trajectories, supports, loads, springs.
 - **Groups**: element types, materials, sets and surfaces of the deck (right
-  click a set or surface: integrate over it); Imported geometry: STL files shown with the results, each with show / hide, colour, opacity and unit scale.
+  click a set or surface: integrate over it); the eye before an element set hides
+  it, the tick shows only the ticked sets; Imported geometry: STL files shown with
+  the results, each with show / hide, colour, opacity and unit scale.
 - **Fields**: the results of the step, their components and invariants,
   the shell section forces (SHELL, with the deck), integrate... (the field's integrals over a set at every step),
   calculated fields, failure criteria (Strength materials... for the data),

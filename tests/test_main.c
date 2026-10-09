@@ -24,6 +24,7 @@ static int g_fail = 0, g_checks = 0;
     __FILE__, __LINE__, #a, #b, _a, _b); } } while (0)
 
 #include "t_cfg.h"
+#include "t_idlist.h"
 #include "t_export.h"
 #include "t_path.h"
 #include "t_video.h"
@@ -1545,6 +1546,7 @@ int main(void) {
     test_integ();
     test_video();
     test_cfg();
+    test_idlist();
     test_export();
     test_fprintf();
     test_path();

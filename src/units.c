@@ -82,27 +82,28 @@ static const cv_unit MOMENT_LEN[] = {     /* a moment per width is a force: name
 };
 
 #define N_(a) (int)(sizeof a / sizeof a[0])
-static const struct { const char* name; const cv_unit* u; int n; int dim[3]; } Q[CV_Q_N] = {
-    /* dimension: powers of length, mass, time */
-    [CV_Q_LEN]      = { "Length",            LEN,      N_(LEN),      {  1, 0,  0 } },
-    [CV_Q_STRESS]   = { "Stress, pressure",  STRESS,   N_(STRESS),   { -1, 1, -2 } },
-    [CV_Q_FORCE]    = { "Force",             FORCE,    N_(FORCE),    {  1, 1, -2 } },
-    [CV_Q_TEMP]     = { "Temperature",       TEMP,     N_(TEMP),     {  0, 0,  0 } },
-    [CV_Q_STRAIN]   = { "Strain",            STRAIN,   N_(STRAIN),   {  0, 0,  0 } },
-    [CV_Q_VELO]     = { "Velocity",          VELO,     N_(VELO),     {  1, 0, -1 } },
-    [CV_Q_ACC]      = { "Acceleration",      ACC,      N_(ACC),      {  1, 0, -2 } },
-    [CV_Q_ENERGY_D] = { "Energy density",    ENERGY_D, N_(ENERGY_D), { -1, 1, -2 } },
-    [CV_Q_FLUX]     = { "Heat flux",         FLUX,     N_(FLUX),     {  0, 1, -3 } },
-    [CV_Q_POWER]    = { "Heat flow, power",  POWER,    N_(POWER),    {  2, 1, -3 } },
-    [CV_Q_ENERGY]   = { "Energy",            ENERGY,   N_(ENERGY),   {  2, 1, -2 } },
-    [CV_Q_MASSFLOW] = { "Mass flow",         MASSFLOW, N_(MASSFLOW), {  0, 1, -1 } },
-    [CV_Q_VOLUME]   = { "Volume",            VOLUME,   N_(VOLUME),   {  3, 0,  0 } },
-    [CV_Q_MASS]     = { "Mass",              MASS,     N_(MASS),     {  0, 1,  0 } },
-    [CV_Q_FORCE_LEN]  = { "Force per width",  FORCE_LEN,  N_(FORCE_LEN),  {  0, 1, -2 } },
-    [CV_Q_MOMENT_LEN] = { "Moment per width", MOMENT_LEN, N_(MOMENT_LEN), {  1, 1, -2 } },
+static const struct { const char* name; const cv_unit* u; int n; int dim[3]; const char* key; } Q[CV_Q_N] = {
+    /* dimension: powers of length, mass, time; the key as in ccxview.ini (unit_<key>) */
+    [CV_Q_LEN]      = { "Length",            LEN,      N_(LEN),      {  1, 0,  0 }, "length" },
+    [CV_Q_STRESS]   = { "Stress, pressure",  STRESS,   N_(STRESS),   { -1, 1, -2 }, "stress" },
+    [CV_Q_FORCE]    = { "Force",             FORCE,    N_(FORCE),    {  1, 1, -2 }, "force" },
+    [CV_Q_TEMP]     = { "Temperature",       TEMP,     N_(TEMP),     {  0, 0,  0 }, "temperature" },
+    [CV_Q_STRAIN]   = { "Strain",            STRAIN,   N_(STRAIN),   {  0, 0,  0 }, "strain" },
+    [CV_Q_VELO]     = { "Velocity",          VELO,     N_(VELO),     {  1, 0, -1 }, "velocity" },
+    [CV_Q_ACC]      = { "Acceleration",      ACC,      N_(ACC),      {  1, 0, -2 }, "acceleration" },
+    [CV_Q_ENERGY_D] = { "Energy density",    ENERGY_D, N_(ENERGY_D), { -1, 1, -2 }, "energy_density" },
+    [CV_Q_FLUX]     = { "Heat flux",         FLUX,     N_(FLUX),     {  0, 1, -3 }, "heat_flux" },
+    [CV_Q_POWER]    = { "Heat flow, power",  POWER,    N_(POWER),    {  2, 1, -3 }, "power" },
+    [CV_Q_ENERGY]   = { "Energy",            ENERGY,   N_(ENERGY),   {  2, 1, -2 }, "energy" },
+    [CV_Q_MASSFLOW] = { "Mass flow",         MASSFLOW, N_(MASSFLOW), {  0, 1, -1 }, "mass_flow" },
+    [CV_Q_VOLUME]   = { "Volume",            VOLUME,   N_(VOLUME),   {  3, 0,  0 }, "volume" },
+    [CV_Q_MASS]     = { "Mass",              MASS,     N_(MASS),     {  0, 1,  0 }, "mass" },
+    [CV_Q_FORCE_LEN]  = { "Force per width",  FORCE_LEN,  N_(FORCE_LEN),  {  0, 1, -2 }, "force_per_width" },
+    [CV_Q_MOMENT_LEN] = { "Moment per width", MOMENT_LEN, N_(MOMENT_LEN), {  1, 1, -2 }, "moment_per_width" },
 };
 
 const char* cv_quantity_name(int q) { return q >= 0 && q < CV_Q_N ? Q[q].name : ""; }
+const char* cv_quantity_key(int q) { return q >= 0 && q < CV_Q_N ? Q[q].key : ""; }
 int cv_unit_count(int q) { return q >= 0 && q < CV_Q_N ? Q[q].n : 0; }
 const cv_unit* cv_unit_get(int q, int i) { return i >= 0 && i < cv_unit_count(q) ? &Q[q].u[i] : NULL; }
 

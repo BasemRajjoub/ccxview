@@ -46,6 +46,7 @@ typedef struct {
     bool        menu_set;
     bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */
     const char* view_file;      /* --view FILE: a saved view state, applied after load */
+    bool        no_sidecar;     /* --no-sidecar: neither read nor write <model>.ccxview this run */
     bool        watch;          /* --watch: reload when the file changes */
     const char* compare;        /* --compare FILE */
     const char* stl[CV_MESH_N]; /* --stl FILE: imported geometry, after load */
@@ -64,6 +65,8 @@ typedef struct {
     bool        bg_set;
     const char* sets[8];        /* --set NAME: tick a deck set / surface */
     int         nsets;
+    const char* hide_sets[8];   /* --hide-set NAME: hide a deck element set */
+    int         nhide_sets;
     int         step;           /* --step N (1-based, -1 = last) */
     bool        gp_under;       /* --gp-under: Gauss points depth-tested against faces */
     bool        xray;           /* --xray: Gauss points through the faces */

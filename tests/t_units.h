@@ -25,6 +25,12 @@ static const char* u_file(int sys, int temp, int q) {
     cv_quantity_name(q), cv_sys_name(sys), _n, name); } } while (0)
 
 static void test_units(void) {
+    for (int q = 0; q < CV_Q_N; q++) {                 /* every quantity has a file key, each its own */
+        CHECK(cv_quantity_key(q) && cv_quantity_key(q)[0]);
+        for (int r = 0; r < q; r++) CHECK(strcmp(cv_quantity_key(q), cv_quantity_key(r)) != 0);
+    }
+    CHECK(!strcmp(cv_quantity_key(CV_Q_FLUX), "heat_flux"));
+    CHECK(!strcmp(cv_quantity_key(CV_Q_N), ""));
     /* every system names every quantity with a listed unit */
     for (int s = 1; s < CV_SYS_N; s++)
         for (int q = 0; q < CV_Q_N; q++) {

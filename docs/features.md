@@ -184,7 +184,9 @@ model that changes from step to step and a submodel of it.
 - ASME VIII-2 stress linearization along a line through the wall: membrane,
   membrane + bending, peak and total at both ends and their largest value on the
   line; bending from the components normal to the line as 5-A.4.1.2 asks, or
-  from all six.
+  from all six. Several lines in one model: "keep" in the Path window stores the
+  line under a name (SCL 1, SCL 2 ... or your own), the list beside it shows a
+  kept line again, "forget" drops it; they are saved with the model.
 - A locked legend range keeps min / max across steps and components; the values past
   either end in grey to stand out, in the map's end colour to blend in, in a colour
   of yours, or not drawn at all. Fifteen colour maps (Fast, cool-warm, viridis,
@@ -235,7 +237,11 @@ model that changes from step to step and a submodel of it.
   (the cut filled) or hide whole elements there, to see inside.
 - Convergence plot from `.sta` / `.cvg`.
 - Groups by element type, material and set; named sets and surfaces from the
-  deck, highlighted on the model.
+  deck, highlighted on the model. An element set is ticked to show only the
+  ticked sets, or hidden by the eye before its name while everything else stays
+  (to look at what it covers); a hidden set wins over a ticked one, its name is
+  dimmed, and "show everything" or Show all brings it back. Hide set in the
+  right-click menu does the same.
 - Imported geometry (#23): parts of the assembly that were not analysed (a pin, a
   clamp, the housing) added from STL files for a picture of the whole: Groups >
   Imported geometry > Import STL..., View > File > Import STL..., a `.stl` dropped
@@ -249,6 +255,29 @@ model that changes from step to step and a submodel of it.
   deformation, is not on the mirror and replicate copies, and the probe passes
   through it. The layers belong to the model: a reload keeps them, opening another
   model clears them.
+
+## Post-processing kept with the model
+
+What is set up for a model is kept in a small file beside it, `model.ccxview`
+for `model.frd` (a deck opened alone: beside the `.inp`), and comes back the
+next time the model is opened ("restored model.ccxview" in the status bar): the
+view (camera, step, field and component, a formula, failure or mesh field,
+per-element, coordinates, deformation, locked range, clip, crop, mirror,
+replicate, cyclic, layers, colour map and bands), units, groups switched off,
+element sets ticked and hidden, node sets and surfaces ticked, elements hidden
+by hand, the path and the history node, the kept linearization lines, the
+comparison run, the labels and the symbols. It is written a moment after a change
+(not while dragging the camera, not while a file loads), before another file
+opens and at quit; only when something changed, so opening a model to look at it
+leaves no file behind. Reload and Watch file keep it all: what a reload starts afresh
+(sets, paths, kept lines) is read back from the file.
+
+ccxview never writes the solver's files (a `.frd` may still be being written).
+A file from an older run, or one edited by hand, is read for what still fits
+(sets, nodes and fields that are gone are skipped). View > File > Forget
+post-processing deletes it and opens the model afresh; `--no-sidecar` leaves it
+alone for one run, `sidecar = 0` in `ccxview.ini` (or `--opt sidecar=0`) for good.
+The browser version keeps none. The keys are listed in [usage.md](usage.md).
 
 ## cgx geometry
 

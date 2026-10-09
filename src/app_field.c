@@ -667,7 +667,9 @@ void app_select_src(const char* field, int comp, int src) {
 
 void app_select(const char* field, int comp) {
     if (G.field_src >= 2 && field[0]) G.field_src = 0;   /* a named field is a .frd one; "" keeps the formula */
-    snprintf(G.field_name, sizeof G.field_name, "%s", field);
+    char f[sizeof G.field_name];                        /* field may be G.field_name itself */
+    snprintf(f, sizeof f, "%s", field);
+    memcpy(G.field_name, f, sizeof f);
     G.comp = comp;
     G.range_lock = false;
     refresh_field();

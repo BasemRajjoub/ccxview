@@ -273,17 +273,26 @@ void app_isolate_elems(const uint32_t* el, uint32_t n) {
     app_groups_changed();
 }
 
+/* hide: the set's flag (Groups > Element sets shows it, and it can be undone there);
+   isolate: only its elements left, by hand */
 void app_hide_set(const char* name, bool isolate) {
     const cv_inp* d = deck_get();
     const cv_set* s = d ? cv_inp_set(d, name, true) : NULL;
     if (!s) return;
+    if (!isolate) {
+        deck_set_hidden_flags()[s - d->sets] = true;
+        G.probe_on = false;
+        app_sel_clear();
+        app_groups_changed();
+        return;
+    }
     uint32_t* el = malloc((size_t)CV_MAX(s->n, 1) * sizeof *el), n = 0;
     if (!el) return;
     for (uint32_t i = 0; i < s->n; i++) {
         uint32_t e = cv_frd_elem_index(&G.frd, s->ids[i]);
         if (e != UINT32_MAX) el[n++] = e;
     }
-    if (isolate) app_isolate_elems(el, n); else app_hide_elems(el, n);
+    app_isolate_elems(el, n);
     free(el);
 }
 
@@ -292,6 +301,8 @@ void app_show_all(void) {
     free(G.hide); G.hide = NULL;
     for (int a = 0; a < CV_AXIS_N; a++)
         for (int i = 0; i < G.groups.axis[a].n; i++) G.groups.axis[a].on[i] = true;
+    const cv_inp* d = deck_get();
+    for (int i = 0; d && i < d->nsets; i++) deck_set_hidden_flags()[i] = false;
     app_groups_changed();
 }
 

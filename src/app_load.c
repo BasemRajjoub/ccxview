@@ -6,7 +6,6 @@
 #include "cgx.h"
 #include "filedlg.h"
 #include "log.h"
-#include "cfg.h"
 #include "app_fail.h"
 #include "app_mesh.h"
 #include "sokol_app.h"
@@ -177,6 +176,7 @@ static bool job_done(void) {
 }
 
 void unload(void) {
+    app_sidecar_flush();                    /* what was set up for this model, before it goes */
     app_path_clear();
     app_hist_close();
     app_integ_close();
@@ -236,6 +236,7 @@ static void pick_default_field(void) {
 }
 
 static void apply_load(cv_job* j) {
+    bool reload = G.reload_keep;
     unload();
     if (!j->ok) {
         cv_msg_add(&G.msgs, 0, false, j->err);
@@ -324,8 +325,10 @@ static void apply_load(cv_job* j) {
     G.eye_hide_on = false;
     free(G.hide); G.hide = NULL;
     G.menu_on = false;
-    G.crop_on = false;
-    for (int k = 0; k < 3; k++) { G.crop_lo[k] = 0.f; G.crop_hi[k] = 1.f; }
+    if (!reload) {                       /* a reload keeps the crop box (the skin is rebuilt with it below) */
+        G.crop_on = false;
+        for (int k = 0; k < 3; k++) { G.crop_lo[k] = 0.f; G.crop_hi[k] = 1.f; }
+    }
     init_group_colors();
     if (O.faces >= 0) G.faces_mode = O.faces;
     refresh_tri_colors();
@@ -409,7 +412,7 @@ static void apply_load(cv_job* j) {
         } else {
             pick_default_field();
         }
-        G.range_lock = false;
+        if (!reload) G.range_lock = false;   /* a reload keeps a locked range */
         app_set_step(G.step);
     } else {
         refresh_field();
@@ -418,6 +421,8 @@ static void apply_load(cv_job* j) {
     if (!G.reload_keep) for (int i = 0; i < O.nstl; i++) app_stl_add(O.stl[i]);   /* before the first fit, which takes them in */
     if (G.reload_keep) { view_bounds(); G.cam = G.keep_cam; G.reload_keep = false; }
     else app_view(CV_VIEW_ISO);
+    app_sidecar_load(reload);            /* what was set up for this model; the command line below wins */
+    if (reload && G.crop_on && !app_busy()) app_groups_changed();   /* the crop box kept */
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
     if (O.fly) app_set_flight(true);
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
@@ -480,11 +485,17 @@ static void apply_load(cv_job* j) {
         if (!app_find((uint32_t)strtoul(O.find + (el ? 1 : 0), NULL, 10), el)) cv_msg_add(&G.msgs, 0, false, "--find: not in this model");
         else { G.label_probe_only = true; if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE; app_label_changed(); }
     }
-    if (O.nsets && deck_loaded()) {
+    if ((O.nsets || O.nhide_sets) && deck_loaded()) {
         const cv_inp* dk = deck_get();
         for (int k = 0; k < O.nsets; k++) {
             for (int i = 0; i < dk->nsets; i++) if (!strcasecmp(dk->sets[i].name, O.sets[k])) deck_set_flags()[i] = true;
             for (int i = 0; i < dk->nsurfs; i++) if (!strcasecmp(dk->surfs[i].name, O.sets[k])) deck_surf_flags()[i] = true;
+        }
+        for (int k = 0; k < O.nhide_sets; k++) {
+            bool found = false;
+            for (int i = 0; i < dk->nsets; i++)
+                if (dk->sets[i].is_elem && !strcasecmp(dk->sets[i].name, O.hide_sets[k])) deck_set_hidden_flags()[i] = found = true;
+            if (!found) cv_msg_add(&G.msgs, 0, false, "--hide-set: no element set of that name in the deck");
         }
         deck_refresh_highlight();
         app_groups_changed();
@@ -731,127 +742,6 @@ void app_reload(void) {
     char p[1024];
     snprintf(p, sizeof p, "%s", G.path);
     app_open(p);
-}
-
-/* ---- view state: camera, step, field and the layer toggles, as a small INI
-   beside the model, so a picture can be reproduced later or by someone else ---- */
-bool app_view_save(const char* path) {
-    if (!G.loaded) return false;
-    cv_cfg c;
-    cv_cfg_load(&c, path);
-    cv_cfg_set_float(&c, "cam_yaw", G.cam.yaw); cv_cfg_set_float(&c, "cam_pitch", G.cam.pitch);
-    cv_cfg_set_float(&c, "cam_dist", G.cam.dist); cv_cfg_set_bool(&c, "cam_ortho", G.cam.ortho);
-    cv_cfg_set_bool(&c, "cam_up_z", G.up_z);           /* yaw and pitch are about this axis */
-    cv_cfg_set_bool(&c, "cam_free", G.orbit_free);     /* free orbit: the direction and up below rule */
-    cv_cfg_set_float(&c, "cam_dx", G.cam.fdir.x); cv_cfg_set_float(&c, "cam_dy", G.cam.fdir.y); cv_cfg_set_float(&c, "cam_dz", G.cam.fdir.z);
-    cv_cfg_set_float(&c, "cam_ux", G.cam.fup.x); cv_cfg_set_float(&c, "cam_uy", G.cam.fup.y); cv_cfg_set_float(&c, "cam_uz", G.cam.fup.z);
-    cv_cfg_set_float(&c, "cam_x", G.cam.target.x); cv_cfg_set_float(&c, "cam_y", G.cam.target.y); cv_cfg_set_float(&c, "cam_z", G.cam.target.z);
-    cv_cfg_set_int(&c, "step", G.step + 1);
-    cv_cfg_set(&c, "field", G.field_src == 0 ? G.field_name : "");
-    cv_cfg_set(&c, "calc", G.field_src == 2 ? G.calc_expr : "");
-    cv_cfg_set_int(&c, "comp", G.comp);
-    cv_cfg_set_bool(&c, "elem_mode", G.elem_mode);
-    cv_cfg_set_int(&c, "csys", G.csys);
-    cv_cfg_set_float(&c, "csys_x", G.csys_o[0]); cv_cfg_set_float(&c, "csys_y", G.csys_o[1]); cv_cfg_set_float(&c, "csys_z", G.csys_o[2]);
-    cv_cfg_set_bool(&c, "deform", G.deform); cv_cfg_set_float(&c, "deform_scale", G.deform_scale);
-    cv_cfg_set_bool(&c, "range_lock", G.range_lock); cv_cfg_set_float(&c, "rmin", G.rmin); cv_cfg_set_float(&c, "rmax", G.rmax);
-    cv_cfg_set_bool(&c, "clip_on", G.clip_on); cv_cfg_set_int(&c, "clip_axis", G.clip_axis);
-    cv_cfg_set_bool(&c, "clip_flip", G.clip_flip); cv_cfg_set_float(&c, "clip_pos", G.clip_pos);
-    cv_cfg_set_bool(&c, "clip_cap", G.clip_cap);
-    cv_cfg_set_bool(&c, "crop_on", G.crop_on);
-    for (int k = 0; k < 3; k++) {
-        char key[16];
-        snprintf(key, sizeof key, "crop_lo%d", k); cv_cfg_set_float(&c, key, G.crop_lo[k]);
-        snprintf(key, sizeof key, "crop_hi%d", k); cv_cfg_set_float(&c, key, G.crop_hi[k]);
-        snprintf(key, sizeof key, "mirror%d", k); cv_cfg_set_bool(&c, key, G.sym[k]);
-        snprintf(key, sizeof key, "mirror_at%d", k); cv_cfg_set_int(&c, key, G.sym_at[k]);
-        snprintf(key, sizeof key, "rep%d", k); cv_cfg_set_bool(&c, key, G.rep[k]);
-        snprintf(key, sizeof key, "rep_n%d", k); cv_cfg_set_int(&c, key, G.rep_n[k]);
-        snprintf(key, sizeof key, "rep_gap%d", k); cv_cfg_set_float(&c, key, G.rep_gap[k]);
-        if (k == 0) cv_cfg_set_bool(&c, "rep_follow", G.rep_follow);
-        snprintf(key, sizeof key, "cyc_o%d", k); cv_cfg_set_float(&c, key, G.cyc_o[k]);
-    }
-    cv_cfg_set_bool(&c, "cyc_on", G.cyc_on); cv_cfg_set_int(&c, "cyc_n", G.cyc_n);
-    cv_cfg_set_int(&c, "cyc_show", G.cyc_show); cv_cfg_set_int(&c, "cyc_axis", G.cyc_axis);
-    const char* layer_keys[] = { "show_faces", "show_edges", "show_nodes", "show_gp", "show_vec", "show_tensor", "show_traj", "show_markers", "show_ghost", "shading" };
-    const bool  layer_vals[] = { G.show_faces, G.show_edges, G.show_nodes, G.show_gp, G.show_vec, G.show_tensor, G.show_traj, G.show_markers, G.show_ghost, G.shading };
-    for (size_t i = 0; i < CV_COUNT(layer_keys); i++) cv_cfg_set_bool(&c, layer_keys[i], layer_vals[i]);
-    cv_cfg_set_int(&c, "tensor_style", G.tensor_style); cv_cfg_set_int(&c, "traj_which", G.traj_which);
-    cv_cfg_set_int(&c, "faces_mode", G.faces_mode); cv_cfg_set_int(&c, "cmap", G.cmap); cv_cfg_set_int(&c, "bands", G.bands);
-    bool ok = cv_cfg_save(&c);
-    cv_cfg_free(&c);
-    if (ok) CV_EXPORTED(path);
-    return ok;
-}
-
-bool app_view_load(const char* path) {
-    if (!G.loaded) return false;
-    cv_cfg c;
-    if (!cv_cfg_load(&c, path) || !c.n) { cv_cfg_free(&c); return false; }
-    int step = cv_cfg_get_int(&c, "step", G.step + 1) - 1;
-    if (step >= 0 && step < G.frd.n_steps) G.step = step;
-    const char* f = cv_cfg_get(&c, "field", "");
-    if (f[0] && find_field(G.step, f) >= 0) { snprintf(G.field_name, sizeof G.field_name, "%s", f); G.comp = cv_cfg_get_int(&c, "comp", G.comp); G.field_src = 0; }
-    const char* calc = cv_cfg_get(&c, "calc", "");
-    if (calc[0]) app_calc_set(calc);
-    G.elem_mode = cv_cfg_get_bool(&c, "elem_mode", G.elem_mode);
-    G.csys = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "csys", G.csys), 3));
-    G.csys_o[0] = cv_cfg_get_float(&c, "csys_x", G.csys_o[0]); G.csys_o[1] = cv_cfg_get_float(&c, "csys_y", G.csys_o[1]);
-    G.csys_o[2] = cv_cfg_get_float(&c, "csys_z", G.csys_o[2]);
-    G.deform = cv_cfg_get_bool(&c, "deform", G.deform);
-    G.deform_scale = cv_cfg_get_float(&c, "deform_scale", G.deform_scale); G.deform_auto = false;
-    G.clip_on = cv_cfg_get_bool(&c, "clip_on", G.clip_on); G.clip_axis = cv_cfg_get_int(&c, "clip_axis", G.clip_axis) % 3;
-    G.clip_flip = cv_cfg_get_bool(&c, "clip_flip", G.clip_flip); G.clip_pos = cv_cfg_get_float(&c, "clip_pos", G.clip_pos);
-    G.clip_cap = cv_cfg_get_bool(&c, "clip_cap", G.clip_cap);
-    G.crop_on = cv_cfg_get_bool(&c, "crop_on", G.crop_on);
-    for (int k = 0; k < 3; k++) {
-        char key[16];
-        snprintf(key, sizeof key, "crop_lo%d", k); G.crop_lo[k] = cv_cfg_get_float(&c, key, G.crop_lo[k]);
-        snprintf(key, sizeof key, "crop_hi%d", k); G.crop_hi[k] = cv_cfg_get_float(&c, key, G.crop_hi[k]);
-        snprintf(key, sizeof key, "mirror%d", k); G.sym[k] = cv_cfg_get_bool(&c, key, G.sym[k]);
-        snprintf(key, sizeof key, "mirror_at%d", k); G.sym_at[k] = cv_cfg_get_int(&c, key, sym_auto(k));
-        if (G.sym_at[k] < 0 || G.sym_at[k] >= CV_SYM_N) G.sym_at[k] = sym_auto(k);
-        snprintf(key, sizeof key, "rep%d", k); G.rep[k] = cv_cfg_get_bool(&c, key, G.rep[k]);
-        snprintf(key, sizeof key, "rep_n%d", k); G.rep_n[k] = CV_MAX(2, CV_MIN(cv_cfg_get_int(&c, key, G.rep_n[k]), 100));
-        snprintf(key, sizeof key, "rep_gap%d", k); G.rep_gap[k] = cv_cfg_get_float(&c, key, G.rep_gap[k]);
-        if (k == 0) G.rep_follow = cv_cfg_get_bool(&c, "rep_follow", G.rep_follow);
-        snprintf(key, sizeof key, "cyc_o%d", k); G.cyc_o[k] = cv_cfg_get_float(&c, key, G.cyc_o[k]);
-    }
-    G.cyc_on = cv_cfg_get_bool(&c, "cyc_on", G.cyc_on);
-    G.cyc_n = CV_MAX(1, CV_MIN(cv_cfg_get_int(&c, "cyc_n", G.cyc_n), 720));
-    G.cyc_show = CV_MAX(1, CV_MIN(cv_cfg_get_int(&c, "cyc_show", G.cyc_show), G.cyc_n));
-    G.cyc_axis = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "cyc_axis", G.cyc_axis), 2));
-    G.show_faces = cv_cfg_get_bool(&c, "show_faces", G.show_faces); G.show_edges = cv_cfg_get_bool(&c, "show_edges", G.show_edges);
-    G.show_nodes = cv_cfg_get_bool(&c, "show_nodes", G.show_nodes); G.show_gp = cv_cfg_get_bool(&c, "show_gp", G.show_gp);
-    G.show_vec = cv_cfg_get_bool(&c, "show_vec", G.show_vec); G.show_markers = cv_cfg_get_bool(&c, "show_markers", G.show_markers);
-    G.show_tensor = cv_cfg_get_bool(&c, "show_tensor", G.show_tensor);
-    G.show_traj = cv_cfg_get_bool(&c, "show_traj", G.show_traj);
-    G.traj_which = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "traj_which", G.traj_which), 2));
-    G.tensor_style = CV_MAX(0, CV_MIN(cv_cfg_get_int(&c, "tensor_style", G.tensor_style), CV_GLYPH_N - 1));
-    G.show_ghost = cv_cfg_get_bool(&c, "show_ghost", G.show_ghost); G.shading = cv_cfg_get_bool(&c, "shading", G.shading);
-    G.faces_mode = cv_cfg_get_int(&c, "faces_mode", G.faces_mode) % FM_N;
-    app_colormap(cv_cfg_get_int(&c, "cmap", G.cmap) % CV_CMAP_N);
-    G.bands = cv_cfg_get_int(&c, "bands", G.bands);
-    app_set_step(G.step);
-    app_set_faces_mode(G.faces_mode);
-    app_groups_changed();
-    G.range_lock = cv_cfg_get_bool(&c, "range_lock", false);
-    if (G.range_lock) { G.rmin = cv_cfg_get_float(&c, "rmin", G.rmin); G.rmax = cv_cfg_get_float(&c, "rmax", G.rmax); }
-    G.up_z = cv_cfg_get_bool(&c, "cam_up_z", false);   /* older views: Y up */
-    G.cam.yaw = cv_cfg_get_float(&c, "cam_yaw", G.cam.yaw); G.cam.pitch = cv_cfg_get_float(&c, "cam_pitch", G.cam.pitch);
-    G.cam.dist = cv_cfg_get_float(&c, "cam_dist", G.cam.dist); G.cam.ortho = cv_cfg_get_bool(&c, "cam_ortho", G.cam.ortho);
-    G.orbit_free = false;                               /* the angles as saved, then the free orientation over them */
-    app_set_orbit_free(true);
-    G.orbit_free = cv_cfg_get_bool(&c, "cam_free", false);
-    if (G.orbit_free) {
-        v3 d = v3_make(cv_cfg_get_float(&c, "cam_dx", G.cam.fdir.x), cv_cfg_get_float(&c, "cam_dy", G.cam.fdir.y), cv_cfg_get_float(&c, "cam_dz", G.cam.fdir.z));
-        v3 u = v3_make(cv_cfg_get_float(&c, "cam_ux", G.cam.fup.x), cv_cfg_get_float(&c, "cam_uy", G.cam.fup.y), cv_cfg_get_float(&c, "cam_uz", G.cam.fup.z));
-        if (v3_dot(d, d) > 0.5f && v3_dot(u, u) > 0.5f) { G.cam.fdir = v3_norm(d); G.cam.fup = v3_norm(u); }
-    }
-    G.cam.target = v3_make(cv_cfg_get_float(&c, "cam_x", G.cam.target.x), cv_cfg_get_float(&c, "cam_y", G.cam.target.y), cv_cfg_get_float(&c, "cam_z", G.cam.target.z));
-    view_bounds();
-    cv_cfg_free(&c);
-    return true;
 }
 
 /* --check FILE: the loader, synchronously and without a window. Prints every

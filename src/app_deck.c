@@ -13,6 +13,7 @@ static struct {
     bool    on;
     char    path[1024];
     bool*   set_on;             /* per set: elset = in the display group, nset = highlighted */
+    bool*   set_hide;           /* per set: an elset hidden, whatever else is shown */
     bool*   surf_on;
     bool*   link_on;
     uint8_t* nvis;              /* per shown node: in a visible element (NULL = all) */
@@ -52,6 +53,7 @@ bool deck_loaded(void) { return D.on; }
 const cv_inp* deck_get(void) { return D.on ? &D.d : NULL; }
 const char* deck_path(void) { return D.path; }
 bool* deck_set_flags(void) { return D.set_on; }
+bool* deck_set_hidden_flags(void) { return D.set_hide; }
 bool* deck_surf_flags(void) { return D.surf_on; }
 bool* deck_link_flags(void) { return D.link_on; }
 
@@ -63,7 +65,7 @@ void deck_clear(void) {
     cv_elemmap_free(&D.M);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
-    free(D.set_on); free(D.surf_on); free(D.link_on); free(D.nvis); free(D.rm);
+    free(D.set_on); free(D.set_hide); free(D.surf_on); free(D.link_on); free(D.nvis); free(D.rm);
     memset(&D, 0, sizeof D);
     cv_render_aux(CV_AUX_HLPT, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_HLTRI, NULL, NULL, NULL, 0);
@@ -85,6 +87,7 @@ void deck_set(cv_inp* d, const char* path) {
     D.rm_step = -2;                     /* no mask built for a step yet */
     snprintf(D.path, sizeof D.path, "%s", path);
     D.set_on = calloc((size_t)CV_MAX(D.d.nsets, 1), sizeof(bool));
+    D.set_hide = calloc((size_t)CV_MAX(D.d.nsets, 1), sizeof(bool));
     D.surf_on = calloc((size_t)CV_MAX(D.d.nsurfs, 1), sizeof(bool));
     D.link_on = calloc((size_t)CV_MAX(D.d.nlinks, 1), sizeof(bool));
     for (int i = 0; D.link_on && i < D.d.nlinks; i++)           /* spiders on, surface pairs off */
@@ -237,7 +240,7 @@ uint32_t deck_elem(const cv_frd* f, uint32_t id) {
     return de == UINT32_MAX ? UINT32_MAX : D.emap[de];
 }
 
-/* ---- display group: ticked element sets --------------------------------------- */
+/* ---- display group: ticked element sets, hidden element sets ------------------- */
 
 bool deck_any_elset_on(void) {
     for (int i = 0; D.on && i < D.d.nsets; i++) if (D.d.sets[i].is_elem && D.set_on[i]) return true;
@@ -270,21 +273,34 @@ void deck_apply_removed(const cv_frd* f, uint8_t* vis) {
     }
 }
 
-/* AND vis with "in at least one ticked element set" (no set ticked = no filter). */
-void deck_apply_mask(const cv_frd* f, uint8_t* vis) {
-    if (!deck_any_elset_on()) return;
-    uint8_t* in = calloc(CV_MAX(f->n_elems, 1), 1);
-    if (!in) return;
+bool deck_any_elset_hidden(void) {
+    for (int i = 0; D.on && D.set_hide && i < D.d.nsets; i++) if (D.d.sets[i].is_elem && D.set_hide[i]) return true;
+    return false;
+}
+
+/* vis[e] = v for every shown element of the element sets flagged in `which` */
+static void mark_sets(const cv_frd* f, const bool* which, uint8_t* vis, uint8_t v) {
     for (int i = 0; i < D.d.nsets; i++) {
         const cv_set* s = &D.d.sets[i];
-        if (!s->is_elem || !D.set_on[i]) continue;
+        if (!s->is_elem || !which[i]) continue;
         for (uint32_t j = 0; j < s->n; j++) {
             uint32_t e = deck_elem(f, s->ids[j]);
-            if (e != UINT32_MAX) in[e] = 1;
+            if (e != UINT32_MAX) vis[e] = v;
         }
     }
-    for (uint32_t e = 0; e < f->n_elems; e++) vis[e] &= in[e];
-    free(in);
+}
+
+/* AND vis with "in at least one ticked element set" (no set ticked = no filter),
+   then drop the elements of the hidden sets: hiding wins over showing. */
+void deck_apply_mask(const cv_frd* f, uint8_t* vis) {
+    if (deck_any_elset_on()) {
+        uint8_t* in = calloc(CV_MAX(f->n_elems, 1), 1);
+        if (!in) return;
+        mark_sets(f, D.set_on, in, 1);
+        for (uint32_t e = 0; e < f->n_elems; e++) vis[e] &= in[e];
+        free(in);
+    }
+    if (deck_any_elset_hidden()) mark_sets(f, D.set_hide, vis, 0);
 }
 
 /* ---- deck node -> shown node ------------------------------------------------------

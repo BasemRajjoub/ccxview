@@ -25,3 +25,6 @@ samples/*/*.nam
 dist/
 !samples/modelchange/modelchange.frd
 !samples/modelchange/submodel.frd
+
+# post-processing kept beside a model by ccxview
+*.ccxview
