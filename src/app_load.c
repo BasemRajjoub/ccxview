@@ -187,6 +187,7 @@ void unload(void) {
     deck_clear();
     fail_clear();
     mesh_clear();
+    shell_clear();
     cv_skin_free(&G.skin);
     cv_groups_free(&G.groups);
     cv_frd_free(&G.frd);
@@ -284,6 +285,7 @@ static void apply_load(cv_job* j) {
     G.groups = j->groups;   memset(&j->groups, 0, sizeof j->groups);
     G.skin = j->skin;       memset(&j->skin, 0, sizeof j->skin);
     gp_localize();                             /* needs the deck and G.frd */
+    shell_attach();                            /* SHELL beside STRESS: the same */
     snprintf(G.path, sizeof G.path, "%s", j->path);
     bool new_model = app_measure_model(G.path);   /* another file: its measurements go (a sidecar may add them after) */
     G.load_seconds = j->seconds;
@@ -484,23 +486,28 @@ static void apply_load(cv_job* j) {
         app_groups_changed();
     }
     if (O.step) { app_set_step(O.step < 0 ? G.frd.n_steps - 1 : O.step - 1); app_fit(); }
-    if (O.export_kind == 1) app_export_png();
-    else if (O.export_kind == 3) app_export_data(false);
-    else if (O.export_kind == 4) app_export_data(true);
-    else if (O.export_kind >= 5) {                 /* seq / mp4 / seqsteps / mp4steps */
-        G.exp_video = O.export_kind == 6 || O.export_kind == 8;
-        G.exp_kind = O.export_kind >= 7;
-        app_export_animation();
-    }
     if (O.conv) G.show_conv = true;
     if (O.look >= 0) app_view(O.look);
     if (O.target_set) G.cam.target = v3_make(O.target[0], O.target[1], O.target[2]);
     if (O.zoom > 0) G.cam.dist /= O.zoom;
-    if (O.field && G.frd.n_steps > 0) {
-        int fi = find_field(G.step, O.field);
+    if (O.field && G.frd.n_steps > 0) {     /* NAME, or NAME:COMPONENT as the Fields tree names it (SHELL:Mxx) */
+        char name[64];
+        const char* colon = strchr(O.field, ':');
+        snprintf(name, sizeof name, "%.*s", (int)(colon ? CV_MIN((size_t)(colon - O.field), sizeof name - 1) : strlen(O.field)), O.field);
+        int fi = find_field(G.step, name);
         if (fi >= 0) {
             cv_scalar_opt o[CV_MAX_OPTS];
-            if (cv_field_options(&G.frd.steps[G.step].fields[fi], o, CV_MAX_OPTS) > 0) app_select_src(O.field, o[0].comp, 0);
+            int n = app_field_options(&G.frd.steps[G.step].fields[fi], o, CV_MAX_OPTS), k = n ? 0 : -1;
+            if (colon) {
+                k = -1;
+                for (int i = 0; i < n; i++) if (!strcasecmp(o[i].label, colon + 1)) k = i;
+            }
+            if (k >= 0) app_select_src(name, o[k].comp, 0);
+            else {
+                char m[160];
+                snprintf(m, sizeof m, "--field %s: %s has no such component", O.field, name);
+                cv_msg_add(&G.msgs, 0, false, m);
+            }
         }
     }
     if (O.calc && !G.reload_keep && !app_calc_set(O.calc)) {
@@ -553,6 +560,15 @@ static void apply_load(cv_job* j) {
         G.crop_on = true;
         for (int k = 0; k < 3; k++) { G.crop_lo[k] = O.crop[2 * k]; G.crop_hi[k] = O.crop[2 * k + 1]; }
         app_groups_changed();
+    }
+    /* last: what --field, --calc, --fail, --mesh chose is what is exported */
+    if (O.export_kind == 1) app_export_png();
+    else if (O.export_kind == 3) app_export_data(false);
+    else if (O.export_kind == 4) app_export_data(true);
+    else if (O.export_kind >= 5) {                 /* seq / mp4 / seqsteps / mp4steps */
+        G.exp_video = O.export_kind == 6 || O.export_kind == 8;
+        G.exp_kind = O.export_kind >= 7;
+        app_export_animation();
     }
 }
 

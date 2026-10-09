@@ -58,6 +58,16 @@ static void test_units(void) {
     CHECK_UNIT(CV_SYS_IN_LBF_S, CV_Q_ENERGY, "in·lbf"); CHECK_UNIT(CV_SYS_IN_LBF_S, CV_Q_MASS, "lbf·s²/in");
     CHECK_UNIT(CV_SYS_IN_LBF_S, CV_Q_TEMP, "°F");     CHECK_UNIT(CV_SYS_IN_LBF_S, CV_Q_VELO, "in/s");
     CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_FORCE, "kN");    CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_STRESS, "GPa");
+    /* per width: a moment per width is named by the system's length, though N·m/m = N·mm/mm */
+    CHECK_UNIT(CV_SYS_MM_T_S, CV_Q_FORCE_LEN, "N/mm");      CHECK_UNIT(CV_SYS_MM_T_S, CV_Q_MOMENT_LEN, "N·mm/mm");
+    CHECK_UNIT(CV_SYS_M_KG_S, CV_Q_FORCE_LEN, "N/m");       CHECK_UNIT(CV_SYS_M_KG_S, CV_Q_MOMENT_LEN, "N·m/m");
+    CHECK_UNIT(CV_SYS_IN_LBF_S, CV_Q_FORCE_LEN, "lbf/in");  CHECK_UNIT(CV_SYS_IN_LBF_S, CV_Q_MOMENT_LEN, "lbf·in/in");
+    CHECK_UNIT(CV_SYS_FT_SLUG_S, CV_Q_MOMENT_LEN, "lbf·ft/ft");
+    CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_FORCE_LEN, "kN/mm");   CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_MOMENT_LEN, "kN·mm/mm");
+    CHECK_UNIT(CV_SYS_CM_G_S, CV_Q_MOMENT_LEN, "dyn·cm/cm");
+    CHECK_NEAR(u_conv(CV_SYS_MM_T_S, CV_TEMP_C, CV_Q_FORCE_LEN, "kN/m", 50), 50, 1e-12);
+    CHECK_NEAR(u_conv(CV_SYS_MM_T_S, CV_TEMP_C, CV_Q_MOMENT_LEN, "kN·m/m", 100), 0.1, 1e-12);
+    CHECK_REL(u_conv(CV_SYS_MM_T_S, CV_TEMP_C, CV_Q_FORCE_LEN, "lbf/in", 1), 5.71014715, 1e-8);
     CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_ENERGY, "J");    CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_VELO, "m/s");
     CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_ACC, "mm/ms²");  CHECK_UNIT(CV_SYS_MM_KG_MS, CV_Q_POWER, "kW");
     CHECK_UNIT(CV_SYS_MM_G_MS, CV_Q_FORCE, "N");      CHECK_UNIT(CV_SYS_MM_G_MS, CV_Q_STRESS, "MPa");
@@ -182,6 +192,10 @@ static void test_units(void) {
 
     /* the quantity of a field */
     CHECK_EQ(cv_field_quantity("STRESS", 0), CV_Q_STRESS);
+    CHECK_EQ(cv_field_quantity("SHELL", 0), CV_Q_FORCE_LEN);
+    CHECK_EQ(cv_field_quantity("SHELL", 3), CV_Q_MOMENT_LEN);
+    CHECK_EQ(cv_field_quantity("SHELL", 7), CV_Q_FORCE_LEN);
+    CHECK_EQ(cv_field_quantity("SHELL", 8), -1);
     CHECK_EQ(cv_field_quantity("STRESS", -1), CV_Q_STRESS);
     CHECK_EQ(cv_field_quantity("DISP", 2), CV_Q_LEN);
     CHECK_EQ(cv_field_quantity("TOSTRAIN", 0), CV_Q_STRAIN);

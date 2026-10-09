@@ -163,6 +163,28 @@ int cv_elemmap_axes(const cv_elemmap* m, const cv_inp* d, const cv_frd* f, uint3
     return cs->cyl ? 2 : 1;
 }
 
+bool cv_elemmap_shell(const cv_elemmap* m, const cv_inp* d, uint32_t e, uint32_t* shell, double Q[3][3]) {
+    uint32_t c = m->comp ? m->comp[e] : UINT32_MAX;
+    if (c == LAYER_LOST) return false;
+    if (c != UINT32_MAX) {                                  /* a layer: the orientation all share, else none */
+        const cv_layered* L = &d->comps[c];
+        uint32_t se = cv_frd_elem_index(&d->mesh, L->id);
+        int32_t o = L->nlay ? d->layer_ori[L->lay0] : -2;
+        for (uint32_t k = 1; k < L->nlay; k++) if (d->layer_ori[L->lay0 + k] != o) o = -2;
+        if (se == UINT32_MAX) return false;
+        *shell = se;
+        return shell_axes(d, se, o >= 0 ? &d->orients[o] : NULL, Q);
+    }
+    uint32_t de = m->f2d ? m->f2d[e] : UINT32_MAX;
+    if (de == UINT32_MAX || !d->nshells) return false;
+    uint32_t id = d->mesh.elem_id[de];
+    if (!bsearch(&id, d->shells, d->nshells, sizeof(uint32_t), cv_cmp_u32)) return false;
+    int32_t o = d->nelem_ori ? find_idix(d->elem_ori, d->nelem_ori, id) : -2;
+    if (o == -1) return false;
+    *shell = de;
+    return shell_axes(d, de, o >= 0 ? &d->orients[o] : NULL, Q);
+}
+
 static double turn_cos(const double A[3][3], const float* B) {   /* cos of the turn from A to B */
     double t = 0;
     for (int i = 0; i < 9; i++) t += A[i / 3][i % 3] * B[i];

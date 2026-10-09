@@ -62,6 +62,32 @@ and the shape follow every node; the full list is in
   `if(MISES > 200, 1, 0)`. Components, magnitudes, von Mises and principal
   values by name, node coordinates `X Y Z`, the step `TIME`, and the usual maths
   functions.
+- Shell section forces, the field `SHELL` beside `STRESS` when a deck with
+  shells lies beside the `.frd`: CalculiX expands a shell into a solid (S3, S4,
+  S6, S8 into C3D6, C3D8, C3D15, C3D20, a composite into one per layer), so the
+  file holds stresses where a structural program shows forces. ccxview turns
+  them back, per unit width: `Nxx Nyy Nxy` (membrane), `Mxx Myy Mxy` (bending),
+  `Qx Qy` (transverse shear), in the shell's axes as CalculiX's: the element's
+  `*ORIENTATION`, else the global x laid on the shell; a composite the
+  orientation its layers share, else the global x. Each line of nodes through
+  the thickness is integrated on its own, the stress taken linear between two
+  nodes and quadratic through three (the corners of a quadratic shell), over
+  the layers of a composite, then averaged at the nodes and shown on the whole
+  expanded shell. `N = integral of s dz`, `M = integral of s z dz`, `Q =
+  integral of the transverse shear dz`, z along the shell normal (e3) from the
+  middle of the section, so `Mxx` is the moment of `sxx`, positive when the
+  side the normal points to pulls (not the moment turning about x); `Mxy` is
+  that of `sxy`. Units are a force and a moment per width (N/mm, N mm/mm), in
+  the units window like any quantity. History, CSV, labels and formulas
+  (`SHELL_MXX`, `SHELL_NXX / 2`) work on it as on a field of the file.
+  Caveats: Qx and Qy come from the solid's nodal transverse shears, which the
+  expansion gives only roughly (the stress is extrapolated to the faces, where
+  it should be zero); a composite's layers share the nodes between them, where
+  CalculiX averages their stresses, so a jump in stiffness is smoothed. The
+  sample `samples/shellplate` (an S8R cantilever plate, 100 x 20 x 2 mm) gives
+  Nxx = 50 N/mm under a 1000 N pull and Mxx = 100.0 N mm/mm at the root under
+  20 N at the tip (F L / b), integrated over the width. Reinforcement design
+  (Wood-Armer moments) is not done.
 - Failure criteria as a field, from the stresses in each element's material
   axes (composite layers, `*ORIENTATION`, cylindrical systems): maximum stress,
   Tsai-Hill, Tsai-Wu, Hashin, Puck (action plane), LaRC03 and LaRC05 for UD

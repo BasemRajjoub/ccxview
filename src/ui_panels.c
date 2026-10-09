@@ -515,7 +515,10 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             for (int f = 0; f < st->nfields; f++) {
                 const cv_field_desc* d = &st->fields[f];
                 bool active = G.field_src == 0 && strcmp(d->name, G.field_name) == 0;
-                if (!nk_tree_push_id(ctx, NK_TREE_NODE, d->name, active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
+                bool sf = !strcmp(d->name, "SHELL");       /* worked out from STRESS with the deck (app_shell.c) */
+                if (sf) tip(ctx, "Shell section forces per width from the stresses through the thickness, in the shell's axes:\n"
+                                 "N membrane, M bending (positive: the +normal side pulls), Q transverse shear (rough)");
+                if (!nk_tree_push_id(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : d->name, active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
                     continue;
                 cv_scalar_opt opts[CV_MAX_OPTS];
                 int n = app_field_options(d, opts, CV_MAX_OPTS);

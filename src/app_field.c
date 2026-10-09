@@ -52,11 +52,16 @@ const float* cache_get(int step, int field) {
     if (slot == CV_CACHE_N) slot = 0;
     float* v = malloc(bytes);
     if (!v) { cv_msg_add(&G.msgs, 0, false, "out of memory decoding a field"); return NULL; }
-    cv_frd_read_field(&G.frd, d, v, &G.msgs);
+    field_read(step, d, v, &G.msgs);
     deck_localize(step, d, v);
     units_apply(d->name, d->ncomp, v, G.frd.n_nodes);
     G.cache[slot] = (cv_cache_entry){ step, field, v, bytes, ++G.cache_clock };
     return v;
+}
+
+void field_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs) {
+    if (shell_field(d)) shell_read(step, out, msgs);
+    else cv_frd_read_field(&G.frd, d, out, msgs);
 }
 
 /* the option label ("von Mises", "D1", ...) of component `comp` of a field */

@@ -15,6 +15,8 @@ ccxview model.frd --field STRESS --tensor ellipsoid   # stress glyphs: ellipsoid
                                                       #   schultz-kindlmann, reynolds, hwy
 ccxview model.frd --field STRESS --trajectories both  # principal stress trajectories: s1, s3, both
 ccxview model.frd --field DISP --history 17 # node 17 over all steps
+ccxview model.frd --field STRESS:SXX        # a field and its component, as the Fields tree names it
+ccxview plate.frd --field SHELL:Mxx         # shell section forces (with the deck): Nxx Nyy Nxy Mxx Myy Mxy Qx Qy
 ccxview model.frd --calc "S1 - S3"          # a calculated field (Tresca)
 ccxview model.frd --fail auto               # failure, per material; built-in presets where none assigned
 ccxview model.frd --fail larc05:rf          # a failure criterion (strength materials in ccxview.ini)
@@ -79,7 +81,7 @@ ccxview --version
   tensor glyphs, stress trajectories, supports, loads, springs.
 - **Groups**: element types, materials, sets and surfaces of the deck.
 - **Fields**: the results of the step, their components and invariants,
-  calculated fields, failure criteria (Strength materials... for the data),
+  the shell section forces (SHELL, with the deck), calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: camera, colours and legend, symbol sizes, mirror, replicate, cyclic
   symmetry, clip and crop; the Measurements window.
