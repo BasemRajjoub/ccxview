@@ -216,6 +216,8 @@ bool app_sel_crop(void) {
         G.crop_hi[k] = ext > 0 ? CV_MIN((hi[k] - b0[k]) / ext, 1.f) : 1.f;
     }
     G.crop_on = true;
+    app_view_push();                     /* the view before, for Ctrl+Z */
+    G.fit_pending = true;                /* framed once the cropped skin is built */
     app_groups_changed();
     return true;
 }

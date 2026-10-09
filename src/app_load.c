@@ -688,8 +688,10 @@ void poll_job(void) {
             }
             deck_refresh_highlight();
             app_label_changed();                  /* other nodes and faces to label */
+            if (G.fit_pending && !G.skin_dirty) { G.fit_pending = false; app_fit(); }   /* the last of the builds in a row */
         } else {
             cv_msg_add(&G.msgs, 0, false, j->err);
+            G.fit_pending = false;
         }
         free(j->eye_node); j->eye_node = NULL;
         if (G.skin_dirty) { j->eye_only = false; start_skin_job(); }

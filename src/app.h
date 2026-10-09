@@ -134,6 +134,7 @@ typedef struct {
 
     cv_job    job;
     bool      skin_dirty;     /* a group changed while a job was running */
+    bool      fit_pending;    /* the view fitted once the skin being built is in (crop to the selection) */
 
     /* crop box, as fractions of the model bounding box per axis */
     bool      crop_on;

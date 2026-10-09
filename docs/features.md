@@ -197,7 +197,7 @@ elements and nodes:
   on the max.
 - What it is: the count, the extremes with their ids, the deck sets it shares
   members with ("EHOLE 40/40").
-- What is done with it: hide it, show only it, put the crop box round it or the
+- What is done with it: hide it, show only it, put the crop box round it (the view framed on it once cut; Ctrl+Z goes back) or the
   clip plane through its centre; its rows as CSV; its ids as `*ELSET` /
   `*NSET` lines, to the clipboard or to `<model>_<name>.inp` beside the model to
   `*INCLUDE` in a deck (a file of its own: the model's input is never
