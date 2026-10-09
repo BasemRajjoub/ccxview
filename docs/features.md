@@ -109,6 +109,18 @@ follow the deformed shape; a bolt's preload sits on its section inside the
 bolt, so it is drawn in front of the faces. [keywords.md](keywords.md) lists every keyword read
 and what is drawn for it; `samples/symbols/` shows them all.
 
+Loads with an `*AMPLITUDE` are drawn and labelled with their value at the time
+of the increment on screen (tabular amplitudes, step or total time). Elements a
+`*MODEL CHANGE` removed are hidden in the steps they are out, and left out of
+the legend's range. In a submodel the DOFs and faces the global model drives
+(`*BOUNDARY, SUBMODEL`, `*DSLOAD, SUBMODEL`) are drawn in blue and labelled.
+Groups > "Steps, amplitudes ..." opens the Deck window: the steps with their
+procedure and time, the one on screen, what each `*MODEL CHANGE` takes out or
+puts back (and "show removed elements"), the submodel's global results and
+driven sets, the amplitudes with their points. [results.md](results.md) lists
+the result fields and what is done with each; `samples/modelchange/` shows a
+model that changes from step to step and a submodel of it.
+
 ## Looking at results
 
 - Animation: mode shapes, steady-state phases, deformation cycles, step

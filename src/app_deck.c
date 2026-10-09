@@ -39,6 +39,8 @@ static struct {
     cv_elemmap M;               /* .frd element -> material and axes, built on first need */
     const cv_frd* M_for;
     bool      M_ok;
+    /* *MODEL CHANGE: the elements out in step rm_step, as the shown mask has them */
+    uint32_t* rm; int64_t nrm; int rm_step;
 } D;
 
 static void grid_free(void) {
@@ -61,7 +63,7 @@ void deck_clear(void) {
     cv_elemmap_free(&D.M);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
-    free(D.set_on); free(D.surf_on); free(D.link_on); free(D.nvis);
+    free(D.set_on); free(D.surf_on); free(D.link_on); free(D.nvis); free(D.rm);
     memset(&D, 0, sizeof D);
     cv_render_aux(CV_AUX_HLPT, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_HLTRI, NULL, NULL, NULL, 0);
@@ -80,6 +82,7 @@ void deck_set(cv_inp* d, const char* path) {
     D.d = *d;
     memset(d, 0, sizeof *d);
     D.on = true;
+    D.rm_step = -2;                     /* no mask built for a step yet */
     snprintf(D.path, sizeof D.path, "%s", path);
     D.set_on = calloc((size_t)CV_MAX(D.d.nsets, 1), sizeof(bool));
     D.surf_on = calloc((size_t)CV_MAX(D.d.nsurfs, 1), sizeof(bool));
@@ -239,6 +242,32 @@ uint32_t deck_elem(const cv_frd* f, uint32_t id) {
 bool deck_any_elset_on(void) {
     for (int i = 0; D.on && i < D.d.nsets; i++) if (D.d.sets[i].is_elem && D.set_on[i]) return true;
     return false;
+}
+
+/* *MODEL CHANGE: the elements removed in the step on screen. true when they differ
+   from those the shown mask was built with (they are then the new ones). */
+static bool removed_changed(void) {
+    int st = D.on && D.d.nmchg ? deck_step() : -1;
+    if (st == D.rm_step) return false;
+    uint32_t* ids = NULL;
+    int64_t n = st >= 0 ? cv_inp_removed(&D.d, st, &ids) : 0;
+    if (n < 0) n = 0;
+    bool same = n == D.nrm && (!n || !memcmp(ids, D.rm, (size_t)n * sizeof *ids));
+    free(D.rm);
+    D.rm = ids; D.nrm = n; D.rm_step = st;
+    return !same;
+}
+
+const uint32_t* deck_removed(int64_t* n) { removed_changed(); *n = D.nrm; return D.rm; }
+
+/* vis without the removed elements, unless they are to be shown */
+void deck_apply_removed(const cv_frd* f, uint8_t* vis) {
+    removed_changed();
+    if (G.show_removed) return;
+    for (int64_t i = 0; i < D.nrm; i++) {
+        uint32_t e = deck_elem(f, D.rm[i]);
+        if (e != UINT32_MAX) vis[e] = 0;
+    }
 }
 
 /* AND vis with "in at least one ticked element set" (no set ticked = no filter). */
@@ -661,7 +690,8 @@ static bool surf_shown(int si) {
     if (D.surf_on[si]) return true;
     for (int i = 0; i < D.d.nlinks; i++) {
         const cv_link* l = &D.d.links[i];
-        if (D.link_on[i] && (l->kind == CV_LINK_TIE || l->kind == CV_LINK_CONTACT) && (l->surf[0] == si || l->surf[1] == si)) return true;
+        if (D.link_on[i] && (l->kind == CV_LINK_TIE || l->kind == CV_LINK_CONTACT) && (l->surf[0] == si || l->surf[1] == si) &&
+            cv_inp_link_active(&D.d, deck_step(), i)) return true;    /* a contact pair removed by *MODEL CHANGE: not */
     }
     return false;
 }
@@ -679,6 +709,7 @@ void deck_refresh_highlight(void) {
         D.nvis = calloc(G.frd.n_nodes, 1);
         for (size_t i = 0; D.nvis && i < G.skin.n_pt; i++) D.nvis[G.skin.pt[i]] = 1;
     }
+    if (removed_changed() && !G.show_removed) app_groups_changed();   /* another step: elements out or back */
     estimate_absent();
     loads_refresh();
     refresh_discrete();

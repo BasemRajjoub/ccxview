@@ -35,27 +35,30 @@ typedef struct {
    step: the *STEP the line stands in (0 = the first), -1 before any step. A card
    with OP=NEW leaves a marker (node / elem 0, set -2) that drops what its kind
    had in the steps before. cv_inp_applied folds the lines into what holds in one
-   step. */
+   step.
+   amp: the AMPLITUDE= of the card, index into amps + 1, 0 none (the value of the
+   line holds at the step's end). sub: a *BOUNDARY, SUBMODEL or *DSLOAD, SUBMODEL
+   line, its value taken from the global model's step `sub` (STEP=), 0 not one. */
 /* *BOUNDARY: node, first..last DOF (1-6 mechanical, 11 temperature), the value
    (0: held, else a prescribed displacement, rotation or temperature) */
-typedef struct { uint32_t node; uint8_t dof_lo, dof_hi; int16_t step; float value; } cv_bc;
+typedef struct { uint32_t node; uint8_t dof_lo, dof_hi; int16_t step; float value; int16_t amp, sub; } cv_bc;
 /* *CLOAD: node, DOF 1-6, magnitude. *CFLUX: DOF 11, heat into the node. */
-typedef struct { uint32_t node; uint8_t dof; int16_t step; float value; } cv_cload;
+typedef struct { uint32_t node; uint8_t dof; int16_t step; float value; int16_t amp; } cv_cload;
 /* On an element face (0-based CalculiX face). P: *DLOAD / *DSLOAD pressure, positive
    pushes on the face; on a plane element (CPS, CPE, CAX) the face is an edge.
    EDGE: *DLOAD EDNORn, a load on edge n of a shell, normal to it in its plane.
    FLUX: *DFLUX Sn, heat into the face. FILM: *FILM Fn, convection (value: the film
    coefficient). RAD: *RADIATE Rn (value: the emissivity). */
 enum { CV_DL_P, CV_DL_EDGE, CV_DL_FLUX, CV_DL_FILM, CV_DL_RAD, CV_DL_N };
-typedef struct { uint32_t elem; uint8_t face, kind; int16_t step; float value; } cv_dload;
+typedef struct { uint32_t elem; uint8_t face, kind; int16_t step; float value; int16_t amp, sub; } cv_dload;
 /* On whole elements: an element set (set: index into sets) or one element (set -1).
    GRAV: value x direction v[0..2]. CENTRIF: value = omega^2, a point v[0..2] on the
    axis and its direction v[3..5]. FORCE: *DLOAD BX / BY / BZ, value along v[0..2].
    NEWTON: gravity between the bodies. HEAT: *DFLUX BF, heat per volume. */
 enum { CV_BL_GRAV, CV_BL_CENTRIF, CV_BL_FORCE, CV_BL_NEWTON, CV_BL_HEAT, CV_BL_N };
-typedef struct { uint8_t kind; int16_t step; int set; uint32_t elem; float value; float v[6]; } cv_body;
+typedef struct { uint8_t kind; int16_t step; int set; uint32_t elem; float value; float v[6]; int16_t amp; } cv_body;
 /* *TEMPERATURE: a temperature given to a node (a thermal load, not a support) */
-typedef struct { uint32_t node; int16_t step; float value; } cv_ntemp;
+typedef struct { uint32_t node; int16_t step; float value; int16_t amp; } cv_ntemp;
 /* *PRE-TENSION SECTION: a bolt cut at a surface (surf, index into surfs) or a beam
    element (elem), its reference node, and the direction of the preload when the
    deck gives one. The preload itself is a *CLOAD or *BOUNDARY on DOF 1 of ref. */
@@ -70,6 +73,37 @@ typedef struct {
     cv_body*  body;   uint32_t nbody;
     cv_ntemp* temps;  uint32_t ntemps;
 } cv_applied;
+
+/* *AMPLITUDE: a named function of time a load is multiplied by. TABULAR (the
+   default DEFINITION=): time, value pairs, straight between them and constant beyond
+   the ends; in step time, or in total time with TIME=TOTAL TIME. The other
+   definitions (SMOOTH STEP, PERIODIC, MODULATED, DECAY, SOLUTION DEPENDENT, USER, ...)
+   keep their name and are not evaluated (tabular false). */
+typedef struct {
+    char   name[64], def[24];   /* upper case; def "TABULAR" or as the deck gives it */
+    bool   tabular, total;
+    float* t; float* v; uint32_t n;
+} cv_amp;
+
+/* Per *STEP: the procedure keyword (STATIC, FREQUENCY, ...; "" none) and the time
+   period of its data line (1 when not given; 0 for procedures that take no time:
+   FREQUENCY, BUCKLE, STEADY STATE DYNAMICS, ...). */
+typedef struct { char proc[32]; float period; } cv_stepinfo;
+
+/* *MODEL CHANGE, TYPE=ELEMENT, REMOVE / ADD: an element set (set >= 0) or element
+   (set -1, elem) leaves the model or comes back from step `step` on.
+   TYPE=CONTACT PAIR: link (index into links) is the contact pair. */
+typedef struct { int16_t step; bool add; int set; uint32_t elem; int link; } cv_mchange;
+
+/* *SUBMODEL: the global model's results (INPUT=) and what it drives: TYPE=NODE node
+   sets or nodes (nodes, sorted ids), TYPE=SURFACE surfaces (surf, indices into surfs)
+   whose pressure comes from the global stresses. names: the data lines as given. */
+typedef struct {
+    bool      surface;
+    char      input[256], gelset[64], names[128];
+    uint32_t* nodes; uint32_t nn;
+    int*      surf;  int nsurf;
+} cv_submodel;
 
 /* Discrete elements: springs, dashpots, masses, gaps. Two-node ones are also
    mesh elements (FRD type 11, as CalculiX writes them); one-node ones live only
@@ -120,6 +154,10 @@ typedef struct {
     cv_body*    body;       uint32_t nbody;
     cv_ntemp*   temps;      uint32_t ntemps;
     cv_pretension* pret;    uint32_t npret;
+    cv_amp*     amps;       int namps;
+    cv_stepinfo* stepinfo;                      /* per *STEP (nsteps) */
+    cv_mchange* mchg;       uint32_t nmchg;     /* in deck order */
+    cv_submodel* subs;      int nsubs;
     int         cyc_n;      float cyc_axis[6];  /* *CYCLIC SYMMETRY MODEL: N= and the two points of its axis; 0 = none */
     cv_discrete* disc;      uint32_t ndisc;
     cv_link*    links;      int nlinks;
@@ -158,6 +196,24 @@ const cv_set* cv_inp_set(const cv_inp* d, const char* name, bool is_elem);   /* 
    replacing the earlier one, OP=NEW dropping all of its kind. false: out of memory. */
 bool cv_inp_applied(const cv_inp* d, int step, cv_applied* a);
 void cv_applied_free(cv_applied* a);
+
+/* inp_steps.c: amplitudes, step times, model changes */
+/* amplitude a at time t; NaN when it is not evaluated (not TABULAR, no points) */
+double cv_amp_at(const cv_amp* a, double t);
+/* the total time at the start of step `step` (the periods of the steps before it) */
+double cv_inp_step_start(const cv_inp* d, int step);
+/* the factor of a line with amplitude amp (cv_bc.amp, ...) at step time ts and total
+   time tt: 1 without one, NaN when it is not evaluated */
+double cv_inp_amp_factor(const cv_inp* d, int amp, double ts, double tt);
+/* every value of a scaled by its amplitude at step time ts, total time tt; a value
+   whose amplitude is not evaluated is left as the line gives it */
+void cv_applied_at(const cv_inp* d, cv_applied* a, double ts, double tt);
+/* the elements removed by *MODEL CHANGE in step `step` (0-based) and not added back:
+   sorted ids in *ids (malloc'd, NULL when none), their count returned; -1 out of memory */
+int64_t cv_inp_removed(const cv_inp* d, int step, uint32_t** ids);
+/* the contact pair link k is active in step `step` (not removed by *MODEL CHANGE,
+   TYPE=CONTACT PAIR, REMOVE, or added back) */
+bool cv_inp_link_active(const cv_inp* d, int step, int k);
 
 /* Results CalculiX wrote in local systems (GLOBAL=NO with *TRANSFORM, *ORIENTATION
    or shell elements) turned back to global. The .frd does not say which system its

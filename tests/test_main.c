@@ -1455,6 +1455,7 @@ int main(void) {
     test_calc();
     test_units();
     test_loads();
+    test_steps();
     test_cap();
     test_label();
     test_glyph();

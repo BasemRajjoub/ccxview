@@ -64,7 +64,8 @@ Each increment of the `.frd` is a step on the time bar, with its time; a
 scale of the shape arbitrary). History (a node or an element over all steps)
 plots against the time, or the step number when the time does not grow.
 The deck's supports and loads follow the step on screen (the `.frd` numbers its
-steps as the deck's `*STEP`s).
+steps as the deck's `*STEP`s), loads with an `*AMPLITUDE` at the time of the
+increment, and elements a `*MODEL CHANGE` removed are hidden.
 
 ## Cyclic symmetry, comparisons
 

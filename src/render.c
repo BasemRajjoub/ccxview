@@ -1209,6 +1209,10 @@ void cv_render_draw(const cv_draw* d) {
             draw_inst(CV_INST_HEAT, CV_COLOR_SOLID, heat_rgb, d, px);
             draw_inst_map(CV_INST_BOLTLD, CV_COLOR_SOLID, ld_rgb, d, px, R.cmap_view, true);
         }
+        if (d->supports || d->loads) {            /* a submodel's nodes and faces driven by the global model: blue */
+            static const float sub_rgb[3] = { 0.35f, 0.50f, 1.0f };
+            draw_inst(CV_INST_SUB, CV_COLOR_SOLID, sub_rgb, d, px);
+        }
         if (d->vectors) draw_inst(CV_INST_VEC, d->vectors_color, vec_rgb, d, px);
         {   /* tensor glyphs, the cross and the trajectories. Coloured by sign: blue -lim, pale 0, red +lim */
             static const float glyph_rgb[3] = { 0.85f, 0.85f, 0.85f }, ten_rgb[3] = { 0.90f, 0.15f, 0.12f },
