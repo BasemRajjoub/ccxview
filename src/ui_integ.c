@@ -120,6 +120,11 @@ void uii_window_integrals(struct nk_context* ctx, float s, float row, int fw, in
             nk_label_colored(ctx, sum ? "sum" : "integral", NK_TEXT_RIGHT, P.dim);
             nk_label_colored(ctx, sum ? "" : "average", NK_TEXT_RIGHT, P.dim);
             const char* size = GI.kind == CV_IK_NODES ? "nodes" : GI.kind == CV_IK_SURFACE ? "area" : "volume";
+            const char* lu = app_unit("DISP", 0);
+            if (GI.kind != CV_IK_NODES && lu[0]) {          /* in the length shown, as the values */
+                snprintf(txt, sizeof txt, "%s [%s^%d]", size, lu, GI.kind == CV_IK_SURFACE ? 2 : 3);
+                size = txt;
+            }
             nk_label(ctx, size, NK_TEXT_LEFT);
             if (cur >= 0) fmt_num(num, sizeof num, GI.size[cur]); else snprintf(num, sizeof num, "-");
             nk_label(ctx, num, NK_TEXT_RIGHT);

@@ -64,6 +64,8 @@ enum { CV_CACHE_N = 8 };
 
 /* Background work: loading a file, or rebuilding the skin after a group change. */
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
+/* the Selection window's parts that fold */
+enum { CV_SELG_PICK, CV_SELG_NAMES, CV_SELG_USE, CV_SELG_NAMED, CV_SELG_N };
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
@@ -134,6 +136,7 @@ typedef struct {
 
     cv_job    job;
     bool      skin_dirty;     /* a group changed while a job was running */
+    bool      fit_pending;    /* the view fitted once the skin being built is in (crop to the selection) */
 
     /* crop box, as fractions of the model bounding box per axis */
     bool      crop_on;
@@ -362,6 +365,7 @@ typedef struct {
     int       sel_tool;              /* CV_ST_*: what a click in the view does (the Selection window's tools) */
     bool      show_select;           /* the Selection window */
     bool      sel_filters;           /* ... with its filter rows open */
+    bool      sel_open[4];           /* ... and its other parts: CV_SELG_* (the filters are sel_filters) */
     char      sel_note[160];         /* what the last selection step did or why it did nothing */
     float     lasso[2 * 512];        /* the lasso being drawn: window pixels, lasso_n points */
     int       lasso_n;
@@ -670,6 +674,7 @@ bool app_sidecar_path(char* out, size_t n);  /* where the open model's goes; fal
 bool app_sidecar_on(void);                   /* the setting and --no-sidecar allow it */
 bool app_sidecar_save(void);                 /* now, whether it changed or not */
 void app_sidecar_load(bool reload);          /* after a load; reload: the parts a reload keeps stay as they are */
+void app_sidecar_units(void);                /* the units part alone, nothing redrawn (the headless runs) */
 void app_sidecar_tick(void);                 /* per frame: written a moment after a change */
 void app_sidecar_flush(void);                /* written now if it changed (before unload, at quit) */
 void app_sidecar_forget(void);               /* delete the file, open the model afresh */
@@ -852,6 +857,7 @@ void app_dialog_done(const char* path);             /* the open dialog's pick: a
 
 /* app_settings.c: the ini file */
 void settings_load(void);                    /* into G, before the first frame */
+void settings_load_units(void);              /* the unit keys alone, for the headless runs */
 void settings_window_size(int* w, int* h);   /* before the window exists */
 void settings_save(int win_w, int win_h);
 bool settings_apply(const char* key_eq_value);   /* --opt; false for an unknown key */

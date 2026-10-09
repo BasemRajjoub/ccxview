@@ -95,6 +95,7 @@ static void init(void) {
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
     G.sel_elems = true; G.sel_visible = true; G.sel_mark_max = true;
+    G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true;   /* the kept ones folded */
     G.label_px = 13.f; G.minmax_n = 1; G.oor_mode[0] = G.oor_mode[1] = 1;
     G.oor_rgb[0][0] = 0.9f; G.oor_rgb[0][1] = 0.1f; G.oor_rgb[0][2] = 0.1f; G.oor_rgb[1][0] = 0.1f; G.oor_rgb[1][1] = 0.2f; G.oor_rgb[1][2] = 0.9f; G.label_spacing = 10.f; G.label_front = true;
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
@@ -912,7 +913,7 @@ static void event(const sapp_event* ev) {
                 if (!drag.moved && fabsf(drag.x - drag.x0) + fabsf(drag.y - drag.y0) > 4) {
                     drag.moved = true;
                     if (drag.mode == NAV_LABEL) { app_label_drag(drag.x - drag.x0, drag.y - drag.y0); break; }   /* the first move whole */
-                    if (drag.mode != CV_NAV_BOX) {       /* the view before the drag, for Ctrl+Z */
+                    if (drag.mode != CV_NAV_BOX && drag.mode != CV_NAV_LASSO) {   /* the view before the drag, for Ctrl+Z */
                         cv_camera now = G.cam;
                         G.cam = drag.cam0; app_view_push(); G.cam = now;
                     }

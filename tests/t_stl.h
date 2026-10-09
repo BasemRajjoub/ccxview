@@ -110,6 +110,19 @@ static void test_stl(void) {
     CHECK(!cv_stl_read(&s, "build/no_such_file.stl", false, err, sizeof err));
     CHECK(err[0] != 0);
     remove(bin); remove(asc); remove(emp); remove("build/t_stl_solid.stl");
+
+    /* see-through layers back to front: the farthest box centre from the eye first */
+    {
+        const float lo[] = { 0, 0, 0,   10, 0, 0,   -5, 0, 0,   0, 0, 0 };
+        const float hi[] = { 2, 2, 2,   12, 2, 2,   -3, 2, 2,   2, 2, 2 };   /* centres x 1, 11, -4, 1 */
+        const float eye[3] = { 20, 1, 1 };
+        int o[4];
+        cv_stl_order_far(lo, hi, 4, eye, o);
+        CHECK(o[0] == 2 && o[1] == 0 && o[2] == 3 && o[3] == 1);         /* the tie keeps its order */
+        const float eye2[3] = { -20, 1, 1 };
+        cv_stl_order_far(lo, hi, 4, eye2, o);
+        CHECK(o[0] == 1 && o[1] == 0 && o[2] == 3 && o[3] == 2);
+    }
 }
 
 #endif

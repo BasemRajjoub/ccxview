@@ -1305,7 +1305,10 @@ void cv_render_meshes(const cv_draw* d, bool transparent) {
     if (d->vp_w <= 0 || d->vp_h <= 0) return;
     sg_apply_viewport(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
     sg_apply_scissor_rect(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
-    for (int i = 0; i < CV_MESH_N; i++) {
+    bool sorted = transparent && d->mesh_n_order > 0;      /* see-through: back to front */
+    for (int k = 0; k < (sorted ? CV_MIN(d->mesh_n_order, CV_MESH_N) : CV_MESH_N); k++) {
+        int i = sorted ? d->mesh_order[k] : k;
+        if (i < 0 || i >= CV_MESH_N) continue;
         float a = d->mesh[i].alpha;
         if (!d->mesh[i].on || !MESH[i].n_tri || !(a > 0) || (a < 1) != transparent) continue;
         vset v = { MESH[i].pos, {0}, {0}, {0} };

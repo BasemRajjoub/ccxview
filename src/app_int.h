@@ -142,6 +142,7 @@ typedef struct { float* buf; size_t cap; } step_scratch;
 const float* step_field_get(void* scratch, int step, int field);
 /* app_integ.c: integrals over a set, step by step */
 void         refresh_integ(void);
+void         integ_stale(void);      /* the rows made again on the next refresh (the units changed) */
 
 /* app_linearize.c: stress linearization, locating points in the solid */
 #define line_locate app_line_locate

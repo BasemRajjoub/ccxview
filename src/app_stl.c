@@ -132,4 +132,13 @@ void app_stl_draw(cv_draw* d) {
         memcpy(d->mesh[i].rgb, L[i].l.rgb, sizeof d->mesh[i].rgb);
         d->mesh[i].alpha = L[i].l.alpha;
     }
+    /* the see-through layers back to front, so a near one blends over a far one */
+    float lo[3 * CV_MESH_N], hi[3 * CV_MESH_N], eye[3];
+    v3 e, f, r, u;
+    cam_basis(&G.cam, &e, &f, &r, &u);
+    eye[0] = e.x; eye[1] = e.y; eye[2] = e.z;
+    for (int i = 0; i < nl; i++)
+        for (int k = 0; k < 3; k++) { lo[3 * i + k] = L[i].mesh.lo[k] * L[i].l.scale; hi[3 * i + k] = L[i].mesh.hi[k] * L[i].l.scale; }
+    cv_stl_order_far(lo, hi, nl, eye, d->mesh_order);
+    d->mesh_n_order = nl;
 }

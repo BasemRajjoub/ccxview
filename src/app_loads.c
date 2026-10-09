@@ -562,6 +562,18 @@ void loads_refresh(void) {
         /* point loads: forces, moments, heat */
         for (uint32_t i = 0; i < a->ncloads; i++) {
             const cv_cload* c = &a->cloads[i];
+            if (c->sub) {                           /* *CLOAD, SUBMODEL: the force of the global model, in blue */
+                if (c->dof > 3 || !deck_node_pd(c->node, p, d) || !thin_take(&th, p, 0.4f * LL, 400u + c->dof)) continue;
+                node_axes(dk, c->node, p, Q);
+                arrow(&sb, p, Q[c->dof - 1], LL, d);
+                if (app_label_on(CV_LABEL_LOADS)) {
+                    static const char* fn[3] = { "FX", "FY", "FZ" };
+                    snprintf(lt, sizeof lt, "%s global step %d", fn[c->dof - 1], c->sub);
+                    snprintf(at, sizeof at, "%u dof %d global", c->node, c->dof);
+                    label_sink_add(p, d, lt, false, at);
+                }
+                continue;
+            }
             if (c->value == 0 || is_bolt_ref(dk, c->node) || !deck_node_pd(c->node, p, d)) continue;
             if (c->dof == 11) {                     /* no direction of its own: from outside the model */
                 for (int k = 0; k < 3; k++) dir[k] = 0.5f * ((&G.bmin.x)[k] + (&G.bmax.x)[k]) - p[k];
@@ -712,9 +724,10 @@ void loads_refresh(void) {
         /* given temperatures */
         for (uint32_t i = 0; i < a->ntemps; i++) {
             if (!deck_node_pd(a->temps[i].node, p, d)) continue;
-            diamond(&ht, p, 0.3f * L, d);
+            diamond(a->temps[i].sub ? &sb : &ht, p, 0.3f * L, d);   /* SUBMODEL: the global model's, in blue */
             if (app_label_on(CV_LABEL_LOADS)) {
-                val_text(lt, sizeof lt, dk, "T", a->temps[i].value, a->temps[i].amp);
+                if (a->temps[i].sub) snprintf(lt, sizeof lt, "T global step %d", a->temps[i].sub);
+                else val_text(lt, sizeof lt, dk, "T", a->temps[i].value, a->temps[i].amp);
                 snprintf(at, sizeof at, "%u T", a->temps[i].node);
                 label_sink_add(p, d, lt, false, at);
             }

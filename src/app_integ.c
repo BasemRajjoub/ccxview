@@ -258,6 +258,9 @@ void refresh_integ(void) {
     if (!GI.step || !GI.t || !GI.size || !GI.val || (nv && !P) || (cyl && !r)) { free(P); free(r); rows_free(); return; }
     step_scratch scr = { NULL, 0 };
     uint32_t skipped = 0, missing = 0;
+    /* the values come in the units shown (units_apply), the mesh in the model's: the
+       volume, the area and the lever of a moment are turned to the length shown as well */
+    double kl = 1.0 / units_len_raw(), kg = GI.kind == CV_IK_VOLUME ? kl * kl * kl : GI.kind == CV_IK_SURFACE ? kl * kl : 1;
     for (int s = 0; s < ns; s++) {
         const float* vals = NULL;
         if (d) {
@@ -285,15 +288,15 @@ void refresh_integ(void) {
             cv_integ_nodes(&G.frd, R.nodes, R.nn, vals, vals ? nv : 0, GI.about, &o);
             GI.size[GI.n] = o.n;
             for (int q = 0; q < extra; q++) row[q] = o.sum[q];
-            for (int q = extra; q < GI.nq; q++) row[q] = o.moment[q - extra];
+            for (int q = extra; q < GI.nq; q++) row[q] = o.moment[q - extra] * kl;
             missing = CV_MAX(missing, o.missing);
         } else {
             cv_integ o;
             if (GI.kind == CV_IK_VOLUME) cv_integ_volume(&G.frd, R.el, R.n, vals, vals ? nv : 0, &o);
             else cv_integ_faces(&G.frd, R.el, R.fc, R.n, vals, vals ? nv : 0, &o);
-            GI.size[GI.n] = o.size;
-            for (int q = 0; q < extra; q++) row[q] = o.integ[q];
-            for (int q = extra; q < GI.nq; q++) row[q] = tensor ? o.traction[q - extra] : o.push[q - extra];
+            GI.size[GI.n] = o.size * kg;
+            for (int q = 0; q < extra; q++) row[q] = o.integ[q] * kg;
+            for (int q = extra; q < GI.nq; q++) row[q] = (tensor ? o.traction[q - extra] : o.push[q - extra]) * kg;
             skipped = CV_MAX(skipped, o.skipped);
             missing = CV_MAX(missing, o.missing);
         }
@@ -312,6 +315,7 @@ void refresh_integ(void) {
 }
 
 void app_integ_refresh(void) { refresh_integ(); }
+void integ_stale(void) { R.key[0] = 0; }
 
 /* ---- opening, the command line, the CSV --------------------------------------------- */
 
@@ -375,7 +379,9 @@ bool app_integ_csv(const char* path) {
     if (!GI.open || !GI.n) return false;
     FILE* o = fopen(path, "wb");
     if (!o) return false;
-    cv_fprintf(o, "step,time,%s", GI.kind == CV_IK_NODES ? "nodes" : GI.kind == CV_IK_SURFACE ? "area" : "volume");
+    const char* lu = app_unit("DISP", 0);                    /* the volume and area in the length shown */
+    if (GI.kind == CV_IK_NODES || !lu[0]) cv_fprintf(o, "step,time,%s", GI.kind == CV_IK_NODES ? "nodes" : GI.kind == CV_IK_SURFACE ? "area" : "volume");
+    else cv_fprintf(o, "step,time,%s [%s^%d]", GI.kind == CV_IK_SURFACE ? "area" : "volume", lu, GI.kind == CV_IK_SURFACE ? 2 : 3);
     for (int q = 0; q < GI.nq; q++) {
         if (GI.how[q] == CV_IQ_INTEG) cv_fprintf(o, ",integral %s,average %s", GI.name[q], GI.name[q]);
         else cv_fprintf(o, GI.how[q] == CV_IQ_SUM ? ",sum %s" : ",%s", GI.name[q]);
@@ -396,7 +402,13 @@ bool app_integ_csv(const char* path) {
 /* --integrate-csv: no window. The field: --field, else STRESS (FORC for nodes), else
    the first of the last step; its first option (von Mises, the magnitude) */
 int app_integ_headless(const char* model, const char* spec, const char* field, const char* out) {
+    /* the units as the window would have them: the settings, --opt, the model's own file */
+    G.sidecar = true;
+    for (int q = 0; q < CV_Q_N; q++) G.unit_in[q] = G.unit_show[q] = -1;
+    settings_load_units();
+    for (int i = 0; i < O.nopts; i++) settings_apply(O.opts[i]);
     if (!app_load_headless(model)) return 1;
+    app_sidecar_units();
     const char* want = field ? field : strncasecmp(spec, "nodes", 5) ? "STRESS" : "FORC";
     G.field_src = 0;
     G.step = CV_MAX(G.frd.n_steps - 1, 0);

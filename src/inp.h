@@ -37,13 +37,17 @@ typedef struct {
    had in the steps before. cv_inp_applied folds the lines into what holds in one
    step.
    amp: the AMPLITUDE= of the card, index into amps + 1, 0 none (the value of the
-   line holds at the step's end). sub: a *BOUNDARY, SUBMODEL or *DSLOAD, SUBMODEL
-   line, its value taken from the global model's step `sub` (STEP=), 0 not one. */
+   line holds at the step's end); a card's TIME DELAY= makes an amplitude of its own,
+   the named one later by the delay ("RAMP DELAY 0.5"). sub: a *BOUNDARY, *CLOAD,
+   *DSLOAD or *TEMPERATURE line with SUBMODEL, its value taken from the global
+   model's step `sub` (STEP=), 0 not one (the line's value is then 0).
+   LOAD CASE=2 (the imaginary part of a steady state dynamics load) is not kept:
+   what is shown is load case 1. */
 /* *BOUNDARY: node, first..last DOF (1-6 mechanical, 11 temperature), the value
    (0: held, else a prescribed displacement, rotation or temperature) */
 typedef struct { uint32_t node; uint8_t dof_lo, dof_hi; int16_t step; float value; int16_t amp, sub; } cv_bc;
 /* *CLOAD: node, DOF 1-6, magnitude. *CFLUX: DOF 11, heat into the node. */
-typedef struct { uint32_t node; uint8_t dof; int16_t step; float value; int16_t amp; } cv_cload;
+typedef struct { uint32_t node; uint8_t dof; int16_t step; float value; int16_t amp, sub; } cv_cload;
 /* On an element face (0-based CalculiX face). P: *DLOAD / *DSLOAD pressure, positive
    pushes on the face; on a plane element (CPS, CPE, CAX) the face is an edge.
    EDGE: *DLOAD EDNORn, a load on edge n of a shell, normal to it in its plane.
@@ -58,7 +62,7 @@ typedef struct { uint32_t elem; uint8_t face, kind; int16_t step; float value; i
 enum { CV_BL_GRAV, CV_BL_CENTRIF, CV_BL_FORCE, CV_BL_NEWTON, CV_BL_HEAT, CV_BL_N };
 typedef struct { uint8_t kind; int16_t step; int set; uint32_t elem; float value; float v[6]; int16_t amp; } cv_body;
 /* *TEMPERATURE: a temperature given to a node (a thermal load, not a support) */
-typedef struct { uint32_t node; int16_t step; float value; int16_t amp; } cv_ntemp;
+typedef struct { uint32_t node; int16_t step; float value; int16_t amp, sub; } cv_ntemp;
 /* *PRE-TENSION SECTION: a bolt cut at a surface (surf, index into surfs) or a beam
    element (elem), its reference node, and the direction of the preload when the
    deck gives one. The preload itself is a *CLOAD or *BOUNDARY on DOF 1 of ref. */

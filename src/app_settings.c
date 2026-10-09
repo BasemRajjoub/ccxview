@@ -86,6 +86,8 @@ static const setting S[] = {
     B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor), B(wheel_invert), B(show_pivot),
     { "cam_ortho", 'b', &G.cam.ortho, 0, 0 }, F(fly_speed, 0.005f, 10),
     I(fly_clip, 0, 2), F(fly_clip_depth, 0, 0.2f), B(sel_elems), B(sel_nodes), B(sel_visible), B(sel_mark_max), B(sel_mark_min), B(sel_filters),
+    { "sel_open_pick", 'b', &G.sel_open[CV_SELG_PICK], 0, 0 }, { "sel_open_names", 'b', &G.sel_open[CV_SELG_NAMES], 0, 0 },
+    { "sel_open_use", 'b', &G.sel_open[CV_SELG_USE], 0, 0 }, { "sel_open_named", 'b', &G.sel_open[CV_SELG_NAMED], 0, 0 },
     SEC("Each model's post-processing (views, sets, paths, lines) kept in <model>.ccxview beside it: 1 on, 0 off"),
     B(sidecar),
     SEC("Display"),
@@ -175,6 +177,20 @@ void settings_load(void) {
     ui_set_pixel_font(cv_cfg_get_bool(&C, "ui_pixel_font", false));
     ui_set_theme(cv_cfg_get(&C, "ui_theme", NULL));
     fail_cfg_load(&C);
+}
+
+/* the headless --integrate-csv: the unit keys alone (and whether the model's own file
+   is read), nothing of the window */
+void settings_load_units(void) {
+    char path[1024];
+    cv_cfg c;
+    if (!cv_cfg_default_path(path, sizeof path) || !cv_cfg_load(&c, path)) return;
+    cv_cfg keep = C;
+    bool was = loaded;
+    C = c; loaded = true;
+    for (int i = 0; i < NS; i++) if (S[i].kind != '#' && (!strncmp(S[i].key, "unit", 4) || !strcmp(S[i].key, "sidecar"))) get_one(&S[i]);
+    cv_cfg_free(&C);
+    C = keep; loaded = was;
 }
 
 /* --opt key=value: any settings key, applied on top of the file */

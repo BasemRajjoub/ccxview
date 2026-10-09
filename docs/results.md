@@ -34,9 +34,9 @@ not built in: write them as a formula (`S1 - S3`, ...).
 |---|---|---|
 | `DISP` | `U` | the deformed shape (Deform, auto scale from the last step that is not a mode); the first field shown; turned to global from a `*TRANSFORM` |
 | `DISPI` | `U`, steady state dynamics | the imaginary part: the animation turns the shape through its phase (DISP cos wt - DISPI sin wt); no phase slider |
-| `PDISP`, `MDISP` | `PU` | components as written (every component counted a length for the units) |
+| `PDISP`, `MDISP` | `PU` | components as written: the amplitudes (`MAG1` .. `MAG3`) are lengths for the units, the phases (`PHA1` .. `PHA3`, degrees) are not converted |
 | `STRESS`, `STRESSI` | `S` | von Mises, principal values, glyphs, trajectories, failure criteria, stress linearization; turned to global from an `*ORIENTATION` with `GLOBAL=NO` |
-| `PSTRESS` | `PHS` | components; written in local systems it cannot be turned back and shows no value |
+| `PSTRESS` | `PHS` | components (the amplitudes are stresses for the units, the phases stay in degrees); written in local systems it cannot be turned back and shows no value |
 | `STRPOS`, `STRNEG`, `STRMID` | shell faces (FEMaster) | as `STRESS` |
 | `ZZSTR`, `ZZSTRI` | `ZZS` | von Mises, principal values (not turned to global) |
 | `TOSTRAIN`, `TOSTRAII`, `MESTRAIN`, `MESTRAII` | `E`, `ME` | principal values, glyphs; turned to global with `GLOBAL=NO` |

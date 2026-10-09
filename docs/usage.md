@@ -36,7 +36,9 @@ ccxview model.frd --field STRESS --integrate volume:EALL   # Integrals window: K
                                             #   (surface or a set's outer faces), nodes (a sum); TARGET a set or
                                             #   surface name, selection or shown; nodes:NSET@x,y,z: moment about x,y,z
 ccxview model.frd --field FORC --integrate nodes:NLEFT --integrate-csv rf.csv   # headless: every step's row
-                                            #   to the CSV, no window (field: --field, else STRESS / FORC for nodes)
+                                            #   to the CSV, no window (field: --field, else STRESS / FORC for nodes);
+                                            #   in the units the window would show: ccxview.ini, --opt units=1
+                                            #   --opt unit_length=0 (an index: m) ..., then the model's .ccxview
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --stl pin.stl --stl alt.stl --stl-alpha 0.4   # geometry that was not analysed, shown with
                                             #   the results (repeatable), see-through
@@ -46,7 +48,8 @@ ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
 ccxview model.frd --select set:EHOLE --select add:ids:1-20 --selection-window
                                             # selection steps, in order (see Selection below);
-                                            #   --opt sel_filters=1: the window's filter rows open
+                                            #   --opt sel_filters=1: the window's filter rows open;
+                                            #   sel_open_pick / _names / _use / _named=0|1: its other parts
 ccxview model.frd --find 120 --details      # probe node 120, its Details window open
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)

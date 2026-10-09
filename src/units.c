@@ -206,8 +206,8 @@ bool cv_unit_conv(int sys, int temp, int in, int q, int show, double* k, double*
 
 int cv_field_quantity(const char* f, int comp) {
     static const struct { const char* name; int q; } T[] = {
-        { "DISP", CV_Q_LEN }, { "DISPI", CV_Q_LEN }, { "PDISP", CV_Q_LEN }, { "MDISP", CV_Q_LEN }, { "MAXU", CV_Q_LEN },
-        { "STRESS", CV_Q_STRESS }, { "STRESSI", CV_Q_STRESS }, { "PSTRESS", CV_Q_STRESS }, { "ZZSTR", CV_Q_STRESS },
+        { "DISP", CV_Q_LEN }, { "DISPI", CV_Q_LEN }, { "MDISP", CV_Q_LEN }, { "MAXU", CV_Q_LEN },
+        { "STRESS", CV_Q_STRESS }, { "STRESSI", CV_Q_STRESS }, { "ZZSTR", CV_Q_STRESS },
         { "ZZSTRI", CV_Q_STRESS }, { "MAXS", CV_Q_STRESS }, { "PRESS", CV_Q_STRESS },
         { "PS3DF", CV_Q_STRESS }, { "PT3DF", CV_Q_STRESS },
         { "FORC", CV_Q_FORCE }, { "FORCI", CV_Q_FORCE }, { "RF", CV_Q_FORCE },
@@ -228,6 +228,10 @@ int cv_field_quantity(const char* f, int comp) {
     if (!f) return -1;
     if (!strcmp(f, "REBAR")) return comp >= 0 && comp < 6 ? CV_Q_AREA_LEN : -1;    /* As_x_top .. As_total | ratio, flag */
     if (!strcmp(f, "SHELL")) return comp >= 3 && comp <= 5 ? CV_Q_MOMENT_LEN : comp >= 0 && comp < 8 ? CV_Q_FORCE_LEN : -1;
+    /* complex results: amplitudes then phases (MAG1 .. MAG3 PHA1 .. PHA3; MAGXX .. MAGZX
+       PHAXX .. PHAZX); a phase is an angle in degrees, no unit of the system */
+    if (!strncmp(f, "PDISP", 5) && (f[5] == 0 || f[5] == ' ')) return comp >= 3 ? -1 : CV_Q_LEN;
+    if (!strncmp(f, "PSTRESS", 7) && (f[7] == 0 || f[7] == ' ')) return comp >= 6 ? -1 : CV_Q_STRESS;
     if (!strcmp(f, "CONTACT")) return comp >= 0 && comp < 3 ? CV_Q_LEN : CV_Q_STRESS;   /* COPEN CSLIP1 CSLIP2 | CPRESS CSHEAR1 CSHEAR2 */
     for (size_t i = 0; i < sizeof T / sizeof T[0]; i++) {
         size_t n = strlen(T[i].name);

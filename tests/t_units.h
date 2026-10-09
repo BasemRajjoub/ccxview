@@ -211,6 +211,10 @@ static void test_units(void) {
     CHECK_EQ(cv_field_quantity("SHELL", 8), -1);
     CHECK_EQ(cv_field_quantity("STRESS", -1), CV_Q_STRESS);
     CHECK_EQ(cv_field_quantity("DISP", 2), CV_Q_LEN);
+    CHECK_EQ(cv_field_quantity("PDISP", 2), CV_Q_LEN);        /* an amplitude */
+    CHECK_EQ(cv_field_quantity("PDISP", 3), -1);              /* a phase: degrees, not a length */
+    CHECK_EQ(cv_field_quantity("PSTRESS", 5), CV_Q_STRESS);
+    CHECK_EQ(cv_field_quantity("PSTRESS", 6), -1);
     CHECK_EQ(cv_field_quantity("TOSTRAIN", 0), CV_Q_STRAIN);
     CHECK_EQ(cv_field_quantity("PE", 0), CV_Q_STRAIN);
     CHECK_EQ(cv_field_quantity("NDTEMP", 0), CV_Q_TEMP);
