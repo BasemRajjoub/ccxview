@@ -911,7 +911,7 @@ static void event(const sapp_event* ev) {
                 if (!drag.moved && fabsf(drag.x - drag.x0) + fabsf(drag.y - drag.y0) > 4) {
                     drag.moved = true;
                     if (drag.mode == NAV_LABEL) { app_label_drag(drag.x - drag.x0, drag.y - drag.y0); break; }   /* the first move whole */
-                    if (drag.mode != CV_NAV_BOX) {       /* the view before the drag, for Ctrl+Z */
+                    if (drag.mode != CV_NAV_BOX && drag.mode != CV_NAV_LASSO) {   /* the view before the drag, for Ctrl+Z */
                         cv_camera now = G.cam;
                         G.cam = drag.cam0; app_view_push(); G.cam = now;
                     }
