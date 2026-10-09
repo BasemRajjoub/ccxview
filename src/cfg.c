@@ -261,6 +261,7 @@ void cv_cfg_unset(cv_cfg* c, const char* key) {
 enum { LONG_PIECE = 960 };
 void cv_cfg_set_long(cv_cfg* c, const char* key, const char* text) {
     size_t n = strlen(text), o = 0;
+    int last = 1;
     for (int k = 1; o < n || k == 1; k++) {
         size_t m = n - o;
         if (m > LONG_PIECE) {
@@ -275,6 +276,13 @@ void cv_cfg_set_long(cv_cfg* c, const char* key, const char* text) {
         while (e && (piece[e - 1] == ' ' || piece[e - 1] == ',')) piece[--e] = 0;
         cv_cfg_set(c, kk, piece);
         o += m;
+        last = k;
+    }
+    for (int k = last + 1;; k++) {                 /* the tail of a longer value saved before */
+        char kk[80];
+        snprintf(kk, sizeof kk, "%s_%d", key, k);
+        if (!cv_cfg_get(c, kk, NULL)) break;
+        cv_cfg_unset(c, kk);
     }
 }
 
@@ -292,7 +300,7 @@ char* cv_cfg_get_long(const cv_cfg* c, const char* key) {
         if (!p) break;
         size_t m = strlen(p);
         char* t = realloc(s, cap + m + 2);
-        if (!t) break;
+        if (!t) { free(s); return NULL; }
         s = t; cap += m + 2;
         memcpy(s + o, ", ", 2); memcpy(s + o + 2, p, m + 1); o += m + 2;
     }

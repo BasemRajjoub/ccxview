@@ -262,6 +262,11 @@ static void test_cfg(void) {
         CHECK(back && !strcmp(back, ""));
         free(back);
         CHECK(cv_cfg_get_long(&t, "absent") == NULL);
+        cv_cfg_set_long(&t, "ids", "7, 8");                   /* shorter over longer: the old tail goes */
+        back = cv_cfg_get_long(&t, "ids");
+        CHECK(back && !strcmp(back, "7, 8"));
+        free(back);
+        CHECK(cv_cfg_get(&t, "ids_2", NULL) == NULL);
         cv_cfg_free(&t);
         remove("build/t_cfg_long.ini");
         free(big);

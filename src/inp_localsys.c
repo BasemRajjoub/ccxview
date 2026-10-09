@@ -170,6 +170,7 @@ bool cv_elemmap_shell(const cv_elemmap* m, const cv_inp* d, uint32_t e, uint32_t
         const cv_layered* L = &d->comps[c];
         uint32_t se = cv_frd_elem_index(&d->mesh, L->id);
         int32_t o = L->nlay ? d->layer_ori[L->lay0] : -2;
+        for (uint32_t k = 0; k < L->nlay; k++) if (d->layer_ori[L->lay0 + k] == -1) return false;   /* an orientation that cannot be rebuilt */
         for (uint32_t k = 1; k < L->nlay; k++) if (d->layer_ori[L->lay0 + k] != o) o = -2;
         if (se == UINT32_MAX) return false;
         *shell = se;

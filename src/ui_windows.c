@@ -395,7 +395,7 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
         nk_layout_row_template_end(ctx);
         const char* hint = (B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) ? B.e[B.sel].name : "double-click a file";
         nk_label_colored(ctx, hint, NK_TEXT_LEFT, P.dim);
-        if (nk_button_label(ctx, "Cancel")) G.browser_open = false;
+        if (nk_button_label(ctx, "Cancel")) { G.browser_open = false; G.dlg_for_compare = G.dlg_for_stl = false; }
         if (nk_button_label(ctx, "Open") && B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) {
             size_t l = strlen(B.dir);
             bool has_sep = l && B.dir[l - 1] == cv_path_sep();
@@ -403,7 +403,7 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
                      has_sep ? "" : (char[2]){ cv_path_sep(), 0 }, B.e[B.sel].name);
         }
     }
-    if (nk_window_is_hidden(ctx, "Open file")) G.browser_open = false;
+    if (nk_window_is_hidden(ctx, "Open file")) { G.browser_open = false; G.dlg_for_compare = G.dlg_for_stl = false; }
     nk_end(ctx);
     if (open_path[0]) {
         G.browser_open = false;

@@ -671,6 +671,7 @@ bool gp_sibling(const char* frd_path, char* out, size_t n);
 void deck_set(cv_inp* d, const char* path);
 void deck_clear(void);
 bool deck_loaded(void);
+unsigned deck_gen(void);             /* bumped when the deck changes: what was derived from it is stale */
 const cv_inp* deck_get(void);
 const char* deck_path(void);
 bool* deck_set_flags(void);          /* per set: an elset ticked (show only the ticked), a node set highlighted */

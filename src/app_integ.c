@@ -15,11 +15,12 @@
 app_integ_t GI;
 
 /* the region, taken when the window opens */
-static struct {
+typedef struct {
     uint32_t* el;  uint8_t* fc;  uint32_t n;     /* elements, and their faces for a surface */
     uint32_t* nodes;  uint32_t nn;
     char key[700];                               /* what the rows were made for */
-} R;
+} region_t;
+static region_t R;
 
 const char* app_integ_kind(int k) {
     static const char* n[CV_IK_N] = { "volume", "surface", "nodes" };
@@ -318,13 +319,15 @@ bool app_integ_open(int kind, const char* target_in) {
     char err[200], target[64];
     snprintf(target, sizeof target, "%s", target_in);        /* it may be GI.target itself */
     if (!G.loaded || kind < 0 || kind >= CV_IK_N) return false;
+    region_t keep = R;                                       /* the window keeps what it had (a selection may have changed since) */
+    R.el = NULL; R.fc = NULL; R.nodes = NULL; R.n = R.nn = 0;
     if (!region(kind, target, err, sizeof err)) {
-        char e2[8];
         region_free();
-        if (GI.open && !region(GI.kind, GI.target, e2, sizeof e2)) app_integ_close();   /* the window keeps what it had */
+        R = keep;
         snprintf(G.note, sizeof G.note, "integrals: %s", err); G.note_t = cv_now();
         return false;
     }
+    free(keep.el); free(keep.fc); free(keep.nodes);
     rows_free();
     GI.open = true;
     GI.kind = kind;

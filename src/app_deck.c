@@ -57,7 +57,10 @@ bool* deck_set_hidden_flags(void) { return D.set_hide; }
 bool* deck_surf_flags(void) { return D.surf_on; }
 bool* deck_link_flags(void) { return D.link_on; }
 
+static unsigned deck_serial;
+unsigned deck_gen(void) { return deck_serial; }
 void deck_clear(void) {
+    deck_serial++;                      /* what was derived from the old deck is stale */
     grid_free();
     free(D.emap);
     free(D.est_id); free(D.est_d);

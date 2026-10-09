@@ -1059,11 +1059,10 @@ static void do_data(P* p, const char* s, const char* e) {
         case S_AMP: {                         /* time, value pairs, up to four per line */
             int n = fields(s, e, f, 8);
             vamp* v = &p->amps.a[p->amps.n - 1];
-            for (int k = 0; k < n; k++) {
-                double x;
-                if (!to_f(f[k], &x)) { p->bad_lines++; return; }
-                if (!cv_push(v->tv, (float)x)) { p->oom = true; return; }
-            }
+            double x[8];
+            if (n % 2) { p->bad_lines++; return; }   /* a value without its time: the line is left out whole */
+            for (int k = 0; k < n; k++) if (!to_f(f[k], &x[k])) { p->bad_lines++; return; }
+            for (int k = 0; k < n; k++) if (!cv_push(v->tv, (float)x[k])) { p->oom = true; return; }
             return;
         }
         case S_PROC: {                        /* initial increment, time period, ... */

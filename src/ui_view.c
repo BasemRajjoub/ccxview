@@ -430,10 +430,10 @@ void section_view(struct nk_context* ctx, float s, float row) {
         tip(ctx, "Open a second .frd of the same mesh and show fields as the difference (Fields > minus ...)");
         if (nk_button_label(ctx, G.cmp_on ? "Compare: off" : "Compare with...")) {
             if (G.cmp_on) { app_compare_close(); app_select(G.field_name, G.comp); }
-            else { G.dlg_for_compare = true; app_open_dialog(); }
+            else if (!G.dlg_running) { G.dlg_for_compare = true; app_open_dialog(); }
         }
         tip(ctx, "Import geometry that was not analysed (an STL file) to show with the results; listed in Groups");
-        if (nk_button_label(ctx, "Import STL...")) { G.dlg_for_stl = true; app_open_dialog(); }
+        if (nk_button_label(ctx, "Import STL...")) { if (!G.dlg_running) { G.dlg_for_stl = true; app_open_dialog(); } }
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Reload when the file changes on disk (a running solver): camera, step and field stay");
         nk_checkbox_label(ctx, "Watch file", &G.watch);

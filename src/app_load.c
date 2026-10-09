@@ -239,6 +239,7 @@ static void apply_load(cv_job* j) {
     bool reload = G.reload_keep;
     unload();
     if (!j->ok) {
+        G.reload_keep = false;                 /* the next file opened is not this reload */
         cv_msg_add(&G.msgs, 0, false, j->err);
         if (j->has_deck) { cv_inp_free(&j->deck); free(j->deck.msgs.a); memset(&j->deck, 0, sizeof j->deck); j->has_deck = false; }
         G.frd.msgs = j->frd_out.msgs;          /* keep what the parser had to say */

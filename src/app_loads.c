@@ -382,7 +382,7 @@ static void box_exit(const float lo[3], const float hi[3], const float dir[3], f
 
 /* ---- the step on screen ---------------------------------------------------------- */
 
-static struct { cv_applied a; const cv_inp* deck; int step; double ts, tt; bool ok; } S;
+static struct { cv_applied a; const cv_inp* deck; unsigned gen; int step; double ts, tt; bool ok; } S;
 
 /* the deck's step of the result on screen (0-based); without results the last one.
    CalculiX numbers the .frd's steps as the deck's *STEPs. */
@@ -412,11 +412,11 @@ static const cv_applied* applied(const cv_inp* dk) {
     int st = dk ? deck_step() : -1;
     double ts, tt;
     deck_step_time(st, &ts, &tt);
-    if (S.ok && S.deck == dk && S.step == st && S.ts == ts && S.tt == tt) return &S.a;
+    if (S.ok && S.deck == dk && S.gen == deck_gen() && S.step == st && S.ts == ts && S.tt == tt) return &S.a;
     if (S.ok) cv_applied_free(&S.a);
     S.ok = dk && cv_inp_applied(dk, st, &S.a);
     if (S.ok) cv_applied_at(dk, &S.a, ts, tt);      /* the loads with an amplitude at the time on screen */
-    S.deck = dk; S.step = st; S.ts = ts; S.tt = tt;
+    S.deck = dk; S.gen = deck_gen(); S.step = st; S.ts = ts; S.tt = tt;
     return S.ok ? &S.a : NULL;
 }
 

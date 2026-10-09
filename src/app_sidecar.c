@@ -111,7 +111,15 @@ static void view_get(const cv_cfg* c) {
     int step = geti(c, "step", G.step + 1, 1, G.frd.n_steps) - 1;
     if (step >= 0 && step < G.frd.n_steps) G.step = step;
     const char* f = cv_cfg_get(c, "field", "");
-    if (f[0] && find_field(G.step, f) >= 0) { snprintf(G.field_name, sizeof G.field_name, "%s", f); G.comp = cv_cfg_get_int(c, "comp", G.comp); G.field_src = 0; }
+    int fi = f[0] ? find_field(G.step, f) : -1;
+    if (fi >= 0) {
+        cv_scalar_opt opts[CV_MAX_OPTS];
+        int no = app_field_options(&G.frd.steps[G.step].fields[fi], opts, CV_MAX_OPTS), comp = cv_cfg_get_int(c, "comp", G.comp);
+        bool ok = false;
+        for (int k = 0; k < no; k++) ok |= opts[k].comp == comp;
+        snprintf(G.field_name, sizeof G.field_name, "%s", f); G.field_src = 0;
+        if (ok) G.comp = comp; else if (no) G.comp = opts[0].comp;   /* a comp the field has not: its first */
+    }
     const char* calc = cv_cfg_get(c, "calc", "");
     if (calc[0]) app_calc_set(calc);
     G.elem_mode = cv_cfg_get_bool(c, "elem_mode", G.elem_mode);
@@ -495,7 +503,7 @@ static const part PARTS[] = {
     { "view",    view_put,    view_get,    true  },
     { "compare", compare_put, compare_get, false },
     { "paths",   path_put,    path_get,    false },
-    { "scl",     scl_put,     scl_get,     true  },
+    { "scl",     scl_put,     scl_get,     false },   /* node indices: read again after a reload (it may renumber) */
 };
 
 /* ---- the file ----------------------------------------------------------------------- */
@@ -636,6 +644,8 @@ void app_sidecar_forget(void) {
     SC.armed = false;                       /* the reopen must not write it back */
     bool gone = have && remove(p) == 0;
     app_scl_clear();
+    app_measure_clear();                    /* the same path reopened keeps these otherwise */
+    app_stl_clear();
     snprintf(G.note, sizeof G.note, gone ? "forgot %s: the model opened afresh" : "nothing kept for this model (%s): opened afresh",
              have ? cv_basename(p) : "no file");
     G.note_t = cv_now();
