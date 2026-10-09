@@ -110,6 +110,13 @@ typedef struct { uint32_t id, lay0, nlay; } cv_layered;
    of their element. */
 enum { CV_OUT_U, CV_OUT_RF, CV_OUT_V, CV_OUT_VF, CV_OUT_S, CV_OUT_E, CV_OUT_HFL, CV_OUT_N };
 
+/* A step's procedure, from its keyword (*STATIC, *FREQUENCY ...) */
+enum { CV_PROC_NONE, CV_PROC_STATIC, CV_PROC_FREQUENCY, CV_PROC_BUCKLE, CV_PROC_DYNAMIC, CV_PROC_MODAL_DYNAMIC,
+       CV_PROC_STEADY_DYNAMICS, CV_PROC_COMPLEX_FREQUENCY, CV_PROC_HEAT, CV_PROC_HEAT_STEADY,
+       CV_PROC_UNCOUPLED_TD, CV_PROC_COUPLED_TD, CV_PROC_VISCO, CV_PROC_ELECTROMAGNETICS,
+       CV_PROC_SENSITIVITY, CV_PROC_GREEN, CV_PROC_N };
+const char* cv_inp_proc_name(int proc);     /* "Static", "Frequency" ...; "" for CV_PROC_NONE */
+
 typedef struct {
     cv_frd      mesh;       /* nodes + elements; emat = material index + 1, 0 = none */
     cv_set*     sets;       int nsets;
@@ -136,6 +143,7 @@ typedef struct {
        'L' local, ' ' not requested (the first card of a step clears the previous
        requests of its kind; a step without one keeps them) */
     char      (*outsys)[CV_OUT_N]; int nsteps;
+    uint8_t*    proc;                           /* per *STEP: its procedure, CV_PROC_* */
     uint32_t*   shells;     uint32_t nshells;   /* ids of the shell elements (S3..S8R), sorted */
     cv_layered* comps;      uint32_t ncomps;    /* composite shells, by id */
     int32_t*    layer_ori;                      /* per layer: orientation, -2 none, -1 cannot be rebuilt */

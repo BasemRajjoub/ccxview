@@ -288,6 +288,56 @@ static void test_modal_flag(void) {
     free(f.msgs.a);
 }
 
+/* The 1U records: heading, user, date, program and version; the step's mode
+   number and the 100CL analysis type; the solver's date as ISO */
+static void test_frd_head(void) {
+    const char* s =
+        "    1C\n"
+        "    1Uplate with a hole, tension\n"
+        "    1UUSER              sergio\n"
+        "    1UDATE              30.september.2026\n"
+        "    1UTIME              23:06:53\n"
+        "    1UHOST\n"
+        "    1UPGM               CalculiX\n"
+        "    1UVERSION           Version 2.22\n"
+        "    1UCOMPILETIME       Mon Aug  5 19:15:25 CEST 2024\n"
+        "    1UMAT    1STEEL\n"
+        "    2C                     1                                     1\n"
+        " -1         1 0.00000E+00 0.00000E+00 0.00000E+00\n -3\n"
+        "    1PSTEP                         1           1           1\n"
+        "  100CL  101 1.000000000           1                     0    1           1\n"
+        " -4  DISP        4    1\n -5  D1          1    2    1    0\n"
+        " -1         1 1.00000E-02\n -3\n"
+        "    1PSTEP                         2           1           2\n"
+        "    1PMODE                         3\n"
+        "  100CL  102 210.1187427           1                     2    2MODAL      1\n"
+        " -4  DISP        4    1\n -5  D1          1    2    1    0\n"
+        " -1         1 9.63160E+03\n -3\n9999\n";
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, s, strlen(s)));
+    CHECK(!strcmp(f.head.heading, "plate with a hole, tension"));
+    CHECK(!strcmp(f.head.user, "sergio"));
+    CHECK(!strcmp(f.head.date, "30.september.2026"));
+    CHECK(!strcmp(f.head.time, "23:06:53"));
+    CHECK(!strcmp(f.head.host, ""));
+    CHECK(!strcmp(f.head.pgm, "CalculiX"));
+    CHECK(!strcmp(f.head.version, "Version 2.22"));
+    CHECK_EQ(f.n_steps, 2);
+    if (f.n_steps == 2) {
+        CHECK_EQ(f.steps[0].ictype, 0); CHECK_EQ(f.steps[0].mode, 0);
+        CHECK_EQ(f.steps[1].ictype, 2); CHECK_EQ(f.steps[1].mode, 3); CHECK_EQ(f.steps[1].step, 2);
+    }
+    cv_frd_free(&f);
+    free(f.msgs.a);
+    char d[16];
+    CHECK(cv_frd_date_iso("30.september.2026", d, sizeof d) && !strcmp(d, "2026-09-30"));
+    CHECK(cv_frd_date_iso("5.Jan.1999", d, sizeof d) && !strcmp(d, "1999-01-05"));
+    CHECK(cv_frd_date_iso("07.11.2024", d, sizeof d) && !strcmp(d, "2024-11-07"));
+    CHECK(!cv_frd_date_iso("", d, sizeof d) && !d[0]);
+    CHECK(!cv_frd_date_iso("32.may.2020", d, sizeof d));
+    CHECK(!cv_frd_date_iso("1.smarch.2020", d, sizeof d));
+}
+
 static void test_absurd_header(void) {
     const char* s = "    2C  999999999999                                                1\n"
                     " -1         1 0.00000E+00 0.00000E+00 0.00000E+00\n -3\n9999\n";
@@ -760,6 +810,8 @@ static void test_inp(void) {
     cv_inp d;
     CHECK(cv_inp_parse(&d, deck, strlen(deck), mem_reader, (void*)files));
     CHECK(strcmp(d.heading, "Test deck") == 0);
+    CHECK_EQ(d.nsteps, 2);                             /* a *STATIC step, then one without a procedure */
+    if (d.nsteps == 2) { CHECK_EQ(d.proc[0], CV_PROC_STATIC); CHECK_EQ(d.proc[1], CV_PROC_NONE); }
     CHECK_EQ(d.mesh.n_nodes, 23);                      /* 12 + 3 included + 6 + 2 ref nodes */
     CHECK_EQ(d.mesh.n_elems, 3);                       /* + the SPRINGA as a Line2 */
     CHECK_EQ(d.ndisc, 4);                              /* + the DCOUP3D */
@@ -839,6 +891,29 @@ static void test_inp(void) {
         free(dd.msgs.a);
     }
     free(w);
+}
+
+/* each step's procedure, by its keyword, blanks and parameters as decks write them */
+static void test_inp_procs(void) {
+    const char* deck =
+        "*NODE\n1, 0,0,0\n"
+        "*STEP\n*HEAT TRANSFER, STEADY STATE\n1., 1.\n*END STEP\n"
+        "*STEP, NLGEOM\n*Static\n*END STEP\n"
+        "*STEP\n*FREQUENCY, SOLVER=SPOOLES\n6\n*END STEP\n"
+        "*STEP, PERTURBATION\n*BUCKLE\n2\n*END STEP\n"
+        "*STEP\n*HEAT TRANSFER\n0.1, 1.\n*END STEP\n"
+        "*STEP\n*COUPLED TEMPERATURE-DISPLACEMENT\n*END STEP\n"
+        "*STEP\n*MODAL DYNAMIC\n*END STEP\n";
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), NULL, NULL));
+    CHECK_EQ(d.nsteps, 7);
+    static const int want[7] = { CV_PROC_HEAT_STEADY, CV_PROC_STATIC, CV_PROC_FREQUENCY, CV_PROC_BUCKLE,
+                                 CV_PROC_HEAT, CV_PROC_COUPLED_TD, CV_PROC_MODAL_DYNAMIC };
+    for (int i = 0; i < 7 && i < d.nsteps; i++) CHECK_EQ(d.proc[i], want[i]);
+    CHECK(!strcmp(cv_inp_proc_name(CV_PROC_BUCKLE), "Buckling"));
+    CHECK(!strcmp(cv_inp_proc_name(CV_PROC_NONE), ""));
+    CHECK(!strcmp(cv_inp_proc_name(99), ""));
+    cv_inp_free(&d);
 }
 
 static void test_fbd(void) {
@@ -1471,6 +1546,7 @@ int main(void) {
     test_sta();
     test_fbd();
     test_inp();
+    test_inp_procs();
     test_rot_node();
     test_localsys();
     test_csys_math();
@@ -1490,6 +1566,7 @@ int main(void) {
     test_fuzz();
     test_absurd_header();
     test_modal_flag();
+    test_frd_head();
     test_missing_node();
     test_continuation_and_nan();
     test_shear_order();

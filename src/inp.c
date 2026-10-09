@@ -146,7 +146,7 @@ typedef struct { char name[64]; cv_csys cs; bool bad; } vorient;
 /* a section's orientation, by name; the layers of a composite shell may each name one */
 typedef struct { char elset[64]; char ori[64]; bool mixed; uint32_t lay0, nlay; } osect;
 typedef struct { char ori[64], mat[64]; float t; } vlayer;
-typedef struct { char f[CV_OUT_N]; } outsys;
+typedef struct { char f[CV_OUT_N]; uint8_t proc; } outsys;   /* per *STEP: output systems, procedure */
 
 enum { S_SKIP, S_NODE, S_ELEM, S_NSET, S_ELSET, S_SURF, S_HEADING, S_BOUNDARY, S_CLOAD, S_DLOAD, S_SPRINGDOF,
        S_CFLUX, S_DFLUX, S_FILM, S_RADIATE, S_TEMP, S_PRETENSION, S_MPC, S_CYCLIC,
@@ -327,6 +327,19 @@ static void op_new(P* p, int st) {
     if (!ok) p->oom = true;
 }
 
+/* the procedure keywords without their blanks, by CV_PROC_*, and their names */
+static const char* const proc_kw[CV_PROC_N] = {
+    NULL, "STATIC", "FREQUENCY", "BUCKLE", "DYNAMIC", "MODALDYNAMIC", "STEADYSTATEDYNAMICS",
+    "COMPLEXFREQUENCY", "HEATTRANSFER", NULL, "UNCOUPLEDTEMPERATURE-DISPLACEMENT",
+    "COUPLEDTEMPERATURE-DISPLACEMENT", "VISCO", "ELECTROMAGNETICS", "SENSITIVITY", "GREEN",
+};
+static const char* const proc_names[CV_PROC_N] = {
+    "", "Static", "Frequency", "Buckling", "Dynamic", "Modal dynamic", "Steady-state dynamics",
+    "Complex frequency", "Heat transfer", "Heat transfer, steady state", "Uncoupled thermomechanical",
+    "Coupled thermomechanical", "Visco", "Electromagnetics", "Sensitivity", "Green functions",
+};
+const char* cv_inp_proc_name(int proc) { return proc > 0 && proc < CV_PROC_N ? proc_names[proc] : ""; }
+
 static void do_keyword(P* p, const char* s, const char* e) {
     char kw[64];
     param prm[16];
@@ -476,11 +489,18 @@ static void do_keyword(P* p, const char* s, const char* e) {
         outsys o;
         if (p->steps.n) o = p->steps.a[p->steps.n - 1];    /* requests carry over */
         else memset(o.f, ' ', sizeof o.f);
+        o.proc = CV_PROC_NONE;
         if (!cv_push(p->steps, o)) p->oom = true;
         p->nodefile = p->elfile = false;
         p->skipped_keywords++;
         return;
     }
+    for (int k = 1; k < CV_PROC_N && p->steps.n; k++)          /* the step's procedure */
+        if (proc_kw[k] && !strcmp(kw, proc_kw[k])) {
+            bool steady = k == CV_PROC_HEAT && pget(prm, np, "STEADYSTATE");
+            p->steps.a[p->steps.n - 1].proc = (uint8_t)(steady ? CV_PROC_HEAT_STEADY : k);
+            return;
+        }
     {   /* output requests; CalculiX ignores the blanks in keywords */
         const char* k2 = kw;
         int kind = !strcmp(k2, "NODEFILE") || !strcmp(k2, "NODEOUTPUT") ? 1 :
@@ -1220,7 +1240,9 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     d->outsys = malloc(CV_MAX(p.steps.n, 1) * sizeof *d->outsys);
     if (!d->outsys) goto oom;
     d->nsteps = (int)p.steps.n;
-    for (size_t i = 0; i < p.steps.n; i++) memcpy(d->outsys[i], p.steps.a[i].f, CV_OUT_N);
+    d->proc = malloc(CV_MAX(p.steps.n, 1));
+    if (!d->proc) goto oom;
+    for (size_t i = 0; i < p.steps.n; i++) { memcpy(d->outsys[i], p.steps.a[i].f, CV_OUT_N); d->proc[i] = p.steps.a[i].proc; }
     cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
     if (p.shells.n) qsort(p.shells.a, p.shells.n, sizeof(uint32_t), cv_cmp_u32);
     d->shells = p.shells.a; d->nshells = (uint32_t)p.shells.n; p.shells.a = NULL;
@@ -1266,7 +1288,7 @@ void cv_inp_free(cv_inp* d) {
     for (int i = 0; i < d->nlinks; i++) free(d->links[i].nodes);
     free(d->links);
     free(d->mats);
-    free(d->transforms); free(d->node_tr); free(d->orients); free(d->orient_names); free(d->elem_ori); free(d->outsys);
+    free(d->transforms); free(d->node_tr); free(d->orients); free(d->orient_names); free(d->elem_ori); free(d->outsys); free(d->proc);
     free(d->shells); free(d->comps); free(d->layer_ori); free(d->layer_mat); free(d->layer_t); free(d->mprop);
     cv_msgs keep = d->msgs;
     memset(d, 0, sizeof *d);

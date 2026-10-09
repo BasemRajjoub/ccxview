@@ -155,6 +155,7 @@ static void close_all(struct nk_context* ctx) {
     G.show_details = false;
     G.label_probe_only = false; G.label_kinds = 0;
     G.hist_open = G.path_open = false;
+    G.title_edit = false;
 }
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
@@ -260,6 +261,12 @@ static void display_open(struct nk_context* ctx) {
     struct nk_window* w = nk_window_find(ctx, "Scene");
     if (w) w->scrollbar.y = 0;
 }
+static bool title_shown(struct nk_context* ctx) { return G.title_on && win_of(ctx, "title"); }
+static bool title_settings_shown(struct nk_context* ctx) { return G.title_edit && win_of(ctx, "Title block") && !G.menu_on; }
+static bool title_settings_gone(struct nk_context* ctx) { return !G.title_edit; }
+static void open_title_settings(struct nk_context* ctx) { G.title_edit = true; }
+static bool title_user_off(struct nk_context* ctx) { return !G.title_line[CV_TB_USER]; }
+static void title_off(struct nk_context* ctx) { G.title_on = false; G.title_line[CV_TB_USER] = true; sections_open(ctx); }
 static bool ui_smaller(struct nk_context* ctx) { return ui_get_zoom() < 0.99f; }
 static bool ui_normal(struct nk_context* ctx) { return fabsf(ui_get_zoom() - 1.f) < 0.01f; }
 static void symbols_open(struct nk_context* ctx) {
@@ -538,6 +545,13 @@ static const step script[] = {
     AT_CLOSE("Legend settings"), CLICK, WAIT(2), EXPECT(legend_settings_gone, "the legend settings close"),
     PANELS_ANSWER,
 
+    CASE("title block: the Display box shows it, a right click on it opens its settings"),
+    DO(display_open), WAIT(2), AT_TIP("Scene", "A title block in the view"), CLICK, WAIT(3), EXPECT(title_shown, "the title block is in the view"),
+    AT_WIN("title", 0.5f, 0.5f), RCLICK, WAIT(2), EXPECT(title_settings_shown, "its settings open, not the menu"),
+    AT_TIP("Title block", "Who you are logged in as"), CLICK, WAIT(2), EXPECT(title_user_off, "the user line goes"),
+    AT_CLOSE("Title block"), CLICK, WAIT(2), EXPECT(title_settings_gone, "the settings close"),
+    DO(title_off), WAIT(2), PANELS_ANSWER,
+
     CLOSED_THEN_PANELS("Messages", open_messages, messages_gone),
     CLOSED_THEN_PANELS("Formula", open_formula, formula_gone),
     CLOSED_THEN_PANELS("Convergence", open_convergence, convergence_gone),
@@ -547,6 +561,7 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
     CLOSED_THEN_PANELS("Details", open_details, details_gone),
     CLOSED_THEN_PANELS("About", open_about, about_gone),
+    CLOSED_THEN_PANELS("Title block", open_title_settings, title_settings_gone),
 
     CASE("menu: a right click on the model opens it, an item acts and closes it"),
     DO(close_all), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),

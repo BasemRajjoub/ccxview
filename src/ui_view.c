@@ -226,6 +226,10 @@ void section_view(struct nk_context* ctx, float s, float row) {
         }
         tip(ctx, "Light the faces. Off: exact colours, as in the legend");
         nk_checkbox_label(ctx, "Shading", &G.shading);
+        tip(ctx, "A title block in the view: file, solver, analysis, step, date ... (also in exports)");
+        nk_checkbox_label(ctx, "Title block", &G.title_on);
+        tip(ctx, "The title block's lines, free text, its date (also: right-click the block)");
+        if (nk_button_label(ctx, "Title block...")) G.title_on = G.title_edit = true;
 
         /* background: presets and a picker; exports use it too */
         nk_layout_row_template_begin(ctx, row);

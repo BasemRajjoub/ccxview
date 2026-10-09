@@ -169,10 +169,11 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     uii_vsep(ctx);
     nk_layout_row_push(ctx, 64 * s);
     tip(ctx, "Look from a side, or the isometric view (keys 1-6, R)");
-    if (nk_combo_begin_label(ctx, "View", nk_vec2(90 * s, 7 * row + 20 * s))) {
+    if (nk_combo_begin_label(ctx, "View", nk_vec2(120 * s, 8 * row + 24 * s))) {
         static const char* vn[7] = { "Iso", "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
         nk_layout_row_dynamic(ctx, row, 1);
         for (int v = 0; v < 7; v++) if (nk_combo_item_label(ctx, vn[v], NK_TEXT_LEFT)) app_view(v);
+        if (nk_combo_item_label(ctx, "Title block...", NK_TEXT_LEFT)) G.title_on = G.title_edit = true;
         nk_combo_end(ctx);
     }
     nk_layout_row_push(ctx, 60 * s);
@@ -269,8 +270,8 @@ void panel_timebar(struct nk_context* ctx, float s, float row, float width) {
 
 /* legend text sits on the 3D view: a faint G.bg plate behind it keeps it
    readable where the model passes behind */
-static void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w,
-                     const char* txt, struct nk_color c) {
+void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w,
+              const char* txt, struct nk_color c) {
     int n = (int)strlen(txt);
     float tw = CV_MIN(f->width(f->userdata, f->height, txt, n), w);
     if (!G.legend_box) nk_fill_rect(cv, nk_rect(x - 2, y, tw + 4, f->height), 3, uii_bg(110));   /* a plate of the background: no need on the box */
@@ -287,8 +288,8 @@ static void ink_label_c(struct nk_context* ctx, const char* txt, struct nk_color
     nk_label_colored(ctx, txt, NK_TEXT_LEFT, c);
 }
 /* the legend's text colour: against the background, or dark on its white box */
-static struct nk_color legend_ink(void) { return G.legend_box ? nk_rgb(25, 25, 25) : uii_on_bg(); }
-static struct nk_color legend_dim(void) { return G.legend_box ? nk_rgb(110, 110, 110) : uii_on_bg_dim(); }
+struct nk_color legend_ink(void) { return G.legend_box ? nk_rgb(25, 25, 25) : uii_on_bg(); }
+struct nk_color legend_dim(void) { return G.legend_box ? nk_rgb(110, 110, 110) : uii_on_bg_dim(); }
 static void ink_label(struct nk_context* ctx, const char* txt) { ink_label_c(ctx, txt, legend_ink()); }
 
 /* ---- the legend's title: the field, its component, its unit (G.legend_lines), each
@@ -298,7 +299,7 @@ enum { HEAD_PIECES = 4 };                        /* lines one title line may wra
 /* byte lengths of the pieces txt breaks into to fit w: after a space, comma or
    operator when there is one in the second half, else anywhere (never in a UTF-8
    sequence); the last piece takes what is left. Returns the count. */
-static int wrap_pieces(const struct nk_user_font* f, const char* txt, float w, int* len, int max) {
+int wrap_pieces(const struct nk_user_font* f, const char* txt, float w, int* len, int max) {
     int n = 0, at = 0, total = (int)strlen(txt);
     while (at < total && n < max) {
         int fit = 0;
@@ -677,9 +678,7 @@ void window_legend_settings(struct nk_context* ctx, float s, float row) {
    have and nobody finds; so a press anywhere on the overlay and a drag moves it.
    Up to 4 px it stays a click (a gizmo tip, the gizmo centre). While moving, the
    anchor follows: the corner nearest the box and the gap from it (anchor.h). */
-typedef struct { bool down, moving, dropped; float px, py, ox, oy; } ov_drag;
-
-static cv_box view_box(void) { return (cv_box){ (float)G.vp_x, (float)G.vp_y, (float)G.vp_w, (float)G.vp_h }; }
+cv_box view_box(void) { return (cv_box){ (float)G.vp_x, (float)G.vp_y, (float)G.vp_w, (float)G.vp_h }; }
 
 /* the window on top at (x, y); NULL over a popup (a combo, a menu) */
 static struct nk_window* window_at(struct nk_context* ctx, float x, float y) {
@@ -697,8 +696,8 @@ static struct nk_window* window_at(struct nk_context* ctx, float x, float y) {
 
 /* at: where the overlay is this frame; keep_right: a strip on its right that
    is not a handle (the group legend's scrollbar) */
-static void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box at, float keep_right,
-                         cv_anchor* pos, float s) {
+void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box at, float keep_right,
+                  cv_anchor* pos, float s) {
     const struct nk_input* in = &ctx->input;
     const struct nk_mouse_button* lb = &in->mouse.buttons[NK_BUTTON_LEFT];
     float mx = in->mouse.pos.x, my = in->mouse.pos.y;
@@ -751,6 +750,8 @@ void window_legend(struct nk_context* ctx, float s, float row) {
             cv_box lb = cv_anchor_place(la, view_box(), lw, lh, s);
             /* a small screen: shorter, rather than over the gizmo; the gizmo never moves */
             if (!G.hide_axes) lb = cv_legend_fit(lb, gizmo_box(s), 10 * s, 160 * s);
+            cv_box tb;
+            if (title_box(&tb)) lb = cv_legend_fit(lb, tb, 10 * s, 160 * s);   /* the title block does not move either */
             lh = lb.h;
             r = nk_rect(lb.x, lb.y, lb.w, lb.h);
             if (nk_window_find(ctx, "Legend")) nk_window_set_bounds(ctx, "Legend", r);
@@ -758,7 +759,7 @@ void window_legend(struct nk_context* ctx, float s, float row) {
             nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(G.legend_box ? nk_rgba(255, 255, 255, 235) : nk_rgba(0, 0, 0, 0)));
             nk_style_push_float(ctx, &ctx->style.window.border, G.legend_box ? 1.f : 0.f);
             nk_style_push_color(ctx, &ctx->style.window.border_color, nk_rgb(90, 90, 90));
-            nk_flags lf = by_group ? 0 : NK_WINDOW_NO_SCROLLBAR;
+            nk_flags lf = (by_group ? 0 : NK_WINDOW_NO_SCROLLBAR) | (G.legend_box ? NK_WINDOW_BORDER : 0);
             if (lh > 80 * s && nk_begin(ctx, "Legend", r, lf)) {
                 struct nk_rect b = nk_window_get_bounds(ctx);
                 if (nk_input_is_mouse_click_in_rect(&ctx->input, NK_BUTTON_RIGHT, b)) G.legend_edit = true;

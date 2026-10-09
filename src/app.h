@@ -27,6 +27,11 @@ enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXP
        CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
        CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_N };
 
+/* the title block's automatic lines (app_title.c), in the order shown */
+enum { CV_TB_TITLE, CV_TB_FILE, CV_TB_SOLVER, CV_TB_ANALYSIS, CV_TB_STEP, CV_TB_SCALE, CV_TB_UNITS,
+       CV_TB_USER, CV_TB_DATE, CV_TB_N };
+enum { CV_TB_FREE = 3 };       /* free lines: a label and a text each */
+
 enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
 
 typedef struct {
@@ -409,6 +414,13 @@ typedef struct {
     float     csys_o[3];             /* ... through this point */
     bool      legend_edit;           /* the legend settings window is open */
     cv_anchor legend_pos, gizmo_pos;  /* dragged to: view corner + gap (unset: top-right, bottom-left) */
+    /* title block: "Label: value" lines in a corner of the view (app_title.c, ui_title.c) */
+    bool      title_on;
+    bool      title_edit;            /* its settings window is open */
+    bool      title_line[CV_TB_N];   /* each automatic line on */
+    bool      title_file_date;       /* the date: the result file's (when it was solved), else today */
+    char      title_free[CV_TB_FREE][2][64];   /* free lines: label, text; shown when the text is set */
+    cv_anchor title_pos;             /* dragged to (unset: bottom-right) */
 } cv_app;
 
 extern cv_app G;
@@ -632,6 +644,12 @@ void settings_add_recent(const char* path);
 int  settings_recent(const char** out, int max);
 const char* settings_last_dir(void);
 void settings_free(void);
+
+/* app_title.c: the title block's lines, those with data only; units: the units
+   line's text ("" or "not set": no line). Returns the count. */
+typedef struct { char label[32]; char text[160]; } cv_title_line;
+int  app_title_lines(cv_title_line* out, int max, const char* units);
+const char* app_title_line_name(int k);    /* CV_TB_*: "Title", "Result file" ... */
 
 /* colour map lookup with the legend's reverse / grey applied */
 void app_cmap_rgb(float t, float rgb[3]);

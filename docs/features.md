@@ -131,6 +131,14 @@ and what is drawn for it; `samples/symbols/` shows them all.
   of yours, or not drawn at all. Fifteen colour maps (Fast, cool-warm, viridis,
   turbo, cividis, plasma, inferno, black body, Kindlmann, heat, warm, cool, rainbow
   and its desaturated form, jet); a white box behind the legend for a page.
+- A title block in a corner of the view (View > Display, or View > Title block...),
+  so pictures and videos carry it: the deck's heading, the result file, the solver
+  and its version, the analysis of the step shown (static, frequency, buckling,
+  heat transfer ... from the deck, else the .frd header), the step with its
+  increment and time or its mode and frequency, the deformation scale, the units,
+  the user and the date (today's, or when the solver wrote the file), and up to
+  three free lines (project, company, checked by). A line without data is left
+  out. Dragged anywhere like the legend; a right click on it picks its lines.
 - The top bar holds what is used all the time: deformation on / off and its scale
   (auto and multiples of it, true scale), animation, fit, all symbol layers in
   one box, the colour map and bands, the field and its component, the standard

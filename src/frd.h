@@ -30,6 +30,9 @@ typedef struct {
     int            step, inc;
     float          time;           /* for a modal increment: the eigenfrequency */
     bool           modal;          /* *FREQUENCY / buckling mode: amplitude is arbitrary */
+    int            mode;           /* its mode number (1PMODE), 0 none */
+    int            ictype;         /* the 100CL analysis type: 0 static, 1 time step, 2 frequency,
+                                      3 load step, 4 user named; -1 not given */
     int            nfields;
     cv_field_desc* fields;
 } cv_step;
@@ -40,8 +43,15 @@ typedef struct {
     uint32_t* keys;  uint32_t* vals; uint32_t hcap;
 } cv_idmap;
 
+/* The 1U records CalculiX writes at the top of the file: the deck's *HEADING
+   line, then USER, DATE, TIME, HOST, PGM, VERSION ... Each "" when not there. */
+typedef struct {
+    char heading[80], user[40], date[32], time[16], host[40], pgm[24], version[40];
+} cv_frd_head;
+
 typedef struct {
     const char* data;  size_t size;      /* not owned: the caller's mapping */
+    cv_frd_head head;
 
     uint32_t  n_nodes;
     uint32_t* node_id;
@@ -89,6 +99,10 @@ void     cv_frd_read_field(const cv_frd* f, const cv_field_desc* d, float* out, 
 
 int         cv_frd_type_nodes(int frd_type);   /* nodes per element, 0 if unknown */
 const char* cv_frd_type_name(int frd_type);
+
+/* The 1UDATE text ("30.september.2026", as CalculiX writes it) as ISO 8601,
+   "2026-09-30"; false (out empty) when it does not read as a date */
+bool cv_frd_date_iso(const char* date, char* out, size_t n);
 
 /* Parse a number the way FRD writes it: E12.5, Fortran 'D' exponents, blanks. */
 bool cv_parse_num(const char* s, const char* e, double* out);
