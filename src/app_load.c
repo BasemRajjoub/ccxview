@@ -454,11 +454,17 @@ static void apply_load(cv_job* j) {
         if (!app_find((uint32_t)strtoul(O.find + (el ? 1 : 0), NULL, 10), el)) cv_msg_add(&G.msgs, 0, false, "--find: not in this model");
         else { G.label_probe_only = true; if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE; app_label_changed(); }
     }
-    if (O.nsets && deck_loaded()) {
+    if ((O.nsets || O.nhide_sets) && deck_loaded()) {
         const cv_inp* dk = deck_get();
         for (int k = 0; k < O.nsets; k++) {
             for (int i = 0; i < dk->nsets; i++) if (!strcasecmp(dk->sets[i].name, O.sets[k])) deck_set_flags()[i] = true;
             for (int i = 0; i < dk->nsurfs; i++) if (!strcasecmp(dk->surfs[i].name, O.sets[k])) deck_surf_flags()[i] = true;
+        }
+        for (int k = 0; k < O.nhide_sets; k++) {
+            bool found = false;
+            for (int i = 0; i < dk->nsets; i++)
+                if (dk->sets[i].is_elem && !strcasecmp(dk->sets[i].name, O.hide_sets[k])) deck_set_hidden_flags()[i] = found = true;
+            if (!found) cv_msg_add(&G.msgs, 0, false, "--hide-set: no element set of that name in the deck");
         }
         deck_refresh_highlight();
         app_groups_changed();

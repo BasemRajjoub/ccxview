@@ -30,6 +30,7 @@ ccxview model.frd --find 120 --details      # probe node 120, its Details window
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
 ccxview model.frd --range 50,150 --opt oor_above=3  # the legend locked to 50 .. 150; values above it hidden (oor_above / oor_below: 0 the map's end colour, 1 grey, 2 a colour, 3 hidden)
+ccxview model.frd --hide-set EHOLE         # hide a deck element set, the rest stays (repeatable; --set NAME ticks one)
 ccxview model.frd --labels node,value,loads # labels on the model, any mix of: node elem value evalue sets links loads supports materials gpvalue gpid minmax
 ccxview model.inp --opt sym_thin=1          # crowded supports and loads thinned to a pattern
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
@@ -69,7 +70,8 @@ ccxview --version
 
 - **Layers** (left panel): faces, edges, outline, nodes, Gauss points, vectors,
   tensor glyphs, stress trajectories, supports, loads, springs.
-- **Groups**: element types, materials, sets and surfaces of the deck.
+- **Groups**: element types, materials, sets and surfaces of the deck; the eye
+  before an element set hides it, the tick shows only the ticked sets.
 - **Fields**: the results of the step, their components and invariants,
   calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).

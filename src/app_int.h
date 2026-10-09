@@ -55,6 +55,8 @@ typedef struct {
     bool        bg_set;
     const char* sets[8];        /* --set NAME: tick a deck set / surface */
     int         nsets;
+    const char* hide_sets[8];   /* --hide-set NAME: hide a deck element set */
+    int         nhide_sets;
     int         step;           /* --step N (1-based, -1 = last) */
     bool        gp_under;       /* --gp-under: Gauss points depth-tested against faces */
     bool        xray;           /* --xray: Gauss points through the faces */

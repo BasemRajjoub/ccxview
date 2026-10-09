@@ -153,7 +153,11 @@ and what is drawn for it; `samples/symbols/` shows them all.
   (the cut filled) or hide whole elements there, to see inside.
 - Convergence plot from `.sta` / `.cvg`.
 - Groups by element type, material and set; named sets and surfaces from the
-  deck, highlighted on the model.
+  deck, highlighted on the model. An element set is ticked to show only the
+  ticked sets, or hidden by the eye before its name while everything else stays
+  (to look at what it covers); a hidden set wins over a ticked one, its name is
+  dimmed, and "show everything" or Show all brings it back. Hide set in the
+  right-click menu does the same.
 
 ## cgx geometry
 

@@ -351,6 +351,17 @@ static bool fly_hides(struct nk_context* ctx) { return G.fly_clip == CV_EYE_HIDE
 static void fly_depth_low(struct nk_context* ctx) { G.fly_clip_depth = 0.f; }
 static bool fly_depth_up(struct nk_context* ctx) { return G.fly_clip_depth > 0.f; }
 static bool scene_still(struct nk_context* ctx) { return !scene_scrolled(ctx); }
+/* Groups alone open, the sidebar at its top: the element sets in sight */
+static int groups_tree[CV_TREE_N];
+static void groups_open(struct nk_context* ctx) {
+    memcpy(groups_tree, G.tree, sizeof groups_tree);
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_GROUPS;
+    struct nk_window* w = win_of(ctx, "Scene");
+    if (w) w->scrollbar.y = 0;
+}
+static void groups_close(struct nk_context* ctx) { memcpy(G.tree, groups_tree, sizeof groups_tree); }
+static bool set_hidden(struct nk_context* ctx) { return deck_any_elset_hidden() && G.vis && !app_busy(); }
+static bool sets_shown(struct nk_context* ctx) { return !deck_any_elset_hidden(); }
 static bool tip_cmap(struct nk_context* ctx) { return !strncmp(uii_tip_shown(), "Colour map", 10); }
 static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 
@@ -580,6 +591,11 @@ static const step script[] = {
     AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Hide the"), CLICK, WAIT(10), EXPECT(sel_hidden, "the selection is hidden"),
     AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Show all"), CLICK, WAIT(10), EXPECT(all_shown, "everything shown again"),
     PANELS_ANSWER,
+
+    CASE("groups: the eye hides an element set, a second click shows it again"),
+    DO(groups_open), WAIT(3), AT_TIP("Scene", "Hide this element set"), CLICK, WAIT(10), EXPECT(set_hidden, "the set is hidden"),
+    AT_TIP("Scene", "Hidden: click to show"), CLICK, WAIT(10), EXPECT(sets_shown, "every set shown again"),
+    DO(groups_close), WAIT(2), PANELS_ANSWER,
 
     CASE("display: the UI size buttons shrink the interface and reset it"),
     DO(display_open), WAIT(3), AT_TIP("Scene", "The whole interface a step smaller"), CLICK, WAIT(4), EXPECT(ui_smaller, "the UI shrinks"),

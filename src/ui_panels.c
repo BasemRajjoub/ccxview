@@ -29,7 +29,8 @@ static void axis_label(char* out, size_t n, int axis, uint32_t v, uint32_t count
 static int g_pick_axis = -1, g_pick_idx = -1;   /* open colour picker (group swatch) */
 
 /* The deck's named sets: element sets are a display group (tick to show only
-   them; none ticked = everything), node sets and surfaces are highlights. */
+   them; none ticked = everything; the eye hides one, whatever is ticked), node
+   sets and surfaces are highlights. */
 static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
     const cv_inp* d = deck_get();
     if (!d) return;
@@ -39,17 +40,34 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
     for (int i = 0; i < d->nsets; i++) { if (d->sets[i].is_elem) ne++; else nn++; }
     char lab[96];
     if (ne && nk_tree_push_id(ctx, NK_TREE_NODE, "Element sets", NK_MAXIMIZED, 40)) {
-        nk_layout_row_dynamic(ctx, row, 1);
-        if (deck_any_elset_on() && nk_button_label(ctx, "show everything")) {
-            for (int i = 0; i < d->nsets; i++) if (d->sets[i].is_elem) on[i] = false;
-            app_groups_changed();
+        bool* hid = deck_set_hidden_flags();
+        if (deck_any_elset_on() || deck_any_elset_hidden()) {
+            nk_layout_row_dynamic(ctx, row, 1);
+            if (nk_button_label(ctx, "show everything")) {
+                for (int i = 0; i < d->nsets; i++) if (d->sets[i].is_elem) on[i] = hid[i] = false;
+                app_groups_changed();
+            }
         }
         int k = 0;
         for (int i = 0; i < d->nsets && k < 500; i++) {
             if (!d->sets[i].is_elem) continue;
             k++;
             snprintf(lab, sizeof lab, "%s  (%u)", d->sets[i].name, d->sets[i].n);
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_static(ctx, row * 1.4f);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_end(ctx);
+            tip(ctx, hid[i] ? "Hidden: click to show this element set again"
+                            : "Hide this element set, everything else stays (tick: show only the ticked sets)");
+            if (nk_button_label(ctx, hid[i] ? IC_EYE_OFF : IC_EYE)) { hid[i] = !hid[i]; app_groups_changed(); }
+            if (hid[i]) {                            /* a hidden set's name dimmed */
+                struct nk_style_toggle* t = &ctx->style.checkbox;
+                nk_style_push_color(ctx, &t->text_normal, P.dim);
+                nk_style_push_color(ctx, &t->text_hover, P.dim);
+                nk_style_push_color(ctx, &t->text_active, P.dim);
+            }
             if (nk_checkbox_label(ctx, lab, &on[i])) app_groups_changed();
+            if (hid[i]) for (int c = 0; c < 3; c++) nk_style_pop_color(ctx);
         }
         nk_tree_pop(ctx);
     }

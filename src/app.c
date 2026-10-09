@@ -1096,6 +1096,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
             else if (sscanf(v, "%f,%f,%f", &O.bg[0], &O.bg[1], &O.bg[2]) != 3) O.bg_set = false;
         }
         else if (!strcmp(argv[i], "--set") && i + 1 < argc && O.nsets < 8) O.sets[O.nsets++] = argv[++i];
+        else if (!strcmp(argv[i], "--hide-set") && i + 1 < argc && O.nhide_sets < 8) O.hide_sets[O.nhide_sets++] = argv[++i];
         else if (!strcmp(argv[i], "--step") && i + 1 < argc) O.step = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--gp-under")) O.gp_under = true;
         else if (!strcmp(argv[i], "--xray")) O.xray = true;

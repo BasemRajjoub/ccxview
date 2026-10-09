@@ -559,12 +559,14 @@ void deck_clear(void);
 bool deck_loaded(void);
 const cv_inp* deck_get(void);
 const char* deck_path(void);
-bool* deck_set_flags(void);
+bool* deck_set_flags(void);          /* per set: an elset ticked (show only the ticked), a node set highlighted */
+bool* deck_set_hidden_flags(void);   /* per set: an elset hidden (wins over ticked); NULL without a deck */
 bool* deck_surf_flags(void);
 bool deck_file_reader(void* user, const char* path, char** data, size_t* size);
 const char* deck_material_name(uint32_t k);
 const cv_elemmap* deck_elemmap(const cv_frd* f);   /* material and axes per .frd element, NULL none */
 bool deck_any_elset_on(void);
+bool deck_any_elset_hidden(void);
 void deck_apply_mask(const cv_frd* f, uint8_t* vis);
 void deck_refresh_highlight(void);   /* highlights and the support / load glyphs */
 bool deck_has_bc(void);
