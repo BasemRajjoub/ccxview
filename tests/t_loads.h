@@ -249,3 +249,55 @@ static void test_steps(void) {
     CHECK(pair >= 0 && cv_inp_link_active(&d, 1, pair) && !cv_inp_link_active(&d, 2, pair));
     cv_inp_free(&d); free(d.msgs.a);
 }
+
+/* *CLOAD and *TEMPERATURE with SUBMODEL, TIME DELAY=, LOAD CASE= (inp.c) */
+static bool t_unreadable(const cv_inp* d) {
+    for (size_t i = 0; i < d->msgs.n; i++) if (strstr(d->msgs.a[i].text, "unreadable")) return true;
+    return false;
+}
+static void test_load_cards(void) {
+    const char* deck =
+        "*NODE, NSET=NALL\n"
+        "1, 0,0,0\n2, 1,0,0\n3, 1,1,0\n4, 0,1,0\n5, 0,0,1\n6, 1,0,1\n7, 1,1,1\n8, 0,1,1\n"
+        "*ELEMENT, TYPE=C3D8, ELSET=EA\n1, 1,2,3,4,5,6,7,8\n"
+        "*NSET, NSET=NCUT\n1, 4, 5, 8\n"
+        "*AMPLITUDE, NAME=RAMP\n0., 0., 1., 1.\n"
+        "*SUBMODEL, TYPE=NODE, INPUT=global.frd\nNCUT\n"
+        "*STEP\n*STATIC\n"
+        "*CLOAD, SUBMODEL, STEP=2\nNCUT, 1\nNCUT, 2\n8, 3\n"
+        "*TEMPERATURE, SUBMODEL, STEP=3\nNCUT\n"
+        "*CLOAD, AMPLITUDE=RAMP, TIME DELAY=0.5\n7, 3, 10.\n"
+        "*CLOAD, AMPLITUDE=RAMP, TIME DELAY=0.5\n6, 3, 10.\n"
+        "*CLOAD, AMPLITUDE=RAMP\n2, 3, 10.\n"
+        "*END STEP\n"
+        "*STEP\n*STEADY STATE DYNAMICS\n1., 10., 5\n"
+        "*CLOAD, LOAD CASE=1\n3, 1, 7.\n"
+        "*CLOAD, LOAD CASE=2, OP=NEW\n3, 1, 9.\n"
+        "*END STEP\n";
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), NULL, NULL));
+    CHECK(!t_unreadable(&d));                             /* the SUBMODEL lines are read, not skipped */
+    CHECK_EQ(d.namps, 2);                                 /* RAMP, and RAMP later by 0.5 (made once) */
+    if (d.namps == 2) {
+        CHECK(!strcmp(d.amps[1].name, "RAMP DELAY 0.5"));
+        CHECK_NEAR(cv_amp_at(&d.amps[1], 0.5), 0., 1e-6);
+        CHECK_NEAR(cv_amp_at(&d.amps[1], 1.0), 0.5, 1e-6);
+    }
+    cv_applied a;
+    CHECK(cv_inp_applied(&d, 0, &a));
+    int f = 0, t = 0;
+    for (uint32_t i = 0; i < a.ncloads; i++) f += a.cloads[i].sub == 2;
+    for (uint32_t i = 0; i < a.ntemps; i++) t += a.temps[i].sub == 3;
+    CHECK_EQ(f, 9);                                       /* 4 nodes x 2 DOFs, node 8 a third */
+    CHECK_EQ(t, 4);
+    CHECK(t_cload(&a, 7, 3) && t_cload(&a, 7, 3)->amp == 2 && t_cload(&a, 6, 3) && t_cload(&a, 6, 3)->amp == 2);
+    cv_applied_at(&d, &a, 1., 1.);                        /* at step time 1: delayed by 0.5, half way up */
+    CHECK(t_cload(&a, 7, 3) && t_cload(&a, 7, 3)->value == 5.f);
+    CHECK(t_cload(&a, 2, 3) && t_cload(&a, 2, 3)->value == 10.f);
+    cv_applied_free(&a);
+    CHECK(cv_inp_applied(&d, 1, &a));                     /* load case 2 left out, its OP=NEW too */
+    CHECK(t_cload(&a, 3, 1) && t_cload(&a, 3, 1)->value == 7.f);
+    CHECK(t_cload(&a, 2, 3) != NULL);
+    cv_applied_free(&a);
+    cv_inp_free(&d); free(d.msgs.a);
+}

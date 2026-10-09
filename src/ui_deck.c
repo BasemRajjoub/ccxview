@@ -60,6 +60,11 @@ static void build(const cv_inp* d) {
         if (nb) line(0, "     %d node DOFs driven by step %d of the global model", nb, g);
         for (uint32_t i = 0; i < d->ndloads; i++) if (d->dloads[i].step == k && d->dloads[i].sub) { nf++; g = d->dloads[i].sub; }
         if (nf) line(0, "     pressure on %d faces from the stresses of global step %d", nf, g);
+        int nc = 0, nt = 0;                        /* *CLOAD / *TEMPERATURE, SUBMODEL */
+        for (uint32_t i = 0; i < d->ncloads; i++) if (d->cloads[i].step == k && d->cloads[i].sub) { nc++; g = d->cloads[i].sub; }
+        if (nc) line(0, "     %d node forces from global step %d", nc, g);
+        for (uint32_t i = 0; i < d->ntemps; i++) if (d->temps[i].step == k && d->temps[i].sub) { nt++; g = d->temps[i].sub; }
+        if (nt) line(0, "     %d node temperatures from global step %d", nt, g);
     }
     int64_t nrm = 0;
     deck_removed(&nrm);

@@ -1539,6 +1539,7 @@ int main(void) {
     test_units();
     test_loads();
     test_steps();
+    test_load_cards();
     test_cap();
     test_label();
     test_glyph();

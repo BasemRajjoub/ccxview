@@ -356,6 +356,25 @@ static int16_t find_amp(P* p, const char* raw) {
     return 0;
 }
 
+/* TIME DELAY=: the amplitude amp (index + 1) later by the delay, as an amplitude of
+   its own (made once per amplitude and delay); amp itself when there is no delay */
+static int16_t delayed_amp(P* p, int16_t amp, const char* td) {
+    double dt;
+    if (amp <= 0 || (size_t)amp > p->amps.n || !td || !to_f(td, &dt) || dt == 0) return amp;
+    char nm[64];
+    snprintf(nm, sizeof nm, "%.40s DELAY %g", p->amps.a[amp - 1].a.name, dt);
+    for (size_t i = 0; i < p->amps.n; i++) if (!strcmp(p->amps.a[i].a.name, nm)) return (int16_t)CV_MIN(i + 1, 32767u);
+    vamp v;
+    memset(&v, 0, sizeof v);
+    v.a = p->amps.a[amp - 1].a;
+    snprintf(v.a.name, sizeof v.a.name, "%s", nm);
+    for (size_t k = 0; k < p->amps.a[amp - 1].tv.n; k++)
+        if (!cv_push(v.tv, p->amps.a[amp - 1].tv.a[k])) { cv_free_vec(v.tv); p->oom = true; return amp; }
+    if (v.tv.n) v.tv.a[0] += (float)dt;               /* the shift in x kept in front: every time later */
+    if (!cv_push(p->amps, v)) { cv_free_vec(v.tv); p->oom = true; return amp; }
+    return (int16_t)CV_MIN(p->amps.n, 32767u);
+}
+
 /* *AMPLITUDE, the procedure of a step, *MODEL CHANGE, *SUBMODEL. true: taken */
 static bool step_keyword(P* p, const char* kw, const param* prm, int np) {
     if (!strcmp(kw, "AMPLITUDE")) {
@@ -663,12 +682,15 @@ static void do_keyword(P* p, const char* s, const char* e) {
                  !strcmp(kc, "DLOAD") || !strcmp(kc, "DSLOAD") ? S_DLOAD : !strcmp(kc, "DFLUX") ? S_DFLUX :
                  !strcmp(kc, "FILM") ? S_FILM : !strcmp(kc, "RADIATE") ? S_RADIATE : !strcmp(kc, "TEMPERATURE") ? S_TEMP : 0;
         if (st) {
+            const char* lc = pget(prm, np, "LOADCASE");     /* steady state dynamics: 2 the imaginary part, not shown */
+            uint32_t lcv;
+            if (lc && to_u32(lc, &lcv) && lcv == 2) { p->st = S_SKIP; return; }
             const char* op = pget(prm, np, "OP");
             if (op && toupper((unsigned char)op[0]) == 'N') op_new(p, st);
             p->st = st;
-            p->camp = find_amp(p, pget(prm, np, "AMPLITUDE"));
+            p->camp = delayed_amp(p, find_amp(p, pget(prm, np, "AMPLITUDE")), pget(prm, np, "TIMEDELAY"));
             p->csub = 0;
-            if (pget(prm, np, "SUBMODEL") && (st == S_BOUNDARY || st == S_DLOAD)) {
+            if (pget(prm, np, "SUBMODEL") && (st == S_BOUNDARY || st == S_DLOAD || st == S_CLOAD || st == S_TEMP)) {
                 const char* gs = pget(prm, np, "STEP");
                 uint32_t v = 1;
                 if (gs && (!to_u32(gs, &v) || !v)) v = 1;
@@ -748,11 +770,11 @@ static void do_data(P* p, const char* s, const char* e) {
             if (!each_node(p, f[0], add_bc, &b)) p->bad_lines++;
             return;
         }
-        case S_CLOAD: {                       /* node|set, dof, magnitude */
+        case S_CLOAD: {                       /* node|set, dof, magnitude (SUBMODEL: no magnitude, the global forces) */
             int n = fields(s, e, f, 3);
-            uint32_t dof; double v;
-            if (n < 3 || !to_u32(f[1], &dof) || dof < 1 || dof > 6 || !to_f(f[2], &v)) { p->bad_lines++; return; }
-            cv_cload c = { 0, (uint8_t)dof, cur_step(p), (float)v, p->camp };
+            uint32_t dof; double v = 0;
+            if (n < 2 || !to_u32(f[1], &dof) || dof < 1 || dof > 6 || (!p->csub && (n < 3 || !to_f(f[2], &v)))) { p->bad_lines++; return; }
+            cv_cload c = { 0, (uint8_t)dof, cur_step(p), (float)v, p->camp, p->csub };
             if (!each_node(p, f[0], add_cload, &c)) p->bad_lines++;
             return;
         }
@@ -764,11 +786,11 @@ static void do_data(P* p, const char* s, const char* e) {
             if (!each_node(p, f[0], add_cload, &c)) p->bad_lines++;
             return;
         }
-        case S_TEMP: {                        /* node|set, temperature */
+        case S_TEMP: {                        /* node|set, temperature (SUBMODEL: none, the global model's) */
             int n = fields(s, e, f, 2);
-            double v;
-            if (n < 2 || !to_f(f[1], &v)) { p->bad_lines++; return; }
-            cv_ntemp t = { 0, cur_step(p), (float)v, p->camp };
+            double v = 0;
+            if (n < 1 || !f[0][0] || (!p->csub && (n < 2 || !to_f(f[1], &v)))) { p->bad_lines++; return; }
+            cv_ntemp t = { 0, cur_step(p), (float)v, p->camp, p->csub };
             if (!each_node(p, f[0], add_temp, &t)) p->bad_lines++;
             return;
         }
