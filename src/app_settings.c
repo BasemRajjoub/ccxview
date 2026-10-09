@@ -83,6 +83,8 @@ static const setting S[] = {
     B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor), B(wheel_invert), B(show_pivot),
     { "cam_ortho", 'b', &G.cam.ortho, 0, 0 }, F(fly_speed, 0.005f, 10),
     I(fly_clip, 0, 2), F(fly_clip_depth, 0, 0.2f), B(sel_elems), B(sel_nodes), B(sel_visible), B(sel_mark_max), B(sel_mark_min), B(sel_filters),
+    { "sel_open_pick", 'b', &G.sel_open[CV_SELG_PICK], 0, 0 }, { "sel_open_names", 'b', &G.sel_open[CV_SELG_NAMES], 0, 0 },
+    { "sel_open_use", 'b', &G.sel_open[CV_SELG_USE], 0, 0 }, { "sel_open_named", 'b', &G.sel_open[CV_SELG_NAMED], 0, 0 },
     SEC("Each model's post-processing (views, sets, paths, lines) kept in <model>.ccxview beside it: 1 on, 0 off"),
     B(sidecar),
     SEC("Display"),

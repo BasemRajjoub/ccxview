@@ -152,7 +152,9 @@ model that changes from step to step and a submodel of it.
 
 One floating window, Selection (S, the top bar's Select, View > Selection...,
 the context menu, or "selection..." in the probe), for everything that picks
-elements and nodes:
+elements and nodes. Under what is selected its parts fold by their headers
+(pick and tools, by name and id, filters, use, kept by name); each stays as
+it was left, and at first the filters and the kept ones are folded:
 
 - Mode: what is picked next replaces the selection, is added to it, removed
   from it, or intersected with it. The mode applies to every way of selecting.
@@ -178,7 +180,7 @@ elements and nodes:
 - Grow and shrink by one layer of neighbours; boundary: the nodes on the
   outside of the selected elements (faces no other selected element shares; a
   shell's free edges) and the elements that have them.
-- Filters (the "filters" box): keep what lies in a range of x, y or z, or of
+- Filters (the "filters" part): keep what lies in a range of x, y or z, or of
   r, theta and the axial coordinate about an X, Y or Z axis through a point
   (undeformed; an element by its centre); what the field shown puts above or
   below a value, or in its top N % (an element by its highest node, its lowest
@@ -197,8 +199,9 @@ elements and nodes:
   on the max.
 - What it is: the count, the extremes with their ids, the deck sets it shares
   members with ("EHOLE 40/40").
-- What is done with it: hide it, show only it, put the crop box round it (the view framed on it once cut; Ctrl+Z goes back) or the
-  clip plane through its centre; its rows as CSV; its ids as `*ELSET` /
+- What is done with it: hide it, show only it, put the crop box round it (the
+  view framed on what is left once cut; Ctrl+Z goes back) or the clip plane
+  through its centre; its rows as CSV; its ids as `*ELSET` /
   `*NSET` lines, to the clipboard or to `<model>_<name>.inp` beside the model to
   `*INCLUDE` in a deck (a file of its own: the model's input is never
   touched); labels on it alone; its history over the steps (the Integrals

@@ -159,6 +159,7 @@ static void close_all(struct nk_context* ctx) {
     G.title_edit = false;
     G.show_measure = false; app_measure_cancel();
     G.show_select = false; G.sel_tool = CV_ST_NONE; G.sel_mode = CV_SEL_NEW;
+    G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true; G.sel_open[CV_SELG_NAMED] = false;
 }
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
@@ -276,8 +277,12 @@ static void use_end(struct nk_context* ctx) {
     G.crop_on = G.clip_on = G.label_sel_only = false; G.label_kinds = 0; app_label_changed();
     app_sel_clear(); app_show_all(); app_nsel_clear();
 }
-static void filters_on(struct nk_context* ctx) { G.sel_filters = true; }
-static void filters_off(struct nk_context* ctx) { G.sel_filters = false; app_sel_clear(); }
+static void filters_on(struct nk_context* ctx) { G.sel_filters = true; G.sel_open[CV_SELG_USE] = false; }   /* room for them */
+static void filters_off(struct nk_context* ctx) { G.sel_filters = false; G.sel_open[CV_SELG_USE] = true; app_sel_clear(); }
+static void named_open(struct nk_context* ctx) { G.sel_open[CV_SELG_NAMED] = true; }
+static bool pick_folded(struct nk_context* ctx) { return !G.sel_open[CV_SELG_PICK] && G.sel_open[CV_SELG_USE]; }
+static bool pick_open(struct nk_context* ctx) { return G.sel_open[CV_SELG_PICK]; }
+static bool named_unfolded(struct nk_context* ctx) { return G.sel_open[CV_SELG_NAMED]; }
 static bool sel_some(struct nk_context* ctx) { return G.sel_n > sel_was && G.sel_n < G.frd.n_elems; }
 static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
 static void ids_on(struct nk_context* ctx) { G.label_kinds = 1 << CV_LABEL_NODE; G.label_probe_only = true; app_label_changed(); }
@@ -726,8 +731,13 @@ static const step script[] = {
     AT_TIP("Selection", "Keep the elements of this type"), CLICK, WAIT(2), EXPECT(sel_empty, "remove: every Hex20 leaves"),
     DO(filters_off), WAIT(2),
 
+    CASE("selection: its parts fold and open by their headers"),
+    DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Selection", "Pick: the mode"), CLICK, WAIT(2), EXPECT(pick_folded, "pick folded, use still open"),
+    AT_TIP("Selection", "Pick: the mode"), CLICK, WAIT(2), EXPECT(pick_open, "pick open again"),
+    AT_TIP("Selection", "Kept by name: the selection kept"), CLICK, WAIT(2), EXPECT(named_unfolded, "kept by name opens"),
+
     CASE("selection: kept by name, taken back, renamed, forgotten"),
-    DO(sel_none), DO(app_nsel_clear_ctx), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
+    DO(sel_none), DO(app_nsel_clear_ctx), DO(named_open), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
     DO(name_holea), AT_TIP("Selection", "Keep the selection under this name"), CLICK, WAIT(3), EXPECT(kept_one, "kept as HOLEA"),
     AT_TIP("Selection", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "cleared"),
     AT_TIP("Selection", "#named sel HOLEA"), CLICK, WAIT(2), EXPECT(sel_20k, "HOLEA selected again"),

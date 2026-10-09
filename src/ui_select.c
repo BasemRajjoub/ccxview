@@ -29,6 +29,28 @@ static void row_head(struct nk_context* ctx, float s, float row, const char* lab
     nk_label_colored(ctx, label, NK_TEXT_LEFT, P.dim);
 }
 
+/* a part's header, drawn as the panel's sub-sections are (a triangle, the title): a
+   click folds or opens it; true when open */
+static bool part_head(struct nk_context* ctx, float row, const char* title, const char* tiptext, bool* open) {
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, tiptext);
+    bool click = nk_widget_is_mouse_clicked(ctx, NK_BUTTON_LEFT);
+    struct nk_rect r;
+    enum nk_widget_layout_states st = nk_widget(&r, ctx);
+    if (st == NK_WIDGET_INVALID) return *open;
+    if (click && st == NK_WIDGET_VALID) *open = !*open;
+    struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
+    const struct nk_user_font* f = ctx->style.font;
+    struct nk_color c = nk_input_is_mouse_hovering_rect(&ctx->input, r) ? ctx->style.tab.node_maximize_button.text_hover
+                                                                         : ctx->style.tab.text;
+    float h = roundf(f->height * 0.55f), cx = r.x + 2 + h * 0.5f, cy = r.y + r.h * 0.5f;
+    if (*open) nk_fill_triangle(cv, cx - h * 0.5f, cy - h * 0.3f, cx + h * 0.5f, cy - h * 0.3f, cx, cy + h * 0.45f, c);
+    else nk_fill_triangle(cv, cx - h * 0.3f, cy - h * 0.5f, cx - h * 0.3f, cy + h * 0.5f, cx + h * 0.45f, cy, c);
+    nk_draw_text(cv, nk_rect(r.x + h + 8, r.y + (r.h - f->height) * 0.5f, r.w - h - 8, f->height), title, (int)strlen(title), f,
+                 ctx->style.window.background, c);
+    return *open;
+}
+
 /* what is selected, its extremes */
 static void summary(struct nk_context* ctx, float s, float row) {
     char t[200], a[32], b[32];
@@ -420,10 +442,13 @@ void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int f
     if (!G.show_select || !G.loaded) { if (was_open) G.sel_tool = CV_ST_NONE; was_open = false; return; }
     if (!was_open) { nk_window_show(ctx, "Selection", NK_SHOWN); G.sel_note[0] = 0; }
     was_open = true;
-    /* as tall as its rows, again when filters open or close or a selection is kept or forgotten */
+    /* as tall as its rows, again when a part folds or opens or a selection is kept or forgotten */
     static int shape = -1;
-    int nk = CV_MIN(app_nsel_count(), 5), now = (G.sel_filters ? 100 : 0) + nk;
-    float lines = 18.f + (G.sel_filters ? 5.f : 0.f) + nk;
+    bool* op = G.sel_open;
+    int nk = op[CV_SELG_NAMED] ? CV_MIN(app_nsel_count(), 5) : 0;
+    int now = (G.sel_filters ? 1000 : 0) + op[CV_SELG_PICK] * 100 + op[CV_SELG_NAMES] * 200 + op[CV_SELG_USE] * 400 + op[CV_SELG_NAMED] * 2000 + nk;
+    float lines = 10.f + (op[CV_SELG_PICK] ? 7.f : 0.f) + (op[CV_SELG_NAMES] ? 2.f : 0.f) + (G.sel_filters ? 5.f : 0.f)
+                + (op[CV_SELG_USE] ? 3.f : 0.f) + (op[CV_SELG_NAMED] ? 1.f + nk : 0.f);
     float w = CV_MIN(430 * s, fw * 0.5f), h = CV_MIN(lines * (row + ctx->style.window.spacing.y) + 2.6f * row, fh * 0.85f);
     if (shape >= 0 && shape != now && nk_window_find(ctx, "Selection"))
         nk_window_set_size(ctx, "Selection", nk_vec2(nk_window_find(ctx, "Selection")->bounds.w, h));
@@ -431,28 +456,41 @@ void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int f
     if (nk_begin(ctx, "Selection", nk_rect(G.vp_x + 10 * s, G.vp_y + 10 * s, w, h),   /* top left: the legend is top right */
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
         summary(ctx, s, row);
-        mode_row(ctx, s, row);
-        takes_rows(ctx, s, row);
-        tools_rows(ctx, s, row);
-        names_row(ctx, s, row);
-        ids_row(ctx, s, row);
-        nk_layout_row_dynamic(ctx, row, 1);
-        tip(ctx, "Filters: keep what lies in a range of x y z (or r theta z about an axis), what the field puts above\n"
-                 "or below a value or in its top N %, a type, a material, the side facing you; of the selection, or\n"
-                 "of everything shown when nothing is selected");
-        nk_checkbox_label(ctx, "filters", &G.sel_filters);
-        if (G.sel_filters) filter_rows(ctx, s, row);
         nk_layout_row_dynamic(ctx, row, 1);
         if (G.sel_note[0]) { tip(ctx, G.sel_note); nk_label_colored(ctx, G.sel_note, NK_TEXT_LEFT, P.warn); }
         else if (G.sel_tool != CV_ST_NONE)
             nk_label_colored(ctx, G.sel_tool == CV_ST_LASSO ? "draw in the view (Esc: done)" : "click in the view (Esc: done)", NK_TEXT_LEFT, P.accent);
         else nk_label(ctx, "", NK_TEXT_LEFT);
-        use_rows(ctx, s, row);
-        named_rows(ctx, s, row);
+        if (part_head(ctx, row, "pick, tools", "Pick: the mode, what a pick takes, the tools (box, click, lasso, faces, edge chain, part)\n"
+                                        "and the steps on the selection (invert, nodes <-> elements, grow, shrink, boundary)", &op[CV_SELG_PICK])) {
+            mode_row(ctx, s, row);
+            takes_rows(ctx, s, row);
+            tools_rows(ctx, s, row);
+        }
+        if (part_head(ctx, row, "by name, by id", "By name: the deck's sets and surfaces, element types and materials; by id: a list as 1-100, 205",
+                      &op[CV_SELG_NAMES])) {
+            names_row(ctx, s, row);
+            ids_row(ctx, s, row);
+        }
+        part_head(ctx, row, "filters", "Filters: keep what lies in a range of x y z (or r theta z about an axis), what the field puts above\n"
+                                       "or below a value or in its top N %, a type, a material, the side facing you; of the selection, or\n"
+                                       "of everything shown when nothing is selected", &G.sel_filters);
+        if (G.sel_filters) filter_rows(ctx, s, row);
+        if (part_head(ctx, row, "use", "Use: hide, isolate, crop, clip; the CSV, the deck lines, labels; its history over the steps",
+                      &op[CV_SELG_USE])) {
+            use_rows(ctx, s, row);
+            nk_layout_row_dynamic(ctx, row, 1);
+            tip(ctx, "Its history: the field integrated over the selected elements at every step (volume integral and\n"
+                     "average), or summed over the selected nodes (reaction forces), plotted over the steps");
+            if (nk_button_label(ctx, "history (integrals)...") && (G.sel_n || G.seln_n)) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");
+        }
+        char kept[48];
+        snprintf(kept, sizeof kept, app_nsel_count() ? "kept by name (%d)" : "kept by name", app_nsel_count());
+        if (part_head(ctx, row, kept, "Kept by name: the selection kept under a name with the model (its .ccxview), and those kept",
+                      &op[CV_SELG_NAMED]))
+            named_rows(ctx, s, row);
         nk_layout_row_dynamic(ctx, row, 2);
-        tip(ctx, "Its history: the field integrated over the selected elements at every step (volume integral and\n"
-                 "average), or summed over the selected nodes (reaction forces), plotted over the steps");
-        if (nk_button_label(ctx, "history (integrals)...") && (G.sel_n || G.seln_n)) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");
+        nk_label(ctx, "", NK_TEXT_LEFT);
         tip(ctx, "Close (S)");
         if (nk_button_label(ctx, "close")) G.show_select = false;
     }

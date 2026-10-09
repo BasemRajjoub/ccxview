@@ -45,7 +45,8 @@ ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
 ccxview model.frd --select set:EHOLE --select add:ids:1-20 --selection-window
                                             # selection steps, in order (see Selection below);
-                                            #   --opt sel_filters=1: the window's filter rows open
+                                            #   --opt sel_filters=1: the window's filter rows open;
+                                            #   sel_open_pick / _names / _use / _named=0|1: its other parts
 ccxview model.frd --find 120 --details      # probe node 120, its Details window open
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)

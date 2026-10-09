@@ -64,6 +64,8 @@ enum { CV_CACHE_N = 8 };
 
 /* Background work: loading a file, or rebuilding the skin after a group change. */
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
+/* the Selection window's parts that fold */
+enum { CV_SELG_PICK, CV_SELG_NAMES, CV_SELG_USE, CV_SELG_NAMED, CV_SELG_N };
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
@@ -363,6 +365,7 @@ typedef struct {
     int       sel_tool;              /* CV_ST_*: what a click in the view does (the Selection window's tools) */
     bool      show_select;           /* the Selection window */
     bool      sel_filters;           /* ... with its filter rows open */
+    bool      sel_open[4];           /* ... and its other parts: CV_SELG_* (the filters are sel_filters) */
     char      sel_note[160];         /* what the last selection step did or why it did nothing */
     float     lasso[2 * 512];        /* the lasso being drawn: window pixels, lasso_n points */
     int       lasso_n;
