@@ -189,7 +189,7 @@ int cv_field_quantity(const char* f, int comp) {
         { "TOSTRAIN", CV_Q_STRAIN }, { "MESTRAIN", CV_Q_STRAIN }, { "TOSTRAII", CV_Q_STRAIN },
         { "MESTRAII", CV_Q_STRAIN }, { "PE", CV_Q_STRAIN }, { "PEEQ", CV_Q_STRAIN },
         { "VELO", CV_Q_VELO }, { "V3DF", CV_Q_VELO }, { "ACC", CV_Q_ACC },
-        { "ENER", CV_Q_ENERGY_D }, { "HFL", CV_Q_FLUX }, { "RFL", CV_Q_POWER }, { "MF", CV_Q_MASSFLOW },
+        { "ENER", CV_Q_ENERGY_D }, { "HFL", CV_Q_FLUX }, { "FLUX", CV_Q_FLUX },   /* *NODE FILE HFL writes FLUX */ { "RFL", CV_Q_POWER }, { "MF", CV_Q_MASSFLOW },
         /* .dat phrases (longer first: the match is on a prefix) */
         { "displacements", CV_Q_LEN }, { "stresses", CV_Q_STRESS }, { "forces", CV_Q_FORCE },
         { "total force", CV_Q_FORCE }, { "temperatures", CV_Q_TEMP }, { "velocities", CV_Q_VELO },

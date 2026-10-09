@@ -61,6 +61,7 @@ ccxview model.frd --calc "S1 - S3" --export mp4
 - [Features in full](docs/features.md)
 - [Command line, mouse and keys](docs/usage.md)
 - [Deck keywords and symbols](docs/keywords.md)
+- [Result fields and what is done with them](docs/results.md)
 - [Building, testing, releasing, timings](docs/build.md)
 - [Design notes](docs/spec.md)
 

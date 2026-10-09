@@ -513,6 +513,9 @@ static void test_field_math(void) {
     int n = cv_field_options(&d, opts, 16);
     CHECK_EQ(n, 7);
     CHECK_EQ(opts[0].comp, CV_COMP_MISES);
+    snprintf(d.name, sizeof d.name, "stresses (elem, integ.pnt.,sxx,...)");    /* a .dat block: von Mises too */
+    n = cv_field_options(&d, opts, 16);
+    CHECK_EQ(opts[0].comp, CV_COMP_MISES);
 }
 
 static void test_portal_wire(void) {
