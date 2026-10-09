@@ -82,7 +82,8 @@ typedef struct {
 
 enum { SRC_TEXT, SRC_NODE, SRC_ELEM, SRC_GAUSS };
 static struct { anchors a; unsigned gen, serial; int kinds, asked; bool sel_only, probe_only, probe_on; uint32_t probe_elem;
-                uint32_t pin0, pin1; } A;        /* anchors pin0 .. pin1: the extremes, always drawn */
+                uint32_t pin0, pin1, meas0; float meas_w; } A;   /* anchors pin0 .. pin1: the extremes, then from meas0 the
+                                                                     measurements (meas_w: their widest text, px); always drawn */
 /* kinds: the ones built (a value field per element: the element value stands for the node
    value); asked: G.label_kinds then; probe_*: the probe these were built for */
 
@@ -336,7 +337,7 @@ static void build_anchors(void) {
     A.kinds = A.asked = G.label_kinds; A.gen = G.label_gen; A.sel_only = G.label_sel_only; A.probe_only = G.label_probe_only;
     A.probe_on = G.probe_on; A.probe_elem = G.probe.elem;
     A.serial++;
-    if (!G.loaded || !G.label_kinds) return;
+    if (!G.loaded || (!G.label_kinds && !app_measure_count())) return;
     const cv_frd* f = &G.frd;
     bool nodal = G.has_field && !G.elem_mode && G.field_src != 1 && G.scalar;
     bool elemv = G.has_field && (G.elem_mode || G.field_src == 1) && G.elem_val;
@@ -428,6 +429,20 @@ static void build_anchors(void) {
             pack(&A.a, p, d, NULL, SRC_TEXT, UINT32_MAX, r, t);
             A.pin1 = A.a.n;
         }
+    /* the measurements, pinned after the extremes: seen through the model */
+    A.meas0 = A.pin1 = A.a.n; A.meas_w = 0;
+    if (app_measure_count()) {
+        uint32_t nm = (uint32_t)app_measure_count();
+        float* anc = malloc(nm * 9 * sizeof *anc);
+        char (*txt)[96] = malloc(nm * sizeof *txt);
+        nm = anc && txt ? app_measure_anchors(anc, txt, nm) : 0;
+        for (uint32_t i = 0; i < nm; i++) {
+            pack(&A.a, anc + 9 * i, anc + 9 * i + 3, NULL, SRC_TEXT, UINT32_MAX, G.diag, txt[i]);
+            A.meas_w = CV_MAX(A.meas_w, cv_label_width(&F.m, txt[i]));
+        }
+        A.pin1 = A.a.n;
+        free(anc); free(txt);
+    }
     /* the named kinds */
     for (int k = CV_LABEL_SETS; k <= CV_LABEL_MATERIALS; k++) if (on(k)) build_named(k);
     free(nmark); free(emark);
@@ -468,8 +483,8 @@ static float widest_label(void) {
         w = CV_MAX(w, cv_label_width(&F.m, t));
     }
     if (on(CV_LABEL_MINMAX)) { snprintf(t, sizeof t, "max %d: %s", G.minmax_n, val); w = CV_MAX(w, cv_label_width(&F.m, t)); }
-    for (uint32_t i = 0; i < A.a.n; i++)             /* the named ones: the texts themselves */
-        if (A.a.toff.a[i] != UINT32_MAX) w = CV_MAX(w, cv_label_width(&F.m, A.a.txt.a + A.a.toff.a[i]));
+    for (uint32_t i = 0; i < A.a.n; i++)             /* the named ones: the texts themselves (not the measurements: pinned) */
+        if (A.a.toff.a[i] != UINT32_MAX && !(i >= A.meas0 && i < A.pin1)) w = CV_MAX(w, cv_label_width(&F.m, A.a.txt.a + A.a.toff.a[i]));
     return w;
 }
 
@@ -493,7 +508,7 @@ static void coarse_check(float cell) {
 
 void app_label_frame(cv_draw* d) {
     static float last_mvp[16], last_px, last_sp, last_f1, last_f2, last_clip[4]; static unsigned last_gen; static int last_kind, last_w, last_h;
-    if (!G.loaded || !G.label_kinds) {
+    if (!G.loaded || (!G.label_kinds && !app_measure_count())) {
         if (A.a.n || last_kind) {
             A.a.n = 0; A.pin0 = A.pin1 = 0; A.asked = -1;                  /* the same kind again rebuilds */
             free(C.keep); C.keep = NULL; C.n = 0;
@@ -572,7 +587,7 @@ void app_label_frame(cv_draw* d) {
     float reach = F.m.height;                      /* the farthest a label's box reaches from its point, px */
     /* pinned labels at one spot (the extremes of a symmetric part, seen along the axis)
        stack: each one that would cover an earlier one goes a row lower */
-    float pin_w = gap > 0 ? bx - gap : widest_label() + 2 * pad, pin_h = F.m.height + 2 * pad;
+    float pin_w = CV_MAX(gap > 0 ? bx - gap : widest_label() + 2 * pad, A.meas_w + 2 * pad), pin_h = F.m.height + 2 * pad;
     struct { float x, y; int row; } st[200];
     uint32_t ns = 0;
     for (uint32_t k = 0; k < n; k++) {
@@ -595,7 +610,8 @@ void app_label_frame(cv_draw* d) {
     d->label_px = reach;                           /* the depth pull: a label clears the face its point lies on */
     cv_render_labels(box.a, (uint32_t)(box.n / CV_LABEL_FLOATS), gly.a, (uint32_t)(gly.n / CV_LABEL_FLOATS));
     cv_free_vec(gly); cv_free_vec(box); free(pts); free(pin); free(chosen);
-    {   /* "labels: node id, loads; shown 420 of 18 000" */
+    if (!G.label_kinds) G.label_note[0] = 0;          /* measurements alone */
+    else {   /* "labels: node id, loads; shown 420 of 18 000" */
         char what[40] = "";
         size_t o = 0;
         for (int k = 1; k < CV_LABEL_N && o < sizeof what - 1; k++)

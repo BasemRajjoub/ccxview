@@ -48,6 +48,9 @@ typedef struct {
     bool        watch;          /* --watch: reload when the file changes */
     const char* compare;        /* --compare FILE */
     const char* path_ids;       /* --path A,B: node ids to plot between */
+    const char* measure[16];    /* --measure dist:A,B | angle:A,B,C | circle:A,B,C (node ids) */
+    int         nmeasure;
+    bool        measure_window; /* --measure-window: the Measurements window open */
     long        hist_id;        /* --history N: node id whose history to plot, 0 none */
     const char* lin_ids;        /* --linearize A,B: node ids of the line */
     int         look;           /* --look iso|+x|-x|+y|-y|+z|-z, -1 = default */

@@ -285,6 +285,7 @@ static void apply_load(cv_job* j) {
     G.skin = j->skin;       memset(&j->skin, 0, sizeof j->skin);
     gp_localize();                             /* needs the deck and G.frd */
     snprintf(G.path, sizeof G.path, "%s", j->path);
+    bool new_model = app_measure_model(G.path);   /* another file: its measurements go (a sidecar may add them after) */
     G.load_seconds = j->seconds;
     settings_add_recent(j->path);
     cv_logf("loaded %s: %u nodes, %u elements, %d steps, %zu skin triangles, %zu messages, %.3f s",
@@ -415,6 +416,7 @@ static void apply_load(cv_job* j) {
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
     if (O.fly) app_set_flight(true);
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
+    if (O.measure_window) G.show_measure = true;
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
     if (O.range_set && !G.reload_keep) { G.range_lock = true; G.rmin = O.range[0]; G.rmax = O.range[1]; }
@@ -443,6 +445,24 @@ static void apply_load(cv_job* j) {
         if (q) G.path_surface = false;
         if (dir) app_path_ray(na, dir);
         else { app_path_start(na); app_path_end(nb); }
+    }
+    for (int q = 0; new_model && q < O.nmeasure; q++) {   /* --measure dist:A,B | angle:A,B,C | circle:A,B,C */
+        const char* s = O.measure[q];
+        const char* colon = strchr(s, ':');
+        int kind = -1;
+        for (int k = 0; colon && k < CV_MEAS_N; k++)
+            if (!strncasecmp(s, app_measure_kind_name(k), (size_t)(colon - s)) && colon > s) kind = k;   /* dist, distance, ang ... */
+        unsigned id[3] = { 0, 0, 0 };
+        int n = colon ? sscanf(colon + 1, "%u,%u,%u", &id[0], &id[1], &id[2]) : 0;
+        uint32_t ids[3] = { id[0], id[1], id[2] };
+        char m[160];
+        if (kind < 0 || n != app_measure_nodes(kind)) {
+            snprintf(m, sizeof m, "--measure %s: dist:A,B, angle:A,B,C or circle:A,B,C (node ids)", s);
+            cv_msg_add(&G.msgs, 0, false, m);
+        } else if (!app_measure_add(kind, ids)) {
+            snprintf(m, sizeof m, "--measure %s: node not in this model", s);
+            cv_msg_add(&G.msgs, 0, false, m);
+        }
     }
     if (O.hist_id > 0) {
         uint32_t n = cv_frd_node_index(&G.frd, (uint32_t)O.hist_id);

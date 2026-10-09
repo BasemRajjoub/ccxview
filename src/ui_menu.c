@@ -14,7 +14,7 @@
 #include <stdarg.h>
 
 enum {
-    M_SEP, M_LOOK, M_PAIR,                             /* a separator, the look-from buttons, a hide | only row */
+    M_SEP, M_LOOK, M_PAIR, M_MEAS,                     /* a separator, the look-from buttons, a hide | only row, the measure buttons */
     M_PROBE, M_DETAILS, M_CENTRE, M_NORMAL, M_ZOOM, M_HIST, M_PATH, M_WALL, M_CLIP, M_COPY,
     M_HIDE_EL, M_HIDE_MAT, M_ONLY_MAT, M_HIDE_TYPE, M_ONLY_TYPE, M_HIDE_SET, M_ONLY_SET,
     M_SEL_HIDE, M_SEL_ONLY, M_SEL_MAX, M_SEL_MIN, M_SEL_IDS, M_SEL_CSV, M_SEL_CLEAR,
@@ -69,6 +69,7 @@ static void build(void) {
         add(M_HIST, 0, "History of node %u", f->node_id[p->node]);
         add(M_PATH, 0, "Path from node %u...", f->node_id[p->node]);
         add(M_WALL, 0, "Through the wall (linearize)");
+        add(M_MEAS, 0, NULL);
         add(M_CLIP, 0, "Clip here");
         add(M_COPY, 0, "Copy ids and value");
         add(M_SEP, 0, NULL);
@@ -186,7 +187,7 @@ void window_menu(struct nk_context* ctx, float s, float row, int fw, int fh) {
     build();
     float sep = 7 * s, h = 2 * ctx->style.window.padding.y + 4 * s;
     for (int i = 0; i < ni; i++) h += it[i].what == M_SEP ? sep : row + ctx->style.window.spacing.y;
-    float w = 250 * s;
+    float w = 275 * s;                                /* the measure row: three words beside its label */
     float x = CV_MIN(G.menu_x, fw - w - 4), y = CV_MIN(G.menu_y, fh - h - 4);
     struct nk_rect r = nk_rect(CV_MAX(x, 4), CV_MAX(y, 4), w, h);
     if (!was_open) { nk_window_show(ctx, "Menu", NK_SHOWN); nk_window_set_focus(ctx, "Menu"); }
@@ -205,6 +206,11 @@ void window_menu(struct nk_context* ctx, float s, float row, int fw, int fh) {
                     uii_test_mark(ctx, mk);
                     if (nk_button_label(ctx, lk[k])) { app_view_push(); app_view(CV_VIEW_ISO + k); G.menu_on = false; }
                 }
+                continue;
+            }
+            if (it[i].what == M_MEAS) {                 /* measure from this node: the next clicks give the others */
+                int k = ui_measure_row(ctx, s, row, "#menu measure");
+                if (k >= 0) { G.menu_on = false; app_probe_pixel(G.menu_x, G.menu_y); app_measure_arm(k, G.menu_pick.node); }
                 continue;
             }
             if (it[i].what == M_PAIR) {

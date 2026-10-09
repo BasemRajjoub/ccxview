@@ -118,7 +118,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     float tw = 0;
     for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
     float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
-    float h = row * (n + 5.8f + (G.sel_n || G.seln_n ? 2.2f : 0.f));
+    float h = row * (n + 6.9f + (G.sel_n || G.seln_n ? 2.2f : 0.f));
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -143,7 +143,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Everything about this node and element in a window of its own:\n"
              "displacement, every component of the field, sets, nodes, the box selection");
     if (nk_button_label(ctx, "details...")) G.show_details = !G.show_details;
-    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.path_arm = false; app_sel_clear(); }
+    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.path_arm = false; app_measure_cancel(); app_sel_clear(); }
     static int pick_dir;
     nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "Where the path from this node goes: to a node you click next, or straight into the\n"
@@ -156,6 +156,8 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     if (nk_button_label(ctx, pick_dir ? "path" : G.path_arm ? "path: to?" : "path from")) {
         if (pick_dir) app_path_ray(p->node, pick_dir); else app_path_start(p->node);
     }
+    int mk = ui_measure_row(ctx, s, row, "#probe measure");
+    if (mk >= 0) app_measure_arm(mk, p->node);
     nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "The field at this node (element in per-element mode) against time, over every step");
     if (nk_button_label(ctx, "history")) app_hist_open(p->node, p->elem);

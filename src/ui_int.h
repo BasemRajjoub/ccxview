@@ -59,6 +59,8 @@
 #define window_path             uii_window_path
 #define window_history          uii_window_history
 #define window_convergence      uii_window_convergence
+#define window_measure          uii_window_measure
+#define ui_measure_row          uii_measure_row
 
 /* ---- ui_style.c: scale + font, palette, themes */
 struct uii_scale {
@@ -164,6 +166,9 @@ void section_failure(struct nk_context* ctx, float s, float row);
 void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_mesh.c */
 void section_mesh(struct nk_context* ctx, float s, float row);
 void section_label(struct nk_context* ctx, float s, float row);    /* ui_label.c */
+void window_measure(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_measure.c */
+/* "measure:  distance  angle  circle" on a row; the kind clicked, -1 none (the caller arms it) */
+int  ui_measure_row(struct nk_context* ctx, float s, float row, const char* mark);
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
 void ui_sel_what(struct nk_context* ctx, float row);   /* ui_windows.c: what a box selects */
