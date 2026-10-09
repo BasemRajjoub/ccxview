@@ -843,7 +843,7 @@ void ui_test_frame(struct nk_context* ctx) {
     if (T.case_failed && script[T.pc].op != OP_CASE) next_case();
     while (T.wait == 0) {
         const step* s = &script[T.pc];
-        float x, y;
+        float x = 0, y = 0;
         if (T.case_failed && s->op != OP_CASE && s->op != OP_END) { next_case(); continue; }
         switch (s->op) {
         case OP_END:

@@ -240,7 +240,7 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f) {
     const double cos_lim = cos(CV_LOC_SPAN * 3.14159265358979323846 / 180);
     for (int pass = 0; pass < 2; pass++)
         for (uint32_t e = 0; e < f->n_elems; e++) {
-            double Q[3][3], Q0[3][3];
+            double Q[3][3], Q0[3][3] = {{0}};
             bool wide = false;
             for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
                 uint32_t n = f->conn[j];
