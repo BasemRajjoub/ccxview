@@ -148,6 +148,35 @@ driven sets, the amplitudes with their points. [results.md](results.md) lists
 the result fields and what is done with each; `samples/modelchange/` shows a
 model that changes from step to step and a submodel of it.
 
+## Selection
+
+One floating window, Selection (S, the top bar's Select, View > Selection...,
+the context menu, or "selection..." in the probe), for everything that picks
+elements and nodes:
+
+- Mode: what is picked next replaces the selection, is added to it, removed
+  from it, or intersected with it. The mode applies to every way of selecting.
+- Takes: elements, nodes or both; only the side facing the camera (nodes on
+  faces turned toward it, elements with such a face) or through the model.
+  Changing a tick takes the last box again with the new ticks.
+- Box, as in CAD (Ctrl+Shift+drag at any time, or the box button): left to
+  right the elements wholly inside, right to left every element touched.
+- Click: while armed, a click in the view takes the element (and node) under
+  the cursor by the mode; with "select" a click on a selected one takes it out.
+  Esc puts the tool down.
+- Invert (what is shown and not selected), elements to their nodes, nodes to
+  the elements with every node selected, or with any ("touching").
+- By name: a deck element or node set, a surface (its elements and the nodes of
+  its faces), every element of a type or a material; also from a right click on
+  a set or surface in Groups.
+- By id: a list as you would write it, "1-100, 205, 300-310"; what is not an id,
+  or not in the model, is reported.
+- The field's max and min over the selection with their node or element ids
+  (over the selected nodes, or the selected elements' nodes; per element over
+  the elements), kept up to date when the field or step changes; the probe sits
+  on the max.
+- `--select SPEC` (repeatable, in order) does the same from the command line.
+
 ## Looking at results
 
 - Animation: mode shapes, steady-state phases, deformation cycles, step
@@ -156,11 +185,9 @@ model that changes from step to step and a submodel of it.
   plots between nodes or through the wall. Details of the probe: position,
   displacement, every component of the field, the element's material, sets
   and nodes.
-- Box selection as in CAD (Ctrl+Shift+drag): left to right the elements wholly
-  inside, right to left every element touched; by default only the side facing
-  the camera (nodes on faces turned toward it, elements with such a face), or
-  through the model; highlighted, with the field's max over them marked (the min
-  too when asked: compression, the cold spot) and both in the details.
+- Selection of elements and nodes (the Selection window, below), highlighted,
+  with the field's max over it marked (the min too when asked: compression, the
+  cold spot) and both in the window, the probe and the details.
 - Integrals of the field over a set, at every step (Integrals window: Fields >
   integrate..., right click a set in Groups, the view's context menu, or the
   probe's "integrate..." under a box selection). Over a volume (an element set,

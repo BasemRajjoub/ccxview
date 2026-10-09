@@ -49,7 +49,6 @@
 #define section_stl             uii_section_stl
 #define units_summary           uii_units_summary
 #define window_probe            uii_window_probe
-#define ui_sel_what             uii_sel_what
 #define window_details          uii_window_details
 #define window_about            uii_window_about
 #define window_deck             uii_window_deck
@@ -176,7 +175,6 @@ void window_measure(struct nk_context* ctx, float s, float row, int fw, int fh);
 int  ui_measure_row(struct nk_context* ctx, float s, float row, const char* mark);
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
-void ui_sel_what(struct nk_context* ctx, float row);   /* ui_windows.c: what a box selects */
 void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_info.c */
 void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
 void window_deck(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_deck.c */
@@ -200,5 +198,9 @@ void uii_plot_steps(struct nk_context* ctx, float s, struct nk_rect area, int n,
 
 /* ---- ui_integ.c: the Integrals window */
 void uii_window_integrals(struct nk_context* ctx, float s, float row, int fw, int fh);
+
+/* ---- ui_select.c: the Selection window */
+void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh);
+void uii_select_ids(const char* text, bool nodes);    /* the id box's text (the interface test) */
 
 #endif

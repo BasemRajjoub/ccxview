@@ -15,6 +15,7 @@
 #include "sta.h"
 #include "anchor.h"
 #include "units.h"
+#include "selset.h"
 
 /* what the faces are coloured by */
 enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
@@ -356,6 +357,10 @@ typedef struct {
     uint8_t*  sel_front;             /* per node, 1: on a face turned toward the camera as the box was dragged; NULL: not judged */
     uint8_t*  sel_front_e;           /* per element: 1 such a face, 0 none turned this way, 2 no face on the skin */
     bool      sel_crossing;          /* ... by a crossing box (else a window) */
+    int       sel_mode;              /* CV_SEL_* (selset.h): how what is picked next goes with the selection */
+    int       sel_tool;              /* CV_ST_*: what a click in the view does (the Selection window's tools) */
+    bool      show_select;           /* the Selection window */
+    char      sel_note[160];         /* what the last selection step did or why it did nothing */
     uint8_t*  hide;                  /* per element, 1: hidden by hand (context menu), NULL none */
     /* the context menu (right click in the view): where, and what was under it */
     bool      menu_on;
@@ -503,15 +508,37 @@ int  app_export_progress(int* done, int* total);  /* a frame export running? fil
 void app_export_cancel(void);            /* stop a frame export; a video keeps what it has */
 bool app_export_data(bool vtk);          /* nodes + field as CSV, or mesh + field as VTK, beside the model */
 bool app_project(v3 p, float* sx, float* sy);   /* world -> window pixels; false when behind the eye */
-/* app_select.c -- box selection, CAD style: dragged left to right a window (the shown
-   elements wholly inside), right to left a crossing (any node inside); by projection,
-   so elements behind the front faces count. The field's max and min over the
-   selection (its nodes, or its elements per element) go to G.boxq, the probe to the
-   max, the selection's outer faces outlined. false: nothing selected */
+/* app_select.c -- the selection: elements G.sel and nodes G.seln. Every change goes
+   through app_sel_apply: the lists in which (1 elements, 2 nodes) combined with the
+   current ones by mode (CV_SEL_*: NEW also empties the other list), then the field's
+   max and min over the selection (its nodes, or its elements per element) to G.boxq,
+   the probe to the max, its outer faces outlined, the labels. false: nothing selected.
+   The box, CAD style: dragged left to right a window (the shown elements wholly
+   inside), right to left a crossing (any node inside); by projection, so elements
+   behind the front faces count; it goes in by G.sel_mode. */
+enum { CV_ST_NONE, CV_ST_CLICK, CV_ST_LASSO, CV_ST_FACE, CV_ST_CHAIN, CV_ST_PART, CV_ST_N };
+bool app_sel_apply(const uint32_t* el, uint32_t ne, const uint32_t* nd, uint32_t nn, int mode, int which);
+int  app_sel_which(void);                       /* what the ticks say a pick takes: 1 elements | 2 nodes */
 bool app_box_select(float x_start, float y_start, float x_end, float y_end);
 bool app_box_reselect(void);                    /* the last box again (G.sel_elems / sel_nodes changed) */
 void app_sel_clear(void);
 void app_sel_refresh(void);                     /* the outline again: the shape changed */
+void app_sel_field_changed(void);               /* the extremes again: the field changed */
+void app_sel_facing(uint8_t* node, uint8_t* elem);   /* the side facing the camera (per node, per element) */
+/* app_seltools.c: the other ways to select, each by the mode given: elements bring
+   their nodes when nodes are ticked (and go in only when elements are), nodes are
+   nodes whatever is ticked; only what is shown */
+bool app_sel_take_elems(const uint32_t* el, uint32_t ne, int mode);
+bool app_sel_take_nodes(const uint32_t* nd, uint32_t nn, int mode);
+bool app_sel_click(float px, float py);         /* the armed tool (G.sel_tool) at the pixel; false: not taken */
+bool app_sel_invert(void);                      /* the ticked kinds: what is shown and not selected */
+bool app_sel_to_nodes(void);                    /* the selected elements' nodes, the elements dropped */
+bool app_sel_to_elems(bool any);                /* the shown elements with every (any) node selected, the nodes dropped */
+/* a deck set or surface by name ("set:", "surf:" to say which), "type:C3D20R",
+   "mat:NAME" or "mat:N" */
+bool app_sel_by_name(const char* name, int mode);
+bool app_sel_by_ids(const char* text, bool nodes, int mode);   /* "1-100, 205"; bad tokens in G.sel_note */
+bool app_sel_spec(const char* spec);            /* --select: "ids:1-100", "set:EHOLE", "add:...", "invert", ... */
 void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
 /* what lies under the pixel (mirror and replicate copies too), the probe untouched;
    o, d: the ray in the model's frame */

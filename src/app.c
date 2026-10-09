@@ -370,7 +370,16 @@ static void frame(void) {
                     G.boxq.vmax, G.boxq.vmin, G.boxq.n);
     }
 
-    if (O.integ && !O.box_set && G.loaded && !app_busy()) {    /* --integrate: after --box, for a selection */
+    if (O.nselect && !O.box_set && G.loaded && !app_busy() && G.vp_w > 0) {   /* --select: after --box, in order */
+        for (int k = 0; k < O.nselect; k++)
+            if (!app_sel_spec(O.select[k]) || G.sel_note[0])
+                fprintf(stderr, "select %s: %s\n", O.select[k], G.sel_note[0] ? G.sel_note : "nothing selected");
+        fprintf(stderr, "select: %u elements, %u nodes", G.sel_n, G.seln_n);
+        if (G.boxq.on) fprintf(stderr, ", max %g min %g over %u", G.boxq.vmax, G.boxq.vmin, G.boxq.n);
+        fprintf(stderr, "\n");
+        O.nselect = 0;
+    }
+    if (O.integ && !O.box_set && !O.nselect && G.loaded && !app_busy()) {    /* --integrate: after --box and --select, for a selection */
         if (!app_integ_open_spec(O.integ)) cv_msg_add(&G.msgs, 0, false, G.note);
         O.integ = NULL;
     }
@@ -853,7 +862,8 @@ static void event(const sapp_event* ev) {
             break;
         case SAPP_EVENTTYPE_MOUSE_UP:
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_LEFT && drag.mode != CV_NAV_BOX) {
-                do_pick(ev->mouse_x, ev->mouse_y);
+                if (G.sel_tool == CV_ST_NONE || !G.show_select) do_pick(ev->mouse_x, ev->mouse_y);
+                else app_sel_click(ev->mouse_x, ev->mouse_y);   /* a selection tool is armed: the click is its */
             }
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_RIGHT && !G.flight)   /* a right click: the menu */
                 app_menu_open(ev->mouse_x, ev->mouse_y);
@@ -937,6 +947,7 @@ static void event(const sapp_event* ev) {
                     break;
                 case SAPP_KEYCODE_R: if (!ctrl) app_view(CV_VIEW_ISO); break;
                 case SAPP_KEYCODE_H: if (!ctrl) G.hide_panels = !G.hide_panels; break;
+                case SAPP_KEYCODE_S: if (!ctrl && !G.flight) G.show_select = !G.show_select; break;
                 case SAPP_KEYCODE_1: case SAPP_KEYCODE_2: case SAPP_KEYCODE_3:
                 case SAPP_KEYCODE_4: case SAPP_KEYCODE_5: case SAPP_KEYCODE_6:
                     if (!ctrl) app_view(CV_VIEW_PX + (ev->key_code - SAPP_KEYCODE_1));
@@ -1037,6 +1048,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--measure-window")) O.measure_window = true;
+        else if (!strcmp(argv[i], "--selection-window")) O.select_window = true;
+        else if (!strcmp(argv[i], "--select") && i + 1 < argc && O.nselect < 32) O.select[O.nselect++] = argv[++i];
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
         else if (!strcmp(argv[i], "--title-block") && O.nopts < 32) O.opts[O.nopts++] = "title_on=1";

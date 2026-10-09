@@ -56,7 +56,7 @@ void cmap_combo(struct nk_context* ctx, float s, float row) {
    looks (colormap, bands, range) below. Camera controls live in the View tree. */
 void panel_toolbar(struct nk_context* ctx, float s, float row) {
     /* line 1: deformation */
-    nk_layout_row_begin(ctx, NK_STATIC, row, 13);
+    nk_layout_row_begin(ctx, NK_STATIC, row, 15);
     nk_layout_row_push(ctx, 80 * s);
     tip(ctx, "Draw the shape displaced by DISP x scale");
     nk_checkbox_label(ctx, "Deform", &G.deform);
@@ -97,6 +97,11 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     uii_vsep(ctx);
     nk_layout_row_push(ctx, 64 * s);
     if (nk_button_label(ctx, IC_SCAN "  Fit")) app_fit();
+    nk_layout_row_push(ctx, 24 * s);
+    uii_vsep(ctx);
+    nk_layout_row_push(ctx, 84 * s);
+    tip(ctx, "The Selection window (S): box, click, by set or id, add / remove / intersect, invert");
+    if (nk_selectable_label(ctx, IC_BOX "  Select", NK_TEXT_CENTERED, &G.show_select)) {}
     nk_layout_row_push(ctx, 24 * s);
     uii_vsep(ctx);
     nk_layout_row_push(ctx, 90 * s);
@@ -651,7 +656,8 @@ void legend_controls(struct nk_context* ctx, float s, float row) {
         tip(ctx, "Drag a box in the view next: the probe goes to the field's max inside it,\n"
                  "with the min beside it (also Ctrl+Shift+drag at any time; Esc cancels)");
         if (nk_button_label(ctx, G.box_arm ? "max in a box: drag one..." : "max in a box")) G.box_arm = !G.box_arm;
-        ui_sel_what(ctx, row);
+        tip(ctx, "The Selection window (S): what a box takes, add / remove / intersect, by name or id");
+        if (nk_button_label(ctx, "Selection...")) G.show_select = !G.show_select;
     }
 }
 

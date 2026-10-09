@@ -64,29 +64,6 @@ void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh)
 
 const char* path_dirs[] = { "to a node", "along normal", "along X", "along Y", "along Z" };
 
-/* what a box selects: elements, nodes or both (never neither); a change selects again */
-void ui_sel_what(struct nk_context* ctx, float row) {
-    nk_layout_row_dynamic(ctx, row, 3);
-    nk_label(ctx, "a box selects:", NK_TEXT_LEFT);
-    bool e = G.sel_elems, n = G.sel_nodes;
-    tip(ctx, "Elements: drag left to right for those wholly inside, right to left for every one touched");
-    nk_checkbox_label(ctx, "elements", &G.sel_elems);
-    tip(ctx, "Nodes inside the box; the max and min are then taken over them");
-    nk_checkbox_label(ctx, "nodes", &G.sel_nodes);
-    if (!G.sel_elems && !G.sel_nodes) { if (e) G.sel_nodes = true; else G.sel_elems = true; }   /* never nothing */
-    bool vis = G.sel_visible, mx = G.sel_mark_max, mn = G.sel_mark_min;
-    nk_layout_row_dynamic(ctx, row, 3);
-    tip(ctx, "Only the side facing you: nodes on faces turned toward the camera, elements with such a face.\n"
-             "Off: everything inside the box, through the model");
-    nk_checkbox_label(ctx, "facing side only", &G.sel_visible);
-    tip(ctx, "A red ball on the selection's maximum");
-    nk_checkbox_label(ctx, "mark max", &G.sel_mark_max);
-    tip(ctx, "A blue ball on the selection's minimum (compression, the cold spot); the value is in the probe either way");
-    nk_checkbox_label(ctx, "mark min", &G.sel_mark_min);
-    if (e != G.sel_elems || n != G.sel_nodes || vis != G.sel_visible) app_box_reselect();
-    else if (mx != G.sel_mark_max || mn != G.sel_mark_min) app_sel_refresh();
-}
-
 void window_probe(struct nk_context* ctx, float s, float row) {
     if (!G.probe_on || !G.loaded) return;
     const cv_pick* p = &G.probe;
@@ -110,15 +87,15 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     if (G.boxq.on && G.boxq.gen == G.field_gen) {                /* the box this probe came from */
         char a[32], b[32];
         fmt_num(a, sizeof a, G.boxq.vmax); fmt_num(b, sizeof b, G.boxq.vmin);
-        snprintf(ln[n], 160, "box: max %s  min %s  (%u %s)", a, b, G.boxq.n, G.boxq.elem ? "elements" : "nodes");
-        tips[n++] = "The field's max (probed) and min over the selected elements\n"
-                    "(their nodes; per element, the elements). Details: where they are";
+        snprintf(ln[n], 160, "selection: max %s  min %s  (%u %s)", a, b, G.boxq.n, G.boxq.elem ? "elements" : "nodes");
+        tips[n++] = "The field's max (probed) and min over the selection\n"
+                    "(its nodes; per element, the elements). Selection window: where they are";
     }
     const struct nk_user_font* fnt = ctx->style.font;
     float tw = 0;
     for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
     float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
-    float h = row * (n + 6.9f + (G.sel_n || G.seln_n ? 3.3f : 0.f));
+    float h = row * (n + 6.9f + (G.sel_n || G.seln_n ? 1.1f : 0.f));
     struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
     if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
         nk_end(ctx);
@@ -131,9 +108,10 @@ void window_probe(struct nk_context* ctx, float s, float row) {
         nk_label(ctx, ln[i], NK_TEXT_LEFT);
     }
     if (G.sel_n || G.seln_n) {
-        ui_sel_what(ctx, row);
         nk_layout_row_dynamic(ctx, row, 3);
-        nk_spacing(ctx, 2);
+        nk_spacing(ctx, 1);
+        tip(ctx, "The Selection window (S): what a box or a click takes, add / remove / intersect, invert, by name or id");
+        if (nk_button_label(ctx, "selection...")) G.show_select = !G.show_select;
         tip(ctx, "The field integrated over the selected elements at every step (volume integral and average),\n"
                  "or summed over the selected nodes (reaction forces)");
         if (nk_button_label(ctx, "integrate...")) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");

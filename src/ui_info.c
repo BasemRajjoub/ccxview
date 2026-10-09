@@ -112,8 +112,9 @@ static void build(void) {
 
     /* the box it came from */
     if (G.sel_n || G.seln_n) {
-        line(true, "Box selection: %u elements, %u nodes (%s)", G.sel_n, G.seln_n,
-             G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
+        if (G.sel_inside) line(true, "Box selection: %u elements, %u nodes (%s)", G.sel_n, G.seln_n,
+                               G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
+        else line(true, "Selection: %u elements, %u nodes", G.sel_n, G.seln_n);
         if (G.boxq.on && G.boxq.gen == G.field_gen) {
             const uint32_t* id = G.boxq.elem ? f->elem_id : f->node_id;
             const char* what = G.boxq.elem ? "element" : "node";

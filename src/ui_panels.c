@@ -28,19 +28,25 @@ static void axis_label(char* out, size_t n, int axis, uint32_t v, uint32_t count
 
 static int g_pick_axis = -1, g_pick_idx = -1;   /* open colour picker (group swatch) */
 
-/* A right click on a set's row (laid out next): integrate over it. kind: what the
-   set holds (elements: a volume, faces: a surface, nodes: a sum). */
-static void set_menu(struct nk_context* ctx, float s, float row, int kind, const char* name) {
+/* A right click on a set's row (laid out next): integrate over it, select it. kind:
+   what the set holds (elements: a volume, faces: a surface, nodes: a sum). */
+static void set_menu(struct nk_context* ctx, float s, float row, int kind, const char* name, bool surf) {
     struct nk_rect b = nk_widget_bounds(ctx);
     uii_test_mark(ctx, "#set menu");
     static const char* what[CV_IK_N] = { "Integrate over set %s", "Integrate over surface %s", "Sum over set %s" };
     char lab[96];
     snprintf(lab, sizeof lab, what[kind], name);
-    if (nk_contextual_begin(ctx, 0, nk_vec2(240 * s, 3 * row + 10 * s), b)) {
+    if (nk_contextual_begin(ctx, 0, nk_vec2(240 * s, 6.4f * row + 10 * s), b)) {
         nk_layout_row_dynamic(ctx, row, 1);
         if (nk_contextual_item_label(ctx, lab, NK_TEXT_LEFT)) app_integ_open(kind, name);
         if (kind == CV_IK_VOLUME && nk_contextual_item_label(ctx, "... its outer faces (surface)", NK_TEXT_LEFT)) app_integ_open(CV_IK_SURFACE, name);
         if (kind != CV_IK_NODES && nk_contextual_item_label(ctx, "... sum over its nodes", NK_TEXT_LEFT)) app_integ_open(CV_IK_NODES, name);
+        char key[80];                                      /* the selection: this one, or with it, or without it */
+        snprintf(key, sizeof key, "%s:%s", surf ? "surf" : "set", name);
+        uii_test_mark(ctx, "#set menu select");
+        if (nk_contextual_item_label(ctx, "Select it", NK_TEXT_LEFT)) app_sel_by_name(key, CV_SEL_NEW);
+        if (nk_contextual_item_label(ctx, "Add it to the selection", NK_TEXT_LEFT)) app_sel_by_name(key, CV_SEL_ADD);
+        if (nk_contextual_item_label(ctx, "Remove it from the selection", NK_TEXT_LEFT)) app_sel_by_name(key, CV_SEL_REMOVE);
         nk_contextual_end(ctx);
     }
 }
@@ -89,7 +95,7 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
                 nk_style_push_color(ctx, &t->text_hover, P.dim);
                 nk_style_push_color(ctx, &t->text_active, P.dim);
             }
-            set_menu(ctx, s, row, CV_IK_VOLUME, d->sets[i].name);
+            set_menu(ctx, s, row, CV_IK_VOLUME, d->sets[i].name, false);
             if (nk_checkbox_label(ctx, lab, &on[i])) app_groups_changed();
             if (hid[i]) for (int c = 0; c < 3; c++) nk_style_pop_color(ctx);
         }
@@ -102,7 +108,7 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
             if (d->sets[i].is_elem) continue;
             k++;
             snprintf(lab, sizeof lab, "%s  (%u)", d->sets[i].name, d->sets[i].n);
-            set_menu(ctx, s, row, CV_IK_NODES, d->sets[i].name);
+            set_menu(ctx, s, row, CV_IK_NODES, d->sets[i].name, false);
             if (nk_checkbox_label(ctx, lab, &on[i])) { G.show_hl = true; deck_refresh_highlight(); }
         }
         nk_tree_pop(ctx);
@@ -130,7 +136,7 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
         nk_layout_row_dynamic(ctx, row, 1);
         for (int i = 0; i < d->nsurfs && i < 500; i++) {
             snprintf(lab, sizeof lab, "%s  (%u)", d->surfs[i].name, d->surfs[i].n ? d->surfs[i].n : d->surfs[i].nn);
-            set_menu(ctx, s, row, d->surfs[i].n ? CV_IK_SURFACE : CV_IK_NODES, d->surfs[i].name);
+            set_menu(ctx, s, row, d->surfs[i].n ? CV_IK_SURFACE : CV_IK_NODES, d->surfs[i].name, true);
             if (nk_checkbox_label(ctx, lab, &son[i])) { G.show_hl = true; deck_refresh_highlight(); }
         }
         nk_tree_pop(ctx);
