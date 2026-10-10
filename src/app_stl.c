@@ -116,11 +116,12 @@ void app_stl_import(const char* path) {
     else app_open(path);                    /* nothing to add it to: it is the model */
 }
 
-/* a file's rank as the model among several dropped: .frd first; -1 an STL, 9 neither */
+/* a file's rank as the model among several dropped: .frd first; -1 an STL, .cel or .nam
+   (they join the model), 9 neither */
 static int model_rank(const char* p) {
     static const char* const ext[] = { ".frd", ".inp", ".fbd", ".dat" };
     for (int k = 0; k < 4; k++) if (cv_ends_with_ci(p, ext[k])) return k;
-    return cv_ends_with_ci(p, ".stl") ? -1 : 9;
+    return cv_ends_with_ci(p, ".stl") || cv_ends_with_ci(p, ".cel") || cv_ends_with_ci(p, ".nam") ? -1 : 9;
 }
 
 void app_open_files(const char* const* paths, int n) {

@@ -206,6 +206,7 @@ void unload(void) {
     cv_calc_free(G.calc); G.calc = NULL;    /* its formula stays, for the next file */
     gp_clear();
     deck_clear();
+    app_contact_clear();
     fail_clear();
     mesh_clear();
     shell_clear();
@@ -458,6 +459,7 @@ static void apply_load(cv_job* j) {
     app_stl_queue_add();                 /* dropped or picked while it loaded */
     if (G.reload_keep) { view_bounds(); G.cam = G.keep_cam; G.reload_keep = false; }
     else app_view(CV_VIEW_ISO);
+    app_contact_model();                 /* the contact elements and warning node sets beside it */
     app_sidecar_load(reload);            /* what was set up for this model; the command line below wins */
     if (reload && G.crop_on && !app_busy()) app_groups_changed();   /* the crop box kept */
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
@@ -469,6 +471,17 @@ static void apply_load(cv_job* j) {
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
     if (O.deck_window) G.show_deck = true;
+    if (O.contact_window) G.show_contact = true;
+    for (int i = 0; i < O.ncel; i++) app_contact_open(O.cel[i]);    /* --cel FILE: a .cel or .nam */
+    for (int i = 0; i < O.nset_alpha; i++) {                       /* --set-alpha NAME:A */
+        char nm[64];
+        const char* c = strrchr(O.set_alpha[i], ':');
+        snprintf(nm, sizeof nm, "%.*s", c ? (int)CV_MIN((size_t)(c - O.set_alpha[i]), sizeof nm - 1) : 0, O.set_alpha[i]);
+        char* end = NULL;
+        double a = c ? strtod(c + 1, &end) : -1;
+        if (!c || end == c + 1 || *end || !(a >= 0 && a <= 1)) cv_msg_add(&G.msgs, 0, false, "--set-alpha NAME:A: A a number from 0 to 1");
+        else if (!app_see_set(nm, (float)a)) cv_msg_add(&G.msgs, 0, false, "--set-alpha NAME:A: no element set of that name in the deck");
+    }
     if (O.range_set && !G.reload_keep) { G.range_lock = true; G.rmin = O.range[0]; G.rmax = O.range[1]; }
     if (O.labels && !G.reload_keep) {
         int m = app_label_parse(O.labels);
@@ -540,6 +553,7 @@ static void apply_load(cv_job* j) {
         for (int k = 0; k < O.nsets; k++) {
             for (int i = 0; i < dk->nsets; i++) if (!strcasecmp(dk->sets[i].name, O.sets[k])) deck_set_flags()[i] = true;
             for (int i = 0; i < dk->nsurfs; i++) if (!strcasecmp(dk->surfs[i].name, O.sets[k])) deck_surf_flags()[i] = true;
+            for (int i = 0; i < dk->nlinks; i++) if (!strcasecmp(dk->links[i].name, O.sets[k])) deck_link_flags()[i] = true;
         }
         for (int k = 0; k < O.nhide_sets; k++) {
             bool found = false;
@@ -752,6 +766,22 @@ static void open_dat(const char* path) {
 void app_open(const char* path) {
     if (!path || !path[0]) return;
     if (cv_ends_with_ci(path, ".dat")) { open_dat(path); return; }
+    /* contact elements and warning node sets join the open model (or the one loading);
+       with none, the model beside them opens and brings them */
+    if (cv_ends_with_ci(path, ".cel") || cv_ends_with_ci(path, ".nam")) {
+        if (G.job.kind == JOB_LOAD) { app_contact_queue(path); return; }
+        if (G.loaded) { app_contact_open(path); return; }
+        char m[1024];
+        snprintf(m, sizeof m, "%s", path);
+        char* us = cv_ends_with_ci(path, ".nam") ? strstr(m, "_Warn") : NULL;
+        if (us) snprintf(us, sizeof m - (size_t)(us - m), ".nam");     /* job_WarnNode...nam -> job.nam */
+        char frd[1024];
+        if (deck_sibling(m, ".frd", frd, sizeof frd) || deck_sibling(m, ".inp", frd, sizeof frd)) {
+            app_contact_queue(path);
+            app_open(frd);
+        } else cv_msg_add(&G.msgs, 0, false, "a .cel or .nam belongs to a model: open its .frd or .inp first");
+        return;
+    }
     /* an STL joins the open model (or the one loading) as imported geometry; with
        none, or when it is the model itself (a reload), it is the model */
     if (cv_ends_with_ci(path, ".stl") && !(G.loaded && !strcmp(path, G.path))) {

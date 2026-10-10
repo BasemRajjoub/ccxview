@@ -47,7 +47,7 @@ not built in: write them as a formula (`S1 - S3`, ...).
 | `FLUX` | `HFL` | magnitude, arrows, heat flux units; turned to global with `GLOBAL=NO` |
 | `RFL` | `RFL` | a scalar, a power for the units |
 | `ERROR`, `HERROR` | `ERR`, `HER` | the error estimate as written |
-| `CONTACT` | `CDIS`, `CSTR` | `COPEN CSLIP1 CSLIP2 CPRESS CSHEAR1 CSHEAR2` as components: the first three lengths, the others stresses for the units |
+| `CONTACT` | `CDIS`, `CSTR` | `COPEN CSLIP1 CSLIP2 CPRESS CSHEAR1 CSHEAR2` as components: the first three lengths, the others stresses for the units. Written for the slave nodes of the active contact elements only: they colour the slave surface, the rest has no value (grey). `COPEN` is negative where the surfaces overlap; `CPRESS` may be a little below 0 at the edge of the zone, which makes the range symmetric about 0 while Colours > center at zero is on |
 | `VELO`, `V3DF` | `V`, `VF` | magnitude, arrows, velocity units; turned to global from a `*TRANSFORM` |
 | `ACC` | `A` | magnitude, arrows, acceleration units |
 | `SDV` | `SDV` | the state variables as components |
@@ -56,6 +56,29 @@ not built in: write them as a formula (`S1 - S3`, ...).
 
 "Turned to global" needs the deck beside the results: see
 [Results in local systems](keywords.md#results-in-local-systems).
+
+## Contact elements and warning node sets
+
+`jobname.cel` (`*NODE FILE, CONTACT ELEMENTS`): read beside the model, or opened
+with it. As ccx 2.22 writes it: an `*ELEMENT, TYPE=..., ELSET=contactelements_st<step>_in<increment>_at<attempt>_it<iteration>`
+card per element, its id running on past the model's, its nodes the model's (no
+`*NODE` block):
+
+| ccx writes | for | read as |
+|---|---|---|
+| `C3D6  m1 s m2 m4 s m3` | node to surface, a quadrilateral master face (corners only when quadratic) | the slave node `s` (twice), the face `m1 m2 m3 m4` |
+| `C3D4  m1 m2 m3 s` | node to surface, a triangular master face | the slave node, the face |
+| `C3D8  m1 m2 m3 m4 s1 s2 s3 s4` | surface to surface (a triangle repeats its last corner) | the master face, the slave face; written once per integration point of the slave face, so the same element many times: drawn once, counted once |
+
+The iterations are matched to the `.frd` by step and increment (its `1PSTEP`
+record): the increment on screen shows the last iteration of its last attempt.
+Other element types in the file are skipped, with a count in the Messages window.
+
+`jobname_WarnNode*.nam`: `*NSET` files ccx writes for its warnings, read beside
+the model with the `.inp` reader. Those named `...Miss...` list slave nodes not
+tied (`WarnNodeMissTiedContact` in ccx 2.22; `WarnNodeMissMasterIntersect`
+by its name): drawn yellow on the ties. The Contact window lists every one read
+with its count.
 
 ## Steps
 
@@ -91,5 +114,5 @@ Not read: the nodal prints (`*NODE PRINT`: displacements, forces, temperatures),
 `EMAS`, ...).
 
 The samples hold `DISP`, `STRESS`, `TOSTRAIN`, `FORC`, `ERROR` (all of them),
-`CONTACT` (elements), `NDTEMP`, `FLUX` (symbols) and `.dat` stresses
-(showcase, elements).
+`CONTACT` (elements, contact), `NDTEMP`, `FLUX` (symbols) and `.dat` stresses
+(showcase, elements); a `.cel` (contact) and a warning `.nam` (tie).

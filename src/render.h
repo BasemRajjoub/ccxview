@@ -18,6 +18,11 @@ void cv_colormap_rgb(int cmap, float t, float rgb[3]);
 #define CV_OOR_BELOW 0.48f
 
 enum { CV_COLOR_SOLID = 0, CV_COLOR_NODAL = 1, CV_COLOR_ELEM = 2, CV_COLOR_GROUP = 3 };
+/* the colours of ties and contact (app_contact.c), shared with the key over the view:
+   master surface, slave surface, a tied slave node, one not tied, a slave node in
+   contact, the line from it to its master face */
+enum { CV_KEY_MASTER, CV_KEY_SLAVE, CV_KEY_TIED, CV_KEY_FREE, CV_KEY_CSLAVE, CV_KEY_LINK, CV_KEY_N };
+extern const float cv_key_rgb[CV_KEY_N][3];
 enum { CV_MESH_N = 16 };     /* imported geometry: layers (cv_render_mesh) */
 
 typedef struct {
@@ -39,7 +44,10 @@ typedef struct {
     bool  gauss_on_top;        /* drawn through the faces (they sit inside elements) */
     int   gauss_points_color;  /* CV_COLOR_SOLID or CV_COLOR_NODAL */
     float gauss_size, gauss_rgb[3];
-    bool  highlights;          /* deck node sets (balls) and surfaces (faces) */
+    bool  highlights;          /* deck node sets (balls) and surfaces (faces); ties and contact pairs */
+    bool  contact;             /* the contact elements of a .cel (CV_AUX_C*) */
+    bool  contact_front;       /* ... their slave nodes and lines in front of everything */
+    bool  mirrored;            /* this instance is a mirror image: its triangles turn the other way */
     float hl_size;
     bool  geo_points, geo_curves, geo_surfaces;   /* cgx geometry */
     bool  supports, loads;     /* deck *BOUNDARY glyphs and *CLOAD / *DLOAD arrows */
@@ -97,9 +105,14 @@ void cv_render_colormap(int cmap, bool reverse, bool grey);
    pairs, surface triangles) */
 enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_GEOTRI,
        CV_AUX_MARK, CV_AUX_PATHLN, CV_AUX_RAYLN, CV_AUX_PICKPT, CV_AUX_ELEMTRI, CV_AUX_CAPTRI,
-       CV_AUX_SELLN, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN, CV_AUX_MEASLN, CV_AUX_MEASPT, CV_AUX_N };
+       CV_AUX_SELLN, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN, CV_AUX_MEASLN, CV_AUX_MEASPT,
+       CV_AUX_PMST, CV_AUX_PSLV, CV_AUX_PTIED, CV_AUX_PFREE, CV_AUX_CMST, CV_AUX_CMLN, CV_AUX_CSLV, CV_AUX_N };
        /* the box selection: outline (vertex pairs), faces (toned), nodes (dots), its max and min;
-          the measurements: their lines (vertex pairs) and nodes */
+          the measurements: their lines (vertex pairs) and nodes;
+          ties and contact pairs (app_contact.c, CV_KEY_* colours): master faces, slave faces
+          (half see-through, over the master's), the tied slave nodes, those not tied (in front);
+          the contact elements of a .cel: their master faces and outlines, slave nodes (their
+          lines: CV_INST_CLINK, CV_INST_CSLN) */
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n);
 /* the same with the second displacement part (harmonic: -DISPI, scaled by def_scale2) */
 void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n);
@@ -117,10 +130,13 @@ void cv_render_aux2(int which, const float* pos, const float* disp, const float*
 /* CV_INST_TENS / COMP: the bars of the principal cross in tension / compression */
 /* CV_INST_TRAJ1 / TRAJ3: principal stress trajectories of S1 / S3 */
 enum { CV_INST_BC, CV_INST_LD, CV_INST_MOM, CV_INST_HEAT, CV_INST_DISC, CV_INST_LINK, CV_INST_VEC,
-       CV_INST_TENS, CV_INST_COMP, CV_INST_TRAJ1, CV_INST_TRAJ3, CV_INST_BOLTLD, CV_INST_BOLTBC, CV_INST_SUB, CV_INST_N };
+       CV_INST_TENS, CV_INST_COMP, CV_INST_TRAJ1, CV_INST_TRAJ3, CV_INST_BOLTLD, CV_INST_BOLTBC, CV_INST_SUB,
+       CV_INST_CLINK, CV_INST_CSLN, CV_INST_N };
 /* BOLTLD / BOLTBC: bolt preloads (load colour) and held bolts (support colour), drawn in
    front of everything: a pretension section lies inside the bolt. SUB: what the global
-   model drives in a submodel (*BOUNDARY, SUBMODEL; *DSLOAD, SUBMODEL), in a colour of its own */
+   model drives in a submodel (*BOUNDARY, SUBMODEL; *DSLOAD, SUBMODEL), in a colour of its own.
+   CLINK / CSLN: the contact elements' lines slave -> master and slave face outlines, a
+   couple of pixels wide whatever the zoom (app_contact.c) */
 #define CV_INST_FLOATS 21
 void cv_render_inst(int which, const float* inst, uint32_t n);
 
@@ -140,6 +156,23 @@ void cv_render_labels(const float* box, uint32_t nb, const float* gly, uint32_t 
 void cv_render_label_depth(const cv_draw* d);   /* before the frame's pass, while labels are on: the faces' depth for their test */
 
 void cv_render_draw(const cv_draw* d);
+
+/* See-through faces (app_see.c): the skin triangles in runs, each drawn with one
+   opacity. ids: skin triangle numbers, run after run; a solid run is drawn in its
+   rgb (faces coloured by group), the others as the faces are coloured. The opaque
+   runs (alpha 1) are the faces of cv_render_draw; the others are drawn by
+   cv_render_see_draw over everything, blended, the far sides first and the near ones
+   over them (a triangle turns counter-clockwise seen from outside its element; one
+   whose id has CV_SEE_FLIP is turned around), so a glass body shows what lies
+   behind it and its own far side, dimmed. Kept until the
+   skin's triangles are uploaded again (cv_render_indices clears it); NULL / 0 clears:
+   every face opaque. Faces coloured per element without the expanded stream (the
+   gl_PrimitiveID path of huge meshes) stay opaque. */
+typedef struct { uint32_t first, n; float alpha; float rgb[3]; bool solid; } cv_see_run;
+#define CV_SEE_FLIP 0x80000000u
+void cv_render_see(const uint32_t* ids, uint32_t n, const cv_see_run* runs, int nruns);
+void cv_render_see_draw(const cv_draw* d);
+bool cv_render_see_on(void);
 
 /* Imported geometry (STL, app_stl.c): triangles that never move, lit like the faces,
    one solid colour, not on the mirror copies; with their outline (vertex pairs), drawn

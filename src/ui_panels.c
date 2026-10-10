@@ -197,6 +197,17 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 nk_checkbox_label(ctx, "Couplings", &G.show_links);
             }
         }
+        {                                        /* ties, contact pairs, contact elements: their window */
+            const cv_inp* dk = deck_get();
+            bool pairs = false;
+            for (int i = 0; dk && i < dk->nlinks; i++) pairs |= dk->links[i].kind == CV_LINK_TIE || dk->links[i].kind == CV_LINK_CONTACT;
+            if (pairs || app_contact_cel()) {
+                nk_layout_row_dynamic(ctx, row, 1);
+                tip(ctx, "Ties and contact pairs in their slave / master colours, the slave nodes CalculiX could\n"
+                         "not tie, the contact elements of the .cel by increment, the model see-through");
+                if (nk_button_label(ctx, "Contact ...")) G.show_contact = !G.show_contact;
+            }
+        }
         if ((geo_loaded() || deck_has_bc() || deck_has_loads() || deck_has_discrete())) uii_hsep(ctx, s);
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Balls at the field's minimum and maximum (legend settings: go there)");
@@ -229,6 +240,21 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             nk_checkbox_label(ctx, "hide when dense", &G.edges_auto);
             if (dense) nk_label_colored(ctx, "hidden: zoom in", NK_TEXT_LEFT, P.warn);
             else nk_label(ctx, "", NK_TEXT_LEFT);   /* nk_spacing ending a row opens the next one */
+        }
+        if (G.show_faces) {                      /* see-through: into an assembly, a contact zone */
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_static(ctx, 54 * s);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 34 * s);
+            nk_layout_row_template_end(ctx);
+            nk_label(ctx, "opacity", NK_TEXT_LEFT);
+            tip(ctx, "Opacity of the faces: less to see into the model (a contact zone inside an assembly).\n"
+                     "Each element set's own: Contact ...");
+            if (ui_slider_float(ctx, 0.f, &G.model_alpha, 1.f, 0.05f)) app_see_refresh();
+            char a[16];
+            snprintf(a, sizeof a, "%.2f", G.model_alpha);
+            nk_label(ctx, a, NK_TEXT_RIGHT);
+            nk_layout_row_dynamic(ctx, row, 2);
         }
         if (G.show_faces) {
             tip(ctx, "Faces of quadratic elements (C3D20, C3D10, S8, ...) drawn through their mid-side nodes:\ncolours and shape follow every node. Off: corners only, a third of the triangles,\nbut a value at a mid node (bending through one shell layer) does not show");

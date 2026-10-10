@@ -350,6 +350,23 @@ static void open_details(struct nk_context* ctx) { app_probe_at(0, false); G.sho
 static bool details_gone(struct nk_context* ctx) { return !G.show_details; }
 static void open_about(struct nk_context* ctx) { G.show_about = true; }
 static void open_deck(struct nk_context* ctx) { G.show_deck = true; }
+/* the Contact window with the contact sample's .cel read into the model on screen:
+   its iterations listed (their nodes need not be this model's) */
+static void open_contact(struct nk_context* ctx) {
+    if (!app_contact_cel()) app_contact_open("samples/contact/contact.cel");
+    G.cel_pick = -1; G.model_alpha = 1.f; app_see_refresh();
+    G.show_contact = true;
+}
+static bool contact_gone(struct nk_context* ctx) { return !G.show_contact; }
+static bool contact_listed(struct nk_context* ctx) { return app_contact_cel() && app_contact_cel()->nsets == 11 && win_of(ctx, "Contact"); }
+static bool contact_popup(struct nk_context* ctx) { return popup_open(ctx, "Contact"); }
+static bool contact_picked(struct nk_context* ctx) { return G.cel_pick >= 0 && app_contact_cel_set() == G.cel_pick && !popup_open(ctx, "Contact"); }
+static bool see_through(struct nk_context* ctx) { return G.model_alpha < 0.9f && cv_render_see_on(); }
+static void contact_end(struct nk_context* ctx) {
+    G.show_contact = false; G.cel_pick = -1; G.model_alpha = 1.f;
+    app_contact_clear(); app_see_refresh();
+}
+static void layers_alpha(struct nk_context* ctx) { G.model_alpha = 1.f; app_see_refresh(); }
 static bool deck_gone(struct nk_context* ctx) { return !G.show_deck; }
 static bool deck_shown(struct nk_context* ctx) { return G.show_deck && win_of(ctx, "Deck"); }
 static void groups_first(struct nk_context* ctx) { G.tree[CV_TREE_LAYERS] = 0; G.tree[CV_TREE_GROUPS] = 1; }
@@ -1071,6 +1088,17 @@ static const step script[] = {
     EXPECT(integrals_set, "the volume of the element's set"),
     DO(integrals_end), WAIT(2), PANELS_ANSWER,
     CLOSED_THEN_PANELS("Deck", open_deck, deck_gone),
+
+    CASE("contact: the .cel's iterations listed, one picked; the model see-through from the window"),
+    DO(close_all), DO(open_contact), WAIT(3), EXPECT(contact_listed, "the window lists the 11 iterations"),
+    AT_TIP("Contact", "Which contact elements"), CLICK, WAIT(2), EXPECT(contact_popup, "the list opens"),
+    AT_POPUP("Contact", 0.5f, 0.45f), CLICK, WAIT(3), EXPECT(contact_picked, "an iteration is drawn"),
+    AT_TIP("Contact", "The faces' opacity: less to see into the model (a contact"), CLICK, WAIT(3), EXPECT(see_through, "the model is see-through"),
+    DO(contact_end), WAIT(2), PANELS_ANSWER,
+    CLOSED_THEN_PANELS("Contact", open_contact, contact_gone),
+    CASE("layers: the opacity slider makes the model see-through"),
+    DO(contact_end), DO(close_all), DO(layers_first), WAIT(3), AT_TIP("Scene", "Opacity of the faces: less to see into the model"),
+    CLICK, WAIT(3), EXPECT(see_through, "the model is see-through"), DO(layers_alpha), WAIT(2), PANELS_ANSWER,
 
     CASE("menu: a right click on the model opens it, an item acts and closes it"),
     DO(close_all), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), EXPECT(menu_open, "the menu opens"),

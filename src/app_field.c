@@ -174,7 +174,7 @@ static void palette(int i, float rgb[3]) {
 
 /* Group colours: the skin triangles sorted by group (counting sort), drawn as
    one solid-colour run per group -- no per-triangle lookup in the shader. */
-void refresh_tri_colors(void) {
+static void group_runs(void) {
     int axis = G.faces_mode - FM_TYPE;
     if (axis < 0 || axis >= CV_AXIS_N || !G.skin.n_tri || !G.axis_rgb[axis]) {
         cv_render_groups(NULL, 0, NULL, NULL, 0);
@@ -195,6 +195,14 @@ void refresh_tri_colors(void) {
     }
     cv_render_groups(tri, G.skin.n_tri, first, G.axis_rgb[axis], ng);
     free(first); free(fill); free(tri);
+}
+
+/* the group runs, and the see-through ones that follow the colours and the skin */
+void refresh_tri_colors(void) {
+    group_runs();
+    app_see_skin();
+    app_see_refresh();
+    app_contact_skin();
 }
 
 void app_set_faces_mode(int fm) {

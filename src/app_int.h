@@ -39,6 +39,12 @@ typedef struct {
     bool        details;        /* --details: the Details window of the probe (with --find or --box) */
     bool        about;          /* --about: the About window open */
     bool        deck_window;    /* --deck-window: the Deck window open (steps, amplitudes, submodel) */
+    bool        contact_window; /* --contact-window: the Contact window open */
+    bool        no_panels;      /* --no-panels: the view alone, as H does (pictures) */
+    const char* cel[4];         /* --cel FILE: contact elements (.cel) or a warning node set (.nam), after load */
+    int         ncel;
+    const char* set_alpha[8];   /* --set-alpha NAME:A: an element set's opacity */
+    int         nset_alpha;
     const char* labels;         /* --labels KIND: what the labels show, by key */
     float       range[2];       /* --range MIN,MAX: the legend's range, locked */
     bool        range_set;
