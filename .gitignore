@@ -29,3 +29,7 @@ dist/
 
 # post-processing kept beside a model by ccxview
 *.ccxview
+!samples/contact/contact.frd
+!samples/contact/contact_s2s.frd
+!samples/tie/tie.frd
+!samples/tie/tie_WarnNodeMissTiedContact.nam
