@@ -11,7 +11,7 @@
 void cv_web_init(void);                       /* before settings_load(): restore the INI, hook page unload */
 void cv_web_exported(const char* path);       /* offer a file from the memory FS as a download */
 void cv_web_settings_saved(const char* path); /* mirror the INI to localStorage */
-void cv_web_pick_start(void);                 /* browser file picker; poll with cv_web_pick_poll */
+void cv_web_pick_start(int kind);             /* browser file picker for a CV_DLG_* kind; poll with cv_web_pick_poll */
 int  cv_web_pick_poll(char* out, size_t n);   /* CV_DLG_* state, path on CV_DLG_DONE */
 void cv_web_fetch_drops(void);                /* after SAPP_EVENTTYPE_FILES_DROPPED: pull the files in, open them */
 #define CV_EXPORTED(path)       cv_web_exported(path)

@@ -574,6 +574,87 @@ static void stl_faint(struct nk_context* ctx) { cv_stl_layer l = stl_l(); l.alph
 static bool stl_more_opaque(struct nk_context* ctx) { return stl_l().alpha > 0.5f; }
 static bool stl_scaled(struct nk_context* ctx) { return stl_l().scale > 1.5f && !popup_open(ctx, "Scene"); }
 static bool stl_gone(struct nk_context* ctx) { return app_stl_count() == 0; }
+/* Import STL... (#23): with no system dialog the built-in browser opens, for an STL;
+   in the model's folder it lists tet.stl and not the model's own files */
+static void stl_tree_open(struct nk_context* ctx) {
+    app_stl_clear();
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_GROUPS || k == CV_TREE_IMPORT;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+static void stl_file_tree_open(struct nk_context* ctx) {
+    app_stl_clear();
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_FILE;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+static bool browser_for_stl(struct nk_context* ctx) {
+    return G.browser_open && G.dlg_kind == CV_DLG_STL && !G.dlg_running && win_of(ctx, "Open file");
+}
+static void browse_model_dir(struct nk_context* ctx) {
+    static const float t[36] = { 0, 0, 0, 0, 60, 0, 60, 0, 0,  0, 0, 0, 60, 0, 0, 0, 0, 60,
+                                 0, 0, 0, 0, 0, 60, 0, 60, 0,  60, 0, 0, 0, 60, 0, 0, 0, 60 };
+    char dir[1024];
+    snprintf(dir, sizeof dir, "%s", G.path);
+    char* s = strrchr(dir, cv_path_sep());
+    if (s) *s = 0;
+    char stl[1100];
+    snprintf(stl, sizeof stl, "%s%ctet.stl", dir, cv_path_sep());
+    cv_stl_write(stl, t, 4);
+    if (!cv_abs_path(dir, G.browse_dir, sizeof G.browse_dir)) snprintf(G.browse_dir, sizeof G.browse_dir, "%s", dir);
+}
+static bool browser_lists_stl_only(struct nk_context* ctx) {
+    return find_mark("Open file", "#file tet.stl") && !find_mark("Open file", "#file showcase.frd") && !find_mark("Open file", "#file showcase.inp");
+}
+static bool stl_picked(struct nk_context* ctx) {
+    return !G.browser_open && G.dlg_kind == CV_DLG_MODEL && app_stl_count() == 1 && !strcmp(app_stl_name(0), "tet.stl");
+}
+/* the pin of the showcase as imported geometry, the whole model in sight: a pixel on
+   the pin where the model is not, so that only the layer can answer there */
+static float pin_x, pin_y;
+static void pin_layer(struct nk_context* ctx) {
+    app_stl_clear();
+    app_stl_add("samples/showcase/pin.stl");
+    app_view(CV_VIEW_ISO);
+    pin_x = pin_y = -1;
+    float best = 1e30f;
+    for (int j = 1; j < 40; j++) for (int i = 1; i < 40; i++) {
+        float px = G.vp_x + G.vp_w * i / 40.f, py = G.vp_y + G.vp_h * j / 40.f, o[3], d[3];
+        cv_pick pk;
+        if (app_pick(px, py, &pk, o, d)) continue;
+        float t = app_stl_ray(o, d, NULL), d2 = (i - 20.f) * (i - 20.f) + (j - 20.f) * (j - 20.f);
+        if (t < INFINITY && d2 < best) { best = d2; pin_x = px; pin_y = py; }
+    }
+}
+static bool in_pin(v3 p) {
+    return p.x > -32.5f && p.x < 32.5f && p.y > -32.5f && p.y < 75.5f && p.z > -24.5f && p.z < 19.5f;   /* pin.stl's box */
+}
+static bool pin_under_cursor(struct nk_context* ctx) {
+    v3 p; bool on = false;
+    return pin_x >= 0 && app_cursor_point(pin_x, pin_y, &p, &on) && on && in_pin(p);
+}
+static bool pin_centred(struct nk_context* ctx) {
+    return pin_x >= 0 && app_center_at(pin_x, pin_y) && in_pin(G.cam.target);
+}
+static void at_pin(struct nk_context* ctx) { if (pin_x >= 0) move_to(pin_x, pin_y); }
+static bool pin_menu(struct nk_context* ctx) { return G.menu_on && G.menu_stl == 0 && win_of(ctx, "Menu"); }
+static void pin_hide(struct nk_context* ctx) {
+    cv_stl_layer l; app_stl_get(0, &l); l.visible = false; app_stl_set(0, &l); G.menu_on = false;
+}
+static bool pin_hidden_misses(struct nk_context* ctx) {
+    v3 p; bool on = true;
+    return app_cursor_point(pin_x, pin_y, &p, &on) && !on;    /* hidden: the ray goes through it */
+}
+static void pin_clear(struct nk_context* ctx) { app_stl_clear(); G.menu_on = false; app_view(CV_VIEW_ISO); }
+/* files dropped together (app_open_files): the model first, the STL then joins it */
+static void drop_model_and_pin(struct nk_context* ctx) {
+    static char model[1024];
+    snprintf(model, sizeof model, "%s", G.path);
+    const char* p[2] = { "samples/showcase/pin.stl", model };
+    app_stl_clear();
+    app_open_files(p, 2);
+}
+static bool pin_joined(struct nk_context* ctx) {
+    return G.loaded && !G.stl_model && G.frd.n_steps > 0 && app_stl_count() == 1 && !strcmp(app_stl_name(0), "pin.stl");
+}
 /* Groups alone open, the sidebar at its top: the element sets in sight */
 static int groups_tree[CV_TREE_N];
 static void groups_open(struct nk_context* ctx) {
@@ -1074,6 +1155,26 @@ static const step script[] = {
     AT_TIP("Scene", "Its colour"), CLICK, WAIT(2),
     AT_TIP("Scene", "Remove this file"), CLICK, WAIT(2), EXPECT(stl_gone, "the remove button takes it out"),
     DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("import STL (#23): the Groups button opens the browser for an STL, a pick adds a layer"),
+    DO(stl_tree_open), WAIT(3), AT_TIP("Scene", "Add an STL file"), CLICK, WAIT(3), EXPECT(browser_for_stl, "the built-in browser opens to import an STL"),
+    DO(browse_model_dir), WAIT(4), EXPECT(browser_lists_stl_only, "it lists the .stl, not the model's files"),
+    AT_TIP("Open file", "#file tet.stl"), CLICK, WAIT(2), AT_TIP("Open file", "#browser open"), CLICK, WAIT(3),
+    EXPECT(stl_picked, "the picked STL is listed as imported geometry, the browser closed"),
+    DO(stl_tree_open), DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("import STL (#23): View > File > Import STL opens the browser for an STL too"),
+    DO(stl_file_tree_open), WAIT(3), AT_TIP("Scene", "Import geometry that was not analysed"), CLICK, WAIT(3),
+    EXPECT(browser_for_stl, "the built-in browser opens to import an STL"),
+    AT_CLOSE("Open file"), CLICK, WAIT(2), EXPECT(browser_gone, "it closes"),
+    DO(file_close), DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("imported geometry under the cursor: the view turns about it and centres on it; the menu hides it"),
+    DO(close_all), DO(pin_layer), WAIT(3), EXPECT(pin_under_cursor, "the point under the cursor lies on the pin"),
+    EXPECT(pin_centred, "centre here (middle click, C) puts the pin's point in the middle"),
+    DO(fit_view), WAIT(2), DO(at_pin), WAIT(2), RCLICK, WAIT(3), EXPECT(pin_menu, "the menu there offers to hide the pin"),
+    DO(pin_hide), WAIT(2), EXPECT(pin_hidden_misses, "hidden, it is not under the cursor any more"),
+    DO(pin_clear), WAIT(3), PANELS_ANSWER,
     CASE("file: forget post-processing deletes the model's .ccxview and opens it afresh"),
     DO(file_open), WAIT(3), AT_TIP("Scene", "Forget what was set up"), CLICK, WAIT(20), EXPECT(sidecar_gone, "the file is gone, the model open"),
     DO(file_close), WAIT(2), DO(sections_open), WAIT(2), PANELS_ANSWER,
@@ -1105,6 +1206,10 @@ static const step script[] = {
     DO(open_units), WAIT(3), AT_TIP("Toolbar", TIP_CMAP), CLICK, EXPECT(toolbar_popup, "the colour map list opens"),
     DO(close_all), WAIT(3), AT_VIEW(0.5f, 0.6f), CLICK,
     PANELS_ANSWER,
+
+    CASE("a model and an STL dropped together: the model opens, the STL joins it as imported geometry"),
+    DO(drop_model_and_pin), WAIT(10), EXPECT(pin_joined, "the model is open with pin.stl listed"),
+    DO(pin_clear), WAIT(3), PANELS_ANSWER,
 
     { OP_END }
 };

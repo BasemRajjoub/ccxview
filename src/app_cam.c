@@ -683,8 +683,9 @@ static void cam_ray(float px, float py, float o[3], float d[3]) {
     d[0] = dir.x; d[1] = dir.y; d[2] = dir.z;
 }
 
-/* The point under window pixel (px, py): the model surface (mirror copies too)
-   when the ray hits it (*on_model), else the point at the orbit target's depth. */
+/* The point under window pixel (px, py): the model surface (mirror copies too) or
+   an imported geometry layer, the nearest, when the ray hits one (*on_model), else
+   the point at the orbit target's depth. */
 bool app_cursor_point(float px, float py, v3* out, bool* on_model) {
     *on_model = false;
     if (!G.loaded) return false;
@@ -698,6 +699,7 @@ bool app_cursor_point(float px, float py, v3* out, bool* on_model) {
         cv_pick p = cv_pick_ray(&G.frd, &G.skin, G.disp, sc, mo, md);
         if (p.hit && p.t < best) best = p.t;
     }
+    best = fminf(best, app_stl_ray(o, d, NULL));     /* imported geometry: the view turns about it too */
     v3 org = v3_make(o[0], o[1], o[2]), dir = v3_make(d[0], d[1], d[2]);
     if (best < INFINITY) { *out = v3_add(org, v3_scale(dir, best)); *on_model = true; return true; }
     v3 eye, fwd, right, up;

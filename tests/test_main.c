@@ -579,6 +579,31 @@ static void test_portal_wire(void) {
     CHECK(strcmp(p, "/tmp/y") == 0);
     CHECK(!cv_uri_to_path("http://x/y", p, sizeof p));
 
+    /* OpenFile: the title and the filter chosen first follow what the dialog is for (#23:
+       the STL filter second in the list hid every .stl in KDE's dialog) */
+    {
+        uint8_t body[4096];
+        char title[128], filt[128];
+        const char* const* globs;
+        size_t bn = cv_dbus_openfile_body(body, sizeof body, "x11:1a", "tok", "/home/u/models", CV_DLG_STL);
+        CHECK(bn > 0);
+        CHECK(cv_dbus_openfile_check(body, bn, title, sizeof title, filt, sizeof filt));
+        CHECK(strcmp(title, "Import STL geometry") == 0);
+        CHECK(strcmp(filt, "STL geometry (*.stl)") == 0);
+        CHECK(strcmp(cv_filedlg_filter(CV_DLG_STL, &globs), "STL geometry (*.stl)") == 0 && !strcmp(globs[0], "*.stl") && !globs[1]);
+        bn = cv_dbus_openfile_body(body, sizeof body, "", "tok", NULL, CV_DLG_MODEL);
+        CHECK(cv_dbus_openfile_check(body, bn, title, sizeof title, filt, sizeof filt));
+        CHECK(strstr(filt, "*.frd") && strstr(filt, "*.stl"));       /* an STL can be opened from Open too */
+        cv_filedlg_filter(CV_DLG_MODEL, &globs);
+        int k = 0; while (globs[k]) k++;
+        CHECK(k == 5 && !strcmp(globs[4], "*.stl"));
+        bn = cv_dbus_openfile_body(body, sizeof body, "", "tok", "/x", CV_DLG_COMPARE);
+        CHECK(cv_dbus_openfile_check(body, bn, title, sizeof title, filt, sizeof filt));
+        CHECK(strstr(filt, "*.frd") && !strstr(filt, "*.inp"));
+        for (size_t c = 0; c + 1 < bn; c += 7) CHECK(!cv_dbus_openfile_check(body, c, title, sizeof title, filt, sizeof filt));
+        CHECK(cv_dbus_openfile_body(body, 16, "", "tok", NULL, CV_DLG_STL) == 0);   /* too small a buffer */
+    }
+
     uint8_t msg[1024];
     size_t n = cv_dbus_build_response(msg, sizeof msg, 0, "file:///data/m%C3%BCller/r.frd");
     CHECK(n > 0);

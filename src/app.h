@@ -17,6 +17,7 @@
 #include "units.h"
 #include "selset.h"
 #include "selfilter.h"
+#include "filedlg.h"
 
 /* what the faces are coloured by */
 enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
@@ -105,6 +106,8 @@ typedef struct {
     char      deck_path[1024];
     bool      has_deck;
     bool      deck_geometry;  /* no .frd: the deck's mesh is what is shown */
+    bool      stl_model;      /* an .stl opened alone: its triangles are the mesh (Tri3, ids 1..n) */
+    bool      stl_binary;
     char      dat_path[1024];
     bool      has_dat;
     cv_fbd    fbd;            /* cgx geometry (.fbd opened) */
@@ -121,6 +124,8 @@ typedef struct {
     char      open_buf[1024];
     int       open_len;
     bool      loaded;
+    bool      stl_model;      /* the model is an STL file: mesh only, no results */
+    bool      stl_binary;
     cv_map    map;
     cv_frd    frd;
     cv_groups groups;
@@ -267,8 +272,7 @@ typedef struct {
     bool      cmp_on;
     char      cmp_path[1024];
     bool      diff_mode;
-    bool      dlg_for_compare;       /* the open dialog picks the comparison file */
-    bool      dlg_for_stl;           /* ... a geometry file to import (app_stl_add) */
+    int       dlg_kind;              /* what the open dialog picks: CV_DLG_MODEL, _STL (imported geometry), _COMPARE */
     float     rmin, rmax;
     bool      range_lock;
     int       oor_mode[2];           /* a locked range: values above [0] and below [1]: 0 the map's end colour, 1 grey, 2 oor_rgb, 3 hidden */
@@ -376,6 +380,7 @@ typedef struct {
     float     menu_x, menu_y;
     cv_pick   menu_pick;
     float     menu_p[3], menu_n[3];  /* the point hit and its face normal (model frame) */
+    int       menu_stl;              /* the imported geometry under it, in front of the model; -1 none */
 
     bool      show_msgs;
     bool      show_calc_help;        /* the formula builder window */
@@ -477,7 +482,7 @@ int  app_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
 
 /* actions the UI calls */
 void app_open(const char* path);
-void app_open_dialog(void);          /* native dialog, else the built-in browser */
+void app_open_dialog(int kind);      /* native dialog for a CV_DLG_* kind, else the built-in browser */
 void app_start_dir(char* out, size_t n);
 void app_set_step(int step);
 void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
@@ -835,9 +840,11 @@ void geo_sets_into_deck(const cv_fbd* g, cv_inp* d);
 void app_eval_cgx(void);             /* re-open the .fbd, evaluated by cgx */
 
 /* app_stl.c: imported geometry, STL files shown beside the results (parts of the
-   assembly that were not analysed): never deformed, not picked, not on the mirror
-   copies. They belong to the model: kept on a reload, cleared when another model
-   opens. A layer as the sidecar keeps it: */
+   assembly that were not analysed): never deformed, not probed, not on the mirror
+   copies, but the view turns, zooms and centres on them as on the model. They
+   belong to the model: kept on a reload, cleared when another model opens. (An
+   STL opened with no model open is the model itself: app_open.) A layer as the
+   sidecar keeps it: */
 typedef struct {
     char  path[1024];        /* absolute */
     bool  visible;
@@ -856,6 +863,18 @@ uint32_t app_stl_tris(int i);
 void app_stl_remove(int i);
 void app_stl_clear(void);
 bool app_stl_bounds(v3* lo, v3* hi);                /* the shown layers, scaled; false: none */
+/* the nearest shown layer triangle along the ray o + t d (world): t, INFINITY none; *layer its index (may be NULL) */
+float app_stl_ray(const float o[3], const float d[3], int* layer);
+/* Import STL: added to the open model, kept for the model being loaded, or -- no
+   model at all -- opened as the model */
+void app_stl_import(const char* path);
+void app_stl_queue(const char* path);               /* added once the model being loaded is in */
+void app_stl_queue_add(void);                       /* the load finished: add what waits */
+void app_stl_queue_drop(void);                      /* the load failed: what waits is not added (said so) */
+/* several files at once (a drop): the model first (.frd before .inp, .fbd, .dat; the
+   rest of them its siblings), then the STLs as its imported geometry; STLs alone
+   join the open model, or the first is the model when none is open */
+void app_open_files(const char* const* paths, int n);
 void app_stl_draw(cv_draw* d);                      /* d->mesh from the layers */
 void app_dialog_done(const char* path);             /* the open dialog's pick: a model, the comparison or a geometry file */
 

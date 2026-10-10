@@ -8,6 +8,7 @@
 #include "log.h"
 #include "app_fail.h"
 #include "app_mesh.h"
+#include "stl.h"
 #include "sokol_app.h"
 #include <math.h>
 #include <strings.h>
@@ -90,8 +91,27 @@ static void worker_load(void* p) {
     j->deck_geometry = false;
     j->has_fbd = false;
     j->fbd_evaluated = false;
+    j->stl_model = false;
     j->cgx_log[0] = 0;
-    if (cv_ends_with_ci(j->path, ".fbd")) {
+    if (cv_ends_with_ci(j->path, ".stl")) {      /* STL geometry alone: its triangles are the mesh */
+        cv_stl s;
+        char err[256];
+        if (!cv_stl_read(&s, j->path, true, err, sizeof err)) {
+            snprintf(j->err, sizeof j->err, "%s: %s", cv_basename(j->path), err);
+            job_finish(j, t0);
+            return;
+        }
+        uint32_t dropped = 0;
+        if (!cv_stl_to_frd(&s, &j->frd_out, &dropped)) snprintf(j->err, sizeof j->err, "out of memory reading %s", j->path);
+        else {
+            char m[200];
+            if (s.skipped) { snprintf(m, sizeof m, "%u triangles with a coordinate that is not a number left out", s.skipped); cv_msg_add(&j->frd_out.msgs, 0, false, m); }
+            if (dropped) { snprintf(m, sizeof m, "%u triangles with two corners at one point left out", dropped); cv_msg_add(&j->frd_out.msgs, 0, false, m); }
+            j->stl_model = j->ok = true;
+            j->stl_binary = s.binary;
+        }
+        cv_stl_free(&s);
+    } else if (cv_ends_with_ci(j->path, ".fbd")) {
         worker_fbd(j);
         if (!j->has_fbd) { job_finish(j, t0); return; }
     } else if (cv_ends_with_ci(j->path, ".inp")) {
@@ -204,6 +224,7 @@ void unload(void) {
     cv_render_clear_model();
     cv_sta_free(&G.sta);
     G.loaded = false;
+    G.stl_model = false;
     G.has_field = false;
     G.probe_on = false;
     app_sel_clear();
@@ -261,6 +282,7 @@ static void apply_load(cv_job* j) {
         cv_map_close(&j->map);
         if (j->has_fbd) { cv_fbd_free(&j->fbd); free(j->fbd.msgs.a); memset(&j->fbd, 0, sizeof j->fbd); j->has_fbd = false; }
         G.show_msgs = true;
+        app_stl_queue_drop();                  /* no model for the STLs dropped with it */
         return;
     }
     if (j->has_deck) {
@@ -331,7 +353,9 @@ static void apply_load(cv_job* j) {
     cv_render_indices(G.skin.tri, G.skin.n_tri, G.skin.edge, G.skin.n_edge, G.skin.pt, G.skin.n_pt);
     cv_render_outline(G.skin.fedge, G.skin.n_fedge);
     G.loaded = true;
-    G.file_bytes = G.map.size;
+    G.stl_model = j->stl_model;
+    G.stl_binary = j->stl_binary;
+    G.file_bytes = G.map.size ? G.map.size : cv_file_size(G.path);
     G.field_src = 0;
     free(G.vis); G.vis = NULL;
     G.eye_hide_on = false;
@@ -431,6 +455,7 @@ static void apply_load(cv_job* j) {
         deck_refresh_highlight();             /* no steps: an unsolved deck shows its last step's loads */
     }
     if (!G.reload_keep) for (int i = 0; i < O.nstl; i++) app_stl_add(O.stl[i]);   /* before the first fit, which takes them in */
+    app_stl_queue_add();                 /* dropped or picked while it loaded */
     if (G.reload_keep) { view_bounds(); G.cam = G.keep_cam; G.reload_keep = false; }
     else app_view(CV_VIEW_ISO);
     app_sidecar_load(reload);            /* what was set up for this model; the command line below wins */
@@ -727,7 +752,12 @@ static void open_dat(const char* path) {
 void app_open(const char* path) {
     if (!path || !path[0]) return;
     if (cv_ends_with_ci(path, ".dat")) { open_dat(path); return; }
-    if (cv_ends_with_ci(path, ".stl")) { app_stl_add(path); return; }   /* geometry joins the open model */
+    /* an STL joins the open model (or the one loading) as imported geometry; with
+       none, or when it is the model itself (a reload), it is the model */
+    if (cv_ends_with_ci(path, ".stl") && !(G.loaded && !strcmp(path, G.path))) {
+        if (G.job.kind == JOB_LOAD) { app_stl_queue(path); return; }
+        if (G.loaded) { app_stl_add(path); return; }
+    }
     if (app_busy()) {               /* finish whatever runs; a load supersedes it */
         cv_thread_join(&G.job.thread);
         if (G.job.kind == JOB_LOAD) {
@@ -828,8 +858,9 @@ void app_eval_cgx(void) {
    executable, else the executable's folder. */
 void app_start_dir(char* out, size_t n) {
     out[0] = 0;
-    if (G.loaded && G.path[0]) {
-        snprintf(out, n, "%s", G.path);
+    const char* open = G.job.kind == JOB_LOAD ? G.job.path : G.loaded ? G.path : "";   /* the one loading, else the one open */
+    if (open[0]) {
+        snprintf(out, n, "%s", open);
         char* s = strrchr(out, cv_path_sep());
         if (s) { *s = 0; if (cv_is_dir(out)) return; }
     }
@@ -842,29 +873,51 @@ void app_start_dir(char* out, size_t n) {
     snprintf(out, n, "%s", G.exe_dir[0] ? G.exe_dir : ".");
 }
 
-void app_open_dialog(void) {
-    if (G.dlg_running) return;
+/* The file dialog for kind (CV_DLG_MODEL, _STL, _COMPARE): the system's, else the
+   built-in browser. Asked again while the system's is up -- it did not come up, or
+   came up out of sight (behind the window, on another desktop), else this window
+   could not take the click -- that one is closed and the built-in browser opens:
+   a click on Open or Import always shows a dialog. */
+void app_open_dialog(int kind) {
     char dir[1024];
     app_start_dir(dir, sizeof dir);
-    if (G.native_dlg_missing) {
-        snprintf(G.browse_dir, sizeof G.browse_dir, "%s", dir);
+    G.dlg_kind = kind;
+    bool fallback = G.native_dlg_missing;
+    if (G.dlg_running) {
+        cv_filedlg_abandon();
+        G.dlg_running = false;
+#ifndef __EMSCRIPTEN__
+        fallback = true;                    /* (the browser's picker is simply asked again) */
+        snprintf(G.note, sizeof G.note, "the system's file dialog did not answer: ccxview's own instead");
+        G.note_t = cv_now();
+        cv_logf("file dialog: the system's abandoned, the built-in browser instead");
+#endif
+    }
+    if (fallback) {
+        if (!G.browser_open) snprintf(G.browse_dir, sizeof G.browse_dir, "%s", dir);
         G.browser_open = true;
         return;
     }
     char parent[64] = "";
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
     uintptr_t xid = (uintptr_t)sapp_x11_get_window();
     if (xid) snprintf(parent, sizeof parent, "x11:%lx", (unsigned long)xid);
 #endif
-    cv_filedlg_start(parent, dir);
+    if (!cv_filedlg_start(parent, dir, kind)) {      /* the abandoned one is still closing */
+        if (!G.browser_open) snprintf(G.browse_dir, sizeof G.browse_dir, "%s", dir);
+        G.browser_open = true;
+        return;
+    }
     G.dlg_running = true;
 }
 
+/* the dialog's pick, by what it was opened for; a .stl picked to open joins the
+   model as imported geometry, or is the model when none is open (app_open) */
 void app_dialog_done(const char* path) {
-    bool cmp = G.dlg_for_compare, stl = G.dlg_for_stl;     /* a .stl picked to open joins the model too (app_open) */
-    G.dlg_for_compare = G.dlg_for_stl = false;
-    if (stl) app_stl_add(path);
-    else if (cmp) app_compare_open(path);
+    int kind = G.dlg_kind;
+    G.dlg_kind = CV_DLG_MODEL;
+    if (kind == CV_DLG_STL) app_stl_import(path);
+    else if (kind == CV_DLG_COMPARE) app_compare_open(path);
     else app_open(path);
 }
 
@@ -872,15 +925,16 @@ void poll_dialog(void) {
     if (!G.dlg_running) return;
     char path[1024];
     int st = cv_filedlg_poll(path, sizeof path);
-    if (st == CV_DLG_RUNNING || st == CV_DLG_IDLE) return;
+    if (st == CV_DLG_RUNNING) return;
     G.dlg_running = false;
     if (st == CV_DLG_DONE) {
         app_dialog_done(path);
     } else if (st == CV_DLG_UNAVAILABLE) {      /* remember, and fall back to ours */
         G.native_dlg_missing = true;
-        app_open_dialog();
-    } else {
-        G.dlg_for_compare = G.dlg_for_stl = false;
+        cv_logf("file dialog: no system dialog (xdg-desktop-portal), the built-in browser instead");
+        app_open_dialog(G.dlg_kind);
+    } else {                                    /* cancelled, or nothing running after all: never "..." for ever */
+        G.dlg_kind = CV_DLG_MODEL;
     }
 }
 

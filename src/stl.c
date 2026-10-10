@@ -217,6 +217,45 @@ void cv_stl_free(cv_stl* s) {
     memset(s, 0, sizeof *s);
 }
 
+bool cv_stl_to_frd(const cv_stl* s, cv_frd* f, uint32_t* dropped) {
+    memset(f, 0, sizeof *f);
+    uint32_t nt = 0, nv = s->n_vert;
+    for (uint32_t t = 0; t < s->n_tri; t++) {
+        const uint32_t* v = s->tri + 3 * (size_t)t;
+        nt += v[0] != v[1] && v[1] != v[2] && v[2] != v[0];
+    }
+    if (dropped) *dropped = s->n_tri - nt;
+    f->n_nodes = nv;
+    f->n_elems = nt;
+    f->node_id = malloc(CV_MAX(nv, 1) * sizeof *f->node_id);
+    f->xyz = malloc(CV_MAX(nv, 1) * 3 * sizeof *f->xyz);
+    f->elem_id = malloc(CV_MAX(nt, 1) * sizeof *f->elem_id);
+    f->etype = malloc(CV_MAX(nt, 1));
+    f->emat = calloc(CV_MAX(nt, 1), sizeof *f->emat);
+    f->egrp = calloc(CV_MAX(nt, 1), sizeof *f->egrp);
+    f->eoff = malloc(((size_t)nt + 1) * sizeof *f->eoff);
+    f->conn = malloc(CV_MAX(nt, 1) * 3 * sizeof *f->conn);
+    if (!f->node_id || !f->xyz || !f->elem_id || !f->etype || !f->emat || !f->egrp || !f->eoff || !f->conn) goto oom;
+    for (uint32_t i = 0; i < nv; i++) f->node_id[i] = i + 1;
+    if (nv) memcpy(f->xyz, s->xyz, (size_t)nv * 3 * sizeof *f->xyz);
+    uint32_t e = 0;
+    for (uint32_t t = 0; t < s->n_tri; t++) {
+        const uint32_t* v = s->tri + 3 * (size_t)t;
+        if (v[0] == v[1] || v[1] == v[2] || v[2] == v[0]) continue;
+        f->elem_id[e] = e + 1;
+        f->etype[e] = 7;                          /* Tri3: corners counter-clockwise, as the STL has them */
+        f->eoff[e] = 3 * e;
+        memcpy(f->conn + 3 * (size_t)e, v, 3 * sizeof *v);
+        e++;
+    }
+    f->eoff[nt] = 3 * nt;
+    if (!cv_frd_build_maps(f, NULL, NULL)) goto oom;
+    return true;
+oom:
+    cv_frd_free(f);
+    return false;
+}
+
 static void wr_u32(unsigned char* p, uint32_t u) { p[0] = (unsigned char)u; p[1] = (unsigned char)(u >> 8); p[2] = (unsigned char)(u >> 16); p[3] = (unsigned char)(u >> 24); }
 static void wr_f32(unsigned char* p, float f) { uint32_t u; memcpy(&u, &f, 4); wr_u32(p, u); }
 
