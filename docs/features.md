@@ -25,7 +25,11 @@ What ccxview does, in full. The short version is in the [README](../README.md).
 - Results of other solvers that write `.frd` (FEMaster) are read too, including
   their tensor order and shell top / bottom fields.
 - Damaged records are skipped and listed in the message window, never a crash.
-- `.stl` geometry (binary and ASCII) imported beside the results: see below.
+- `.stl` geometry (binary and ASCII) imported beside the results: see below. An
+  `.stl` opened with no model open is the model: a mesh of Tri3 elements (welded
+  vertices the nodes, both numbered from 1), no results, so that turning, zooming,
+  labels, measurements, selection, clip, mirror and pictures work on it as on any
+  mesh; the status bar says "STL geometry".
 
 ## Elements
 
@@ -351,7 +355,10 @@ it was left, and at first the filters and the kept ones are folded:
 - Imported geometry (#23): parts of the assembly that were not analysed (a pin, a
   clamp, the housing) added from STL files for a picture of the whole: Groups >
   Imported geometry > Import STL..., View > File > Import STL..., a `.stl` dropped
-  on the window, or `--stl`. Each file is a layer with a box to show or hide it, its
+  on the window (with the model, or after it when both are dropped together),
+  Open... with a model open, or `--stl`. The Import dialogs show STL files only
+  (the system's dialog starts on the STL filter); a file that cannot be read says
+  why in the status bar and the Messages window. Each file is a layer with a box to show or hide it, its
   colour, an opacity slider (see-through: the results show behind it, blended over
   the model, back faces then front faces; see-through layers drawn back to front
   by the distance of their boxes' centres from the eye, so a near one blends over
@@ -360,7 +367,10 @@ it was left, and at first the filters and the kept ones are folded:
   outline at the model's crease angle while Outline is on, cut by the clip plane,
   in the PNG and the videos, taken in by Fit. It never moves with the
   deformation, is not on the mirror and replicate copies, and the probe passes
-  through it. The layers belong to the model: a reload keeps them, opening another
+  through it; but the view takes it as the model: turning about the cursor,
+  zooming to the cursor, centre here (middle click, C), look at the face (N) and box
+  zoom aim at the layer under the cursor when it is nearer than the model, and the
+  right-click menu on it can hide it. The layers belong to the model: a reload keeps them, opening another
   model clears them, and the post-processing file brings them back the next time
   the model opens (a file that is gone is left out, with a message).
 

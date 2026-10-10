@@ -1,9 +1,22 @@
 # Using ccxview
 
 Open a file from the command line, with Open... (Ctrl+O), by dropping it on the
-window, or by typing a path in the box. A `.stl` dropped on the window (or picked
-with Import STL... in Groups > Imported geometry or View > File) is added to the
-open model as imported geometry instead.
+window, or by typing a path in the box. A `.stl` opened while a model is open
+(dropped, picked with Open... or with Import STL... in Groups > Imported geometry
+or View > File) is added to that model as imported geometry; with no model open
+it is the model itself: its triangles become Tri3 elements, its vertices nodes,
+both numbered from 1, so that the view, labels, measurements, selection, clip,
+mirror and pictures work on it as on any mesh (no results; lengths as in the
+file). To look at an STL alone while a model is open, start another ccxview with
+it (`ccxview part.stl`, or drop it on a window with nothing open). Several files
+dropped at once: the model first (a `.frd` before a `.inp`, `.fbd`, `.dat`), then
+the `.stl` files as its imported geometry.
+
+The file dialog is the system's (the desktop portal on Linux): Open lists CalculiX
+files and STL, Import STL lists STL files only. When there is none (bare X11, SSH)
+ccxview's own browser opens instead, listing the same files; and when the system's
+dialog does not come up (out of sight, or the portal does not answer), a second
+click on Open or Import STL... closes it and opens ccxview's own.
 
 ## Command line
 
@@ -42,6 +55,8 @@ ccxview model.frd --field FORC --integrate nodes:NLEFT --integrate-csv rf.csv   
 ccxview run2.frd --compare run1.frd         # difference of two runs
 ccxview model.frd --stl pin.stl --stl alt.stl --stl-alpha 0.4   # geometry that was not analysed, shown with
                                             #   the results (repeatable), see-through
+ccxview pin.stl --labels node --measure dist:1,450   # an STL alone is the model (so is --stl with no model)
+ccxview model.frd --browse-stl              # ccxview's own file browser, open to import an STL (--browse: to open a model)
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
@@ -143,8 +158,8 @@ It prints what it selected and the field's max and min over it.
 | Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection window's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
 | S | the Selection window: mode, box, click, lasso, faces, edge chain and part tools, invert, conversions, grow, shrink, boundary, by name, by id |
 | Alt+drag, Alt+← → | roll about the line of sight |
-| middle click, C | centre the view on the point under the cursor (new rotation centre) |
-| right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
+| middle click, C | centre the view on the point under the cursor (new rotation centre); imported STL geometry counts as the model for this, for turning about the cursor, zooming to it, look at the face and box zoom |
+| right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; on imported STL geometry in front of the model hide it (and centre, look at the face); always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
 | N | look normal to the face under the cursor |
 | Ctrl+← → ↑ ↓ | turn the view 15° (with Shift 90°) |
 | Ctrl+Z / Ctrl+Y | view back / forward |

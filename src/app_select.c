@@ -500,7 +500,10 @@ void app_menu_open(float x, float y) {
     G.menu_on = true; G.menu_x = x; G.menu_y = y;
     memset(G.menu_n, 0, sizeof G.menu_n);
     app_label_menu_at(x, y);                         /* on a moved label: it can be reset */
-    if (!app_pick(x, y, &G.menu_pick, o, d)) return;
+    bool hit = app_pick(x, y, &G.menu_pick, o, d);
+    float ts = app_stl_ray(o, d, &G.menu_stl);      /* imported geometry in front of the model: it can be hidden */
+    if (hit && ts >= G.menu_pick.t) G.menu_stl = -1;
+    if (!hit) return;
     for (int k = 0; k < 3; k++) G.menu_p[k] = o[k] + d[k] * G.menu_pick.t;
     if (G.menu_pick.tri < G.skin.n_tri) {             /* the face's normal, as shown */
         float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f, q[3][3];

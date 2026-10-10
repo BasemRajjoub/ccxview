@@ -717,12 +717,12 @@ void panel_scene(struct nk_context* ctx, float s, float row) {
     nk_layout_row_template_push_static(ctx, 76 * s);
     nk_layout_row_template_end(ctx);
     if (g_focus_open) { nk_edit_focus(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER); g_focus_open = false; }
-    tip(ctx, "Path of a .frd / .inp / .fbd / .dat, then Enter  (Ctrl+L)");
+    tip(ctx, "Path of a .frd / .inp / .fbd / .dat / .stl, then Enter  (Ctrl+L)");
     nk_flags ev = nk_edit_string(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, G.open_buf, &G.open_len,
                                  (int)sizeof G.open_buf - 1, nk_filter_default);
     G.open_buf[G.open_len] = 0;
     if (ev & NK_EDIT_COMMITED) app_open(G.open_buf);          /* typed path + Enter */
-    if (nk_button_label(ctx, G.dlg_running ? "..." : IC_FOLDER_OPEN "  Open")) app_open_dialog();
+    if (nk_button_label(ctx, G.dlg_running ? "..." : IC_FOLDER_OPEN "  Open")) app_open_dialog(CV_DLG_MODEL);
     if (G.loaded) {                          /* recent files: a drop-down under the path box (the empty view lists them) */
         const char* recent[CV_CFG_RECENT];
         int nr = settings_recent(recent, CV_CFG_RECENT);

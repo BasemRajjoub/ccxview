@@ -163,7 +163,7 @@ static void init(void) {
     if (O.tensor >= 0) { G.show_tensor = true; G.tensor_style = O.tensor; }
     if (O.traj >= 0) { G.show_traj = true; G.traj_which = O.traj; }
     if (O.bg_set) memcpy(G.bg, O.bg, sizeof G.bg);
-    if (O.ui_test) ui_test_start(O.ui_test, event);
+    if (O.ui_test) { ui_test_start(O.ui_test, event); G.native_dlg_missing = true; }   /* never the system's dialog on the desktop of whoever runs it */
     if (O.gp_size > 0) G.gp_size = O.gp_size;
     if (O.gp_under) G.gp_on_top = false;
     if (O.xray) G.gp_on_top = true;
@@ -171,8 +171,12 @@ static void init(void) {
     if (O.no_edges) G.show_edges = false;
     if (O.outline == 0) G.show_outline = false;
     else if (O.outline > 0) { G.show_outline = true; G.outline_angle = O.outline; }
+    if (!O.argv_path && O.nstl > 0) {    /* --stl with no model: the first is the model, the rest its imported geometry */
+        O.argv_path = O.stl[0];
+        memmove(O.stl, O.stl + 1, (size_t)--O.nstl * sizeof O.stl[0]);
+    }
     if (O.argv_path) app_open(O.argv_path);
-    if (O.browse) { G.native_dlg_missing = true; app_open_dialog(); }
+    if (O.browse) { G.native_dlg_missing = true; app_open_dialog(O.browse == 2 ? CV_DLG_STL : CV_DLG_MODEL); }
 }
 
 static void fmt_bytes(char* out, size_t n, uint64_t b) {
@@ -844,7 +848,12 @@ static void event(const sapp_event* ev) {
 #ifdef __EMSCRIPTEN__
             cv_web_fetch_drops();
 #else
-            if (sapp_get_num_dropped_files() > 0) app_open(sapp_get_dropped_file_path(0));   /* a .stl joins the model */
+            {                                /* the model first, then the STLs as its imported geometry */
+                const char* p[CV_MESH_N + 8];
+                int n = CV_MIN(sapp_get_num_dropped_files(), (int)CV_COUNT(p));
+                for (int i = 0; i < n; i++) p[i] = sapp_get_dropped_file_path(i);
+                app_open_files(p, n);
+            }
 #endif
             break;
         case SAPP_EVENTTYPE_MOUSE_DOWN:
@@ -982,7 +991,7 @@ static void event(const sapp_event* ev) {
                 case SAPP_KEYCODE_MINUS: case SAPP_KEYCODE_KP_SUBTRACT: case SAPP_KEYCODE_SLASH:
                     if (ctrl) ui_zoom(-1); else if (ev->key_code != SAPP_KEYCODE_SLASH) { G.deform_scale /= 1.25f; G.deform_auto = false; }
                     break;
-                case SAPP_KEYCODE_O: if (ctrl) app_open_dialog(); break;
+                case SAPP_KEYCODE_O: if (ctrl) app_open_dialog(CV_DLG_MODEL); break;
                 case SAPP_KEYCODE_L: if (ctrl) ui_focus_open(); break;
                 case SAPP_KEYCODE_F: if (ctrl) G.find_open = true; else { app_view_push(); app_fit(); } break;
                 case SAPP_KEYCODE_E: if (ctrl) app_export_png(); break;
@@ -1066,7 +1075,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--shot") && i + 1 < argc) O.shot_path = argv[++i];
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) O.shot_frames = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "--browse")) O.browse = true;
+        else if (!strcmp(argv[i], "--browse")) O.browse = 1;
+        else if (!strcmp(argv[i], "--browse-stl")) O.browse = 2;
         else if (!strcmp(argv[i], "--fly")) O.fly = true;
         else if (!strcmp(argv[i], "--mesh-window")) O.mesh_window = true;
         else if (!strcmp(argv[i], "--measure-window")) O.measure_window = true;
@@ -1204,7 +1214,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 #else
         .width = O.win_w,
         .height = O.win_h,
-        .max_dropped_files = 1,
+        .max_dropped_files = CV_MESH_N + 8,  /* a model with its STLs */
 #endif
         .sample_count = 4,
         .high_dpi = true,

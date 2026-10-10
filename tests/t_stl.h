@@ -111,6 +111,38 @@ static void test_stl(void) {
     CHECK(err[0] != 0);
     remove(bin); remove(asc); remove(emp); remove("build/t_stl_solid.stl");
 
+    /* an STL alone as the model: welded vertices the nodes, Tri3 elements, ids from 1 */
+    {
+        CHECK(cv_stl_write(bin, kTet, 4));
+        CHECK(cv_stl_read(&s, bin, true, err, sizeof err));
+        cv_frd f;
+        uint32_t dropped = 9;
+        CHECK(cv_stl_to_frd(&s, &f, &dropped));
+        CHECK_EQ(dropped, 0);
+        CHECK_EQ(f.n_nodes, 4); CHECK_EQ(f.n_elems, 4); CHECK_EQ(f.n_steps, 0);
+        CHECK(f.node_id[0] == 1 && f.node_id[3] == 4 && f.elem_id[0] == 1 && f.elem_id[3] == 4);
+        CHECK_EQ(cv_frd_node_index(&f, 3), 2); CHECK_EQ(cv_frd_elem_index(&f, 4), 3);
+        CHECK_EQ(cv_frd_node_index(&f, 5), UINT32_MAX);
+        bool ok = true;
+        for (uint32_t e = 0; e < f.n_elems; e++) {
+            ok = ok && f.etype[e] == 7 && f.eoff[e] == 3 * e && cv_frd_type_nodes(f.etype[e]) == 3;
+            for (int c = 0; c < 3; c++) {                     /* the same corners in the same order (outward) */
+                const float* p = f.xyz + 3 * (size_t)f.conn[3 * e + c];
+                ok = ok && p[0] == kTet[9 * e + 3 * c] && p[1] == kTet[9 * e + 3 * c + 1] && p[2] == kTet[9 * e + 3 * c + 2];
+            }
+        }
+        CHECK(ok); CHECK_EQ(f.eoff[4], 12);
+        cv_frd_free(&f); free(f.msgs.a);
+        /* a triangle with two corners at one point is left out, the rest kept */
+        s.tri[4] = s.tri[3];
+        CHECK(cv_stl_to_frd(&s, &f, &dropped));
+        CHECK_EQ(dropped, 1); CHECK_EQ(f.n_elems, 3); CHECK_EQ(f.n_nodes, 4);
+        CHECK(f.elem_id[2] == 3 && f.conn[3] == s.tri[6]);   /* numbered on, the third triangle second */
+        cv_frd_free(&f); free(f.msgs.a);
+        cv_stl_free(&s);
+        remove(bin);
+    }
+
     /* see-through layers back to front: the farthest box centre from the eye first */
     {
         const float lo[] = { 0, 0, 0,   10, 0, 0,   -5, 0, 0,   0, 0, 0 };

@@ -297,7 +297,12 @@ static bool has_ext(const char* n, const char* ext) {
     size_t l = strlen(n);
     return l > 4 && n[l - 4] == '.' && (n[l - 3] | 32) == ext[0] && (n[l - 2] | 32) == ext[1] && (n[l - 1] | 32) == ext[2];
 }
-static bool is_frd(const char* n) { return has_ext(n, "frd") || has_ext(n, "inp") || has_ext(n, "dat") || has_ext(n, "fbd") || has_ext(n, "stl"); }
+/* the files listed for what the browser picks (G.dlg_kind), folders aside */
+static bool listed(const char* n) {
+    if (G.dlg_kind == CV_DLG_STL) return has_ext(n, "stl");
+    if (G.dlg_kind == CV_DLG_COMPARE) return has_ext(n, "frd");
+    return has_ext(n, "frd") || has_ext(n, "inp") || has_ext(n, "dat") || has_ext(n, "fbd") || has_ext(n, "stl");
+}
 
 static void fmt_size(char* out, size_t n, uint64_t b) {
     if (b >= (1ull << 30)) snprintf(out, n, "%.1f GB", b / 1073741824.0);
@@ -315,7 +320,9 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
 
     float w = CV_MIN(720 * s, fw * 0.9f), h = CV_MIN(560 * s, fh * 0.85f);
     char open_path[2048] = "";
-    if (nk_begin(ctx, "Open file", nk_rect((fw - w) / 2, (fh - h) / 2, w, h),
+    const char* title = G.dlg_kind == CV_DLG_STL ? "Import STL geometry (*.stl)" : G.dlg_kind == CV_DLG_COMPARE ? "Compare with results (*.frd)"
+                      : "Open file (*.frd, *.inp, *.dat, *.fbd, *.stl)";
+    if (nk_begin_titled(ctx, "Open file", title, nk_rect((fw - w) / 2, (fh - h) / 2, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE |
                  NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         /* folder: editable, Enter jumps */
@@ -344,7 +351,7 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
             }
             for (int i = 0; i < B.n; i++) {
                 const cv_dirent* e = &B.e[i];
-                if (!e->dir && !B.all && !is_frd(e->name)) continue;
+                if (!e->dir && !B.all && !listed(e->name)) continue;
                 nk_layout_row_template_begin(ctx, row);
                 nk_layout_row_template_push_dynamic(ctx);
                 nk_layout_row_template_push_static(ctx, 90 * s);
@@ -353,6 +360,9 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
                 snprintf(lab, sizeof lab, e->dir ? "[%s]" : "%s", e->name);
                 if (!e->dir) fmt_size(sz, sizeof sz, e->size);
                 nk_bool sel = B.sel == i;
+                char mk[300];
+                snprintf(mk, sizeof mk, "#file %s", e->name);
+                uii_test_mark(ctx, mk);
                 if (nk_selectable_label(ctx, lab, NK_TEXT_LEFT, &sel)) {
                     double now = cv_now();
                     bool dbl = B.last_idx == i && now - B.last_click < 0.4;
@@ -379,15 +389,16 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
         nk_layout_row_template_end(ctx);
         const char* hint = (B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) ? B.e[B.sel].name : "double-click a file";
         nk_label_colored(ctx, hint, NK_TEXT_LEFT, P.dim);
-        if (nk_button_label(ctx, "Cancel")) { G.browser_open = false; G.dlg_for_compare = G.dlg_for_stl = false; }
-        if (nk_button_label(ctx, "Open") && B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) {
+        if (nk_button_label(ctx, "Cancel")) { G.browser_open = false; G.dlg_kind = CV_DLG_MODEL; }
+        uii_test_mark(ctx, "#browser open");
+        if (nk_button_label(ctx, G.dlg_kind == CV_DLG_STL ? "Import" : "Open") && B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) {
             size_t l = strlen(B.dir);
             bool has_sep = l && B.dir[l - 1] == cv_path_sep();
             snprintf(open_path, sizeof open_path, "%s%s%s", B.dir,
                      has_sep ? "" : (char[2]){ cv_path_sep(), 0 }, B.e[B.sel].name);
         }
     }
-    if (nk_window_is_hidden(ctx, "Open file")) { G.browser_open = false; G.dlg_for_compare = G.dlg_for_stl = false; }
+    if (nk_window_is_hidden(ctx, "Open file")) { G.browser_open = false; G.dlg_kind = CV_DLG_MODEL; }
     nk_end(ctx);
     if (open_path[0]) {
         G.browser_open = false;
@@ -409,7 +420,7 @@ void drop_hint(struct nk_context* ctx, float s, float row) {
     if (nk_begin(ctx, "hint", r, fl)) {
         nk_window_set_bounds(ctx, "hint", r);
         nk_layout_row_dynamic(ctx, row, 1);
-        nk_label(ctx, "Drop a .frd, .inp or .fbd file here", NK_TEXT_CENTERED);
+        nk_label(ctx, "Drop a .frd, .inp, .fbd or .stl file here", NK_TEXT_CENTERED);
         nk_label_colored(ctx, "or Open... (Ctrl+O)", NK_TEXT_CENTERED, P.dim);
         if (nr) { nk_label(ctx, "", NK_TEXT_LEFT); recent_buttons(ctx, row); }
     }

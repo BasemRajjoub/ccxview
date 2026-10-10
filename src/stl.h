@@ -5,6 +5,7 @@
 #define CV_STL_H
 
 #include "base.h"
+#include "frd.h"
 
 typedef struct {
     float*    xyz;            /* 3 per vertex */
@@ -32,6 +33,11 @@ bool cv_stl_edges(const cv_stl* s, float deg, uint32_t** out, uint32_t* n);
    each one's bounding-box centre (lo, hi: 3 floats each per layer) to the eye,
    the farthest first; ties keep their order. order: n indices */
 void cv_stl_order_far(const float* lo, const float* hi, int n, const float eye[3], int* order);
+/* The welded mesh as a model of its own (an STL opened alone): nodes the vertices,
+   elements Tri3 shells (FRD type 7) in the file's order, both numbered from 1, no
+   steps; lengths as in the file. Triangles with two corners at one vertex are
+   left out (*dropped counts them; may be NULL). false: out of memory (f empty). */
+bool cv_stl_to_frd(const cv_stl* s, cv_frd* f, uint32_t* dropped);
 /* a binary STL of n triangles (9 floats each), normals from the vertices; for tests and fixtures */
 bool cv_stl_write(const char* path, const float* tri9, uint32_t n);
 

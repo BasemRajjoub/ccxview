@@ -40,7 +40,7 @@ void section_stl(struct nk_context* ctx, float s, float row) {
     if (!sub_push(ctx, "Imported geometry", CV_TREE_IMPORT)) return;
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "Add an STL file: parts of the assembly that were not analysed, shown with the results");
-    if (nk_button_label(ctx, G.dlg_running ? "..." : "Import STL...")) { if (!G.dlg_running) { G.dlg_for_stl = true; app_open_dialog(); } }
+    if (nk_button_label(ctx, "Import STL...")) app_open_dialog(CV_DLG_STL);
     int remove = -1;
     for (int i = 0; i < app_stl_count(); i++) {
         cv_stl_layer l, was;

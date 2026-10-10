@@ -510,6 +510,9 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
         snprintf(mid, sizeof mid, "%u points   %u lines   %u surfaces   %u nodes   %u elements   loaded in %.2f s%s",
                  geo_get()->npts, geo_get()->ncrv, geo_get()->nsrf, G.frd.n_nodes, G.frd.n_elems, G.load_seconds,
                  geo_evaluated() ? "   (evaluated by cgx)" : "");
+    else if (G.loaded && G.stl_model)
+        snprintf(mid, sizeof mid, "STL geometry (%s)   %u vertices   %u triangles   no results   loaded in %.2f s",
+                 G.stl_binary ? "binary" : "ASCII", G.frd.n_nodes, G.frd.n_elems, G.load_seconds);
     else if (G.loaded)
         snprintf(mid, sizeof mid, "%u nodes   %u elements   %d steps   %zu triangles   loaded in %.2f s%s",
                  G.frd.n_nodes, G.frd.n_elems, G.frd.n_steps, G.skin.n_tri, G.load_seconds,

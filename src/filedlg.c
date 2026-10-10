@@ -297,17 +297,123 @@ size_t cv_dbus_build_response(uint8_t* buf, size_t cap, uint32_t code, const cha
 }
 
 /* ============================================================================
+   what each kind of dialog shows: its title, its filters (the first one chosen)
+   ============================================================================ */
+static const char* const g_model[] = { "*.frd", "*.inp", "*.dat", "*.fbd", "*.stl", NULL };
+static const char* const g_stl[] = { "*.stl", NULL };
+static const char* const g_frd[] = { "*.frd", NULL };
+static const char* const g_all[] = { "*", NULL };
+typedef struct { const char* name; const char* const* globs; } dfilter;
+static const struct { const char* title; const char* desc; dfilter f[3]; } kinds[3] = {
+    { "Open CalculiX model or results", "CalculiX files, STL geometry",
+      { { "CalculiX, STL (*.frd, *.inp, *.dat, *.fbd, *.stl)", g_model }, { "STL geometry (*.stl)", g_stl }, { "All files", g_all } } },
+    { "Import STL geometry", "STL geometry",
+      { { "STL geometry (*.stl)", g_stl }, { "All files", g_all }, { NULL, NULL } } },
+    { "Compare with results", "CalculiX results",
+      { { "CalculiX results (*.frd)", g_frd }, { "All files", g_all }, { NULL, NULL } } },
+};
+static int kind_ok(int k) { return k >= 0 && k < 3 ? k : CV_DLG_MODEL; }
+
+const char* cv_filedlg_filter(int kind, const char* const** globs) {
+    kind = kind_ok(kind);
+    if (globs) *globs = kinds[kind].f[0].globs;
+    return kinds[kind].f[0].name;
+}
+
+/* one filter, (name, [(0, glob), ...]): an element of filters' a(sa(us)), or current_filter's (sa(us)) */
+static void w_filter(wbuf* w, const dfilter* f) {
+    w_align(w, 8);
+    w_s(w, f->name);
+    warr pats = w_abegin(w, 8);
+    for (int g = 0; f->globs[g]; g++) { w_align(w, 8); w_u(w, 0); w_s(w, f->globs[g]); }
+    w_aend(w, pats);
+}
+
+size_t cv_dbus_openfile_body(uint8_t* buf, size_t cap, const char* parent, const char* token, const char* dir, int kind) {
+    kind = kind_ok(kind);
+    wbuf body = {0};
+    /* OpenFile(parent_window s, title s, options a{sv}) */
+    w_s(&body, parent ? parent : "");
+    w_s(&body, kinds[kind].title);
+    warr opts = w_abegin(&body, 8);
+    w_align(&body, 8); w_s(&body, "handle_token"); w_g(&body, "s"); w_s(&body, token);
+    w_align(&body, 8); w_s(&body, "modal"); w_g(&body, "b"); w_u(&body, 1);
+    w_align(&body, 8); w_s(&body, "filters"); w_g(&body, "a(sa(us))");
+    warr fl = w_abegin(&body, 8);
+    for (int i = 0; i < 3 && kinds[kind].f[i].name; i++) w_filter(&body, &kinds[kind].f[i]);
+    w_aend(&body, fl);
+    /* the first filter chosen: the dialog may otherwise start on another one, which hides the files wanted */
+    w_align(&body, 8); w_s(&body, "current_filter"); w_g(&body, "(sa(us))");
+    w_filter(&body, &kinds[kind].f[0]);
+    if (dir && dir[0]) {
+        w_align(&body, 8); w_s(&body, "current_folder"); w_g(&body, "ay");
+        warr ay = w_abegin(&body, 1);
+        w_raw(&body, dir, strlen(dir) + 1);
+        w_aend(&body, ay);
+    }
+    w_aend(&body, opts);
+    size_t n = !body.bad && body.n <= cap ? body.n : 0;
+    if (n) memcpy(buf, body.p, n);
+    free(body.p);
+    return n;
+}
+
+bool cv_dbus_openfile_check(const uint8_t* body, size_t len, char* title, size_t tn, char* filter, size_t fn) {
+    rbuf r = { body, len, 0, false, false };
+    r_s(&r);
+    snprintf(title, tn, "%s", r_s(&r));
+    filter[0] = 0;
+    uint32_t alen = r_u(&r);
+    r_align(&r, 8);
+    if (r.bad || alen > r.n - r.i) return false;
+    size_t end = r.i + alen;
+    int seen = 0;
+    while (!r.bad && r.i < end) {
+        r_align(&r, 8);
+        const char* key = r_s(&r);
+        const char* vs = r_g(&r);
+        if (r.bad) break;
+        if (!strcmp(key, "current_filter") && !strcmp(vs, "(sa(us))")) {
+            r_align(&r, 8);
+            snprintf(filter, fn, "%s", r_s(&r));
+            r_skip(&r, "a(us)", 0);
+        } else r_skip(&r, vs, 0);
+        seen++;
+    }
+    return !r.bad && r.i == end && end == len && seen >= 4;
+}
+
+/* ============================================================================
    Linux: the portal call
    ============================================================================ */
 #if defined(__EMSCRIPTEN__)
 #include "web.h"
-void cv_filedlg_start(const char* parent, const char* start_dir) { (void)parent; (void)start_dir; cv_web_pick_start(); }
+bool cv_filedlg_start(const char* parent, const char* start_dir, int kind) { (void)parent; (void)start_dir; cv_web_pick_start(kind_ok(kind)); return true; }
 int  cv_filedlg_poll(char* out, size_t n) { return cv_web_pick_poll(out, n); }
+void cv_filedlg_abandon(void) {}              /* the browser's picker: a new one replaces it */
 #elif defined(__linux__)
 #include <stddef.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <poll.h>
+#include <pthread.h>
+
+/* the connection of the running dialog, so that it can be dropped from the main thread */
+static int g_fd = -1;
+static pthread_mutex_t g_fd_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void native_abort(void) {
+    pthread_mutex_lock(&g_fd_lock);
+    if (g_fd >= 0) shutdown(g_fd, SHUT_RDWR);      /* the worker's recv fails; the portal closes a dead peer's dialog */
+    pthread_mutex_unlock(&g_fd_lock);
+}
+
+/* a message waiting within ms: a portal that never answers is taken as none */
+static bool readable(int fd, int ms) {
+    struct pollfd p = { .fd = fd, .events = POLLIN };
+    return poll(&p, 1, ms) > 0;
+}
 
 static int bus_connect(void) {
     char addr[512] = "";
@@ -427,10 +533,13 @@ static bool add_match(int fd, const char* path) {
     return ok;
 }
 
-/* 1 = chosen, 0 = cancelled, -1 = no portal */
-static int portal_open(const char* parent, const char* start_dir, char* out, size_t n) {
+/* 1 = chosen, 0 = cancelled, -1 = no portal (or one that does not answer) */
+static int portal_open(const char* parent, const char* start_dir, int kind, char* out, size_t n) {
     int fd = bus_connect();
     if (fd < 0) return -1;
+    pthread_mutex_lock(&g_fd_lock);
+    g_fd = fd;
+    pthread_mutex_unlock(&g_fd_lock);
     int result = -1;
     uint8_t* buf = NULL;
     size_t cap = 0, len = 0;
@@ -438,12 +547,13 @@ static int portal_open(const char* parent, const char* start_dir, char* out, siz
     char unique[128] = "", req_path[256] = "", handle[256] = "", token[64];
     uint32_t serial;
     dmsg m;
+    bool answered = false;                                   /* OpenFile's reply came: from now the user takes their time */
 
     if (!bus_auth(fd)) goto done;
     if (!bus_call(fd, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "Hello",
                   NULL, NULL, &serial)) goto done;
     for (;;) {                                               /* Hello reply: our unique name */
-        if (!bus_recv(fd, &buf, &cap, &len)) goto done;
+        if (!readable(fd, 5000) || !bus_recv(fd, &buf, &cap, &len)) goto done;
         if (!parse_msg(buf, len, &m)) continue;
         if (m.reply_serial != serial) continue;
         if (m.type != DB_RETURN) goto done;
@@ -459,43 +569,20 @@ static int portal_open(const char* parent, const char* start_dir, char* out, siz
     snprintf(req_path, sizeof req_path, "/org/freedesktop/portal/desktop/request/%s/%s", sender, token);
     if (!add_match(fd, req_path)) goto done;
 
-    /* OpenFile(parent_window s, title s, options a{sv}) */
-    w_s(&body, parent ? parent : "");
-    w_s(&body, "Open CalculiX model or results");
-    warr opts = w_abegin(&body, 8);
-    w_align(&body, 8); w_s(&body, "handle_token"); w_g(&body, "s"); w_s(&body, token);
-    w_align(&body, 8); w_s(&body, "modal"); w_g(&body, "b"); w_u(&body, 1);
-    w_align(&body, 8); w_s(&body, "filters"); w_g(&body, "a(sa(us))");
-    {
-        /* one filter can hold several globs: (name, [(0, glob), ...]) */
-        static const char* names[3] = { "CalculiX (*.frd, *.inp, *.dat, *.fbd)", "STL geometry (*.stl)", "All files" };
-        static const char* globs[3][5] = { { "*.frd", "*.inp", "*.dat", "*.fbd", NULL }, { "*.stl", NULL }, { "*", NULL } };
-        warr fl = w_abegin(&body, 8);
-        for (int i = 0; i < 3; i++) {
-            w_align(&body, 8);
-            w_s(&body, names[i]);
-            warr pats = w_abegin(&body, 8);
-            for (int g = 0; globs[i][g]; g++) { w_align(&body, 8); w_u(&body, 0); w_s(&body, globs[i][g]); }
-            w_aend(&body, pats);
-        }
-        w_aend(&body, fl);
-    }
-    if (start_dir && start_dir[0]) {
-        w_align(&body, 8); w_s(&body, "current_folder"); w_g(&body, "ay");
-        warr ay = w_abegin(&body, 1);
-        w_raw(&body, start_dir, strlen(start_dir) + 1);
-        w_aend(&body, ay);
-    }
-    w_aend(&body, opts);
-    if (body.bad) goto done;
+    body.cap = 8192;
+    if (!(body.p = malloc(body.cap)) || !(body.n = cv_dbus_openfile_body(body.p, body.cap, parent, token, start_dir, kind))) goto done;
     if (!bus_call(fd, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop",
                   "org.freedesktop.portal.FileChooser", "OpenFile", "ssa{sv}", &body, &serial)) goto done;
 
     for (;;) {
+        /* the portal starts on demand, which can take a few seconds; one that has not
+           answered the call itself in 20 s is not going to show a dialog */
+        if (!answered && !readable(fd, 20000)) goto done;
         if (!bus_recv(fd, &buf, &cap, &len)) goto done;
         if (!parse_msg(buf, len, &m)) continue;
         if (m.reply_serial == serial) {
             if (m.type == DB_ERROR) goto done;               /* no FileChooser portal */
+            answered = true;
             const char* h = r_s(&m.body);
             if (!m.body.bad && strcmp(h, req_path) != 0) {   /* old portals pick their own path */
                 snprintf(handle, sizeof handle, "%s", h);
@@ -515,12 +602,15 @@ static int portal_open(const char* parent, const char* start_dir, char* out, siz
 done:
     free(buf);
     free(body.p);
+    pthread_mutex_lock(&g_fd_lock);
+    g_fd = -1;
     close(fd);
+    pthread_mutex_unlock(&g_fd_lock);
     return result;
 }
 
-static int native_open(const char* parent, const char* start_dir, char* out, size_t n) {
-    return portal_open(parent, start_dir, out, n);
+static int native_open(const char* parent, const char* start_dir, int kind, char* out, size_t n) {
+    return portal_open(parent, start_dir, kind, out, n);
 }
 
 /* Connect + authenticate + Hello, nothing visible. For tests. */
@@ -548,7 +638,9 @@ bool cv_dbus_hello(char* unique, size_t n) {
 #else  /* Windows, macOS: tinyfiledialogs */
 #include "tinyfiledialogs.h"
 
-static int native_open(const char* parent, const char* start_dir, char* out, size_t n) {
+static void native_abort(void) {}              /* a modal system dialog: its answer is dropped */
+
+static int native_open(const char* parent, const char* start_dir, int kind, char* out, size_t n) {
     (void)parent;
     char def[1100] = "";
     if (start_dir && start_dir[0]) {
@@ -558,8 +650,11 @@ static int native_open(const char* parent, const char* start_dir, char* out, siz
         snprintf(def, sizeof def, "%s/", start_dir);
 #endif
     }
-    const char* pats[5] = { "*.frd", "*.inp", "*.dat", "*.fbd", "*.stl" };
-    const char* r = tinyfd_openFileDialog("Open CalculiX model or results", def, 5, pats, "CalculiX files, STL geometry", 0);
+    kind = kind_ok(kind);
+    const char* const* pats = kinds[kind].f[0].globs;
+    int np = 0;
+    while (pats[np]) np++;
+    const char* r = tinyfd_openFileDialog(kinds[kind].title, def, np, pats, kinds[kind].desc, 0);
     if (!r) return 0;
     snprintf(out, n, "%s", r);
     return 1;
@@ -575,31 +670,45 @@ static struct {
     cv_mutex  lock;
     bool      lock_ready;
     cv_thread thread;
-    int       state;
+    int       state, kind;
+    bool      abandoned;            /* given up on: its answer is not reported */
     char      parent[64], start[1024], result[1024];
 } D;
 
 static void worker(void* p) {
     (void)p;
     char out[1024] = "";
-    int r = native_open(D.parent, D.start[0] ? D.start : NULL, out, sizeof out);
+    int r = native_open(D.parent, D.start[0] ? D.start : NULL, D.kind, out, sizeof out);
     cv_mutex_lock(&D.lock);
     snprintf(D.result, sizeof D.result, "%s", out);
-    D.state = r > 0 ? CV_DLG_DONE : r == 0 ? CV_DLG_CANCELLED : CV_DLG_UNAVAILABLE;
+    D.state = D.abandoned ? CV_DLG_IDLE : r > 0 ? CV_DLG_DONE : r == 0 ? CV_DLG_CANCELLED : CV_DLG_UNAVAILABLE;
     cv_mutex_unlock(&D.lock);
 }
 
-void cv_filedlg_start(const char* parent, const char* start_dir) {
+bool cv_filedlg_start(const char* parent, const char* start_dir, int kind) {
     if (!D.lock_ready) { cv_mutex_init(&D.lock); D.lock_ready = true; }
     cv_mutex_lock(&D.lock);
     int s = D.state;
     cv_mutex_unlock(&D.lock);
-    if (s == CV_DLG_RUNNING) return;
+    if (s == CV_DLG_RUNNING) return false;
     if (D.thread.h_) cv_thread_join(&D.thread);
     snprintf(D.parent, sizeof D.parent, "%s", parent ? parent : "");
     snprintf(D.start, sizeof D.start, "%s", start_dir ? start_dir : "");
+    D.kind = kind_ok(kind);
+    D.abandoned = false;
     D.state = CV_DLG_RUNNING;
     if (!cv_thread_start(&D.thread, worker, NULL)) D.state = CV_DLG_UNAVAILABLE;
+    return true;
+}
+
+void cv_filedlg_abandon(void) {
+    if (!D.lock_ready) return;
+    cv_mutex_lock(&D.lock);
+    bool running = D.state == CV_DLG_RUNNING;
+    if (running) D.abandoned = true;
+    else D.state = CV_DLG_IDLE;                 /* an answer not yet polled goes too */
+    cv_mutex_unlock(&D.lock);
+    if (running) native_abort();
 }
 
 int cv_filedlg_poll(char* out, size_t n) {
