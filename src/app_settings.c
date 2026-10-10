@@ -47,7 +47,8 @@ static const setting S[] = {
     B(sym_auto), F(sym_size, 0, 1e30f), F(sym_thick, 0.1f, 10), B(sym_thin),
     B(show_disc), B(show_links), B(show_hl), F(hl_size, 0.5f, 64), B(show_removed), F(model_alpha, 0, 1),
     B(cel_show), B(cel_master), B(cel_links), B(cel_front), I(cel_pick, -1, 100000),
-    I(cel_mode, 0, CV_CMODE_ALL), B(cel_true), F(cel_gap_max, 0, 1e30f), F(cel_pen_max, 0, 1e30f), F(cel_tol, 0, 1e30f), F(cel_near, 0, 1e30f), I(tie_nodes, 0, 3), B(contact_key), { "ckey_pos", 'a', &G.ckey_pos, 0, 0 },
+    I(cel_mode, 0, CV_CMODE_ALL), B(cel_true), F(cel_gap_max, 0, 1e30f), F(cel_pen_max, 0, 1e30f), F(cel_tol, 0, 1e30f), F(cel_near, 0, 1e30f),
+    I(cel_layer_by, 0, CV_CLBY_N - 1), F(cel_layer_alpha, 0, 1), F(cel_layer_min, 0, 1e30f), B(cel_layer_edges), F(cel_layer_lo, 0, 1e30f), F(cel_layer_hi, 0, 1e30f), I(tie_nodes, 0, 3), B(contact_key), { "ckey_pos", 'a', &G.ckey_pos, 0, 0 },
     B(vec_colored), F(vec_pct, 0.01f, 100),
     I(tensor_style, 0, CV_GLYPH_N - 1), B(tensor_colored), F(tensor_scale, 0.01f, 100),
     I(traj_which, 0, 2), F(traj_spacing, 0.2f, 50), F(geo_size, 0.5f, 64), B(show_markers), B(show_ghost), { "oor_above", 'i', &G.oor_mode[0], 0, 3 }, { "oor_below", 'i', &G.oor_mode[1], 0, 3 },
@@ -262,6 +263,12 @@ bool settings_apply(const char* kv) {
     char key[64];
     snprintf(key, sizeof key, "%.*s", (int)CV_MIN(eq - kv, 63), kv);
     const char* val = eq + 1;
+    if (!strcmp(key, "cel_layer_by")) {      /* gap|cpress|cslip|cshear|status, or the number */
+        int b = app_clayer_parse_by(val);
+        if (b < 0) return false;
+        G.cel_layer_by = b;
+        return true;
+    }
     const setting* e = find(key);
     if (e) { set_from_text(e, val); return true; }
     if (!strcmp(key, "ui_zoom")) { ui_set_zoom((float)atof(val)); return true; }
@@ -293,7 +300,7 @@ bool settings_apply(const char* kv) {
         G.deform_scale = x; G.deform_auto = false; G.deform = x > 0;
         return true;
     }
-    if (!strcmp(key, "contact_mode")) {       /* links,status,gap,solids or the bits: the contact display, shown */
+    if (!strcmp(key, "contact_mode")) {       /* links,status,gap,solids,layer or the bits: the contact display, shown */
         int m = app_cdisp_parse_mode(val);
         if (m < 0) return false;
         G.cel_mode = m; G.cel_show = true;

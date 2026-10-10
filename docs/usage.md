@@ -68,9 +68,15 @@ ccxview model.frd --cel run1.cel --opt cel_pick=4   # contact elements from anot
 ccxview contact.frd --opt contact_mode=links,status --opt deform_scale=30 --opt cel_true=1
                                             # the contact display: links (slave node to its projection, by
                                             #   gap), status (far / near open, sliding, sticking), gap (contour
-                                            #   on the slave faces), solids (the .cel's elements), any mix;
+                                            #   on the slave faces), solids (the .cel's elements), layer, any mix;
                                             #   the shape x30 with the gap drawn at true scale; cel_gap_max
                                             #   cel_pen_max cel_tol cel_near: lengths, 0 automatic
+ccxview contact.frd --opt contact_mode=layer --opt cel_layer_by=cpress --opt model_alpha=0.3
+                                            # the interface layer: a solid over each slave face up to the
+                                            #   master, as thick as the gap, coloured by gap|cpress|cslip|
+                                            #   cshear|status; cel_layer_alpha (opacity), cel_layer_min (least
+                                            #   thickness, model units), cel_layer_edges=0|1, cel_layer_lo
+                                            #   cel_layer_hi (its colours' ends, 0 automatic)
 ccxview contact.frd --field CONTACT:STATUS --labels value   # the contact status as a field, named on the nodes
 ccxview model.frd --opt deform_scale=1 --opt deform=0        # a fixed deformation scale; undeformed
 ccxview tie.frd --set GLUE --opt tie_nodes=2 --opt model_alpha=0.4  # a tie's slave nodes: 0 tied and not tied,
@@ -132,7 +138,7 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | see | `elset_alpha`: `ROCKER 0.3, ...` the element sets see-through; `pairs_on`: the ties and contact pairs drawn, by name |
 | groups | `off_type`, `off_material`, `off_group`: the values switched off, as ranges (`1-4, 9`) |
 | hidden | `hidden_elems`: element ids hidden by hand, as ranges |
-| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q`, `model_alpha`, the contact elements (`cel_show`, `cel_master`, `cel_links`, `cel_front`, `cel_pick`), the contact display (`cel_mode`, `cel_true`, `cel_gap_max`, `cel_pen_max`, `cel_tol`, `cel_near`), `tie_nodes` |
+| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q`, `model_alpha`, the contact elements (`cel_show`, `cel_master`, `cel_links`, `cel_front`, `cel_pick`), the contact display (`cel_mode`, `cel_true`, `cel_gap_max`, `cel_pen_max`, `cel_tol`, `cel_near`, `cel_layer_by`, `cel_layer_alpha`, `cel_layer_min`, `cel_layer_edges`, `cel_layer_lo`, `cel_layer_hi`), `tie_nodes` |
 | units | `units` (the system), `unit_in_<quantity>` and `unit_<quantity>`: unit names (`MPa`), empty for the system's / as input |
 | view | the keys of a view state file: `cam_*`, `step`, `field`, `comp`, `calc`, `gauss_field`, `fail_field`, `mesh_field`, `elem_mode`, `csys*`, `deform*`, `range_lock`, `rmin`, `rmax`, `clip_*`, `crop_*`, `mirror*`, `rep*`, `cyc_*`, the layers, `faces_mode`, `cmap`, `bands` |
 | compare | `compare` (the other run's path), `compare_diff` |

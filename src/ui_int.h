@@ -207,6 +207,11 @@ void uii_window_integrals(struct nk_context* ctx, float s, float row, int fw, in
 /* ---- ui_contact.c: the Contact window, the key of its colours over the view */
 void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int fh);
 void uii_window_contact_key(struct nk_context* ctx, float s, float row);
+/* ---- ui_clayer.c: the interface layer's rows in it (how many now), its colour bar in the key */
+void uii_section_clayer(struct nk_context* ctx, float s, float row);
+int  uii_clayer_rows(void);
+void uii_clayer_bar(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w, float lh,
+                    struct nk_color ink, float s);
 
 /* ---- ui_select.c: the Selection window */
 void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh);
