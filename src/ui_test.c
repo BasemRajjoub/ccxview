@@ -373,6 +373,16 @@ static bool cmode_gap(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_GA
 static bool cmode_solids(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_SOLIDS) != 0; }
 static bool ctrue_on(struct nk_context* ctx) { return G.cel_true; }
 static void cdisp_back(struct nk_context* ctx) { G.cel_mode = CV_CMODE_LINKS; G.cel_true = false; app_contact_refresh(); }
+/* the interface layer's rows */
+static bool cmode_layer(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_LAYER) != 0; }
+static bool clayer_popup(struct nk_context* ctx) { return popup_open(ctx, "Contact"); }
+static bool clayer_by(struct nk_context* ctx) { return G.cel_layer_by != CV_CLBY_GAP && !popup_open(ctx, "Contact"); }
+static bool clayer_alpha(struct nk_context* ctx) { return G.cel_layer_alpha < 0.95f; }
+static bool clayer_no_edges(struct nk_context* ctx) { return !G.cel_layer_edges; }
+static void clayer_back(struct nk_context* ctx) {
+    G.cel_mode = CV_CMODE_LINKS; G.cel_layer_by = CV_CLBY_GAP; G.cel_layer_alpha = 1.f; G.cel_layer_edges = true;
+    app_contact_refresh();
+}
 static bool deck_gone(struct nk_context* ctx) { return !G.show_deck; }
 static bool deck_shown(struct nk_context* ctx) { return G.show_deck && win_of(ctx, "Deck"); }
 static void groups_first(struct nk_context* ctx) { G.tree[CV_TREE_LAYERS] = 0; G.tree[CV_TREE_GROUPS] = 1; }
@@ -1108,6 +1118,14 @@ static const step script[] = {
     AT_TIP("Contact", "Solids: the contact elements of the .cel"), CLICK, WAIT(2), EXPECT(cmode_solids, "the solids drawn"),
     AT_TIP("Contact", "With the shape exaggerated (deformation scale not 1)"), CLICK, WAIT(2), EXPECT(ctrue_on, "at true scale"),
     DO(cdisp_back), DO(contact_end), WAIT(2), PANELS_ANSWER,
+    CASE("contact display: the interface layer ticked, coloured by another value, see-through, not outlined"),
+    DO(close_all), DO(open_contact), WAIT(3),
+    AT_TIP("Contact", "Layer: an interface layer drawn like an adhesive"), CLICK, WAIT(2), EXPECT(cmode_layer, "the layer drawn"),
+    AT_TIP("Contact", "What colours the interface layer"), CLICK, WAIT(2), EXPECT(clayer_popup, "its list opens"),
+    AT_POPUP("Contact", 0.5f, 0.5f), CLICK, WAIT(3), EXPECT(clayer_by, "coloured by another value"),
+    AT_TIP("Contact", "The interface layer's opacity"), CLICK, WAIT(2), EXPECT(clayer_alpha, "the layer see-through"),
+    AT_TIP("Contact", "The interface layer's edges outlined"), CLICK, WAIT(2), EXPECT(clayer_no_edges, "its outline off"),
+    DO(clayer_back), DO(contact_end), WAIT(2), PANELS_ANSWER,
     CLOSED_THEN_PANELS("Contact", open_contact, contact_gone),
     CASE("layers: the opacity slider makes the model see-through"),
     DO(contact_end), DO(close_all), DO(layers_first), WAIT(3), AT_TIP("Scene", "Opacity of the faces: less to see into the model"),

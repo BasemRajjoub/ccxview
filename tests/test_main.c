@@ -1572,6 +1572,7 @@ static void test_localsys_requests(void) {
 #include "t_stl.h"
 #include "t_cel.h"
 #include "t_contact.h"
+#include "t_clayer.h"
 #include "t_integ.h"
 #include "t_selset.h"
 #include "t_seltopo.h"
@@ -1605,6 +1606,7 @@ int main(void) {
     test_stl();
     test_cel();
     test_contact();
+    test_clayer();
     test_anchor();
     test_measure();
     test_tbtext();

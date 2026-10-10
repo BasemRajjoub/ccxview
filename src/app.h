@@ -437,6 +437,12 @@ typedef struct {
     float     cel_pen_max;           /* ... their penetration end, 0 auto (the deepest, at least the tolerance) */
     float     cel_tol;               /* closed within this gap (without CPRESS), penetrating beyond it; 0 auto */
     float     cel_near;              /* open within this gap: near open; 0 auto */
+    /* the interface layer (app_clayer.c): a solid over each slave face up to the master, the gap its thickness */
+    int       cel_layer_by;          /* coloured by: CV_CLBY_* */
+    float     cel_layer_alpha;       /* its opacity */
+    float     cel_layer_min;         /* the least thickness, model units: closed faces a thin skin; 0 none */
+    bool      cel_layer_edges;       /* its edges outlined */
+    float     cel_layer_lo, cel_layer_hi;   /* its colours' ends (not the gap's: those are the gap colours'); 0 auto */
     int       tie_nodes;             /* a tie's slave nodes: 0 tied and not tied, 1 tied only, 2 not tied only, 3 none */
     bool      contact_key;           /* the colours' key over the view while any of it is drawn */
     cv_anchor ckey_pos;              /* ... dragged to (unset: bottom-left, above the axes) */
@@ -933,8 +939,11 @@ uint32_t* app_contact_surf_nodes(int si, uint32_t* n);
    deck's contact pairs active in the step) against its master face: projected onto it
    on the true deformed shape, its gap (COPEN, else measured), its status (contact.h).
    Drawn as links (the node to its projection), a status patchwork or a gap contour on
-   the slave faces, and the contact elements as solids. */
-enum { CV_CMODE_LINKS = 1, CV_CMODE_STATUS = 2, CV_CMODE_GAP = 4, CV_CMODE_SOLIDS = 8, CV_CMODE_ALL = 15 };
+   the slave faces, the contact elements as solids, and an interface layer over the
+   slave faces as thick as the gap (app_clayer.c). */
+enum { CV_CMODE_LINKS = 1, CV_CMODE_STATUS = 2, CV_CMODE_GAP = 4, CV_CMODE_SOLIDS = 8, CV_CMODE_LAYER = 16, CV_CMODE_ALL = 31 };
+/* what the interface layer is coloured by */
+enum { CV_CLBY_GAP, CV_CLBY_CPRESS, CV_CLBY_CSLIP, CV_CLBY_CSHEAR, CV_CLBY_STATUS, CV_CLBY_N };
 typedef struct {
     int   nodes;                 /* slave nodes with a status */
     int   cat[6];                /* ... by status (CV_CST_*) */
@@ -946,8 +955,15 @@ typedef struct {
     bool  measured;              /* gaps measured from the shape (where there is no COPEN) */
     bool  faces;                 /* status and gap drawn on slave faces (else balls) */
     int   drawn;                 /* the CV_CMODE_ bits drawn now */
+    float llo, lhi;              /* the interface layer's colours' ends (CV_CLBY_GAP: lo, hi) */
+    int   lby;                   /* ... what they are (CV_CLBY_*), -1 no layer drawn */
+    bool  lknown;                /* ... any slave node has that value (CONTACT in the .frd) */
+    int   lpen;                  /* ... its faces with a penetrating corner (outlined magenta) */
 } cv_cinfo;
 void app_cdisp_refresh(void);                /* from app_contact_refresh */
+extern const char* const cv_clby_names[CV_CLBY_N];   /* "gap", "CPRESS", ... (app_clayer.c) */
+int  app_clayer_parse_by(const char* s);
+void app_clayer_map(float t, float rgb[3]);  /* the layer's colours of CPRESS, CSLIP, CSHEAR at t 0..1 */     /* "gap|cpress|cslip|cshear|status" or the number; -1 not one */
 void app_cdisp_clear(void);
 const cv_cinfo* app_cdisp_info(void);
 int  app_cdisp_parse_mode(const char* s);    /* "links,status" or a number -> CV_CMODE_ bits; -1 not understood */

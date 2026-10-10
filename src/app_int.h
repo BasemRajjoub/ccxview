@@ -3,6 +3,7 @@
 #define CV_APP_INT_H
 
 #include "app.h"
+#include "contact.h"
 
 /* command-line options, parsed in app.c, applied when a file has loaded */
 typedef struct {
@@ -174,5 +175,24 @@ void unload(void);
 bool app_load_headless(const char* path);   /* read a model into G without a window (--integrate-csv) */
 void poll_job(void);
 void poll_dialog(void);
+
+/* app_cdisp.c: its slave nodes, for the interface layer */
+typedef struct {
+    uint32_t node;              /* shown index */
+    uint32_t m[4]; uint8_t nm;  /* its master face's corners; nm 0: not paired */
+    cv_cproj pj;                /* onto it, on the true deformed shape */
+    float    dist;              /* from the node to the foot */
+    float    gap, press, shear, slip;   /* NaN unknown; slip |CSLIP1, CSLIP2| */
+    int8_t   st;                /* CV_CST_*, -1 none */
+    bool     elem;              /* a contact element pairs it */
+    int      link;              /* its deck contact pair, -1 none */
+} cv_cslave;
+const cv_cslave* app_cdisp_slave(uint32_t node);   /* a shown node's, NULL when it is no slave node */
+const uint32_t*  app_cdisp_faces(size_t* nf);      /* the slave faces, 4 corners each (a triangle: the 4th UINT32_MAX) */
+/* the point of weights w over nodes m[0..n): where it is undeformed, how it moves */
+void app_cdisp_wpt(const uint32_t* m, int n, const float* w, float p[3], float d[6]);
+/* app_clayer.c: the interface layer over the slave faces, its colours' range into I */
+void app_clayer_draw(const uint8_t* shown, cv_cinfo* I);
+void app_clayer_clear(void);
 
 #endif

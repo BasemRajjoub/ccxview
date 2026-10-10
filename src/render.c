@@ -498,7 +498,8 @@ static struct {
     sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
     sg_image    div_img;   sg_view div_view;   /* cool-warm, fixed: the principal cross by value */
-    sg_image    cmap_c[3];  sg_view cview_c[3];  int cstat_n;   /* the contact maps: links, contour, status */
+    sg_image    cmap_c[4];  sg_view cview_c[4];  int cstat_n;   /* the contact maps: links, contour, status, the interface layer */
+    sg_pipeline pip_clay[2];          /* the interface layer see-through: its far side (front faces culled), then its near side */
     sg_image    etex_img;  sg_view etex_view;
     sg_buffer   ib_grp;               /* skin triangles ordered by group */
     uint32_t*   grp_first;            /* ngroups + 1 */
@@ -593,6 +594,8 @@ void cv_render_contact_maps(const float* links, const float* contour, int n, con
     make_table(status, ns, &R.cmap_c[2], &R.cview_c[2]);
     R.cstat_n = ns < 1 ? 1 : ns > 256 ? 256 : ns;
 }
+
+void cv_render_contact_layer_map(const float* rgb, int n) { make_table(rgb, n, &R.cmap_c[3], &R.cview_c[3]); }
 
 static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, const char* fs_src) {
     return sg_make_shader(&(sg_shader_desc){
@@ -742,6 +745,11 @@ void cv_render_init(void) {
             .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA, .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
             .src_factor_alpha = SG_BLENDFACTOR_ONE, .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA };
         R.pip_tri_blend_ni = sg_make_pipeline(&pb);
+        pb.face_winding = SG_FACEWINDING_CCW;      /* the layer's prisms turn counter-clockwise seen from outside */
+        pb.cull_mode = SG_CULLMODE_FRONT;
+        R.pip_clay[0] = sg_make_pipeline(&pb);
+        pb.cull_mode = SG_CULLMODE_BACK;
+        R.pip_clay[1] = sg_make_pipeline(&pb);
     }
     /* imported geometry see-through: indexed, blended, the depth tested but left as it
        is; STL triangles turn counter-clockwise seen from outside */
@@ -891,6 +899,7 @@ void cv_render_init(void) {
     cv_render_colormap(CV_CMAP_FAST, false, false);
     make_cmap(CV_CMAP_COOLWARM, false, false, &R.div_img, &R.div_view);
     cv_render_contact_maps(NULL, NULL, 1, NULL, 1);
+    cv_render_contact_layer_map(NULL, 1);
     float zero = 0;
     make_etex(&zero, 1, 1);
 }
@@ -1225,6 +1234,25 @@ static void draw_contact(const cv_draw* d) {
         g_cmap.id = 0;
         if (A[CV_AUX_CSOLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_CSOLN].v, NO_IB, (int)A[CV_AUX_CSOLN].n, CV_COLOR_SOLID, edge, false, d, 1, false, 7 * PULL, 0);
+        if (A[CV_AUX_CLAY].n) {                    /* the interface layer: solid, or its far side then its near side */
+            cv_draw L = *d;
+            L.rmin = d->clay_lo; L.rmax = d->clay_hi; L.bands = 0; memset(L.oor, 0, sizeof L.oor);
+            const float pen[3] = { 0.92f, 0.18f, 0.86f };   /* the penetrating status colour (contact.c) */
+            g_cmap = R.cview_c[3];
+            if (d->clay_alpha >= 0.999f)
+                draw_layer(R.pip_tri_ni, A[CV_AUX_CLAY].v, NO_IB, (int)A[CV_AUX_CLAY].n, CV_COLOR_NODAL, grey, d->shade, &L, 1, false, 4 * PULL, 0);
+            else {
+                g_alpha = CV_MAX(d->clay_alpha, 0.02f);
+                for (int k = 0; k < 2; k++)
+                    draw_layer(R.pip_clay[k], A[CV_AUX_CLAY].v, NO_IB, (int)A[CV_AUX_CLAY].n, CV_COLOR_NODAL, grey, d->shade, &L, 1, false, 4 * PULL, 0);
+                g_alpha = 1.f;
+            }
+            g_cmap.id = 0;
+            if (A[CV_AUX_CLAYN].n)
+                draw_layer(R.pip_line_ni, A[CV_AUX_CLAYN].v, NO_IB, (int)A[CV_AUX_CLAYN].n, CV_COLOR_SOLID, edge, false, d, 1, false, 6 * PULL, 0);
+            if (A[CV_AUX_CLAYP].n)
+                draw_layer(R.pip_line_ni, A[CV_AUX_CLAYP].v, NO_IB, (int)A[CV_AUX_CLAYP].n, CV_COLOR_SOLID, pen, false, d, 1, false, 7 * PULL, 0);
+        }
         if (A[CV_AUX_CSOL].n) {                    /* see-through, over everything drawn so far */
             g_cmap = R.cview_c[1];
             g_alpha = d->csol_alpha > 0 ? d->csol_alpha : 0.45f;

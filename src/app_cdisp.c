@@ -22,7 +22,10 @@
      solids  the contact elements of the .cel as CalculiX wrote them: a pyramid (or
              tetrahedron) from the slave node to its master face, a prism between the
              faces for surface to surface, see-through, coloured by the gap: the gap
-             is the layer's thickness. */
+             is the layer's thickness.
+     layer   a prism over each slave face up to its corners' feet on the master
+             (app_clayer.c): an adhesive whose thickness is the gap, coloured by the
+             gap, CPRESS, CSLIP, CSHEAR or the status. */
 #include "app.h"
 #include "app_int.h"
 #include "contact.h"
@@ -33,16 +36,7 @@
 
 typedef char cinfo_cats_fit[sizeof(((cv_cinfo*)0)->cat) / sizeof(int) == CV_CST_N ? 1 : -1];
 
-typedef struct {
-    uint32_t node;              /* shown index */
-    uint32_t m[4]; uint8_t nm;  /* its master face's corners; nm 0: not paired */
-    cv_cproj pj;                /* onto it, on the true deformed shape */
-    float    dist;              /* from the node to the foot */
-    float    gap, press, shear; /* NaN unknown */
-    int8_t   st;                /* CV_CST_*, -1 none */
-    bool     elem;              /* a contact element pairs it */
-    int      link;              /* its deck contact pair, -1 none */
-} cnode;
+typedef cv_cslave cnode;
 
 static struct {
     CV_VEC(cnode) n;
@@ -53,7 +47,7 @@ static struct {
 
 const cv_cinfo* app_cdisp_info(void) { return &D.info; }
 
-static const char* const mode_names[4] = { "links", "status", "gap", "solids" };
+static const char* const mode_names[5] = { "links", "status", "gap", "solids", "layer" };
 
 int app_cdisp_parse_mode(const char* s) {
     char* end = NULL;
@@ -65,10 +59,10 @@ int app_cdisp_parse_mode(const char* s) {
         if (!*s) break;
         size_t l = strcspn(s, ",+ ");
         int k = -1;
-        for (int i = 0; i < 4; i++) if (strlen(mode_names[i]) == l && !strncasecmp(s, mode_names[i], l)) k = i;
+        for (int i = 0; i < 5; i++) if (strlen(mode_names[i]) == l && !strncasecmp(s, mode_names[i], l)) k = i;
         if (l == 4 && !strncasecmp(s, "none", 4)) k = 9;
         if (k < 0) return -1;
-        if (k < 4) m |= 1 << k;
+        if (k < 5) m |= 1 << k;
         s += l;
     }
     return m;
@@ -177,6 +171,7 @@ static int comp_of(const cv_field_desc* d, const char* name) {
 static void build(void) {
     D.n.n = 0; D.sf.n = 0;
     memset(&D.info, 0, sizeof D.info);
+    D.info.lby = -1;
     if (!G.loaded || !G.frd.n_nodes || G.stl_model) return;
     if (D.nat != G.frd.n_nodes) {
         free(D.at);
@@ -222,11 +217,12 @@ static void build(void) {
     /* the CONTACT block of the increment on screen */
     int fi = find_field(G.step, "CONTACT");
     const float* v = fi >= 0 ? cache_get(G.step, fi) : NULL;
-    int nc = 0, co = -1, cp = -1, c1 = -1, c2 = -1;
+    int nc = 0, co = -1, cp = -1, c1 = -1, c2 = -1, s1 = -1, s2 = -1;
     if (v) {
         const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
         nc = d->ncomp;
         co = comp_of(d, "COPEN"); cp = comp_of(d, "CPRESS"); c1 = comp_of(d, "CSHEAR1"); c2 = comp_of(d, "CSHEAR2");
+        s1 = comp_of(d, "CSLIP1"); s2 = comp_of(d, "CSLIP2");
     }
     const float raw = units_len_raw();
     /* the size of the faces met: the automatic tolerance and near distance */
@@ -253,6 +249,7 @@ static void build(void) {
         float copen = r && co >= 0 ? r[co] * raw : NAN;
         if (r && cp >= 0) q->press = r[cp] == r[cp] ? r[cp] : 0.f;   /* not in the block: CalculiX has it open */
         if (r && c1 >= 0 && c2 >= 0 && r[c1] == r[c1] && r[c2] == r[c2]) q->shear = sqrtf(r[c1] * r[c1] + r[c2] * r[c2]);
+        if (r && s1 >= 0 && s2 >= 0 && r[s1] == r[s1] && r[s2] == r[s2]) q->slip = sqrtf(r[s1] * r[s1] + r[s2] * r[s2]) * raw;
         if (copen == copen) { q->gap = copen; any_copen = true; }
         else if (q->nm) { q->gap = q->pj.gap; I->measured = true; }
         cv_cin in = { q->gap, q->press, q->shear, 0.f, tol, near, q->elem };
@@ -296,8 +293,7 @@ static void vb_up(vb* b, int which) {
     cv_free_vec(b->p); cv_free_vec(b->d); cv_free_vec(b->s);
 }
 
-/* the point of weights w over nodes m[0..n): where it is undeformed, how it moves */
-static void wpt(const uint32_t* m, int n, const float* w, float p[3], float d[6]) {
+void app_cdisp_wpt(const uint32_t* m, int n, const float* w, float p[3], float d[6]) {
     memset(p, 0, 3 * sizeof(float)); memset(d, 0, 6 * sizeof(float));
     for (int k = 0; k < n; k++) {
         if (w[k] == 0) continue;
@@ -317,7 +313,7 @@ static bool exaggerated(void) {
    exaggerated) its foot on the face plus the true gap along the face's normal */
 static void slave_at(const cnode* q, float p[3], float d[6]) {
     if (G.cel_true && q->nm && q->gap == q->gap && exaggerated()) {
-        wpt(q->m, q->nm, q->pj.w, p, d);
+        app_cdisp_wpt(q->m, q->nm, q->pj.w, p, d);
         for (int i = 0; i < 3; i++) p[i] += q->gap * q->pj.n[i];
         return;
     }
@@ -339,7 +335,7 @@ static void draw_links(const uint8_t* shown) {
         vb_add(is_closed(q->st) ? &fb : &ob, a, da, q->gap);
         if (!q->nm || !G.cel_links || q->gap != q->gap) continue;
         float b[3], db[6];
-        wpt(q->m, q->nm, q->pj.w, b, db);
+        app_cdisp_wpt(q->m, q->nm, q->pj.w, b, db);
         deck_inst2(&in, a, b, r, r, q->gap, da, db);
     }
     vb_up(&fb, CV_AUX_CSLV); vb_up(&ob, CV_AUX_CSLVO);
@@ -347,7 +343,9 @@ static void draw_links(const uint8_t* shown) {
     cv_free_vec(in);
 }
 
-static const cnode* at_node(uint32_t i) { return i != UINT32_MAX && D.at[i] != UINT32_MAX ? &D.n.a[D.at[i]] : NULL; }
+static const cnode* at_node(uint32_t i) { return i != UINT32_MAX && i < D.nat && D.at[i] != UINT32_MAX ? &D.n.a[D.at[i]] : NULL; }
+const cv_cslave* app_cdisp_slave(uint32_t node) { return D.at ? at_node(node) : NULL; }
+const uint32_t* app_cdisp_faces(size_t* nf) { *nf = D.sf.n / 4; return D.sf.a; }
 
 /* each slave face as a patch per corner (the corner, the middles of its two edges, the
    face's centre) in its node's status colour; or a contour of the gap over its corners */
@@ -366,13 +364,13 @@ static void draw_faces(const uint8_t* shown, bool status, bool gap) {
         if (!vis || !any) continue;
         if (status) {
             float wc[4] = { 1.f / n, 1.f / n, 1.f / n, n == 4 ? 0.25f : 0.f }, cp[3], cd[6];
-            wpt(c, n, wc, cp, cd);
+            app_cdisp_wpt(c, n, wc, cp, cd);
             for (int k = 0; k < n; k++) {
                 if (!q[k] || q[k]->st < 0) continue;
                 float w0[4] = { 0 }, w1[4] = { 0 }, w2[4] = { 0 }, p0[3], d0[6], p1[3], d1[6], p2[3], d2[6];
                 int kn = (k + 1) % n, kp = (k + n - 1) % n;
                 w0[k] = 1; w1[k] = w1[kn] = 0.5f; w2[k] = w2[kp] = 0.5f;
-                wpt(c, n, w0, p0, d0); wpt(c, n, w1, p1, d1); wpt(c, n, w2, p2, d2);
+                app_cdisp_wpt(c, n, w0, p0, d0); app_cdisp_wpt(c, n, w1, p1, d1); app_cdisp_wpt(c, n, w2, p2, d2);
                 float s = (float)q[k]->st;
                 vb_add(&sb, p0, d0, s); vb_add(&sb, p1, d1, s); vb_add(&sb, cp, cd, s);
                 vb_add(&sb, p0, d0, s); vb_add(&sb, cp, cd, s); vb_add(&sb, p2, d2, s);
@@ -469,7 +467,8 @@ void app_cdisp_clear(void) {
     static const int w[] = { CV_AUX_CSLV, CV_AUX_CSLVO, CV_AUX_CSTAT, CV_AUX_CSTPT, CV_AUX_CGAP, CV_AUX_CSOL, CV_AUX_CSOLN };
     for (size_t i = 0; i < CV_COUNT(w); i++) cv_render_aux(w[i], NULL, NULL, NULL, 0);
     cv_render_inst(CV_INST_CLINK, NULL, 0);
-    D.info.drawn = 0;
+    app_clayer_clear();
+    D.info.drawn = 0; D.info.lby = -1;
 }
 
 void app_cdisp_refresh(void) {
@@ -484,6 +483,7 @@ void app_cdisp_refresh(void) {
     if (m & (CV_CMODE_STATUS | CV_CMODE_GAP)) draw_faces(shown, m & CV_CMODE_STATUS, m & CV_CMODE_GAP);
     if ((m & CV_CMODE_STATUS) && !D.info.faces) draw_status_balls(shown);
     if (m & CV_CMODE_SOLIDS) draw_solids(shown);
+    if (m & CV_CMODE_LAYER) app_clayer_draw(shown, &D.info);
     D.info.drawn = m;
     free(shown);
     /* the colour maps over this range */
@@ -496,10 +496,10 @@ void app_cdisp_refresh(void) {
 /* ---- the STATUS of the CONTACT field --------------------------------------------- */
 
 bool app_cdisp_status_field(float* out) {
-    int drawn = D.info.drawn;                   /* what is on screen stays so */
-    bool faces = D.info.faces;
+    cv_cinfo was = D.info;                      /* what is on screen stays so */
     build();
-    D.info.drawn = drawn; D.info.faces = faces;
+    D.info.drawn = was.drawn; D.info.faces = was.faces;
+    D.info.llo = was.llo; D.info.lhi = was.lhi; D.info.lby = was.lby; D.info.lknown = was.lknown; D.info.lpen = was.lpen;
     if (!D.n.n || !D.info.nodes) return false;
     for (uint32_t i = 0; i < G.frd.n_nodes; i++) out[i] = NAN;
     for (size_t j = 0; j < D.n.n; j++) if (D.n.a[j].st >= 0) out[D.n.a[j].node] = (float)D.n.a[j].st;
