@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# solve_showcase.sh [showcase|elements|symbols|cantilever|contact|tie] [JOB ...] -- regenerate
+# solve_showcase.sh [showcase|elements|symbols|cantilever|contact|tie|contact_showcase|...] [JOB ...] -- regenerate
 # samples/NAME/NAME.inp with scripts/gen_NAME.py and solve it with ccx (on PATH or in $CCX).
 # Leaves NAME.frd / .dat / .sta / .cvg (and .cel, *.nam where ccx writes them) beside it.
 # Further JOBs: other decks the generator wrote in samples/NAME/, solved too
