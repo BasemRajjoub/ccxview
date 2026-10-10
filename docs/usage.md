@@ -60,23 +60,23 @@ ccxview model.frd --stl pin.stl --stl alt.stl --stl-alpha 0.4   # geometry that 
 ccxview pin.stl --labels node --measure dist:1,450   # an STL alone is the model (so is --stl with no model)
 ccxview model.frd --browse-stl              # ccxview's own file browser, open to import an STL (--browse: to open a model)
 ccxview contact.frd --contact-window --set STEEL_ON_STEEL --set-alpha ROCKER:0.3
-                                            # the Contact window; a contact pair (or tie) drawn by name; an
-                                            #   element set see-through (repeatable); contact.cel beside it is read
+                                            # Fields > Contact open with its settings window; a contact pair (or
+                                            #   tie) ticked by name; an element set see-through (repeatable);
+                                            #   contact.cel beside it is read
 ccxview model.frd --cel run1.cel --opt cel_pick=4   # contact elements from another file (or a .nam); the list's
-                                            #   iteration 4 (-1: the increment on screen); cel_show cel_master
-                                            #   cel_links cel_front=0|1
-ccxview contact.frd --opt contact_mode=links,status --opt deform_scale=30 --opt cel_true=1
-                                            # the contact display: links (slave node to its projection, by
-                                            #   gap), status (far / near open, sliding, sticking), gap (contour
-                                            #   on the slave faces), solids (the .cel's elements), layer, any mix;
-                                            #   the shape x30 with the gap drawn at true scale; cel_gap_max
-                                            #   cel_pen_max cel_tol cel_near: lengths, 0 automatic
-ccxview contact.frd --opt contact_mode=layer --opt cel_layer_by=cpress --opt model_alpha=0.3
-                                            # the interface layer: a solid over each slave face up to the
-                                            #   master, as thick as the gap, coloured by gap|cpress|cslip|
-                                            #   cshear|status; cel_layer_alpha (opacity), cel_layer_min (least
-                                            #   thickness, model units), cel_layer_edges=0|1, cel_layer_lo
-                                            #   cel_layer_hi (its colours' ends, 0 automatic)
+                                            #   iteration 4 (-1: the increment on screen); contact_show cel_master
+                                            #   cel_front cel_surfs (the pairs' surfaces)=0|1
+ccxview contact.frd --opt contact_draw=links --opt contact_by=status --opt deform_scale=30 --opt cel_true=1
+                                            # the contact display, drawn one way: layer (an adhesive as thick as
+                                            #   the gap, the default), links (open slave node to its projection),
+                                            #   ccx (the .cel's elements); coloured by gap|cpress|cslip|cshear|
+                                            #   status; the shape x30 with the gap drawn at true scale;
+                                            #   cel_closed cel_open=0|1 (the balls); cel_gap_max cel_pen_max
+                                            #   cel_tol cel_near: lengths, 0 automatic; cel_lo cel_hi: CPRESS ...
+                                            #   colours' ends; cel_alpha cel_ccx_alpha (opacity), cel_min (the
+                                            #   layer's least thickness), cel_edges=0|1; the old contact_mode=
+                                            #   links,status,gap,solids,layer still works
+ccxview model.frd --field STRESS --opt fields_open=STRESS   # a subgroup of Fields (and its options) opened
 ccxview contact.frd --field CONTACT:STATUS --labels value   # the contact status as a field, named on the nodes
 ccxview model.frd --opt deform_scale=1 --opt deform=0        # a fixed deformation scale; undeformed
 ccxview tie.frd --set GLUE --opt tie_nodes=2 --opt model_alpha=0.4  # a tie's slave nodes: 0 tied and not tied,
@@ -120,7 +120,7 @@ ccxview --version
 
 `--opt` takes every key of `ccxview.ini`, for example `--opt bands=0`, and a few
 of the model's view: `deform=0|1`, `deform_scale=S` (a fixed scale, shown),
-`contact_mode=...`, `clip_*`, `elem_mode`, `rep*` (applied again once the model
+`contact_draw=...`, `contact_by=...`, `contact_show=...`, `fields_open=...`, `clip_*`, `elem_mode`, `rep*` (applied again once the model
 has loaded, over its `.ccxview`); more examples:
 `--opt clip_on=1 --opt clip_axis=0 --opt clip_pos=0.4`, `--opt ui_theme="Catppuccin Latte"`,
 `--opt sym_auto=0 --opt sym_size=5`, `--opt mid_faces=0`.
@@ -138,7 +138,7 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | see | `elset_alpha`: `ROCKER 0.3, ...` the element sets see-through; `pairs_on`: the ties and contact pairs drawn, by name |
 | groups | `off_type`, `off_material`, `off_group`: the values switched off, as ranges (`1-4, 9`) |
 | hidden | `hidden_elems`: element ids hidden by hand, as ranges |
-| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q`, `model_alpha`, the contact elements (`cel_show`, `cel_master`, `cel_links`, `cel_front`, `cel_pick`), the contact display (`cel_mode`, `cel_true`, `cel_gap_max`, `cel_pen_max`, `cel_tol`, `cel_near`, `cel_layer_by`, `cel_layer_alpha`, `cel_layer_min`, `cel_layer_edges`, `cel_layer_lo`, `cel_layer_hi`), `tie_nodes` |
+| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q`, `model_alpha`, the contact elements (`cel_show`, `cel_master`, `cel_surfs`, `cel_front`, `cel_pick`), the contact display (`cel_draw`, `cel_by`, `cel_closed`, `cel_open`, `cel_true`, `cel_gap_max`, `cel_pen_max`, `cel_tol`, `cel_near`, `cel_lo`, `cel_hi`, `cel_alpha`, `cel_ccx_alpha`, `cel_min`, `cel_edges`), `tie_nodes` |
 | units | `units` (the system), `unit_in_<quantity>` and `unit_<quantity>`: unit names (`MPa`), empty for the system's / as input |
 | view | the keys of a view state file: `cam_*`, `step`, `field`, `comp`, `calc`, `gauss_field`, `fail_field`, `mesh_field`, `elem_mode`, `csys*`, `deform*`, `range_lock`, `rmin`, `rmax`, `clip_*`, `crop_*`, `mirror*`, `rep*`, `cyc_*`, the layers, `faces_mode`, `cmap`, `bands` |
 | compare | `compare` (the other run's path), `compare_diff` |
@@ -210,15 +210,20 @@ It prints what it selected and the field's max and min over it.
 
 ## Where things are
 
-- **Layers** (left panel): faces, edges, outline, nodes, Gauss points, vectors,
-  tensor glyphs, stress trajectories, supports, loads, springs.
+- **Layers** (left panel): faces, edges, outline, nodes, Gauss points; the arrows,
+  glyphs and trajectories of the field shown (their settings: its options in
+  Fields), supports, loads, springs.
 - **Groups**: element types, materials, sets and surfaces of the deck (right
   click a set or surface: integrate over it); the eye before an element set hides
   it, the tick shows only the ticked sets; Imported geometry: STL files shown with
   the results, each with show / hide, colour, opacity and unit scale.
-- **Fields**: the results of the step, their components and invariants,
-  the shell section forces (SHELL, with the deck) and the reinforcement of
-  concrete shells from them (REBAR; Reinforcement... for fcd, fyd, cover), integrate... (the field's integrals over a set at every step),
+- **Fields**: a tree. Contact first (when there is contact: show, pairs, how
+  it is drawn and coloured, nodes, increment, opacity; more... for its
+  settings window), then the results of the step, each a subgroup with its
+  components and invariants and, nested, its "options" (arrows of a vector;
+  glyphs, principal directions, trajectories of a tensor; REBAR's fcd, fyd,
+  cover; a .dat field's Gauss points); the shell section forces (SHELL, with
+  the deck) and the reinforcement of concrete shells from them (REBAR), integrate... (the field's integrals over a set at every step),
   calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: camera, colours and legend, symbol sizes, mirror, replicate, cyclic

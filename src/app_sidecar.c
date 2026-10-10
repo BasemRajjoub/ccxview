@@ -701,9 +701,10 @@ static const plain PLAIN[] = {
     { "label_box_b", 'f', &G.label_box_rgba[2], 0, 1 }, { "label_box_a", 'f', &G.label_box_rgba[3], 0, 1 },
     PB(lin_asme), PI(lin_q, 0, 8),
     PF(rebar_fcd, 1e-12f, 1e30f), PF(rebar_fyd, 1e-12f, 1e30f), PF(rebar_cover, 1e-12f, 1e30f),
-    PF(model_alpha, 0, 1), PB(cel_show), PB(cel_master), PB(cel_links), PB(cel_front), PI(cel_pick, -1, 100000), PI(tie_nodes, 0, 3),
-    PI(cel_mode, 0, CV_CMODE_ALL), PB(cel_true), PF(cel_gap_max, 0, 1e30f), PF(cel_pen_max, 0, 1e30f), PF(cel_tol, 0, 1e30f), PF(cel_near, 0, 1e30f),
-    PI(cel_layer_by, 0, CV_CLBY_N - 1), PF(cel_layer_alpha, 0, 1), PF(cel_layer_min, 0, 1e30f), PB(cel_layer_edges), PF(cel_layer_lo, 0, 1e30f), PF(cel_layer_hi, 0, 1e30f),
+    PF(model_alpha, 0, 1), PB(cel_show), PB(cel_master), PB(cel_surfs), PB(cel_front), PI(cel_pick, -1, 100000), PI(tie_nodes, 0, 3),
+    PI(cel_draw, 0, CV_CDRAW_N - 1), PI(cel_by, 0, CV_CBY_N - 1), PB(cel_closed), PB(cel_open), PB(cel_true),
+    PF(cel_gap_max, 0, 1e30f), PF(cel_pen_max, 0, 1e30f), PF(cel_tol, 0, 1e30f), PF(cel_near, 0, 1e30f), PF(cel_lo, 0, 1e30f), PF(cel_hi, 0, 1e30f),
+    PF(cel_alpha, 0, 1), PF(cel_ccx_alpha, 0, 1), PF(cel_min, 0, 1e30f), PB(cel_edges),
 };
 #undef PB
 #undef PI

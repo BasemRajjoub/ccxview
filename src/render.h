@@ -47,10 +47,9 @@ typedef struct {
     bool  highlights;          /* deck node sets (balls) and surfaces (faces); ties and contact pairs */
     bool  contact;             /* the contact elements of a .cel (CV_AUX_C*) */
     bool  contact_front;       /* ... their slave nodes and lines in front of everything */
-    float cgap_lo, cgap_hi;    /* the contact gap maps' range: lo < 0 < hi (cv_render_contact_maps) */
-    float csol_alpha;          /* the contact solids' opacity */
-    float clay_lo, clay_hi;    /* the interface layer's colour range (cv_render_contact_layer_map) */
-    float clay_alpha;          /* ... its opacity: 1 solid, else see-through, its far side first */
+    float clay_lo, clay_hi;    /* the contact display's colour range (cv_render_contact_map) */
+    float clay_alpha;          /* the interface layer's opacity: 1 solid, else see-through, its far side first */
+    float csol_alpha;          /* the .cel's contact elements' opacity */
     bool  mirrored;            /* this instance is a mirror image: its triangles turn the other way */
     float hl_size;
     bool  geo_points, geo_curves, geo_surfaces;   /* cgx geometry */
@@ -99,12 +98,9 @@ void cv_render_indices(const uint32_t* tri, size_t n_tri, const uint32_t* edge, 
                        const uint32_t* pt, size_t n_pt);
 void cv_render_outline(const uint32_t* fedge, size_t n_fedge);   /* the skin's feature edges */
 void cv_render_colormap(int cmap, bool reverse, bool grey);
-/* the contact display's colours, n texels of rgb each: the gap of the links and slave
-   nodes, the gap contour (both over cgap_lo .. cgap_hi of cv_draw), and the status, one
-   texel per category (the scalar is the category's number) */
-void cv_render_contact_maps(const float* links, const float* contour, int n, const float* status, int ns);
-/* the interface layer's colours, n texels of rgb (a category per texel for the status) */
-void cv_render_contact_layer_map(const float* rgb, int n);
+/* the contact display's colours, n texels of rgb over clay_lo .. clay_hi of cv_draw (a
+   category per texel for the status: the scalar is the category's number) */
+void cv_render_contact_map(const float* rgb, int n);
 
 /* Non-indexed vertex sets drawn with the same shader. NULL/0 clears.
    CV_AUX_ELEMTRI: the skin triangles with one value per triangle, expanded to
@@ -117,7 +113,7 @@ enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_
        CV_AUX_MARK, CV_AUX_PATHLN, CV_AUX_RAYLN, CV_AUX_PICKPT, CV_AUX_ELEMTRI, CV_AUX_CAPTRI,
        CV_AUX_SELLN, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN, CV_AUX_MEASLN, CV_AUX_MEASPT,
        CV_AUX_PMST, CV_AUX_PSLV, CV_AUX_PTIED, CV_AUX_PFREE, CV_AUX_CMST, CV_AUX_CMLN, CV_AUX_CSLV,
-       CV_AUX_CSLVO, CV_AUX_CSTAT, CV_AUX_CSTPT, CV_AUX_CGAP, CV_AUX_CSOL, CV_AUX_CSOLN,
+       CV_AUX_CSLVO, CV_AUX_CSOL, CV_AUX_CSOLN,
        CV_AUX_CLAY, CV_AUX_CLAYN, CV_AUX_CLAYP, CV_AUX_N };
        /* the box selection: outline (vertex pairs), faces (toned), nodes (dots), its max and min;
           the measurements: their lines (vertex pairs) and nodes;
@@ -125,13 +121,11 @@ enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_
           (half see-through, over the master's), the tied slave nodes, those not tied (in front);
           the contact elements of a .cel: their master faces and outlines, slave nodes (their
           lines: CV_INST_CLINK, CV_INST_CSLN);
-          the contact display (app_cdraw.c), coloured by their scalar on the contact maps
-          (cv_render_contact_maps): the closed slave nodes (balls) and the open ones (rings)
-          by gap, the status patches on the slave faces (or balls where there are no faces)
-          by category, the gap contour on the slave faces, the contact elements as solids
-          (see-through, by gap) and their edges; the interface layer (app_clayer.c): its
-          triangles, by its scalar on the layer's map (cv_render_contact_layer_map, over
-          clay_lo .. clay_hi), its edges, the edges of its faces penetrating (magenta) */
+          the contact display (app_cdisp.c), coloured by their scalar on the contact map
+          (cv_render_contact_map, over clay_lo .. clay_hi): the closed slave nodes (balls)
+          and the open ones (rings), the contact elements as solids (see-through) and their
+          edges; the interface layer (app_clayer.c): its triangles, its edges, the edges of
+          its faces penetrating (magenta) */
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n);
 /* the same with the second displacement part (harmonic: -DISPI, scaled by def_scale2) */
 void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n);

@@ -703,6 +703,7 @@ void app_select(const char* field, int comp) {
     G.comp = comp;
     G.range_lock = false;
     refresh_field();
+    app_cdisp_field_chosen(G.field_name, G.comp);   /* a CONTACT component colours the contact display too */
 }
 
 void app_set_elem_mode(bool on) {

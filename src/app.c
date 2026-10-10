@@ -122,9 +122,9 @@ static void init(void) {
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
     G.model_alpha = 1.f;
-    G.cel_show = G.cel_master = G.cel_links = G.cel_front = G.contact_key = true;
-    G.cel_mode = CV_CMODE_LINKS;
-    G.cel_layer_alpha = 1.f; G.cel_layer_edges = true;
+    G.cel_show = G.cel_master = G.cel_front = G.contact_key = true;
+    G.cel_draw = CV_CDRAW_LAYER; G.cel_by = CV_CBY_GAP; G.cel_closed = G.cel_open = true;
+    G.cel_alpha = 1.f; G.cel_ccx_alpha = 0.45f; G.cel_edges = true;
     G.cel_pick = -1;
     G.geo_size = 6.f;
     G.point_size = 3;
@@ -153,7 +153,7 @@ static void init(void) {
     G.rep_follow = true;
     G.cyc_n = G.cyc_show = 12; G.cyc_axis = 2;
     G.tree[CV_TREE_LAYERS] = G.tree[CV_TREE_GROUPS] = G.tree[CV_TREE_FIELDS] = G.tree[CV_TREE_VIEW] = 1;
-    G.tree[CV_TREE_CAMERA] = G.tree[CV_TREE_COLOURS] = 1;
+    G.tree[CV_TREE_CAMERA] = G.tree[CV_TREE_COLOURS] = G.tree[CV_TREE_CONTACT] = 1;
     G.exp_video = true; G.exp_cycles = 1; G.exp_fps = 30; G.exp_lock_range = true;
     G.watch = O.watch;
     if (!O.ui_test) settings_load();     /* the user's last choices override the defaults above */
@@ -450,8 +450,8 @@ static void frame(void) {
         d.gauss_points = G.show_gp && !dense;
         d.highlights = G.show_hl;
         d.contact = G.cel_show; d.contact_front = G.cel_front;
-        d.cgap_lo = app_cdisp_info()->lo; d.cgap_hi = app_cdisp_info()->hi; d.csol_alpha = 0.45f;
-        d.clay_lo = app_cdisp_info()->llo; d.clay_hi = app_cdisp_info()->lhi; d.clay_alpha = G.cel_layer_alpha;
+        d.clay_lo = app_cdisp_info()->llo; d.clay_hi = app_cdisp_info()->lhi;
+        d.clay_alpha = G.cel_alpha; d.csol_alpha = G.cel_ccx_alpha;
         d.geo_points = G.show_geo_pts; d.geo_curves = G.show_geo_crv; d.geo_surfaces = G.show_geo_srf;
         d.geo_size = G.geo_size * ui_scale();
         d.supports = G.show_bc; d.loads = G.show_loads; d.discrete = G.show_disc; d.links = G.show_links;

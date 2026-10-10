@@ -41,7 +41,7 @@ typedef struct {
     bool        details;        /* --details: the Details window of the probe (with --find or --box) */
     bool        about;          /* --about: the About window open */
     bool        deck_window;    /* --deck-window: the Deck window open (steps, amplitudes, submodel) */
-    bool        contact_window; /* --contact-window: the Contact window open */
+    bool        contact_window; /* --contact-window: the Contact subgroup of Fields and its settings window open */
     bool        no_panels;      /* --no-panels: the view alone, as H does (pictures) */
     const char* cel[4];         /* --cel FILE: contact elements (.cel) or a warning node set (.nam), after load */
     int         ncel;
@@ -66,7 +66,7 @@ typedef struct {
     int         nlabel_off;
     int         nmeasure;
     bool        measure_window; /* --measure-window: the Measurements window open */
-    bool        rebar_window;   /* --rebar-window: the Reinforcement window open */
+    bool        rebar_window;   /* --rebar-window: REBAR's options open in Fields */
     const char* select[32];     /* --select SPEC: selection steps, in order, after load (app_sel_spec) */
     int         nselect;
     bool        select_window;  /* --selection-window: the Selection window open */
@@ -192,8 +192,11 @@ const cv_cslave* app_cdisp_slave(uint32_t node);   /* a shown node's, NULL when 
 const uint32_t*  app_cdisp_faces(size_t* nf);      /* the slave faces, 4 corners each (a triangle: the 4th UINT32_MAX) */
 /* the point of weights w over nodes m[0..n): where it is undeformed, how it moves */
 void app_cdisp_wpt(const uint32_t* m, int n, const float* w, float p[3], float d[6]);
-/* app_clayer.c: the interface layer over the slave faces, its colours' range into I */
-void app_clayer_draw(const uint8_t* shown, cv_cinfo* I);
-void app_clayer_clear(void);
+/* app_clayer.c: the interface layer over the slave faces; the value of a slave node the
+   display is coloured by (NaN unknown), the colours over the values found (vmin..vmax) */
+void  app_clayer_draw(const uint8_t* shown, cv_cinfo* I);
+void  app_clayer_clear(void);
+float app_cby_value(const cv_cslave* q, int by);
+void  app_cby_colours(cv_cinfo* I, float vmin, float vmax);
 
 #endif

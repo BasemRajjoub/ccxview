@@ -6,7 +6,8 @@
    nodes are the model's, so they ride on the deformed shape. What each slave node
    is (its gap, its status) is drawn by the contact display, app_cdisp.c.
 
-   The ties and contact pairs ticked under Groups > Couplings: the master surface
+   The ties ticked (in the Contact subgroup of Fields, or under Groups > Couplings),
+   and the contact pairs ticked when their surfaces are asked for: the master surface
    blue, the slave surface crimson over it (half see-through, so where they overlap
    the two mix), and for a tie its slave nodes: green those CalculiX tied, yellow
    those it could not (they are in jobname_WarnNodeMissTiedContact.nam, 2.22, or
@@ -430,13 +431,13 @@ void app_contact_refresh(void) {
     if (G.vis && G.frd.n_nodes && (shown = calloc(G.frd.n_nodes, 1)))
         for (size_t i = 0; i < G.skin.n_pt; i++) shown[G.skin.pt[i]] = 1;
 
-    /* ties and contact pairs ticked */
+    /* ties ticked; contact pairs ticked, their surfaces when asked for */
     const cv_inp* dk = deck_get();
     const bool* lon = deck_link_flags();
     vbuf pm = {0}, ps = {0}, pt = {0}, pf = {0};
-    for (int i = 0; dk && lon && i < dk->nlinks; i++) {
+    for (int i = 0; G.cel_show && dk && lon && i < dk->nlinks; i++) {
         const cv_link* l = &dk->links[i];
-        if (!lon[i] || (l->kind != CV_LINK_TIE && l->kind != CV_LINK_CONTACT) || !cv_inp_link_active(dk, deck_step(), i)) continue;
+        if (!lon[i] || (l->kind != CV_LINK_TIE && (l->kind != CV_LINK_CONTACT || !G.cel_surfs)) || !cv_inp_link_active(dk, deck_step(), i)) continue;
         size_t m0 = pm.p.n, s0 = ps.p.n;
         surf_faces(&pm, dk, l->surf[1], shown);
         surf_faces(&ps, dk, l->surf[0], shown);

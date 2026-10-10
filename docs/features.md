@@ -45,6 +45,21 @@ and the shape follow every node; the full list is in
 
 ## Fields
 
+The Fields section is a tree: each field (DISP, STRESS, ... SHELL, REBAR,
+Calculated, Failure, Mesh quality, a `.dat` field) is a subgroup listing its
+components, and holds its own controls in a nested "options" subgroup where it
+has any: a vector's arrows (on, coloured, size %), a tensor's glyphs (on,
+style, size, coloured), principal directions and stress trajectories (on,
+family, spacing), REBAR's design values, a `.dat` field's Gauss points (on,
+x-ray, size). Changing an option of a field not shown shows that field first.
+Layers keeps a tick for the arrows, glyphs and trajectories of the field shown,
+mirrored, so they can still be switched off where they were; Gauss points stay
+in Layers (they show a nodal field too). Big option sets that are set once stay
+in windows opened from a button in their subgroup (Failure > Strength
+materials..., Mesh quality..., Calculated > Formula..., Contact > more...).
+`--opt fields_open=STRESS` opens a field's subgroup and its options and scrolls
+to it. Contact is the first subgroup (see Contact and ties).
+
 - Any result component as colour on faces, edges or nodes; per-element (flat)
   colouring; vectors and principal directions as 3D arrows.
 - Stress and strain tensors as a glyph per element, six styles:
@@ -116,8 +131,8 @@ and the shape follow every node; the full list is in
   layer 2c thick (h / 2 at most) against fcd. So pure bending gives `M / (z
   fyd)` on the tension face, a pull half to each face, a twist `|Mxy| / (z
   fyd)` both ways on both faces. The design values are the model's: concrete
-  `fcd`, steel `fyd` and the cover `c` in the Reinforcement window (REBAR in the
-  Fields panel, Reinforcement...), kept per model and as the default in
+  `fcd`, steel `fyd` and the cover `c` in REBAR's options in Fields
+  (`--rebar-window` opens them), kept per model and as the default in
   `ccxview.ini` (`rebar_fcd`, `rebar_fyd`, `rebar_cover`; 20 MPa, 435 MPa,
   40 mm by default: C30/37 and B500 to Eurocode 2). The thickness h is the
   expanded shell's. With N and mm the areas are mm²/mm; the units window shows
@@ -188,11 +203,31 @@ model that changes from step to step and a submodel of it.
 
 ## Contact and ties
 
-Layers > Contact ... (shown when the deck has a `*TIE` or `*CONTACT PAIR`, or a
-`.cel` lies beside the model; `--contact-window`) opens the Contact window: the
-model see-through, the ties and contact pairs, the contact elements. The colours
-are the same everywhere, and a key in a corner of the view names those drawn
-(drag it to move it; "key over the view" turns it off):
+Fields > Contact, the first subgroup of Fields (shown when the deck has a
+`*TIE` or `*CONTACT PAIR`, a `.cel` lies beside the model, or the `.frd` has a
+`CONTACT` block), holds what is changed often:
+
+```
+v Contact                         [x] show
+   Pairs      [x] A_GAP  [x] B_SLIDE ... [ ] E_TIE (tie)
+   Draw       (o) layer  ( ) links  ( ) ccx elements
+   Colour by  [gap v]   gap, pressure, slip, shear, status
+   Nodes      [x] closed [x] open   [x] tied [x] not tied (ties)
+   Increment  [on screen v]          (a .cel)
+   Opacity    [-----o--]             (layer, ccx elements)
+                                   [more...]
+```
+
+"show" (`--opt contact_show=0|1`, `cel_show`) turns all of it on or off: the
+contact display, the ties' surfaces and nodes, the `.cel`'s master faces.
+"more..." opens the Contact settings window with what is set once: true scale,
+the colours' ends, tolerance and near distance, the layer's least thickness and
+outline, "in front", the `.cel`'s master faces, the contact pairs' surfaces, the
+key over the view, the model's and each element set's opacity, and what was
+read (the `.cel`'s iterations, the warning files, closed / open / penetrating).
+`--contact-window` opens the subgroup and that window. The colours are the
+same everywhere, and a key in a corner of the view names those drawn (drag it
+to move it; "key over the view" turns it off):
 
 | Colour | What |
 |---|---|
@@ -206,127 +241,123 @@ are the same everywhere, and a key in a corner of the view names those drawn
 and the contact display's colours (below).
 
 - See-through: Layers > opacity (`--opt model_alpha=0.4`) for the whole model,
-  the Contact window for each element set (`--set-alpha ROCKER:0.3`, the two
+  Contact settings for each element set (`--set-alpha ROCKER:0.3`, the two
   multiplied). See-through faces are blended over everything else, their far
   sides first and the near ones over them, as the imported geometry's: the parts
   inside, the contact zone, the deck's symbols show through, the model's own far
   side too. Coloured by the field or by group, in the PNG and the videos, kept in
   the model's `.ccxview`.
-- Ties and contact pairs: a box per pair (also Groups > Couplings, or `--set NAME`
-  with the tie's or the pair's interaction name) draws its slave and master
-  surfaces in their colours, on the model as it is deformed, with the very
-  triangles of the faces they lie on. For a tie, its slave nodes: CalculiX writes
-  those it cannot tie to `jobname_WarnNodeMissTiedContact.nam` (ccx 2.22; any
-  `jobname_WarnNode*Miss*.nam` counts), read beside the model, its nodes drawn
-  yellow and the others, the tied ones, green, both in front of the model (they
-  lie between two parts). "slave nodes" chooses tied and not
-  tied, tied only, not tied only (the inverted view: what is connected) or none
-  (`--opt tie_nodes=0..3`); the window counts them per tie ("96 slave nodes, 24 not
-  tied") and lists the warning files read.
+- Pairs: a tick per tie and contact pair (also Groups > Couplings, or `--set
+  NAME` with the tie's or the pair's interaction name). A contact pair ticked
+  (all are, at first) has its slave nodes in the contact display; its slave and
+  master surfaces in their colours with "pair surfaces" (Contact settings,
+  `cel_surfs`). A tie ticked draws its surfaces, on the model as it is deformed,
+  with the very triangles of the faces they lie on, and its slave nodes:
+  CalculiX writes those it cannot tie to `jobname_WarnNodeMissTiedContact.nam`
+  (ccx 2.22; any `jobname_WarnNode*Miss*.nam` counts), read beside the model,
+  its nodes drawn yellow and the others, the tied ones, green, both in front of
+  the model (they lie between two parts). The tie's row says how many are not
+  tied; Nodes > "tied" and "not tied" choose which show (`--opt tie_nodes=0..3`:
+  both, tied only, not tied only, none).
 - Contact elements: with `*NODE FILE, CONTACT ELEMENTS` in a step, ccx writes
   `jobname.cel`, the contact elements of every iteration (in `.inp` syntax, an
   element set per iteration named `contactelements_st1_in2_at1_it3`: step,
   increment, attempt, iteration). Read beside the model, opened or dropped while
   it is open (a `.cel` with no model open opens the model beside it), or
-  `--cel FILE`. The window lists the iterations; drawn are those of the increment
-  on screen (the last iteration of its last attempt: what converged), following
-  the time bar, or one iteration picked from the list (`--opt cel_pick=N`, the
-  list's index from 0; -1 the increment on screen). Their master faces are drawn
-  filled; surface to surface (a C3D8 of the master and the slave face, written
-  once per integration point, so tens of times) the slave face outlined, each
-  pair once. The count of distinct contact elements of the increment is shown in
-  the window. Their nodes are the model's, so they follow the deformed shape.
-  What each slave node is, the contact display below draws. "show" and "master
-  faces" turn the parts off (`cel_show`, `cel_master`); "in front" (`cel_front`)
-  draws the slave nodes, links and status patches in front of the model (they lie
-  between two parts, under a part, and on an exaggerated shape a slave node
-  sinks into its master face).
+  `--cel FILE`. "Increment" lists the iterations; drawn are those of the
+  increment on screen (the last iteration of its last attempt: what converged),
+  following the time bar, or one iteration picked from the list (`--opt
+  cel_pick=N`, the list's index from 0; -1 the increment on screen). Their
+  master faces are drawn filled ("master faces", `cel_master`); surface to
+  surface (a C3D8 of the master and the slave face, written once per
+  integration point, so tens of times) the slave face outlined, each pair
+  once. Their nodes are the model's, so they follow the deformed shape. "in
+  front" (`cel_front`) draws the slave nodes and links in front of the model
+  (they lie between two parts, under a part, and on an exaggerated shape a
+  slave node sinks into its master face).
 - The contact display: every slave node, those of the `.cel` set drawn (paired
   by CalculiX with a master face) and those of the slave surfaces of the deck's
-  contact pairs active in the step (paired here with the nearest face of the
-  pair's master surface, so the open nodes CalculiX writes no contact element for
-  are there too), is projected onto its master face on the true deformed shape
-  (coordinates plus DISP, whatever the scale on screen): the foot (clamped to the
-  face), the face's normal there, the signed gap. The gap used is `COPEN` where
-  the `.frd` has it (CalculiX's own, right also in the first increment of an
-  initially overclosed contact, where it adjusts the overclosure and the
-  geometry disagrees with it), else the measured one; the key says which.
-  Closed: `CPRESS` > 0 (a slave node missing from a `CONTACT` block is open, as
-  CalculiX writes only those in contact), else a gap within the tolerance, else
-  a contact element. The window's "Contact display" ticks combine
-  (`--opt contact_mode=links,status,gap,solids,layer`, or the bits 1 2 4 8 16; `--opt`
-  of it also turns "show" on):
-  - links (the default): the slave node a filled ball when closed, a ring when
-    open, and a line from it to its foot on the face, ball and line coloured by
-    the true gap: red into the face, yellow, green at 0 (and within the
-    tolerance), cyan, blue wide open. A closed node sits on its face: no line,
-    whatever the in-plane offset to the face's centre.
-  - status: the slave faces split into a patch per corner node, coloured by the
-    node's status as Ansys' contact tool and Abaqus' CSTATUS show it (balls where
-    the slave surface has no faces):
+  contact pairs ticked and active in the step (paired here with the nearest face
+  of the pair's master surface, so the open nodes CalculiX writes no contact
+  element for are there too), is projected onto its master face on the true
+  deformed shape (coordinates plus DISP, whatever the scale on screen): the foot
+  (clamped to the face), the face's normal there, the signed gap. The gap used
+  is `COPEN` where the `.frd` has it (CalculiX's own, right also in the first
+  increment of an initially overclosed contact, where it adjusts the
+  overclosure and the geometry disagrees with it), else the measured one; the
+  key says which. Closed: `CPRESS` > 0 (a slave node missing from a `CONTACT`
+  block is open, as CalculiX writes only those in contact), else a gap within
+  the tolerance, else a contact element. "Draw" is one choice (`--opt
+  contact_draw=layer|links|ccx`, which also turns "show" on):
+  - layer (the default): an interface layer, drawn like an adhesive filling
+    the gap. Over each slave face of the deck's contact pairs a solid (a
+    hexahedron on a quadrilateral face, a wedge on a triangle; the corners of a
+    quadratic face), its bottom the slave face, its top each corner's foot on
+    its master face: as thick as the gap at every corner, and no thickness
+    where the contact is closed. Where a corner penetrates its master the top
+    lies inside the slave body: the solid turns inside out, its faces with such
+    a corner are outlined magenta (the penetrating colour); the key counts
+    them. "Opacity" (`cel_alpha`, 1 solid; less: its far side shows through),
+    "layer outlined" (`cel_edges`), "least thickness" (`cel_min`, model units,
+    0 none: a closed face still shows a thin coloured skin, grown towards the
+    master). It follows the shape drawn (its top moves with the master face,
+    its bottom with the slave nodes). Only a picture of the contact, not an
+    element of the model: nothing is picked, probed or labelled on it. It
+    needs the deck's contact pairs (their slave faces).
+  - links: a line from each open slave node to its foot on the face. A closed
+    node sits on its face: no line, whatever the in-plane offset to the face's
+    centre.
+  - ccx elements: the elements as CalculiX wrote them (cgx draws them so): one
+    slave node paired with one master face, hence pyramids (a tetrahedron on a
+    triangle; a prism between the two faces surface to surface), see-through
+    ("Opacity", `cel_ccx_alpha`), outlined.
 
-    | Colour | Status |
-    |---|---|
-    | grey-blue | far open: open wider than the near distance |
-    | yellow | near open: open within the near distance |
-    | orange | sliding: closed, `|CSHEAR|` at `mu CPRESS` (or frictionless) |
-    | dark red | sticking: closed, `|CSHEAR|` below `mu CPRESS` (mu: the pair's `*FRICTION`) |
-    | light orange | closed, stick or slip unknown (no `CSHEAR`) |
-    | magenta | penetrating: closed and deeper into the face than the tolerance |
+  "Colour by" (`--opt contact_by=gap|cpress|cslip|cshear|status`) colours the
+  chosen drawing and the balls: the gap (red into the face, yellow, green at 0
+  and within the tolerance, cyan, blue wide open), `CPRESS` (0 where open:
+  CalculiX writes it negative there), `|CSLIP|`, `|CSHEAR|` (both from their
+  two components; Turbo, from "colours from" to "colours to" in Contact
+  settings, 0 for 0 and the largest shown), or the status, as Ansys' contact
+  tool and Abaqus' CSTATUS show it (the layer a patch per corner, the ccx
+  elements by their slave node):
 
-    The key counts each. The same status is a field: `CONTACT`'s last option
-    `STATUS` (`--field CONTACT:STATUS`), its numbers 0 far open, 1 near open, 2
-    sliding, 3 sticking (Ansys' numbering), 4 closed, 5 penetrating, named in the
-    labels on the model, the probe and at the legend's ends (coloured by the
-    colour map, not the fixed colours).
-  - gap: the slave faces coloured by the gap, red overclosed, white at 0, blue
-    open; the two ends apart, so a few microns of overclosure read against a
-    gap of tenths. See it from the master's side with the master's set hidden.
-  - solids: the contact elements of the `.cel` as CalculiX wrote them (cgx
-    draws them so), see-through, from the slave node to its master face (a
-    pyramid on a quadrilateral, a tetrahedron on a triangle; a prism between the
-    two faces surface to surface), outlined, coloured as the gap: the gap is the
-    layer's thickness.
-  - layer: an interface layer, drawn like an adhesive filling the gap. Over
-    each slave face of the deck's contact pairs active in the step a solid
-    (a hexahedron on a quadrilateral face, a wedge on a triangle; the corners
-    of a quadratic face), its bottom the slave face, its top each corner's
-    foot on its master face: as thick as the gap at every corner, and no
-    thickness where the contact is closed. Where a corner penetrates its
-    master the top lies inside the slave body: the solid turns inside out, its
-    faces with such a corner are outlined magenta (the penetrating colour) and,
-    coloured by the gap, red. "layer coloured by" chooses what colours it,
-    interpolated over its faces: the gap (the gap colours, as the links), `CPRESS`
-    (0 where open: CalculiX writes it negative there), `|CSLIP|`, `|CSHEAR|`
-    (both from their two components; Turbo, from "layer colours from" to "layer
-    colours to", 0 for 0 and the largest shown) or the status (a patch per
-    corner in the status colours). Its own bar is in the key, with the count of
-    penetrating faces. "layer opacity" (`cel_layer_alpha`, 1 solid; less: its
-    far side shows through), "layer outlined" (`cel_layer_edges`), "least
-    thickness" (`cel_layer_min`, model units, 0 none: a closed face still shows
-    a thin coloured skin, grown towards the master). It follows the shape drawn
-    (its top moves with the master face, its bottom with the slave nodes); on an
-    exaggerated shape it is as thick as the gap on screen, which is the initial
-    gap plus the scale times the motion, unless "at true scale" puts the top at
-    the slave node less its true gap along the face's normal. Only a picture of
-    the contact, not an element of the model: nothing is picked, probed or
-    labelled on it. It needs the deck's contact pairs (their slave faces);
-    the values come from the `.frd`'s `CONTACT`, else the gaps are measured; a
-    `.cel` only adds its pairings (`--opt contact_mode=layer --opt
-    cel_layer_by=gap|cpress|cslip|cshear|status`).
+  | Colour | Status |
+  |---|---|
+  | grey-blue | far open: open wider than the near distance |
+  | yellow | near open: open within the near distance |
+  | orange | sliding: closed, `|CSHEAR|` at `mu CPRESS` (or frictionless) |
+  | dark red | sticking: closed, `|CSHEAR|` below `mu CPRESS` (mu: the pair's `*FRICTION`) |
+  | light orange | closed, stick or slip unknown (no `CSHEAR`) |
+  | magenta | penetrating: closed and deeper into the face than the tolerance |
+
+  "Colour by" and the `CONTACT` field agree: picking `CONTACT`'s `CPRESS` (or
+  `COPEN`, a `CSLIP`, a `CSHEAR`, `STATUS`) in Fields colours the contact by
+  it, and while the model shows `CONTACT`, "Colour by" picks the matching
+  component for the model too (with another field shown, the model keeps it).
+  The status is a field as well: `CONTACT`'s last option `STATUS` (`--field
+  CONTACT:STATUS`), its numbers 0 far open, 1 near open, 2 sliding, 3 sticking
+  (Ansys' numbering), 4 closed, 5 penetrating, named in the labels on the
+  model, the probe and at the legend's ends (coloured by the colour map, not
+  the fixed colours). "Nodes": the closed slave nodes as filled balls, the open
+  ones as rings, in the colours of the value (`cel_closed`, `cel_open`).
+
+  The old `--opt contact_mode=links,status,gap,solids,layer` (or its bits 1 2 4
+  8 16) still works: links, ccx elements (solids) or the layer, and status or
+  gap the layer coloured by them.
 
   The gap colours run from the "overclosure to" end (0: the deepest shown, at
   least the tolerance; `cel_pen_max`) to the "gap colours to" end (0: the widest
-  shown; `cel_gap_max`). The tolerance (`cel_tol`, 0: 0.5 % of the master
-  faces' mean edge) and the near distance (`cel_near`, 0: 10 %) are lengths in
-  the model's units. The key over the view shows closed / open / penetrating,
-  the gap bar with its ends, and with the shape exaggerated "gap on screen x30,
-  colours true scale": the screen then shows the initial gap plus 30 times the
-  motion, so a closed node seems to sink 29 times its overclosure into its face
-  while its colour stays the true gap. "links and solids at true scale"
-  (`cel_true`) draws each slave node at its foot plus the true gap along the
-  face's normal instead, so the gap drawn is the real one on the exaggerated
-  model, and makes the layer as thick as the true gap. All of it is kept in the model's `.ccxview`.
+  shown; `cel_gap_max`); `CPRESS`, `CSLIP`, `CSHEAR` from `cel_lo` to `cel_hi`.
+  The tolerance (`cel_tol`, 0: 0.5 % of the master faces' mean edge) and the
+  near distance (`cel_near`, 0: 10 %) are lengths in the model's units. The key
+  over the view shows closed / open / penetrating, the bar of the value with its
+  ends, and with the shape exaggerated "gap on screen x30, colours true scale":
+  the screen then shows the initial gap plus 30 times the motion, so a closed
+  node seems to sink 29 times its overclosure into its face while its colour
+  stays the true gap. "gap at true scale" (`cel_true`) draws each slave node at
+  its foot plus the true gap along the face's normal instead, so the gap drawn
+  is the real one on the exaggerated model, and makes the layer as thick as the
+  true gap. All of it is kept in the model's `.ccxview`.
 - The `CONTACT` results (`*CONTACT FILE` or `*NODE FILE` with `CDIS`, `CSTR`) are a
   field like any other: `COPEN`, `CSLIP1`, `CSLIP2`, `CPRESS`, `CSHEAR1`,
   `CSHEAR2`, on the slave nodes of the active contact elements only, so they
@@ -358,8 +389,8 @@ row, D and E in front of them:
 
 - A, gap closing (`A_GAP`): a block standing tilted on a plate, pushed down;
   the contact spreads from its low edge, 7 of its 77 slave nodes closed in the
-  first increment, 51 in the last. Links, or status (open, near, closed); the
-  gap mode seen from below with `A_GAP_PLATE` hidden.
+  first increment, 51 in the last. Links, or coloured by status (open, near,
+  closed); the layer by gap seen from below with `A_GAP_PLATE` hidden.
 - B, sliding (`B_SLIDE`, friction 0.3): a block pressed (increments 1-2), then
   pushed along x: every node sticks until increment 4, increment 5 has 21
   sticking and 42 sliding (from the leading edge back), from 6 on all slide;
@@ -382,7 +413,7 @@ surface ... does not exist") when one deck mixes node to surface and surface to
 surface pairs (`samples/contact/contact_s2s` is one). Overview and a close-up:
 
 ```sh
-ccxview samples/contact_showcase/contact_showcase.frd --opt contact_mode=status \
+ccxview samples/contact_showcase/contact_showcase.frd --opt contact_by=status \
   --opt model_alpha=0.35 --opt deform_scale=10 --faces plain --step 5
 ccxview samples/contact_showcase/contact_showcase.frd --field CONTACT:CSLIP1 \
   --hide-set B_SLIDE_PLATE --look -z --target 75,0,0 --zoom 5 --step 8   # B from below

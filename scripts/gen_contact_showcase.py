@@ -2,7 +2,7 @@
 """gen_contact_showcase.py -- write samples/contact_showcase/contact_showcase.inp:
 five small, separate contact models in one deck, each showing one behaviour
 develop over the 8 increments of one static step, to see what ccxview's contact
-display shows (the Contact window, --opt contact_mode=links,status,gap,solids).
+display shows (Fields > Contact, --opt contact_draw=layer|links|ccx, contact_by=...).
 Solved by ccx: scripts/solve_showcase.sh contact_showcase
 
 mm, N, MPa, steel, linear, no NLGEOM.  Each model has its own parts, contact

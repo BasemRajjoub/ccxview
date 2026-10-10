@@ -29,7 +29,8 @@ enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
 /* the side panel's sections and sub-sections: open or closed, kept in the settings */
 enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
        CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
-       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_IMPORT, CV_TREE_N };
+       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_IMPORT,
+       CV_TREE_CONTACT, CV_TREE_N };
 
 /* the title block's automatic lines (app_title.c), in the order shown */
 enum { CV_TB_TITLE, CV_TB_FILE, CV_TB_SOLVER, CV_TB_ANALYSIS, CV_TB_STEP, CV_TB_SCALE, CV_TB_UNITS,
@@ -405,9 +406,11 @@ typedef struct {
     /* measurements (app_measure.c): their window, and what their labels show */
     bool      show_measure;
     /* reinforcement of concrete shells, the field REBAR (app_shell.c, rebar.h): the
-       design values in the model's units (MPa and mm with N and mm), its window */
+       design values in the model's units (MPa and mm with N and mm), under REBAR in Fields */
     float     rebar_fcd, rebar_fyd, rebar_cover;
-    bool      show_rebar;
+    /* a subgroup of Fields to open and scroll to once ("CONTACT", "REBAR", a field's name):
+       --contact-window, --rebar-window, the menus */
+    char      fields_open[32];
     int       meas_show;             /* CV_MSHOW_*: the labels give both values, the undeformed or the deformed one */
     bool      show_about;            /* the About window: author, licence, libraries */
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
@@ -423,26 +426,28 @@ typedef struct {
     bool      show_bc, show_loads;   /* deck supports / loads as glyphs */
     bool      show_disc;             /* springs / dashpots / masses as symbols */
     bool      show_links;            /* coupling spiders */
-    /* contact (app_contact.c): the Contact window, the .cel's contact elements, the tied
-       slave nodes of the ties ticked under Groups > Couplings, the key over the view */
-    bool      show_contact;          /* the Contact window */
-    bool      cel_show;              /* the contact elements of the .cel drawn */
+    /* contact (app_contact.c): the Contact subgroup of Fields, the .cel's contact elements, the
+       ties and contact pairs ticked there (or under Groups > Couplings), the key over the view */
+    bool      show_contact;          /* the Contact settings window (more... in the subgroup) */
+    bool      cel_show;              /* any of it drawn: the contact display, the pairs' surfaces, the tied nodes */
     int       cel_pick;              /* the .cel set drawn: -1 the increment on screen, else its index */
-    bool      cel_master, cel_links; /* ... with their master faces, with the lines slave -> master */
+    bool      cel_master;            /* ... with their master faces */
+    bool      cel_surfs;             /* the contact pairs' surfaces in their slave / master colours */
     bool      cel_front;             /* ... their slave nodes and lines in front of the model (inside an assembly) */
-    /* the contact display (app_cdisp.c): what is drawn of each slave node, CV_CMODE_* bits */
-    int       cel_mode;
+    /* the contact display (app_cdisp.c): how the slave nodes are drawn, coloured by what */
+    int       cel_draw;              /* CV_CDRAW_*: the interface layer, links, the .cel's elements */
+    int       cel_by;                /* CV_CBY_*: the gap, CPRESS, CSLIP, CSHEAR, the status */
+    bool      cel_closed, cel_open;  /* the closed / open slave nodes as balls (filled / rings) */
     bool      cel_true;              /* with the shape exaggerated, the slave nodes drawn at their true gap off the face */
     float     cel_gap_max;           /* the gap colours' open end, 0 auto (the widest gap shown) */
     float     cel_pen_max;           /* ... their penetration end, 0 auto (the deepest, at least the tolerance) */
     float     cel_tol;               /* closed within this gap (without CPRESS), penetrating beyond it; 0 auto */
     float     cel_near;              /* open within this gap: near open; 0 auto */
-    /* the interface layer (app_clayer.c): a solid over each slave face up to the master, the gap its thickness */
-    int       cel_layer_by;          /* coloured by: CV_CLBY_* */
-    float     cel_layer_alpha;       /* its opacity */
-    float     cel_layer_min;         /* the least thickness, model units: closed faces a thin skin; 0 none */
-    bool      cel_layer_edges;       /* its edges outlined */
-    float     cel_layer_lo, cel_layer_hi;   /* its colours' ends (not the gap's: those are the gap colours'); 0 auto */
+    float     cel_lo, cel_hi;        /* the CPRESS, CSLIP, CSHEAR colours' ends (the gap's: the gap colours'); 0 auto */
+    float     cel_alpha;             /* the interface layer's opacity */
+    float     cel_ccx_alpha;         /* the .cel's elements' opacity */
+    float     cel_min;               /* the layer's least thickness, model units: closed faces a thin skin; 0 none */
+    bool      cel_edges;             /* the layer's edges outlined */
     int       tie_nodes;             /* a tie's slave nodes: 0 tied and not tied, 1 tied only, 2 not tied only, 3 none */
     bool      contact_key;           /* the colours' key over the view while any of it is drawn */
     cv_anchor ckey_pos;              /* ... dragged to (unset: bottom-left, above the axes) */
@@ -936,14 +941,14 @@ const uint32_t* app_contact_cel_uniq(uint32_t* n);
 uint32_t* app_contact_surf_nodes(int si, uint32_t* n);
 
 /* app_cdisp.c: the contact display. Each slave node (of the .cel set drawn and of the
-   deck's contact pairs active in the step) against its master face: projected onto it
-   on the true deformed shape, its gap (COPEN, else measured), its status (contact.h).
-   Drawn as links (the node to its projection), a status patchwork or a gap contour on
-   the slave faces, the contact elements as solids, and an interface layer over the
-   slave faces as thick as the gap (app_clayer.c). */
-enum { CV_CMODE_LINKS = 1, CV_CMODE_STATUS = 2, CV_CMODE_GAP = 4, CV_CMODE_SOLIDS = 8, CV_CMODE_LAYER = 16, CV_CMODE_ALL = 31 };
-/* what the interface layer is coloured by */
-enum { CV_CLBY_GAP, CV_CLBY_CPRESS, CV_CLBY_CSLIP, CV_CLBY_CSHEAR, CV_CLBY_STATUS, CV_CLBY_N };
+   deck's contact pairs ticked and active in the step) against its master face: projected
+   onto it on the true deformed shape, its gap (COPEN, else measured), its status
+   (contact.h). Drawn one way (CV_CDRAW_*): an interface layer over the slave faces as
+   thick as the gap (app_clayer.c), links (the node to its projection), or the .cel's
+   contact elements as CalculiX wrote them; coloured by one value (CV_CBY_*); the closed
+   and open slave nodes as balls on top, as ticked. */
+enum { CV_CDRAW_LAYER, CV_CDRAW_LINKS, CV_CDRAW_CCX, CV_CDRAW_N };
+enum { CV_CBY_GAP, CV_CBY_CPRESS, CV_CBY_CSLIP, CV_CBY_CSHEAR, CV_CBY_STATUS, CV_CBY_N };
 typedef struct {
     int   nodes;                 /* slave nodes with a status */
     int   cat[6];                /* ... by status (CV_CST_*) */
@@ -953,20 +958,28 @@ typedef struct {
     float gmin, gmax;            /* the gaps found */
     bool  copen;                 /* gaps from CalculiX's COPEN */
     bool  measured;              /* gaps measured from the shape (where there is no COPEN) */
-    bool  faces;                 /* status and gap drawn on slave faces (else balls) */
-    int   drawn;                 /* the CV_CMODE_ bits drawn now */
-    float llo, lhi;              /* the interface layer's colours' ends (CV_CLBY_GAP: lo, hi) */
-    int   lby;                   /* ... what they are (CV_CLBY_*), -1 no layer drawn */
+    int   draw;                  /* CV_CDRAW_* drawn now, -1 nothing */
+    bool  balls;                 /* slave nodes drawn as balls */
+    int   by;                    /* what colours it (CV_CBY_*) */
+    float llo, lhi;              /* ... its colours' ends (CV_CBY_GAP: lo, hi) */
     bool  lknown;                /* ... any slave node has that value (CONTACT in the .frd) */
-    int   lpen;                  /* ... its faces with a penetrating corner (outlined magenta) */
+    int   lpen;                  /* the layer's faces with a penetrating corner (outlined magenta) */
 } cv_cinfo;
 void app_cdisp_refresh(void);                /* from app_contact_refresh */
-extern const char* const cv_clby_names[CV_CLBY_N];   /* "gap", "CPRESS", ... (app_clayer.c) */
-int  app_clayer_parse_by(const char* s);
-void app_clayer_map(float t, float rgb[3]);  /* the layer's colours of CPRESS, CSLIP, CSHEAR at t 0..1 */     /* "gap|cpress|cslip|cshear|status" or the number; -1 not one */
+extern const char* const cv_cby_names[CV_CBY_N];     /* "gap", "pressure", ... (app_clayer.c) */
+extern const char* const cv_cdraw_names[CV_CDRAW_N]; /* "layer", "links", "ccx" */
+int  app_cby_parse(const char* s);           /* "gap|cpress|cslip|cshear|status" (or pressure ...) or the number; -1 not one */
+int  app_cdraw_parse(const char* s);         /* "layer|links|ccx" (solids) or the number; -1 not one */
+void app_cby_map(float t, float rgb[3]);     /* the colours of CPRESS, CSLIP, CSHEAR at t 0..1 */
+/* the old contact_mode ("links,status,gap,solids,layer" or its bits 1 2 4 8 16): the draw
+   style and (when it says) what colours it; false when not understood */
+bool app_cdisp_parse_mode(const char* s, int* draw, int* by);
+/* the CONTACT field's component chosen in Fields (app_select): the display coloured by it */
+void app_cdisp_field_chosen(const char* field, int comp);
+/* the CONTACT component that shows what the display is coloured by, -100 none in this step */
+int  app_cdisp_by_comp(int by);
 void app_cdisp_clear(void);
 const cv_cinfo* app_cdisp_info(void);
-int  app_cdisp_parse_mode(const char* s);    /* "links,status" or a number -> CV_CMODE_ bits; -1 not understood */
 /* the CONTACT field's STATUS: per node its CV_CST_ number, NaN where not a slave node;
    false when there is no contact to classify */
 bool app_cdisp_status_field(float* out);

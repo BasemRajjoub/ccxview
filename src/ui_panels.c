@@ -166,6 +166,29 @@ static void panel_geo_sets(struct nk_context* ctx, float row) {
     nk_tree_pop(ctx);
 }
 
+/* The field's own layers on and off, mirrored from its options in Fields (arrows,
+   tensor glyphs, trajectories): where they were before they moved there */
+static void layer_mirrors(struct nk_context* ctx, float row) {
+    bool vec = app_field_is_vector(), ten = app_field_is_tensor();
+    if (!vec && !ten) return;
+    char help[200];
+    snprintf(help, sizeof help, "The field's %s; their settings: Fields > %s > options",
+             vec ? (G.comp < CV_COMP_MISES ? "principal directions as arrow pairs" : "arrows at the nodes") : "glyphs", G.field_name);
+    nk_layout_row_dynamic(ctx, row, 2);
+    if (vec) {
+        tip(ctx, help);
+        if (nk_checkbox_label(ctx, G.comp < CV_COMP_MISES ? "Directions" : "Vectors", &G.show_vec)) app_vectors_changed();
+    }
+    if (ten) {
+        snprintf(help, sizeof help, "The tensor as a glyph at each element's centre; style and size: Fields > %s > options", G.field_name);
+        tip(ctx, help);
+        if (nk_checkbox_label(ctx, "Tensors", &G.show_tensor)) app_tensors_changed();
+        snprintf(help, sizeof help, "Principal stress trajectories; family and spacing: Fields > %s > options", G.field_name);
+        tip(ctx, help);
+        if (nk_checkbox_label(ctx, "Trajectories", &G.show_traj)) app_traj_changed();
+    }
+}
+
 /* ---- Layers: what is drawn and how it is coloured */
 static void section_layers(struct nk_context* ctx, float s, float row) {
     /* layers */
@@ -195,17 +218,6 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             if (deck_get() && deck_get()->nlinks) {
                 tip(ctx, "Rigid bodies, couplings and equations as spiders from the reference node;\ntick single ones under Groups > Couplings");
                 nk_checkbox_label(ctx, "Couplings", &G.show_links);
-            }
-        }
-        {                                        /* ties, contact pairs, contact elements: their window */
-            const cv_inp* dk = deck_get();
-            bool pairs = false;
-            for (int i = 0; dk && i < dk->nlinks; i++) pairs |= dk->links[i].kind == CV_LINK_TIE || dk->links[i].kind == CV_LINK_CONTACT;
-            if (pairs || app_contact_cel()) {
-                nk_layout_row_dynamic(ctx, row, 1);
-                tip(ctx, "Ties and contact pairs in their slave / master colours, the slave nodes CalculiX could\n"
-                         "not tie, the contact elements of the .cel by increment, the model see-through");
-                if (nk_button_label(ctx, "Contact ...")) G.show_contact = !G.show_contact;
             }
         }
         if ((geo_loaded() || deck_has_bc() || deck_has_loads() || deck_has_discrete())) uii_hsep(ctx, s);
@@ -249,7 +261,7 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
             nk_layout_row_template_end(ctx);
             nk_label(ctx, "opacity", NK_TEXT_LEFT);
             tip(ctx, "Opacity of the faces: less to see into the model (a contact zone inside an assembly).\n"
-                     "Each element set's own: Contact ...");
+                     "Each element set's own: Fields > Contact > more");
             if (ui_slider_float(ctx, 0.f, &G.model_alpha, 1.f, 0.05f)) app_see_refresh();
             char a[16];
             snprintf(a, sizeof a, "%.2f", G.model_alpha);
@@ -282,93 +294,7 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 tip(ctx, "Draw the points through the faces (they sit inside the elements)");
                 nk_checkbox_label(ctx, "x-ray", &G.gp_on_top);
             }
-            if (app_field_is_vector()) {             /* arrows of DISP, FORC, FLUX, ... */
-                nk_layout_row_dynamic(ctx, row, 2);
-                tip(ctx, G.comp < CV_COMP_MISES ? "The principal direction at the nodes: arrow pairs out for tension, in for compression"
-                                                : "The field as arrows at the nodes, the longest one 'vec %' of the model");
-                if (nk_checkbox_label(ctx, G.comp < CV_COMP_MISES ? "Directions" : "Vectors", &G.show_vec)) app_vectors_changed();
-                tip(ctx, "Colour the arrows by the selected scalar (else white)");
-                nk_checkbox_label(ctx, "coloured", &G.vec_colored);
-            }
-            if (app_field_is_tensor()) {             /* stress, strain: a glyph per element */
-                nk_layout_row_dynamic(ctx, row, 2);
-                tip(ctx, "The tensor as a glyph at each element's centre, the largest one 'size' elements wide");
-                if (nk_checkbox_label(ctx, "Tensors", &G.show_tensor)) app_tensors_changed();
-                tip(ctx, "ellipsoid: semi-axes |s1| |s2| |s3| along the principal directions\n"
-                         "superquadric (Kindlmann): the same axes, edged where two values are close,\n"
-                         "  so rod, disc and ball tell apart from any side; magnitudes only\n"
-                         "cross: a bar per principal value, heads out for tension, in for compression\n"
-                         "schultz-kindlmann: superquadrics for any signs: mixed signs pinch the shape\n"
-                         "  about the axis normal to the two of the same sign\n"
-                         "reynolds: the normal stress on every plane, as distance from the centre\n"
-                         "hwy: the shear stress on every plane; waists along the principal directions\n"
-                         "The last three are coloured by the normal stress in each direction");
-                uii_test_mark(ctx, "#tensor style");
-                int st = nk_combo(ctx, (const char**)cv_glyph_names, CV_GLYPH_N, G.tensor_style, (int)row,
-                                  nk_vec2(170 * s, CV_GLYPH_N * (row + 4 * s) + 20 * s));
-                if (st != G.tensor_style) { G.tensor_style = st; G.show_tensor = true; app_tensors_changed(); }
-                if (G.show_tensor) {                 /* size: log slider, the number resets it */
-                    static const float ratio[3] = { 0.3f, 0.5f, 0.2f };
-                    const char* help = "Size of the largest glyph, times the mean element size";
-                    nk_layout_row(ctx, NK_DYNAMIC, row, 3, ratio);
-                    tip(ctx, help);
-                    nk_label(ctx, "size", NK_TEXT_LEFT);
-                    float t = log10f(CV_MIN(CV_MAX(G.tensor_scale, 0.1f), 10.f));
-                    tip(ctx, help);
-                    uii_test_mark(ctx, "#tensor size");
-                    bool ch = ui_slider_float(ctx, -1.f, &t, 1.f, 0.01f);
-                    if (ch) G.tensor_scale = powf(10.f, t);
-                    char b[32];
-                    snprintf(b, sizeof b, "%.2f", G.tensor_scale);
-                    tip(ctx, "Click: back to 1 (one element)");
-                    if (nk_button_label(ctx, b)) { G.tensor_scale = 1.f; ch = true; }
-                    if (ch) app_tensors_changed();
-                    nk_layout_row_dynamic(ctx, row, 2);
-                    nk_label(ctx, "", NK_TEXT_LEFT);
-                    tip(ctx, G.tensor_style == CV_GLYPH_CROSS
-                        ? "Colour each bar by its principal value: blue compression, pale near zero,\nred tension, full colour at the size's reference value (else plain red / blue)"
-                        : cv_glyph_signed(G.tensor_style)
-                        ? "Colour the surface by the normal stress in each direction: blue compression,\npale zero, red tension (else grey). Also colours the trajectories"
-                        : "Colour the glyphs by the selected scalar, the element's mean (else grey)");
-                    if (nk_checkbox_label(ctx, "coloured", &G.tensor_colored)) app_tensors_changed();
-                }
-                {                                /* principal stress trajectories */
-                    static const char* fam[3] = { "S1 (max)", "S3 (min)", "S1 + S3" };
-                    nk_layout_row_dynamic(ctx, row, 2);
-                    tip(ctx, "Principal stress trajectories: curves along the direction of S1 (red)\n"
-                             "or S3 (blue) through the solid, the load paths. 'coloured' above:\n"
-                             "by the principal value, blue compression .. red tension");
-                    if (nk_checkbox_label(ctx, "Trajectories", &G.show_traj)) app_traj_changed();
-                    uii_test_mark(ctx, "#traj family");
-                    int f = nk_combo(ctx, fam, 3, G.traj_which, (int)row, nk_vec2(150 * s, 3 * (row + 4 * s) + 20 * s));
-                    if (f != G.traj_which) { G.traj_which = f; G.show_traj = true; app_traj_changed(); }
-                    if (G.show_traj) {
-                        static const float ratio[3] = { 0.3f, 0.5f, 0.2f };
-                        const char* help = "Distance between trajectories, times the mean element size";
-                        nk_layout_row(ctx, NK_DYNAMIC, row, 3, ratio);
-                        tip(ctx, help);
-                        nk_label(ctx, "spacing", NK_TEXT_LEFT);
-                        float t = log10f(CV_MIN(CV_MAX(G.traj_spacing, 0.5f), 20.f));
-                        tip(ctx, help);
-                        bool ch = ui_slider_float(ctx, log10f(0.5f), &t, log10f(20.f), 0.01f);
-                        if (ch) G.traj_spacing = powf(10.f, t);
-                        char b[32];
-                        snprintf(b, sizeof b, "%.2f", G.traj_spacing);
-                        tip(ctx, "Click: back to 2");
-                        if (nk_button_label(ctx, b)) { G.traj_spacing = 2.f; ch = true; }
-                        /* traced again when the drag ends: a trace takes a moment on big models */
-                        static bool pending;
-                        if (ch) pending = true;
-                        if (pending && !ctx->input.mouse.buttons[NK_BUTTON_LEFT].down) { pending = false; app_traj_changed(); }
-                        if (!G.show_tensor) {         /* the glyphs' box, when they are off */
-                            nk_layout_row_dynamic(ctx, row, 2);
-                            nk_label(ctx, "", NK_TEXT_LEFT);
-                            tip(ctx, "Colour the trajectories by the principal value: blue compression .. red tension");
-                            nk_checkbox_label(ctx, "coloured", &G.tensor_colored);
-                        }
-                    }
-                }
-            }
+            layer_mirrors(ctx, row);
         }
         nk_tree_pop(ctx);
     }
@@ -589,6 +515,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 tip(ctx, "Show this field minus the same field of the comparison run (same step index)");
                 if (nk_checkbox_label(ctx, lab, &G.diff_mode)) app_select(G.field_name, G.comp);
             }
+            uii_section_contact(ctx, s, row);       /* contact first: pairs, the .cel, the CONTACT block */
             for (int f = 0; f < st->nfields; f++) {
                 const cv_field_desc* d = &st->fields[f];
                 bool active = G.field_src == 0 && strcmp(d->name, G.field_name) == 0;
@@ -597,8 +524,10 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                                  "N membrane, M bending (positive: the +normal side pulls; about the OFFSET surface), Q transverse shear (rough)");
                 if (rb) tip(ctx, "Reinforcement of a concrete shell from its section forces: the steel per width each face needs\n"
                                  "in x and y (sandwich model, Wood-Armer), and where the concrete is crushed");
-                if (!nk_tree_push_id(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : rb ? "REBAR (reinforcement)" : d->name,
-                                     active ? NK_MAXIMIZED : NK_MINIMIZED, 100 + f))
+                int* fs = uii_fnode_state(d->name, active);
+                if (!strcmp(G.fields_open, d->name)) { *fs = NK_MAXIMIZED; uii_scroll_here(ctx); }
+                if (!nk_tree_state_push(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : rb ? "REBAR (reinforcement)" : d->name,
+                                        (enum nk_collapse_states*)fs))
                     continue;
                 cv_scalar_opt opts[CV_MAX_OPTS];
                 int n = app_field_options(d, opts, CV_MAX_OPTS);
@@ -607,11 +536,9 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                     bool sel = active && G.comp == opts[i].comp;
                     if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(d->name, opts[i].comp, 0);
                 }
-                if (rb) {
-                    tip(ctx, "The design values: concrete fcd, steel fyd, the cover to the bars");
-                    if (nk_button_label(ctx, "Reinforcement...")) G.show_rebar = !G.show_rebar;
-                }
-                nk_tree_pop(ctx);
+                uii_field_options(ctx, s, row, d, active);
+                if (!strcmp(G.fields_open, d->name)) G.fields_open[0] = 0;
+                nk_tree_state_pop(ctx);
             }
             nk_layout_row_template_begin(ctx, row);
             nk_layout_row_template_push_dynamic(ctx);
@@ -642,7 +569,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 bool active = G.field_src == 1 && strcmp(names[f], G.field_name) == 0;
                 char title[64];
                 snprintf(title, sizeof title, "%s (.dat)", names[f]);
-                if (!nk_tree_push_id(ctx, NK_TREE_NODE, title, active ? NK_MAXIMIZED : NK_MINIMIZED, 300 + f))
+                if (!nk_tree_state_push(ctx, NK_TREE_NODE, title, (enum nk_collapse_states*)uii_fnode_state(title, active)))
                     continue;
                 cv_scalar_opt opts[CV_MAX_OPTS];
                 int n = cv_field_options(&d, opts, CV_MAX_OPTS);
@@ -651,7 +578,8 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                     bool sel = active && G.comp == opts[i].comp;
                     if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(names[f], opts[i].comp, 1);
                 }
-                nk_tree_pop(ctx);
+                uii_gauss_options(ctx, s, row, names[f]);
+                nk_tree_state_pop(ctx);
             }
         }
         nk_tree_pop(ctx);

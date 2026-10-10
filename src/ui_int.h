@@ -63,7 +63,7 @@
 #define window_convergence      uii_window_convergence
 #define window_measure          uii_window_measure
 #define ui_measure_row          uii_measure_row
-#define window_rebar            uii_window_rebar
+#define rows_rebar              uii_rows_rebar
 
 /* ---- ui_style.c: scale + font, palette, themes */
 struct uii_scale {
@@ -120,6 +120,11 @@ void tick_num(char* out, size_t n, double v, double step, double big);
 bool ui_slider_float(struct nk_context* ctx, float lo, float* v, float hi, float step);
 bool ui_slider_int(struct nk_context* ctx, int lo, int* v, int hi, int step);
 bool sub_push(struct nk_context* ctx, const char* title, int t);
+/* a sub-section with a tick in its header (Contact: show), open or closed in *state; its
+   rows indented as a tree node's, ended by uii_node_pop. True when open */
+bool uii_node_check(struct nk_context* ctx, const char* title, int* state, bool* on, const char* lab, const char* help);
+void uii_node_pop(struct nk_context* ctx);
+void uii_scroll_here(struct nk_context* ctx);   /* the sidebar scrolled so the next row is at its top */
 
 /* ---- ui_panels.c, ui_view.c: the sidebar */
 void recent_buttons(struct nk_context* ctx, float row);
@@ -177,7 +182,7 @@ void section_label(struct nk_context* ctx, float s, float row);    /* ui_label.c
 void window_measure(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_measure.c */
 /* "measure:  distance  angle  circle" on a row; the kind clicked, -1 none (the caller arms it) */
 int  ui_measure_row(struct nk_context* ctx, float s, float row, const char* mark);
-void window_rebar(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_rebar.c */
+void rows_rebar(struct nk_context* ctx, float s, float row);    /* ui_rebar.c: REBAR's design values */
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
 void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_info.c */
@@ -192,6 +197,7 @@ void drop_hint(struct nk_context* ctx, float s, float row);
 /* ---- ui_test.c: --ui-test. tip() reports its widget; widgets without a tooltip are
    marked by a name starting with '#'. Nothing unless a test runs. */
 void uii_test_mark(struct nk_context* ctx, const char* text);
+void uii_test_mark_row(struct nk_context* ctx, const char* text);   /* the tree header laid out next */
 
 /* ---- ui_plots.c */
 void window_path(struct nk_context* ctx, float s, float row, int fw, int fh);
@@ -204,14 +210,17 @@ void uii_plot_steps(struct nk_context* ctx, float s, struct nk_rect area, int n,
 /* ---- ui_integ.c: the Integrals window */
 void uii_window_integrals(struct nk_context* ctx, float s, float row, int fw, int fh);
 
-/* ---- ui_contact.c: the Contact window, the key of its colours over the view */
-void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int fh);
+/* ---- ui_contact.c: the Contact subgroup of Fields (when there is contact), the key of its
+   colours over the view */
+bool uii_contact_present(void);
+void uii_section_contact(struct nk_context* ctx, float s, float row);
+void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int fh);   /* Contact settings */
 void uii_window_contact_key(struct nk_context* ctx, float s, float row);
-/* ---- ui_clayer.c: the interface layer's rows in it (how many now), its colour bar in the key */
-void uii_section_clayer(struct nk_context* ctx, float s, float row);
-int  uii_clayer_rows(void);
-void uii_clayer_bar(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w, float lh,
-                    struct nk_color ink, float s);
+
+/* ---- ui_fopts.c: a field's options subgroup in Fields; the open state of its subgroups by name */
+int* uii_fnode_state(const char* key, bool open);
+void uii_field_options(struct nk_context* ctx, float s, float row, const cv_field_desc* d, bool active);
+void uii_gauss_options(struct nk_context* ctx, float s, float row, const char* name);
 
 /* ---- ui_select.c: the Selection window */
 void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh);
