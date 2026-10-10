@@ -2,7 +2,7 @@
 """gen_contact_gap.py -- write samples/contact_gap/*.inp: a block standing tilted on
 a plate, so the gap between them varies, to check how ccxview draws a contact gap
 (the contact elements of the .cel, COPEN). Solved by ccx:
-scripts/solve_showcase.sh contact_gap contact_gap_c0 contact_gap_over
+scripts/solve_showcase.sh contact_gap contact_gap_c0 contact_gap_over contact_gap_fric
 Checked by scripts/contact_gap_check.py.
 
 mm, N, MPa, steel.  The plate 30 x 20 x 6 (x, y, z), its top at z = 0, its bottom
@@ -17,6 +17,9 @@ contact_gap        the gap 0 .. 0.5, c0 left at ccx's default
 contact_gap_c0     the same with c0 = 1 (contact springs generated, so contact
                    elements written, for slave nodes up to 1 mm off the master)
 contact_gap_over   the low edge 0.03 into the plate (overclosure 0.03, gap up to 0.47), c0 = 1
+contact_gap_fric   as contact_gap_c0 with friction (mu 0.3) and the block's top also moved
+                   SHIFT along x: where the pressure is high the slave nodes stick, at
+                   the edge of the contact zone they slide (the status display)
 
 *NODE FILE, CONTACT ELEMENTS makes ccx write jobname.cel; *CONTACT FILE CDIS,
 CSTR the CONTACT block of the .frd (COPEN, CSLIP, CPRESS, CSHEAR).
@@ -27,6 +30,7 @@ import os
 RISE = 0.5                     # the gap's growth over the block's length (20)
 PUSH = 0.15                    # the block top's travel
 OVER = 0.03                    # contact_gap_over: the low edge this far into the plate
+MU, SHIFT = 0.3, 0.004         # contact_gap_fric: the friction coefficient, the top's travel along x
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "samples", "contact_gap")
 
 
@@ -36,7 +40,7 @@ def wrap(vals, per=16):
             for i in range(0, len(vals), per)]
 
 
-def deck(name, gap0, c0):
+def deck(name, gap0, c0, mu=0.0):
     nodes = {}
 
     def grid(nx, ny, nz, fx):
@@ -90,12 +94,14 @@ def deck(name, gap0, c0):
           "*SOLID SECTION, ELSET=PLATE, MATERIAL=STEEL",
           "*SOLID SECTION, ELSET=BLOCK, MATERIAL=STEEL",
           "*SURFACE INTERACTION, NAME=STEEL_ON_STEEL",
-          "*SURFACE BEHAVIOR, PRESSURE-OVERCLOSURE=LINEAR", beh,
-          "*CONTACT PAIR, INTERACTION=STEEL_ON_STEEL, TYPE=NODE TO SURFACE",
+          "*SURFACE BEHAVIOR, PRESSURE-OVERCLOSURE=LINEAR", beh]
+    if mu:
+        L += ["*FRICTION", f"{mu:g}, 50000."]
+    L += ["*CONTACT PAIR, INTERACTION=STEEL_ON_STEEL, TYPE=NODE TO SURFACE",
           "BLOCK_BOTTOM, PLATE_TOP",
           "*BOUNDARY", "NBOTTOM, 1, 3", "NTOP, 1, 2",
           "*STEP, INC=100", "*STATIC", "0.34, 1.",
-          "*BOUNDARY", "NTOP, 3, 3, %g" % -PUSH,
+          "*BOUNDARY", "NTOP, 3, 3, %g" % -PUSH] + (["NTOP, 1, 1, %g" % SHIFT] if mu else []) + [
           "*NODE FILE, CONTACT ELEMENTS", "U",
           "*CONTACT FILE", "CDIS, CSTR",
           "*END STEP"]
@@ -107,3 +113,4 @@ def deck(name, gap0, c0):
 deck("contact_gap", 0.0, None)
 deck("contact_gap_c0", 0.0, 1.0)
 deck("contact_gap_over", -OVER, 1.0)
+deck("contact_gap_fric", 0.0, 1.0, MU)

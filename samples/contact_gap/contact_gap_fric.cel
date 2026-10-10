@@ -1,0 +1,1540 @@
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         349 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         350 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         351 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         352 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         353 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         354 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         355 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         356 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         357 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         358 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         359 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         360 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         361 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         362 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         363 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         364 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         365 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         366 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         367 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         368 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         369 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         370 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         371 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         372 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         373 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         374 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         375 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         376 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         377 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         378 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         379 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         380 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         381 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         382 ,         163 ,         244 ,         173 ,         162 ,         244 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         383 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         384 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         385 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         386 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         387 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         388 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         389 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         390 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         391 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         392 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         393 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         394 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         395 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         396 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         397 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         398 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         399 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         400 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         401 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         402 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         403 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         404 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         405 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         406 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         407 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         408 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         409 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         410 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         411 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         412 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         413 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         414 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         415 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         416 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         417 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         418 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         419 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         420 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         421 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         422 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         423 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         424 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it1
+         425 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         426 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         427 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         428 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         429 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         430 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         431 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         432 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         433 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         434 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         435 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         436 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         437 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         438 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         439 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         440 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         441 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         442 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         443 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         444 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         445 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         446 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         447 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         448 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         449 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         450 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         451 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         452 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         453 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         454 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         455 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         456 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         457 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         458 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         459 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         460 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         461 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         462 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         463 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         464 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         465 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         466 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         467 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         468 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         469 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         470 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         471 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         472 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         473 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         474 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         475 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         476 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         477 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         478 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         479 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         480 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         481 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         482 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         483 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         484 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         485 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         486 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         487 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         488 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         489 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         490 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         491 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         492 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         493 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         494 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         495 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         496 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         497 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         498 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         499 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         500 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         501 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it2
+         502 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         503 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         504 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         505 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         506 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         507 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         508 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         509 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         510 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         511 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         512 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         513 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         514 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         515 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         516 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         517 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         518 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         519 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         520 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         521 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         522 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         523 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         524 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         525 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         526 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         527 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         528 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         529 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         530 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         531 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         532 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         533 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         534 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         535 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         536 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         537 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         538 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         539 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         540 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         541 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         542 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         543 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         544 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         545 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         546 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         547 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         548 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         549 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         550 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         551 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         552 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         553 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         554 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         555 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         556 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         557 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         558 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         559 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         560 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         561 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         562 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         563 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         564 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         565 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         566 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         567 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         568 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         569 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         570 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         571 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         572 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         573 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         574 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         575 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         576 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         577 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         578 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it3
+         579 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         580 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         581 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         582 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         583 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         584 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         585 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         586 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         587 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         588 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         589 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         590 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         591 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         592 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         593 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         594 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         595 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         596 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         597 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         598 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         599 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         600 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         601 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         602 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         603 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         604 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         605 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         606 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         607 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         608 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         609 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         610 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         611 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         612 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         613 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         614 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         615 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         616 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         617 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         618 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         619 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         620 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         621 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         622 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         623 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         624 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         625 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         626 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         627 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         628 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         629 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         630 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         631 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         632 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         633 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         634 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         635 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         636 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         637 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         638 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         639 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         640 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         641 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         642 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         643 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         644 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         645 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         646 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         647 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         648 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         649 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         650 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         651 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         652 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         653 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         654 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         655 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in1_at1_it4
+         656 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         657 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         658 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         659 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         660 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         661 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         662 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         663 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         664 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         665 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         666 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         667 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         668 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         669 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         670 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         671 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         672 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         673 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         674 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         675 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         676 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         677 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         678 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         679 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         680 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         681 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         682 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         683 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         684 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         685 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         686 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         687 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         688 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         689 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         690 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         691 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         692 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         693 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         694 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         695 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         696 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         697 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         698 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         699 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         700 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         701 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         702 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         703 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         704 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         705 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         706 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         707 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         708 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         709 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         710 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         711 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         712 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         713 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         714 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         715 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         716 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         717 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         718 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         719 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         720 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         721 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         722 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         723 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         724 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         725 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         726 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         727 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         728 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         729 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         730 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         731 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         732 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it1
+         733 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         734 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         735 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         736 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         737 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         738 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         739 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         740 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         741 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         742 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         743 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         744 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         745 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         746 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         747 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         748 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         749 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         750 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         751 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         752 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         753 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         754 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         755 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         756 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         757 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         758 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         759 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         760 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         761 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         762 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         763 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         764 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         765 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         766 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         767 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         768 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         769 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         770 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         771 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         772 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         773 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         774 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         775 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         776 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         777 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         778 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         779 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         780 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         781 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         782 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         783 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         784 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         785 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         786 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         787 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         788 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         789 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         790 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         791 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         792 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         793 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         794 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         795 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         796 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         797 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         798 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         799 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         800 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         801 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         802 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         803 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         804 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         805 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         806 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         807 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         808 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         809 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it2
+         810 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         811 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         812 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         813 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         814 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         815 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         816 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         817 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         818 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         819 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         820 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         821 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         822 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         823 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         824 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         825 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         826 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         827 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         828 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         829 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         830 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         831 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         832 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         833 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         834 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         835 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         836 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         837 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         838 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         839 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         840 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         841 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         842 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         843 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         844 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         845 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         846 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         847 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         848 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         849 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         850 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         851 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         852 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         853 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         854 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         855 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         856 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         857 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         858 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         859 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         860 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         861 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         862 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         863 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         864 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         865 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         866 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         867 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         868 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         869 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         870 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         871 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         872 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         873 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         874 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         875 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         876 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         877 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         878 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         879 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         880 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         881 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         882 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         883 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         884 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         885 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         886 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in2_at1_it3
+         887 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         888 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         889 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         890 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         891 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         892 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         893 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         894 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         895 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         896 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         897 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         898 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         899 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         900 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         901 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         902 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         903 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         904 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         905 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         906 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         907 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         908 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         909 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         910 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         911 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         912 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         913 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         914 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         915 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         916 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         917 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         918 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         919 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         920 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         921 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         922 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         923 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         924 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         925 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         926 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         927 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         928 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         929 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         930 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         931 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         932 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         933 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         934 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         935 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         936 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         937 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         938 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         939 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         940 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         941 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         942 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         943 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         944 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         945 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         946 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         947 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         948 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         949 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         950 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         951 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         952 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         953 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         954 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         955 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         956 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         957 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         958 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         959 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         960 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         961 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         962 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         963 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it1
+         964 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         965 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         966 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         967 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         968 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         969 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         970 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         971 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         972 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         973 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         974 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         975 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         976 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         977 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         978 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         979 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         980 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         981 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         982 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         983 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         984 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         985 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         986 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         987 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         988 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         989 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         990 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         991 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         992 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         993 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         994 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         995 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         996 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         997 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         998 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+         999 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1000 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1001 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1002 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1003 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1004 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1005 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1006 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1007 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1008 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1009 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1010 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1011 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1012 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1013 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1014 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1015 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1016 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1017 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1018 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1019 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1020 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1021 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1022 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1023 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1024 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1025 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1026 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1027 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1028 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1029 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1030 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1031 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1032 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1033 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1034 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1035 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1036 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1037 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1038 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1039 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1040 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it2
+        1041 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1042 ,         153 ,         211 ,         163 ,         152 ,         211 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1043 ,         154 ,         212 ,         164 ,         153 ,         212 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1044 ,         154 ,         213 ,         164 ,         153 ,         213 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1045 ,         155 ,         214 ,         165 ,         154 ,         214 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1046 ,         155 ,         215 ,         165 ,         154 ,         215 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1047 ,         156 ,         216 ,         166 ,         155 ,         216 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1048 ,         157 ,         217 ,         167 ,         156 ,         217 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1049 ,         157 ,         218 ,         167 ,         156 ,         218 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1050 ,         158 ,         219 ,         168 ,         157 ,         219 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1051 ,         158 ,         220 ,         168 ,         157 ,         220 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1052 ,         159 ,         221 ,         169 ,         158 ,         221 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1053 ,         153 ,         222 ,         163 ,         152 ,         222 ,         162
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1054 ,         154 ,         223 ,         164 ,         153 ,         223 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1055 ,         154 ,         224 ,         164 ,         153 ,         224 ,         163
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1056 ,         155 ,         225 ,         165 ,         154 ,         225 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1057 ,         155 ,         226 ,         165 ,         154 ,         226 ,         164
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1058 ,         156 ,         227 ,         166 ,         155 ,         227 ,         165
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1059 ,         157 ,         228 ,         167 ,         156 ,         228 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1060 ,         157 ,         229 ,         167 ,         156 ,         229 ,         166
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1061 ,         158 ,         230 ,         168 ,         157 ,         230 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1062 ,         158 ,         231 ,         168 ,         157 ,         231 ,         167
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1063 ,         159 ,         232 ,         169 ,         158 ,         232 ,         168
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1064 ,         163 ,         233 ,         173 ,         162 ,         233 ,         172
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1065 ,         164 ,         234 ,         174 ,         163 ,         234 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1066 ,         164 ,         235 ,         174 ,         163 ,         235 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1067 ,         165 ,         236 ,         175 ,         164 ,         236 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1068 ,         165 ,         237 ,         175 ,         164 ,         237 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1069 ,         166 ,         238 ,         176 ,         165 ,         238 ,         175
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1070 ,         167 ,         239 ,         177 ,         166 ,         239 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1071 ,         167 ,         240 ,         177 ,         166 ,         240 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1072 ,         168 ,         241 ,         178 ,         167 ,         241 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1073 ,         168 ,         242 ,         178 ,         167 ,         242 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1074 ,         169 ,         243 ,         179 ,         168 ,         243 ,         178
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1075 ,         173 ,         244 ,         183 ,         172 ,         244 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1076 ,         174 ,         245 ,         184 ,         173 ,         245 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1077 ,         164 ,         246 ,         174 ,         163 ,         246 ,         173
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1078 ,         175 ,         247 ,         185 ,         174 ,         247 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1079 ,         165 ,         248 ,         175 ,         164 ,         248 ,         174
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1080 ,         176 ,         249 ,         186 ,         175 ,         249 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1081 ,         177 ,         250 ,         187 ,         176 ,         250 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1082 ,         167 ,         251 ,         177 ,         166 ,         251 ,         176
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1083 ,         178 ,         252 ,         188 ,         177 ,         252 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1084 ,         168 ,         253 ,         178 ,         167 ,         253 ,         177
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1085 ,         179 ,         254 ,         189 ,         178 ,         254 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1086 ,         173 ,         255 ,         183 ,         172 ,         255 ,         182
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1087 ,         174 ,         256 ,         184 ,         173 ,         256 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1088 ,         174 ,         257 ,         184 ,         173 ,         257 ,         183
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1089 ,         175 ,         258 ,         185 ,         174 ,         258 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1090 ,         175 ,         259 ,         185 ,         174 ,         259 ,         184
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1091 ,         176 ,         260 ,         186 ,         175 ,         260 ,         185
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1092 ,         177 ,         261 ,         187 ,         176 ,         261 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1093 ,         177 ,         262 ,         187 ,         176 ,         262 ,         186
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1094 ,         178 ,         263 ,         188 ,         177 ,         263 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1095 ,         178 ,         264 ,         188 ,         177 ,         264 ,         187
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1096 ,         179 ,         265 ,         189 ,         178 ,         265 ,         188
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1097 ,         183 ,         266 ,         193 ,         182 ,         266 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1098 ,         184 ,         267 ,         194 ,         183 ,         267 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1099 ,         184 ,         268 ,         194 ,         183 ,         268 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1100 ,         185 ,         269 ,         195 ,         184 ,         269 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1101 ,         185 ,         270 ,         195 ,         184 ,         270 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1102 ,         186 ,         271 ,         196 ,         185 ,         271 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1103 ,         187 ,         272 ,         197 ,         186 ,         272 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1104 ,         187 ,         273 ,         197 ,         186 ,         273 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1105 ,         188 ,         274 ,         198 ,         187 ,         274 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1106 ,         188 ,         275 ,         198 ,         187 ,         275 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1107 ,         189 ,         276 ,         199 ,         188 ,         276 ,         198
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1108 ,         183 ,         277 ,         193 ,         182 ,         277 ,         192
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1109 ,         184 ,         278 ,         194 ,         183 ,         278 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1110 ,         184 ,         279 ,         194 ,         183 ,         279 ,         193
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1111 ,         185 ,         280 ,         195 ,         184 ,         280 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1112 ,         185 ,         281 ,         195 ,         184 ,         281 ,         194
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1113 ,         186 ,         282 ,         196 ,         185 ,         282 ,         195
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1114 ,         187 ,         283 ,         197 ,         186 ,         283 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1115 ,         187 ,         284 ,         197 ,         186 ,         284 ,         196
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1116 ,         188 ,         285 ,         198 ,         187 ,         285 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1117 ,         188 ,         286 ,         198 ,         187 ,         286 ,         197
+*ELEMENT,TYPE=C3D6,ELSET=contactelements_st1_in3_at1_it3
+        1118 ,         189 ,         287 ,         199 ,         188 ,         287 ,         198
