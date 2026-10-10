@@ -4,8 +4,10 @@
    every time it is drawn, so live values stay live after the text is edited by
    hand. `{{` writes a brace; an unknown {name} stays as typed. A line whose
    placeholders all come out empty is left out, as is a blank line. The dates
-   take strftime formats, with %-d / %-m / %-H for no leading zero. Also the
-   escaping that keeps the multi-line text on one ini line. Headless. */
+   take strftime formats, with %-d / %-m / %-H for no leading zero. A number
+   takes a number format, {time:000.000} or {time:%8.3f}, so it keeps its width
+   while it changes (cv_tb_num). Also the escaping that keeps the multi-line text
+   on one ini line. Headless. */
 #ifndef CV_TBTEXT_H
 #define CV_TBTEXT_H
 
@@ -13,7 +15,14 @@
 #include <stddef.h>
 #include <time.h>
 
-typedef struct { const char* key; const char* val; } cv_tb_kv;
+/* a placeholder's value. One with a number (num) writes x in a number format in
+   place of the first number in val: the one given in the template, else fmt
+   (NULL: val as it is), so "x1.5 (auto)" may become "x1.50 (auto)". */
+typedef struct {
+    const char* key; const char* val;
+    bool        num; double x;    /* the number val shows, when it has one */
+    const char* fmt;              /* its number format when the template gives none */
+} cv_tb_kv;
 
 typedef struct {
     const cv_tb_kv*  kv; int n;   /* the placeholders and their values ("" for none) */
@@ -31,6 +40,23 @@ extern const char* const cv_tb_date_fmt[CV_TB_DATE_N];
    the offset in out where the label's ": " starts (-1: no label, the line spans).
    false when the line is left out. */
 bool cv_tb_line(const char* line, size_t len, const cv_tb_ctx* c, char* out, size_t n, int* split);
+
+/* x in a number format; false (out "") when pat is none:
+   - a picture: digits as '0' (padded with zeros) or '#' (padded with spaces, which
+     also make room for a minus), then '.' and a '0' per decimal, the whole of it
+     optionally after a '+' (a sign always): "000.000", "###0.00", "+0.0". The
+     integer part always has a digit; one wider than the picture overflows it.
+   - printf style, checked before it reaches printf: %[-+ 0#][width][.precision]
+     and f, e, g or d (d: rounded to a whole number, no precision), width and
+     precision at most two digits each: "%8.3f", "%+.4e", "%3d". */
+bool cv_tb_num(const char* pat, double x, char* out, size_t n);
+
+/* a picture that writes every one of x[0..n) at one width: the decimals the
+   widest of them needs when written to sig significant digits (at most 6), the
+   integer digits of the largest, room for a minus when one is negative; the
+   exponent form ("%.5e" for 6 digits) when the decimals would be more than 6
+   or the number has more than 9 integer digits. Integers up to 999: "##0". */
+void cv_tb_fit(const double* x, int n, int sig, char* pat, size_t pn);
 
 /* strftime with a portable set of conversions (the C89 ones, %e %F %T %R %D, and
    %-x without the leading zero); an unknown one is copied as typed. The length. */

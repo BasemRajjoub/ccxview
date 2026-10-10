@@ -273,14 +273,76 @@ void panel_timebar(struct nk_context* ctx, float s, float row, float width) {
     nk_layout_row_end(ctx);
 }
 
+/* ---- tabular figures: the text over the view (legend, title block) writes its
+   digits in cells of one width, the font's widest digit, each centred in its
+   cell, so a number that changes keeps its place and its length while the steps
+   play or a video is made. A sign before a digit takes a cell too, as do the
+   spaces padding a number (all but the one after a word). */
+
+static bool is_digit(char c) { return c >= '0' && c <= '9'; }
+
+/* the cell width of f: its widest digit */
+static float digit_cell(const struct nk_user_font* f) {
+    static const void* font;
+    static float h, cell;
+    if (font != f->userdata.ptr || h != f->height) {
+        font = f->userdata.ptr;
+        h = f->height;
+        cell = 0;
+        for (char d = '0'; d <= '9'; d++) cell = CV_MAX(cell, f->width(f->userdata, f->height, &d, 1));
+    }
+    return cell;
+}
+
+/* whether t[i] of n takes a digit cell */
+static bool tab_at(const char* t, int n, int i) {
+    char c = t[i];
+    if (is_digit(c)) return true;
+    bool alnum_before = i > 0 && (is_digit(t[i - 1]) || ((t[i - 1] | 32) >= 'a' && (t[i - 1] | 32) <= 'z'));
+    if (c == '-' || c == '+') return i + 1 < n && is_digit(t[i + 1]) && !alnum_before;
+    if (c != ' ') return false;
+    int a = i, b = i;
+    while (a > 0 && t[a - 1] == ' ') a--;
+    while (b < n && t[b] == ' ') b++;
+    bool number = b < n && (is_digit(t[b]) || (b + 1 < n && strchr("-+.", t[b]) && is_digit(t[b + 1])));
+    return number && (a == 0 || i > a);
+}
+
+float ink_width(const struct nk_user_font* f, const char* t, int n) {
+    float w = 0, cell = digit_cell(f);
+    for (int i = 0, run = 0; i <= n; i++) {
+        bool tab = i < n && tab_at(t, n, i);
+        if (i == n || tab) {
+            if (i > run) w += f->width(f->userdata, f->height, t + run, i - run);
+            if (tab) w += cell;
+            run = i + 1;
+        }
+    }
+    return w;
+}
+
 /* legend text sits on the 3D view: a faint G.bg plate behind it keeps it
    readable where the model passes behind */
 void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w,
               const char* txt, struct nk_color c) {
     int n = (int)strlen(txt);
-    float tw = CV_MIN(f->width(f->userdata, f->height, txt, n), w);
+    float tw = CV_MIN(ink_width(f, txt, n), w), cell = digit_cell(f), end = x + w;
     if (!G.legend_box) nk_fill_rect(cv, nk_rect(x - 2, y, tw + 4, f->height), 3, uii_bg(110));   /* a plate of the background: no need on the box */
-    nk_draw_text(cv, nk_rect(x, y, w, f->height), txt, n, f, nk_rgba(0, 0, 0, 0), c);
+    struct nk_color none = nk_rgba(0, 0, 0, 0);
+    for (int i = 0, run = 0; i <= n && x < end; i++) {
+        bool tab = i < n && tab_at(txt, n, i);
+        if (i < n && !tab) continue;
+        if (i > run) {
+            nk_draw_text(cv, nk_rect(x, y, end - x, f->height), txt + run, i - run, f, none, c);
+            x += f->width(f->userdata, f->height, txt + run, i - run);
+        }
+        if (tab && x + cell <= end + 0.5f) {
+            float gw = f->width(f->userdata, f->height, txt + i, 1);
+            if (txt[i] != ' ') nk_draw_text(cv, nk_rect(x + 0.5f * (cell - gw), y, gw + 1, f->height), txt + i, 1, f, none, c);
+            x += cell;
+        } else if (tab) break;
+        run = i + 1;
+    }
 }
 
 /* nk_label in colour c, with the same plate */
@@ -311,7 +373,7 @@ int wrap_pieces(const struct nk_user_font* f, const char* txt, float w, int* len
         for (;;) {
             int next = fit + 1;
             while (at + next < total && (txt[at + next] & 0xC0) == 0x80) next++;
-            if (at + next > total || (fit > 0 && f->width(f->userdata, f->height, txt + at, next) > w)) break;
+            if (at + next > total || (fit > 0 && ink_width(f, txt + at, next) > w)) break;
             fit = next;
             if (at + fit >= total) break;
         }
@@ -448,7 +510,7 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
         snprintf(b, sizeof b, "-%s", a);
         ink_text(cv, font, area.x, ky + sh + 1, kw * 0.5f, b, ink);
         snprintf(b, sizeof b, "+%s", a);
-        float tw2 = font->width(font->userdata, font->height, b, (int)strlen(b));
+        float tw2 = ink_width(font, b, (int)strlen(b));
         ink_text(cv, font, area.x + kw - tw2, ky + sh + 1, tw2 + 2, b, ink);
     }
     if (G.range_lock && (G.oor_mode[0] == 1 || G.oor_mode[0] == 2 || G.oor_mode[1] == 1 || G.oor_mode[1] == 2)) {   /* swatches for the out-of-range colours, above and below the bar */

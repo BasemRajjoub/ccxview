@@ -32,6 +32,7 @@
 #define overlay_drag            uii_overlay_drag
 #define view_box                uii_view_box
 #define ink_text                uii_ink_text
+#define ink_width               uii_ink_width
 #define legend_ink              uii_legend_ink
 #define legend_dim              uii_legend_dim
 #define wrap_pieces             uii_wrap_pieces
@@ -150,6 +151,8 @@ void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box a
                   cv_anchor* pos, float s);
 void ink_text(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w,
               const char* txt, struct nk_color c);
+/* the width ink_text gives n bytes of t: its digits in cells of one width (tabular figures) */
+float ink_width(const struct nk_user_font* f, const char* t, int n);
 struct nk_color legend_ink(void);
 struct nk_color legend_dim(void);
 /* byte lengths of the pieces txt wraps to in width w (after a blank or comma when
