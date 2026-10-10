@@ -16,9 +16,10 @@
 #include "ui_int.h"
 #include "app_mesh.h"
 #include "stl.h"
+#include "tbtext.h"
 
 enum { OP_END, OP_CASE, OP_AT_TIP, OP_AT_WIN, OP_AT_POPUP, OP_AT_CLOSE, OP_AT_TITLE, OP_AT_VIEW, OP_AT_MODEL, OP_CLICK, OP_PRESS, OP_RELEASE,
-       OP_WHEEL, OP_WAIT, OP_DO, OP_EXPECT };
+       OP_WHEEL, OP_TYPE, OP_WAIT, OP_DO, OP_EXPECT };
 
 typedef struct {
     int op;
@@ -382,6 +383,32 @@ static bool title_settings_gone(struct nk_context* ctx) { return !G.title_edit; 
 static void open_title_settings(struct nk_context* ctx) { G.title_edit = true; }
 static bool title_user_off(struct nk_context* ctx) { return !G.title_line[CV_TB_USER]; }
 static void title_off(struct nk_context* ctx) { G.title_on = false; G.title_line[CV_TB_USER] = true; sections_open(ctx); }
+/* the title block's text: made from the boxes, today's date in the first format */
+static void title_text_open(struct nk_context* ctx) {
+    G.title_on = G.title_edit = true; G.title_hand = false;
+    snprintf(G.title_date_fmt, sizeof G.title_date_fmt, "%s", cv_tb_date_fmt[0]);
+}
+/* the block drawn has a line with `what` in it */
+static bool title_has(const char* what) {
+    char units[96];
+    units_summary(units, sizeof units);
+    static cv_title_line L[CV_TB_LINES];
+    int n = app_title_lines(L, CV_TB_LINES, units);
+    for (int i = 0; i < n; i++) if (strstr(L[i].text, what) || strstr(L[i].label, what)) return true;
+    return false;
+}
+static bool title_typed(struct nk_context* ctx) { return G.title_hand && strstr(G.title_text, "Qzx") && title_has("Qzx"); }
+static bool title_reset(struct nk_context* ctx) { return !G.title_hand && !strstr(G.title_text, "Qzx") && !title_has("Qzx") && title_has(app_title_line_name(CV_TB_FILE)); }
+static bool title_fmt_picked(struct nk_context* ctx) {
+    if (!strcmp(G.title_date_fmt, cv_tb_date_fmt[0]) || popup_open(ctx, "Title block")) return false;
+    for (int i = 1; i < CV_TB_DATE_N; i++) if (!strcmp(G.title_date_fmt, cv_tb_date_fmt[i])) return true;
+    return false;
+}
+static bool title_fmt_list(struct nk_context* ctx) { return popup_open(ctx, "Title block"); }
+static void title_text_off(struct nk_context* ctx) {
+    G.title_on = false; G.title_hand = false;
+    snprintf(G.title_date_fmt, sizeof G.title_date_fmt, "%s", cv_tb_date_fmt[0]);
+}
 static bool ui_smaller(struct nk_context* ctx) { return ui_get_zoom() < 0.99f; }
 static bool ui_normal(struct nk_context* ctx) { return fabsf(ui_get_zoom() - 1.f) < 0.01f; }
 static void symbols_open(struct nk_context* ctx) {
@@ -619,6 +646,7 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 #define RPRESS              { OP_PRESS, .n = 1 }
 #define RRELEASE            { OP_RELEASE, .n = 1 }
 #define WHEEL(turns)        { OP_WHEEL, .y = turns }
+#define TYPE(text)          { OP_TYPE, NULL, text }     /* characters, as typed: to the active text box */
 #define WAIT(frames)        { OP_WAIT, .n = frames }
 #define DO(f)               { OP_DO, .fn = f }
 #define EXPECT(f, what)     { OP_EXPECT, NULL, what, .ok = f }
@@ -890,6 +918,17 @@ static const step script[] = {
     AT_TIP("Title block", "Who you are logged in as"), CLICK, WAIT(2), EXPECT(title_user_off, "the user line goes"),
     AT_CLOSE("Title block"), CLICK, WAIT(2), EXPECT(title_settings_gone, "the settings close"),
     DO(title_off), WAIT(2), PANELS_ANSWER,
+
+    CASE("title block: typing into its text changes the block, reset to the boxes makes it again"),
+    DO(title_text_open), WAIT(3), AT_TIP("Title block", "The title block's text, one line"), CLICK, WAIT(2), TYPE("Qzx"), WAIT(2),
+    EXPECT(title_typed, "the text is edited by hand and the block shows it"),
+    AT_TIP("Title block", "Make the text from the boxes again"), CLICK, WAIT(2), EXPECT(title_reset, "the boxes' text is back"),
+    DO(title_text_off), WAIT(2), PANELS_ANSWER,
+
+    CASE("title block: the date format list picks a format"),
+    DO(title_text_open), WAIT(3), AT_TIP("Title block", "How {date} and {date_file}"), CLICK, WAIT(2), EXPECT(title_fmt_list, "the list opens"),
+    AT_POPUP("Title block", 0.5f, 0.45f), CLICK, WAIT(2), EXPECT(title_fmt_picked, "another format is chosen, the list closes"),
+    DO(title_text_off), WAIT(2), PANELS_ANSWER,
 
     CLOSED_THEN_PANELS("Messages", open_messages, messages_gone),
     CLOSED_THEN_PANELS("Formula", open_formula, formula_gone),
@@ -1171,6 +1210,18 @@ void ui_test_frame(struct nk_context* ctx) {
         case OP_PRESS:   press(s->n); T.wait = 1; break;
         case OP_RELEASE: release(s->n); T.wait = 2; break;
         case OP_WHEEL:   send(SAPP_EVENTTYPE_MOUSE_SCROLL, 0, s->y); T.wait = 1; break;
+        case OP_TYPE:                           /* one character a frame */
+            if (s->b[T.phase]) {
+                sapp_event ev = { .type = SAPP_EVENTTYPE_CHAR, .frame_count = T.frame, .char_code = (uint32_t)(unsigned char)s->b[T.phase],
+                                  .mouse_x = T.mx, .mouse_y = T.my, .window_width = sapp_width(), .window_height = sapp_height(),
+                                  .framebuffer_width = sapp_width(), .framebuffer_height = sapp_height() };
+                T.send(&ev);
+                T.phase++;
+                n_marks = 0;
+                return;
+            }
+            T.phase = 0; T.wait = 2;
+            break;
         case OP_WAIT:    T.wait = s->n; break;
         case OP_DO:      s->fn(ctx); break;
         case OP_EXPECT:  if (!s->ok(ctx)) fail("expected: %s", s->b); break;

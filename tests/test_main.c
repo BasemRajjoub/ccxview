@@ -31,6 +31,7 @@ static int g_fail = 0, g_checks = 0;
 #include "t_match.h"
 #include "t_anchor.h"
 #include "t_measure.h"
+#include "t_tbtext.h"
 #include "t_mesh.h"
 
 /* ---- helpers ---- */
@@ -1577,6 +1578,7 @@ int main(void) {
     test_stl();
     test_anchor();
     test_measure();
+    test_tbtext();
     test_feature_edges();
     test_plane_mask();
     test_box_elems();

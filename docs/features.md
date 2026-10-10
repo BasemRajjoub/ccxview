@@ -293,6 +293,20 @@ it was left, and at first the filters and the kept ones are folded:
   the user and the date (today's, or when the solver wrote the file), and up to
   three free lines (project, company, checked by). A line without data is left
   out. Dragged anywhere like the legend; a right click on it picks its lines.
+  The boxes make a text, shown below them in the same window, that may be edited
+  by hand with the keyboard: one line per row, "Label: value" (the part before
+  the first ": " is the label column; a line without one spans the block), with
+  placeholders filled in every frame, so the step, the scale or the date stay live
+  after an edit: {title} {file} {path} {solver} {analysis} {step} {step_no}
+  {increment} {time} {mode} {freq} {factor} {scale} {units} {field} {component}
+  {unit} {user} {host} {date} {date_file} {time_now}. A line whose placeholders
+  all come out empty is left out (as with the boxes); an unknown {name} stays as
+  typed, `{{` writes a brace. Once typed in, the boxes leave the text alone until
+  "reset to the boxes". The date is written as chosen from a list (2026-10-09,
+  09.10.2026, 09/10/2026, 10/09/2026, 9 Oct 2026, October 9, 2026, each with or
+  without the time), or in a format of its own in one placeholder:
+  {date:%d.%m.%Y %H:%M} (strftime codes; %-d, %-m, %-H without the leading zero).
+  The text and the date format are kept in the settings.
 - The top bar holds what is used all the time: deformation on / off and its scale
   (auto and multiples of it, true scale), animation, fit, all symbol layers in
   one box, the colour map and bands, the field and its component, the standard

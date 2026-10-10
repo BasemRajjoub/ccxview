@@ -33,6 +33,7 @@ enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXP
 enum { CV_TB_TITLE, CV_TB_FILE, CV_TB_SOLVER, CV_TB_ANALYSIS, CV_TB_STEP, CV_TB_SCALE, CV_TB_UNITS,
        CV_TB_USER, CV_TB_DATE, CV_TB_N };
 enum { CV_TB_FREE = 3 };       /* free lines: a label and a text each */
+enum { CV_TB_LINES = 32, CV_TB_TEXT = 2048 };   /* the template's rows shown, its size */
 
 enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
 
@@ -459,6 +460,9 @@ typedef struct {
     bool      title_line[CV_TB_N];   /* each automatic line on */
     bool      title_file_date;       /* the date: the result file's (when it was solved), else today */
     char      title_free[CV_TB_FREE][2][64];   /* free lines: label, text; shown when the text is set */
+    char      title_text[CV_TB_TEXT]; /* the template drawn (tbtext.h): made from the boxes above, or typed */
+    bool      title_hand;            /* the template was edited by hand: the boxes leave it alone */
+    char      title_date_fmt[48];    /* {date}, {date_file}: strftime, %-d no leading zero */
     cv_anchor title_pos;             /* dragged to (unset: bottom-right) */
     bool      sidecar;               /* keep each model's post-processing in <model>.ccxview (app_sidecar.c) */
 } cv_app;
@@ -866,11 +870,15 @@ int  settings_recent(const char** out, int max);
 const char* settings_last_dir(void);
 void settings_free(void);
 
-/* app_title.c: the title block's lines, those with data only; units: the units
-   line's text ("" or "not set": no line). Returns the count. */
-typedef struct { char label[32]; char text[160]; } cv_title_line;
+/* app_title.c: the title block's lines, the template filled in, those with data
+   only; label "" spans the block. units: the units line's text ("" or "not set":
+   none). Returns the count. */
+typedef struct { char label[48]; char text[256]; bool span; } cv_title_line;
 int  app_title_lines(cv_title_line* out, int max, const char* units);
 const char* app_title_line_name(int k);    /* CV_TB_*: "Title", "Result file" ... */
+void app_title_generate(char* out, size_t n);   /* the template the boxes make */
+void app_title_sync(void);                 /* G.title_text from the boxes, unless typed by hand */
+extern const char app_title_keys[];        /* the placeholders, for the help line */
 
 /* colour map lookup with the legend's reverse / grey applied */
 void app_cmap_rgb(float t, float rgb[3]);

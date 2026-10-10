@@ -57,6 +57,10 @@ ccxview model.frd --range 50,150 --opt oor_above=3  # the legend locked to 50 ..
 ccxview model.frd --hide-set EHOLE         # hide a deck element set, the rest stays (repeatable; --set NAME ticks one)
 ccxview model.frd --title-block --opt "title_text1=Bracket rev B"  # the title block, a project line (title_label1..3 / title_text1..3)
 ccxview model.frd --title-block --opt title_user=0 --opt title_file_date=1   # lines off by key: title_heading file solver analysis step scale units user date
+ccxview model.frd --title-block --opt "title_text=Project: Bracket\nResult file: {file}\nDate: {date}"
+                                            # the block's text by hand (\n between lines; placeholders as in features.md)
+ccxview model.frd --title-block --opt "title_date_fmt=%-d %b %Y"   # how {date} / {date_file} are written (strftime; %-d: no leading zero)
+ccxview model.frd --title-window            # the title block and its settings window open
 ccxview model.frd --labels node,value,loads # labels on the model, any mix of: node elem value evalue sets links loads supports materials gpvalue gpid minmax
 ccxview model.frd --labels node,minmax --label-offset max:1:80,-60 --label-offset node:940:-40,30
                                             # a label moved by hand: KIND:ID:DX,DY px (x right, y down), repeatable;
@@ -154,7 +158,7 @@ It prints what it selected and the field's max and min over it.
 | G | free flight (WASD, Esc to leave); View > Camera: the "eye" list cuts what lies just ahead, or hides whole elements there, to fly through walls |
 | H | view only, for screenshots |
 | click the legend's unit / right-click the legend | units / legend settings |
-| right-click the title block | its lines, date and free text (drag it to move it, like the legend) |
+| right-click the title block | its lines, date format, free text and the text they make, editable by hand (drag it to move it, like the legend) |
 | Ctrl+O / Ctrl+E / Ctrl+F | open / export PNG / find |
 | Esc | cancel a pending pick (path end, measurement nodes), close the menu, put a selection tool down, clear the selection |
 
