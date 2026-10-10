@@ -18,6 +18,7 @@
 #include "selset.h"
 #include "selfilter.h"
 #include "filedlg.h"
+#include "cel.h"
 
 /* what the faces are coloured by */
 enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
@@ -296,6 +297,7 @@ typedef struct {
     float*    axis_rgb[CV_AXIS_N];   /* 3 floats per group value */
     float     point_size;
     bool      shading;               /* off: flat true colours; on: light + shadow */
+    float     model_alpha;           /* the faces' opacity, 0..1 (1 opaque); an element set's multiplies it (app_see.c) */
     int       cmap;
     int       bands;
 
@@ -421,6 +423,16 @@ typedef struct {
     bool      show_bc, show_loads;   /* deck supports / loads as glyphs */
     bool      show_disc;             /* springs / dashpots / masses as symbols */
     bool      show_links;            /* coupling spiders */
+    /* contact (app_contact.c): the Contact window, the .cel's contact elements, the tied
+       slave nodes of the ties ticked under Groups > Couplings, the key over the view */
+    bool      show_contact;          /* the Contact window */
+    bool      cel_show;              /* the contact elements of the .cel drawn */
+    int       cel_pick;              /* the .cel set drawn: -1 the increment on screen, else its index */
+    bool      cel_master, cel_links; /* ... with their master faces, with the lines slave -> master */
+    bool      cel_front;             /* ... their slave nodes and lines in front of the model (inside an assembly) */
+    int       tie_nodes;             /* a tie's slave nodes: 0 tied and not tied, 1 tied only, 2 not tied only, 3 none */
+    bool      contact_key;           /* the colours' key over the view while any of it is drawn */
+    cv_anchor ckey_pos;              /* ... dragged to (unset: bottom-left, above the axes) */
     bool      show_vec;              /* arrows of the current 3-component field */
     bool      vec_colored;
     float     vec_pct;               /* longest arrow, percent of the model diagonal */
@@ -772,6 +784,7 @@ const char* deck_path(void);
 bool* deck_set_flags(void);          /* per set: an elset ticked (show only the ticked), a node set highlighted */
 bool* deck_set_hidden_flags(void);   /* per set: an elset hidden (wins over ticked); NULL without a deck */
 bool* deck_surf_flags(void);
+float* deck_set_alpha(void);         /* per set: an elset's opacity, 1 opaque (app_see.c); NULL without a deck */
 bool deck_file_reader(void* user, const char* path, char** data, size_t* size);
 const char* deck_material_name(uint32_t k);
 const cv_elemmap* deck_elemmap(const cv_frd* f);   /* material and axes per .frd element, NULL none */
@@ -877,6 +890,33 @@ void app_stl_queue_drop(void);                      /* the load failed: what wai
 void app_open_files(const char* const* paths, int n);
 void app_stl_draw(cv_draw* d);                      /* d->mesh from the layers */
 void app_dialog_done(const char* path);             /* the open dialog's pick: a model, the comparison or a geometry file */
+
+/* app_see.c: see-through faces -- the model's opacity (G.model_alpha) times each
+   element set's (deck_set_alpha), drawn as a glass shell over what lies inside */
+void app_see_refresh(void);          /* the skin, the colouring or an opacity changed */
+void app_see_skin(void);             /* the skin was built again: its triangles' turn worked out afresh */
+bool app_see_set(const char* name, float alpha);   /* an element set's opacity by name; false: no such set */
+
+/* app_contact.c: contact elements (jobname.cel), ties and contact pairs in their
+   slave and master colours (cv_key_rgb), the slave nodes CalculiX could not tie
+   (jobname_WarnNode*.nam). The files beside the model are read with it; a .cel or
+   .nam opened or dropped joins the open model. */
+void app_contact_model(void);                /* a model loaded: its .cel and .nam (a reload reads them again) */
+bool app_contact_open(const char* path);     /* a .cel or .nam (Open, a drop, --cel); false with a message */
+void app_contact_queue(const char* path);    /* opened while a model loads: read once it is in */
+void app_contact_clear(void);
+void app_contact_refresh(void);              /* the step, the shape or a choice changed: drawn again */
+void app_contact_skin(void);                 /* the skin was built again: its faces looked up afresh */
+const cv_cel* app_contact_cel(void);         /* the .cel read, NULL none */
+const char* app_contact_cel_path(void);
+int  app_contact_cel_set(void);              /* the .cel set drawn, -1 none */
+uint32_t app_contact_cel_count(void);        /* its distinct contact elements */
+int  app_contact_nam_count(void);            /* the warning node sets read */
+const char* app_contact_nam(int i, uint32_t* n, bool* miss);   /* its file's name, node count, whether it lists untied nodes */
+/* link k (a tie or contact pair): its slave surface's nodes, those in a warning set */
+void app_contact_pair_nodes(int k, uint32_t* slave, uint32_t* untied);
+bool app_contact_drawn(int what[CV_KEY_N]);  /* what is drawn now, by CV_KEY_* (counts); false: nothing */
+bool app_contact_s2s(void);                  /* ... the contact elements surface to surface (slave faces) */
 
 /* app_settings.c: the ini file */
 void settings_load(void);                    /* into G, before the first frame */

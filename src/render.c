@@ -45,6 +45,15 @@ static const float kCoolWarm[32][3] = {
 
 static float clamp01(float x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
+const float cv_key_rgb[CV_KEY_N][3] = {
+    { 0.22f, 0.48f, 1.00f },      /* master: blue */
+    { 0.93f, 0.16f, 0.36f },      /* slave: crimson */
+    { 0.30f, 0.88f, 0.40f },      /* tied slave node: green */
+    { 1.00f, 0.86f, 0.10f },      /* not tied: yellow, the warning */
+    { 1.00f, 0.55f, 0.08f },      /* a slave node in contact: orange */
+    { 0.98f, 0.98f, 0.92f },      /* slave to master: white */
+};
+
 void cv_colormap_rgb(int cm, float t, float o[3]) {
     t = clamp01(t);
     switch (cm) {
@@ -467,6 +476,8 @@ static struct {
     sg_pipeline pip_tri, pip_tri_prim, pip_line, pip_pt;
     sg_pipeline pip_tri_ni, pip_line_ni, pip_pt_ni;   /* non-indexed: the aux vertex sets */
     sg_pipeline pip_see[2];           /* imported geometry see-through: back faces, front faces */
+    sg_pipeline pip_glass[2];         /* the model's see-through faces: the far sides, then the near */
+    sg_pipeline pip_tri_blend_ni;     /* aux triangles blended over what is drawn (a slave surface over its master) */
     sg_shader   shd_inst;
     sg_pipeline pip_inst;             /* the instanced symbol bodies */
     sg_shader   shd_glyph;
@@ -494,6 +505,11 @@ static struct {
     sg_buffer   ib_tri, ib_edge, ib_pt, ib_fedge;
     size_t      n_tri, n_edge, n_pt, n_fedge;
     uint32_t    n_nodes;
+    uint32_t*   tri_cpu;              /* the skin triangles as uploaded: the see-through runs index them */
+    /* see-through faces (cv_render_see): the triangles run after run, over the nodes and
+       over the per-element stream (3 vertices a triangle) */
+    sg_buffer   ib_run_n, ib_run_e;
+    cv_see_run* runs;  int nruns;
 } R;
 
 static void kill_buf(sg_buffer* b) {
@@ -694,6 +710,14 @@ void cv_render_init(void) {
     R.pip_line_ni = sg_make_pipeline(&pd);
     pd.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
     R.pip_tri_ni = sg_make_pipeline(&pd);
+    {
+        sg_pipeline_desc pb = pd;
+        pb.depth.write_enabled = false;
+        pb.colors[0].blend = (sg_blend_state){ .enabled = true,
+            .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA, .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            .src_factor_alpha = SG_BLENDFACTOR_ONE, .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA };
+        R.pip_tri_blend_ni = sg_make_pipeline(&pb);
+    }
     /* imported geometry see-through: indexed, blended, the depth tested but left as it
        is; STL triangles turn counter-clockwise seen from outside */
     pd.index_type = SG_INDEXTYPE_UINT32;
@@ -706,6 +730,12 @@ void cv_render_init(void) {
     R.pip_see[0] = sg_make_pipeline(&pd);
     pd.cull_mode = SG_CULLMODE_BACK;
     R.pip_see[1] = sg_make_pipeline(&pd);
+    /* the model's see-through faces, turned outward by app_see.c: as the imported
+       geometry's, the far sides first, then the near ones over them */
+    pd.cull_mode = SG_CULLMODE_FRONT;
+    R.pip_glass[0] = sg_make_pipeline(&pd);
+    pd.cull_mode = SG_CULLMODE_BACK;
+    R.pip_glass[1] = sg_make_pipeline(&pd);
 
     {   /* instanced symbols: the unit body per vertex, 15 floats per instance */
         static const char* const attr[8] = { "a_m", "i_a", "i_b", "i_r", "i_disp", "i_disp2", "i_dispb", "i_disp2b" };
@@ -840,6 +870,7 @@ void cv_render_init(void) {
 }
 
 static void clear_aux(void);
+static void see_clear(void);
 
 void cv_render_clear_model(void) {
     clear_aux();
@@ -847,6 +878,8 @@ void cv_render_clear_model(void) {
     kill_buf(&R.ib_tri); kill_buf(&R.ib_edge); kill_buf(&R.ib_pt); kill_buf(&R.ib_fedge);
     R.n_tri = R.n_edge = R.n_pt = R.n_fedge = 0;
     R.n_nodes = 0;
+    see_clear();
+    free(R.tri_cpu); R.tri_cpu = NULL;
     cv_render_labels(NULL, 0, NULL, 0);
 }
 
@@ -892,10 +925,18 @@ void cv_render_tri_values(const float* v, size_t n_tri) {
     free(pad);
 }
 
+static void see_clear(void) {
+    kill_buf(&R.ib_run_n); kill_buf(&R.ib_run_e);
+    free(R.runs); R.runs = NULL; R.nruns = 0;
+}
+
 void cv_render_indices(const uint32_t* tri, size_t n_tri, const uint32_t* edge, size_t n_edge,
                        const uint32_t* pt, size_t n_pt) {
     kill_buf(&R.ib_tri); kill_buf(&R.ib_edge); kill_buf(&R.ib_pt);
+    see_clear();
+    free(R.tri_cpu); R.tri_cpu = NULL;
     R.ib_tri = make_buf(tri, n_tri * 12, true);   R.n_tri = R.ib_tri.id ? n_tri : 0;
+    if (R.n_tri && (R.tri_cpu = malloc(n_tri * 12))) memcpy(R.tri_cpu, tri, n_tri * 12);
     R.ib_edge = make_buf(edge, n_edge * 8, true); R.n_edge = R.ib_edge.id ? n_edge : 0;
     R.ib_pt = make_buf(pt, n_pt * 4, true);       R.n_pt = R.ib_pt.id ? n_pt : 0;
 }
@@ -1106,12 +1147,111 @@ static void draw_inst(int which, int mode, const float rgb[3], const cv_draw* d,
     draw_inst_map(which, mode, rgb, d, min_px, R.cmap_view, false);
 }
 
+/* ---- ties, contact pairs, contact elements (app_contact.c) ---------------------------
+   Faces a hair in front of the model's, the slave surface half see-through over the
+   master's (where they overlap the two mix); a tie's slave nodes as balls in front of
+   everything (they lie between two parts), so none is missed. */
+static void draw_contact(const cv_draw* d) {
+    const float (*k)[3] = cv_key_rgb;
+    if (d->highlights) {
+        if (A[CV_AUX_PMST].n)
+            draw_layer(R.pip_tri_ni, A[CV_AUX_PMST].v, NO_IB, (int)A[CV_AUX_PMST].n, CV_COLOR_SOLID, k[CV_KEY_MASTER], d->shade, d, 1, false, PULL, 0);
+        if (A[CV_AUX_PSLV].n) {
+            g_alpha = 0.62f;
+            draw_layer(R.pip_tri_blend_ni, A[CV_AUX_PSLV].v, NO_IB, (int)A[CV_AUX_PSLV].n, CV_COLOR_SOLID, k[CV_KEY_SLAVE], d->shade, d, 1, false, 2 * PULL, 0);
+            g_alpha = 1.f;
+        }
+        if (A[CV_AUX_PTIED].n)
+            draw_layer(R.pip_pt_ni, A[CV_AUX_PTIED].v, NO_IB, (int)A[CV_AUX_PTIED].n, CV_COLOR_SOLID, k[CV_KEY_TIED], false, d, d->hl_size * 0.85f, true, 0.f, 0);
+        if (A[CV_AUX_PFREE].n)
+            draw_layer(R.pip_pt_ni, A[CV_AUX_PFREE].v, NO_IB, (int)A[CV_AUX_PFREE].n, CV_COLOR_SOLID, k[CV_KEY_FREE], false, d, d->hl_size, true, 0.f, 0);
+    }
+    if (d->contact) {
+        const float mln[3] = { k[CV_KEY_MASTER][0] * 0.35f, k[CV_KEY_MASTER][1] * 0.35f, k[CV_KEY_MASTER][2] * 0.35f };
+        if (A[CV_AUX_CMST].n)
+            draw_layer(R.pip_tri_ni, A[CV_AUX_CMST].v, NO_IB, (int)A[CV_AUX_CMST].n, CV_COLOR_SOLID, k[CV_KEY_MASTER], d->shade, d, 1, false, 3 * PULL, 0);
+        if (A[CV_AUX_CMLN].n)
+            draw_layer(R.pip_line_ni, A[CV_AUX_CMLN].v, NO_IB, (int)A[CV_AUX_CMLN].n, CV_COLOR_SOLID, mln, false, d, 1, false, 4 * PULL, 0);
+        draw_inst_map(CV_INST_CSLN, CV_COLOR_SOLID, k[CV_KEY_CSLAVE], d, 1.1f, R.cmap_view, d->contact_front);
+        draw_inst_map(CV_INST_CLINK, CV_COLOR_SOLID, k[CV_KEY_LINK], d, 0.9f, R.cmap_view, d->contact_front);
+        if (A[CV_AUX_CSLV].n)
+            draw_layer(R.pip_pt_ni, A[CV_AUX_CSLV].v, NO_IB, (int)A[CV_AUX_CSLV].n, CV_COLOR_SOLID, k[CV_KEY_CSLAVE], false, d, d->hl_size, d->contact_front, 0.f, 0);
+    }
+}
+
+/* ---- see-through faces ----------------------------------------------------------- */
+
+void cv_render_see(const uint32_t* ids, uint32_t n, const cv_see_run* runs, int nruns) {
+    see_clear();
+    if (!ids || !n || !runs || nruns <= 0 || !R.tri_cpu) return;
+    uint32_t* tn = malloc((size_t)n * 12);
+    uint32_t* te = malloc((size_t)n * 12);
+    R.runs = malloc((size_t)nruns * sizeof *R.runs);
+    bool ok = tn && te && R.runs;
+    for (uint32_t i = 0; ok && i < n; i++) {
+        uint32_t t = ids[i] & ~CV_SEE_FLIP;
+        if (t >= R.n_tri) { ok = false; break; }
+        for (int k = 0; k < 3; k++) {
+            int q = (ids[i] & CV_SEE_FLIP) && k ? 3 - k : k;     /* turned: 0 2 1 */
+            tn[3 * i + k] = R.tri_cpu[3 * (size_t)t + q]; te[3 * i + k] = 3 * t + (uint32_t)q;
+        }
+    }
+    if (ok) {
+        R.ib_run_n = make_buf(tn, (size_t)n * 12, true);
+        R.ib_run_e = make_buf(te, (size_t)n * 12, true);
+        memcpy(R.runs, runs, (size_t)nruns * sizeof *R.runs);
+        R.nruns = nruns;
+    }
+    free(tn); free(te);
+    if (!ok || !R.ib_run_n.id || !R.ib_run_e.id) see_clear();
+}
+
+bool cv_render_see_on(void) { return R.nruns > 0; }
+
+/* the runs stand in for the faces: not with the per-triangle texture (its primitive
+   numbers are the skin's order) */
+static bool see_ok(const cv_draw* d) {
+    return R.nruns > 0 && !(d->faces_color == CV_COLOR_ELEM && !A[CV_AUX_ELEMTRI].n);
+}
+
+/* the opaque runs (glass false), or the see-through ones, with the pipeline given */
+static void see_runs_with(const cv_draw* d, bool glass, sg_pipeline pip) {
+    vset mesh = { R.pos, R.disp, R.scal, R.disp2 };
+    bool elem = d->faces_color == CV_COLOR_ELEM;
+    int mode = d->faces_color == CV_COLOR_GROUP ? CV_COLOR_SOLID : elem ? CV_COLOR_NODAL : d->faces_color;
+    for (int i = 0; i < R.nruns; i++) {
+        const cv_see_run* r = &R.runs[i];
+        if (!r->n || (r->alpha < 1.f) != glass || !(r->alpha > 0.f)) continue;
+        g_alpha = glass ? r->alpha : 1.f;
+        if (r->solid) draw_layer(pip, mesh, R.ib_run_n, (int)r->n * 3, CV_COLOR_SOLID, r->rgb, d->shade, d, 1, false, 0.f, (int)r->first * 3);
+        else if (elem) draw_layer(pip, A[CV_AUX_ELEMTRI].v, R.ib_run_e, (int)r->n * 3, mode, d->face_rgb, d->shade, d, 1, false, 0.f, (int)r->first * 3);
+        else draw_layer(pip, mesh, R.ib_run_n, (int)r->n * 3, mode, d->face_rgb, d->shade, d, 1, false, 0.f, (int)r->first * 3);
+    }
+    g_alpha = 1.f;
+}
+
+static void see_runs(const cv_draw* d, bool glass) {
+    if (!glass) { see_runs_with(d, false, R.pip_tri); return; }
+    int m = d->mirrored ? 1 : 0;              /* a mirror image turns its triangles round */
+    see_runs_with(d, true, R.pip_glass[m]);   /* the far sides */
+    see_runs_with(d, true, R.pip_glass[1 - m]);   /* the near ones over them */
+}
+
+void cv_render_see_draw(const cv_draw* d) {
+    if (d->vp_w <= 0 || d->vp_h <= 0 || !d->faces || !see_ok(d)) return;
+    sg_apply_viewport(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
+    sg_apply_scissor_rect(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
+    see_runs(d, true);
+}
+
 void cv_render_draw(const cv_draw* d) {
     if (d->vp_w <= 0 || d->vp_h <= 0) return;
     sg_apply_viewport(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
     sg_apply_scissor_rect(d->vp_x, d->vp_y, d->vp_w, d->vp_h, true);
     vset mesh = { R.pos, R.disp, R.scal, R.disp2 };
-    if (d->faces)
+    if (d->faces && see_ok(d))
+        see_runs(d, false);
+    else if (d->faces)
     {
         if (d->faces_color == CV_COLOR_GROUP && R.ngroups) {
             /* one solid-colour run per group: no per-triangle lookup at all */
@@ -1216,6 +1356,7 @@ void cv_render_draw(const cv_draw* d) {
             draw_layer(R.pip_pt_ni, A[CV_AUX_HLPT].v, NO_IB, (int)A[CV_AUX_HLPT].n,
                        CV_COLOR_SOLID, nset_rgb, false, d, d->hl_size, false, 0.f, 0);
     }
+    draw_contact(d);
     {
         /* supports, loads, links and springs from the deck: line glyphs with their
            true depth, so faces in front hide them; pulled a hair toward the eye

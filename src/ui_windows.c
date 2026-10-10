@@ -321,7 +321,7 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
     float w = CV_MIN(720 * s, fw * 0.9f), h = CV_MIN(560 * s, fh * 0.85f);
     char open_path[2048] = "";
     const char* title = G.dlg_kind == CV_DLG_STL ? "Import STL geometry (*.stl)" : G.dlg_kind == CV_DLG_COMPARE ? "Compare with results (*.frd)"
-                      : "Open file (*.frd, *.inp, *.dat, *.fbd, *.stl)";
+                      : "Open file (*.frd, *.inp, *.dat, *.fbd, *.stl, *.cel)";
     if (nk_begin_titled(ctx, "Open file", title, nk_rect((fw - w) / 2, (fh - h) / 2, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE |
                  NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {

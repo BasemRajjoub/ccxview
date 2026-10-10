@@ -299,14 +299,14 @@ size_t cv_dbus_build_response(uint8_t* buf, size_t cap, uint32_t code, const cha
 /* ============================================================================
    what each kind of dialog shows: its title, its filters (the first one chosen)
    ============================================================================ */
-static const char* const g_model[] = { "*.frd", "*.inp", "*.dat", "*.fbd", "*.stl", NULL };
+static const char* const g_model[] = { "*.frd", "*.inp", "*.dat", "*.fbd", "*.stl", "*.cel", NULL };
 static const char* const g_stl[] = { "*.stl", NULL };
 static const char* const g_frd[] = { "*.frd", NULL };
 static const char* const g_all[] = { "*", NULL };
 typedef struct { const char* name; const char* const* globs; } dfilter;
 static const struct { const char* title; const char* desc; dfilter f[3]; } kinds[3] = {
     { "Open CalculiX model or results", "CalculiX files, STL geometry",
-      { { "CalculiX, STL (*.frd, *.inp, *.dat, *.fbd, *.stl)", g_model }, { "STL geometry (*.stl)", g_stl }, { "All files", g_all } } },
+      { { "CalculiX, STL (*.frd, *.inp, *.dat, *.fbd, *.stl, *.cel)", g_model }, { "STL geometry (*.stl)", g_stl }, { "All files", g_all } } },
     { "Import STL geometry", "STL geometry",
       { { "STL geometry (*.stl)", g_stl }, { "All files", g_all }, { NULL, NULL } } },
     { "Compare with results", "CalculiX results",

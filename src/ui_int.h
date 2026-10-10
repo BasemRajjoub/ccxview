@@ -204,6 +204,10 @@ void uii_plot_steps(struct nk_context* ctx, float s, struct nk_rect area, int n,
 /* ---- ui_integ.c: the Integrals window */
 void uii_window_integrals(struct nk_context* ctx, float s, float row, int fw, int fh);
 
+/* ---- ui_contact.c: the Contact window, the key of its colours over the view */
+void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int fh);
+void uii_window_contact_key(struct nk_context* ctx, float s, float row);
+
 /* ---- ui_select.c: the Selection window */
 void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh);
 void uii_select_ids(const char* text, bool nodes);    /* the id box's text (the interface test) */

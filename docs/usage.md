@@ -10,7 +10,9 @@ mirror and pictures work on it as on any mesh (no results; lengths as in the
 file). To look at an STL alone while a model is open, start another ccxview with
 it (`ccxview part.stl`, or drop it on a window with nothing open). Several files
 dropped at once: the model first (a `.frd` before a `.inp`, `.fbd`, `.dat`), then
-the `.stl` files as its imported geometry.
+the `.stl` files as its imported geometry. A `.cel` (contact elements) or a `.nam`
+(a warning node set) joins the open model the same way; with none open, the
+model beside it opens and brings it.
 
 The file dialog is the system's (the desktop portal on Linux): Open lists CalculiX
 files and STL, Import STL lists STL files only. When there is none (bare X11, SSH)
@@ -57,7 +59,16 @@ ccxview model.frd --stl pin.stl --stl alt.stl --stl-alpha 0.4   # geometry that 
                                             #   the results (repeatable), see-through
 ccxview pin.stl --labels node --measure dist:1,450   # an STL alone is the model (so is --stl with no model)
 ccxview model.frd --browse-stl              # ccxview's own file browser, open to import an STL (--browse: to open a model)
+ccxview contact.frd --contact-window --set STEEL_ON_STEEL --set-alpha ROCKER:0.3
+                                            # the Contact window; a contact pair (or tie) drawn by name; an
+                                            #   element set see-through (repeatable); contact.cel beside it is read
+ccxview model.frd --cel run1.cel --opt cel_pick=4   # contact elements from another file (or a .nam); the list's
+                                            #   iteration 4 (-1: the increment on screen); cel_show cel_master
+                                            #   cel_links cel_front=0|1
+ccxview tie.frd --set GLUE --opt tie_nodes=2 --opt model_alpha=0.4  # a tie's slave nodes: 0 tied and not tied,
+                                            #   1 tied only, 2 not tied only, 3 none; the whole model see-through
 ccxview model.frd --step 3 --look +z        # a step, a view direction
+ccxview model.frd --no-panels --shot v.png  # the view alone, as H does
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
@@ -107,9 +118,10 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | Part | Keys |
 |---|---|
 | sets | `elsets_on`, `elsets_hidden`, `nsets_on`, `surfaces_on`: set names, `, ` between |
+| see | `elset_alpha`: `ROCKER 0.3, ...` the element sets see-through; `pairs_on`: the ties and contact pairs drawn, by name |
 | groups | `off_type`, `off_material`, `off_group`: the values switched off, as ranges (`1-4, 9`) |
 | hidden | `hidden_elems`: element ids hidden by hand, as ranges |
-| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q` |
+| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q`, `model_alpha`, the contact elements (`cel_show`, `cel_master`, `cel_links`, `cel_front`, `cel_pick`), `tie_nodes` |
 | units | `units` (the system), `unit_in_<quantity>` and `unit_<quantity>`: unit names (`MPa`), empty for the system's / as input |
 | view | the keys of a view state file: `cam_*`, `step`, `field`, `comp`, `calc`, `gauss_field`, `fail_field`, `mesh_field`, `elem_mode`, `csys*`, `deform*`, `range_lock`, `rmin`, `rmax`, `clip_*`, `crop_*`, `mirror*`, `rep*`, `cyc_*`, the layers, `faces_mode`, `cmap`, `bands` |
 | compare | `compare` (the other run's path), `compare_diff` |

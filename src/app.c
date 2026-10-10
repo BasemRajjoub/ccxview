@@ -121,6 +121,9 @@ static void init(void) {
     G.sym_auto = true; G.sym_thick = 1.f;
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
+    G.model_alpha = 1.f;
+    G.cel_show = G.cel_master = G.cel_links = G.cel_front = G.contact_key = true;
+    G.cel_pick = -1;
     G.geo_size = 6.f;
     G.point_size = 3;
     G.cmap = CV_CMAP_FAST;
@@ -170,6 +173,7 @@ static void init(void) {
     if (O.xray) G.gp_on_top = true;
     if (O.no_faces) G.show_faces = G.show_edges = false;   /* points only */
     if (O.no_edges) G.show_edges = false;
+    if (O.no_panels) G.hide_panels = true;
     if (O.outline == 0) G.show_outline = false;
     else if (O.outline > 0) { G.show_outline = true; G.outline_angle = O.outline; }
     if (!O.argv_path && O.nstl > 0) {    /* --stl with no model: the first is the model, the rest its imported geometry */
@@ -443,6 +447,7 @@ static void frame(void) {
         d.shade = G.shading;
         d.gauss_points = G.show_gp && !dense;
         d.highlights = G.show_hl;
+        d.contact = G.cel_show; d.contact_front = G.cel_front;
         d.geo_points = G.show_geo_pts; d.geo_curves = G.show_geo_crv; d.geo_surfaces = G.show_geo_srf;
         d.geo_size = G.geo_size * ui_scale();
         d.supports = G.show_bc; d.loads = G.show_loads; d.discrete = G.show_disc; d.links = G.show_links;
@@ -517,6 +522,19 @@ static void frame(void) {
                 m4_mul(d.mvp, mvp0, M);
                 m4_mul(d.mv, mv0, M);
                 cv_render_draw(&d);
+            }
+        }
+        if (cv_render_see_on()) {              /* the model's see-through faces: over every instance's opaque ones */
+            cv_draw ds = d;
+            cv_render_see_draw(&d0);
+            for (int m = 1; m < nc; m++) {
+                float M[16];
+                app_copy_matrix(m, M);
+                m4_mul(ds.mvp, d0.mvp, M);
+                m4_mul(ds.mv, d0.mv, M);
+                ds.mirrored = M[0] * (M[5] * M[10] - M[6] * M[9]) - M[1] * (M[4] * M[10] - M[6] * M[8])
+                            + M[2] * (M[4] * M[9] - M[5] * M[8]) < 0;
+                cv_render_see_draw(&ds);
             }
         }
         cv_render_meshes(&d0, true);           /* see-through: over everything drawn */
@@ -1089,6 +1107,10 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--title-block") && O.nopts < 32) O.opts[O.nopts++] = "title_on=1";
         else if (!strcmp(argv[i], "--title-window") && O.nopts < 31) { O.opts[O.nopts++] = "title_on=1"; O.opts[O.nopts++] = "title_edit=1"; }
         else if (!strcmp(argv[i], "--deck-window")) O.deck_window = true;
+        else if (!strcmp(argv[i], "--contact-window")) O.contact_window = true;
+        else if (!strcmp(argv[i], "--no-panels")) O.no_panels = true;
+        else if (!strcmp(argv[i], "--cel") && i + 1 < argc && O.ncel < 4) O.cel[O.ncel++] = argv[++i];
+        else if (!strcmp(argv[i], "--set-alpha") && i + 1 < argc && O.nset_alpha < 8) O.set_alpha[O.nset_alpha++] = argv[++i];
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
         else if (!strcmp(argv[i], "--range") && i + 1 < argc) O.range_set = sscanf(argv[++i], "%f,%f", &O.range[0], &O.range[1]) == 2;
         else if (!strcmp(argv[i], "--menu") && i + 1 < argc) O.menu_set = sscanf(argv[++i], "%f,%f", &O.menu[0], &O.menu[1]) == 2;

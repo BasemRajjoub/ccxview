@@ -62,7 +62,7 @@ EM_JS(void, web_pick_start, (int kind), {
         });
     }
     Module.cvPickKind = kind;
-    inp.accept = kind == 1 ? '.stl' : kind == 2 ? '.frd' : '.frd,.inp,.dat,.fbd,.sta,.cvg,.stl';
+    inp.accept = kind == 1 ? '.stl' : kind == 2 ? '.frd' : '.frd,.inp,.dat,.fbd,.sta,.cvg,.stl,.cel,.nam';
     Module.cvPick = 1;
     inp.click();
 });

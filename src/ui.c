@@ -292,6 +292,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     }
     window_title(ctx, s, row);
     window_legend(ctx, s, row);
+    uii_window_contact_key(ctx, s, row);
 
     r = nk_rect(0, H - status_h, W, status_h);
     if (!G.hide_panels && nk_begin(ctx, "Status", r, fixed)) {
@@ -306,6 +307,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_details(ctx, s, row, fw, fh);
     window_about(ctx, s, row, fw, fh);
     window_deck(ctx, s, row, fw, fh);
+    uii_window_contact(ctx, s, row, fw, fh);
     window_menu(ctx, s, row, fw, fh);                 /* last: over every other window */
     window_messages(ctx, s, row, fw, fh);
     window_calc_help(ctx, s, row, fw, fh);

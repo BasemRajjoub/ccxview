@@ -14,6 +14,7 @@ static struct {
     char    path[1024];
     bool*   set_on;             /* per set: elset = in the display group, nset = highlighted */
     bool*   set_hide;           /* per set: an elset hidden, whatever else is shown */
+    float*  set_alpha;          /* per set: an elset's opacity (app_see.c) */
     bool*   surf_on;
     bool*   link_on;
     uint8_t* nvis;              /* per shown node: in a visible element (NULL = all) */
@@ -54,6 +55,7 @@ const cv_inp* deck_get(void) { return D.on ? &D.d : NULL; }
 const char* deck_path(void) { return D.path; }
 bool* deck_set_flags(void) { return D.set_on; }
 bool* deck_set_hidden_flags(void) { return D.set_hide; }
+float* deck_set_alpha(void) { return D.set_alpha; }
 bool* deck_surf_flags(void) { return D.surf_on; }
 bool* deck_link_flags(void) { return D.link_on; }
 
@@ -68,7 +70,7 @@ void deck_clear(void) {
     cv_elemmap_free(&D.M);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
-    free(D.set_on); free(D.set_hide); free(D.surf_on); free(D.link_on); free(D.nvis); free(D.rm);
+    free(D.set_on); free(D.set_hide); free(D.set_alpha); free(D.surf_on); free(D.link_on); free(D.nvis); free(D.rm);
     memset(&D, 0, sizeof D);
     cv_render_aux(CV_AUX_HLPT, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_HLTRI, NULL, NULL, NULL, 0);
@@ -91,6 +93,8 @@ void deck_set(cv_inp* d, const char* path) {
     snprintf(D.path, sizeof D.path, "%s", path);
     D.set_on = calloc((size_t)CV_MAX(D.d.nsets, 1), sizeof(bool));
     D.set_hide = calloc((size_t)CV_MAX(D.d.nsets, 1), sizeof(bool));
+    D.set_alpha = malloc((size_t)CV_MAX(D.d.nsets, 1) * sizeof(float));
+    for (int i = 0; D.set_alpha && i < D.d.nsets; i++) D.set_alpha[i] = 1.f;
     D.surf_on = calloc((size_t)CV_MAX(D.d.nsurfs, 1), sizeof(bool));
     D.link_on = calloc((size_t)CV_MAX(D.d.nlinks, 1), sizeof(bool));
     for (int i = 0; D.link_on && i < D.d.nlinks; i++)           /* spiders on, surface pairs off */
@@ -704,16 +708,9 @@ static void refresh_links(void) {
     cv_free_vec(lp); cv_free_vec(ld);
 }
 
-/* a surface is highlighted when ticked itself or through a ticked tie / contact pair */
-static bool surf_shown(int si) {
-    if (D.surf_on[si]) return true;
-    for (int i = 0; i < D.d.nlinks; i++) {
-        const cv_link* l = &D.d.links[i];
-        if (D.link_on[i] && (l->kind == CV_LINK_TIE || l->kind == CV_LINK_CONTACT) && (l->surf[0] == si || l->surf[1] == si) &&
-            cv_inp_link_active(&D.d, deck_step(), i)) return true;    /* a contact pair removed by *MODEL CHANGE: not */
-    }
-    return false;
-}
+/* a surface is highlighted when ticked itself; a tie or contact pair ticked draws its
+   two surfaces in the slave and master colours (app_contact.c) */
+static bool surf_shown(int si) { return D.surf_on[si]; }
 
 void app_symbol_size(void) {
     if (!G.sym_auto && !(G.sym_size > 0)) G.sym_size = G.sym_auto_len;     /* by hand: starts from what was shown */
@@ -768,6 +765,7 @@ void deck_refresh_highlight(void) {
     app_aux_upload(CV_AUX_HLPT, &pp, &pd, NULL);
     app_aux_upload(CV_AUX_HLTRI, &tp, &td, NULL);
     app_sel_refresh();                              /* the box selection's outline moves with the shape too */
+    app_contact_refresh();                          /* ties, contact pairs and contact elements: theirs too */
     /* the named labels follow the sets ticked, the symbols and the step; ids and values do not
        depend on any of it (a million node ids would be rebuilt on every symbol-size drag) */
     if (G.label_kinds >> CV_LABEL_SETS) app_label_changed();

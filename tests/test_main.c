@@ -596,7 +596,7 @@ static void test_portal_wire(void) {
         CHECK(strstr(filt, "*.frd") && strstr(filt, "*.stl"));       /* an STL can be opened from Open too */
         cv_filedlg_filter(CV_DLG_MODEL, &globs);
         int k = 0; while (globs[k]) k++;
-        CHECK(k == 5 && !strcmp(globs[4], "*.stl"));
+        CHECK(k == 6 && !strcmp(globs[4], "*.stl") && !strcmp(globs[5], "*.cel"));
         bn = cv_dbus_openfile_body(body, sizeof body, "", "tok", "/x", CV_DLG_COMPARE);
         CHECK(cv_dbus_openfile_check(body, bn, title, sizeof title, filt, sizeof filt));
         CHECK(strstr(filt, "*.frd") && !strstr(filt, "*.inp"));
@@ -1570,6 +1570,7 @@ static void test_localsys_requests(void) {
 #include "t_shell.h"
 #include "t_rebar.h"
 #include "t_stl.h"
+#include "t_cel.h"
 #include "t_integ.h"
 #include "t_selset.h"
 #include "t_seltopo.h"
@@ -1601,6 +1602,7 @@ int main(void) {
     test_fprintf();
     test_path();
     test_stl();
+    test_cel();
     test_anchor();
     test_measure();
     test_tbtext();

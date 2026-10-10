@@ -287,6 +287,58 @@ static void sets_get(const cv_cfg* c) {
     names_get(c, "surfaces_on", deck_surf_flags(), d->nsurfs, 0, d, true);
 }
 
+/* ---- see-through and contact: the element sets' opacities ("ROCKER 0.3, ..."), the
+   ties and contact pairs drawn, by name ----------------------------------------------- */
+
+static void see_put(cv_cfg* c) {
+    const cv_inp* d = deck_get();
+    const float* sa = deck_set_alpha();
+    if (!d || !sa) return;
+    size_t cap = 1, o = 0;
+    for (int i = 0; i < d->nsets; i++) cap += strlen(d->sets[i].name) + 16;
+    for (int i = 0; i < d->nlinks; i++) cap += strlen(d->links[i].name) + 2;
+    char* s = malloc(cap);
+    if (!s) return;
+    s[0] = 0;
+    for (int i = 0; i < d->nsets; i++)
+        if (d->sets[i].is_elem && sa[i] < 1.f) o += (size_t)snprintf(s + o, cap - o, "%s%s %.3g", o ? ", " : "", d->sets[i].name, sa[i]);
+    cv_cfg_set_long(c, "elset_alpha", s);
+    o = 0; s[0] = 0;
+    const bool* lon = deck_link_flags();
+    for (int i = 0; lon && i < d->nlinks; i++) {
+        const cv_link* l = &d->links[i];
+        if ((l->kind != CV_LINK_TIE && l->kind != CV_LINK_CONTACT) || !lon[i] || !l->name[0]) continue;
+        o += (size_t)snprintf(s + o, cap - o, "%s%s", o ? ", " : "", l->name);
+    }
+    cv_cfg_set_long(c, "pairs_on", s);
+    free(s);
+}
+
+static void see_get(const cv_cfg* c) {
+    const cv_inp* d = deck_get();
+    float* sa = deck_set_alpha();
+    if (!d || !sa) return;
+    char* s = cv_cfg_get_long(c, "elset_alpha");
+    for (int i = 0; s && i < d->nsets; i++) {
+        if (!d->sets[i].is_elem) continue;
+        size_t n = strlen(d->sets[i].name);
+        for (const char* p = s; *p;) {             /* "NAME A" items, comma separated */
+            while (*p == ',' || *p == ' ') p++;
+            if (!strncasecmp(p, d->sets[i].name, n) && p[n] == ' ') { float a = (float)atof(p + n + 1); if (a >= 0 && a <= 1) sa[i] = a; }
+            while (*p && *p != ',') p++;
+        }
+    }
+    free(s);
+    s = cv_cfg_get_long(c, "pairs_on");
+    bool* lon = deck_link_flags();
+    for (int i = 0; s && lon && i < d->nlinks; i++)
+        if ((d->links[i].kind == CV_LINK_TIE || d->links[i].kind == CV_LINK_CONTACT) && d->links[i].name[0])
+            lon[i] = in_names(s, d->links[i].name);
+    free(s);
+    app_see_refresh();
+    deck_refresh_highlight();
+}
+
 /* ---- groups switched off: the values per axis (type code, material, group) ------- */
 
 static const char* const AXIS_KEY[CV_AXIS_N] = { "off_type", "off_material", "off_group" };
@@ -649,6 +701,7 @@ static const plain PLAIN[] = {
     { "label_box_b", 'f', &G.label_box_rgba[2], 0, 1 }, { "label_box_a", 'f', &G.label_box_rgba[3], 0, 1 },
     PB(lin_asme), PI(lin_q, 0, 8),
     PF(rebar_fcd, 1e-12f, 1e30f), PF(rebar_fyd, 1e-12f, 1e30f), PF(rebar_cover, 1e-12f, 1e30f),
+    PF(model_alpha, 0, 1), PB(cel_show), PB(cel_master), PB(cel_links), PB(cel_front), PI(cel_pick, -1, 100000), PI(tie_nodes, 0, 3),
 };
 #undef PB
 #undef PI
@@ -680,6 +733,7 @@ static void plain_get(const cv_cfg* c) {
 typedef struct { const char* name; void (*put)(cv_cfg*); void (*get)(const cv_cfg*); bool kept; } part;
 static const part PARTS[] = {
     { "sets",    sets_put,    sets_get,    false },
+    { "see",     see_put,     see_get,     false },
     { "groups",  groups_put,  groups_get,  false },
     { "hidden",  hidden_put,  hidden_get,  false },
     { "plain",   plain_put,   plain_get,   true  },

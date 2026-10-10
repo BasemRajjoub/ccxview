@@ -30,6 +30,10 @@ What ccxview does, in full. The short version is in the [README](../README.md).
   vertices the nodes, both numbered from 1), no results, so that turning, zooming,
   labels, measurements, selection, clip, mirror and pictures work on it as on any
   mesh; the status bar says "STL geometry".
+- `jobname.cel`, the contact elements CalculiX made in each iteration, and
+  `jobname_WarnNode*.nam`, the node sets of its warnings (the slave nodes a tie
+  could not tie): read with the model when they lie beside it; see Contact and
+  ties below.
 
 ## Elements
 
@@ -181,6 +185,78 @@ puts back (and "show removed elements"), the submodel's global results and
 driven sets, the amplitudes with their points. [results.md](results.md) lists
 the result fields and what is done with each; `samples/modelchange/` shows a
 model that changes from step to step and a submodel of it.
+
+## Contact and ties
+
+Layers > Contact ... (shown when the deck has a `*TIE` or `*CONTACT PAIR`, or a
+`.cel` lies beside the model; `--contact-window`) opens the Contact window: the
+model see-through, the ties and contact pairs, the contact elements. The colours
+are the same everywhere, and a key in a corner of the view names those drawn
+(drag it to move it; "key over the view" turns it off):
+
+| Colour | What |
+|---|---|
+| blue | a master surface; the master face of a contact element |
+| crimson | a slave surface, drawn half see-through over the master |
+| purple | the slave lying on its master (crimson alone where it reaches past it) |
+| green ball | a tie's slave node CalculiX tied |
+| yellow ball | a tie's slave node CalculiX could not tie |
+| orange ball | the slave node of a contact element (node to surface) |
+| orange outline | the slave face of a contact element (surface to surface) |
+| white line | from the slave node (face) to the centre of its master face: the pairing |
+
+- See-through: Layers > opacity (`--opt model_alpha=0.4`) for the whole model,
+  the Contact window for each element set (`--set-alpha ROCKER:0.3`, the two
+  multiplied). See-through faces are blended over everything else, their far
+  sides first and the near ones over them, as the imported geometry's: the parts
+  inside, the contact zone, the deck's symbols show through, the model's own far
+  side too. Coloured by the field or by group, in the PNG and the videos, kept in
+  the model's `.ccxview`.
+- Ties and contact pairs: a box per pair (also Groups > Couplings, or `--set NAME`
+  with the tie's or the pair's interaction name) draws its slave and master
+  surfaces in their colours, on the model as it is deformed, with the very
+  triangles of the faces they lie on. For a tie, its slave nodes: CalculiX writes
+  those it cannot tie to `jobname_WarnNodeMissTiedContact.nam` (ccx 2.22; any
+  `jobname_WarnNode*Miss*.nam` counts), read beside the model, its nodes drawn
+  yellow and the others, the tied ones, green, both in front of the model (they
+  lie between two parts). "slave nodes" chooses tied and not
+  tied, tied only, not tied only (the inverted view: what is connected) or none
+  (`--opt tie_nodes=0..3`); the window counts them per tie ("96 slave nodes, 24 not
+  tied") and lists the warning files read.
+- Contact elements: with `*NODE FILE, CONTACT ELEMENTS` in a step, ccx writes
+  `jobname.cel`, the contact elements of every iteration (in `.inp` syntax, an
+  element set per iteration named `contactelements_st1_in2_at1_it3`: step,
+  increment, attempt, iteration). Read beside the model, opened or dropped while
+  it is open (a `.cel` with no model open opens the model beside it), or
+  `--cel FILE`. The window lists the iterations; drawn are those of the increment
+  on screen (the last iteration of its last attempt: what converged), following
+  the time bar, or one iteration picked from the list (`--opt cel_pick=N`, the
+  list's index from 0; -1 the increment on screen). Not as the small solids ccx
+  writes them (a slave node and a master face's corners make a C3D6, a wedge with
+  the slave node twice), but for what they are: the slave node a ball, the master
+  face filled, a line from the node to the face's centre; surface to surface (a
+  C3D8 of the master and the slave face, written once per integration point, so
+  tens of times) the slave face outlined and each pair once. The count of
+  distinct contact elements of the increment is shown in the window and the key.
+  Their nodes are the model's, so they follow the deformed shape; the slave balls
+  and lines are drawn in front of the model (they lie between two parts, and on
+  an exaggerated shape a slave node sinks into its master face), unless "in front"
+  is unticked (`--opt cel_front=0`). "show", "master faces", "lines" turn the
+  parts off (`cel_show`, `cel_master`, `cel_links`).
+- The `CONTACT` results (`*CONTACT FILE` or `*NODE FILE` with `CDIS`, `CSTR`) are a
+  field like any other: `COPEN`, `CSLIP1`, `CSLIP2`, `CPRESS`, `CSHEAR1`,
+  `CSHEAR2`, on the slave nodes of the active contact elements only, so they
+  colour the slave surface and leave the rest grey (no value). To see `CPRESS`
+  on a slave face lying on its master: hide the master's element set (the eye in
+  Groups) and look at the slave from the master's side, or make the master
+  see-through.
+
+`samples/contact/` holds a rocker pressed onto a plate, node to surface
+(`contact.frd`, `.cel`, 3 increments, the contact strip widening) and surface to
+surface (`contact_s2s`); `samples/tie/` a block tied onto a base it overhangs,
+with the warning file of the 24 slave nodes past the master's end
+(`scripts/gen_contact.py`, `scripts/gen_tie.py`, solved by
+`scripts/solve_showcase.sh contact contact_s2s` and `... tie`).
 
 ## Selection
 
@@ -415,8 +491,8 @@ next time the model is opened ("restored model.ccxview" in the status bar): the
 view (camera, step, field and component, a formula, failure or mesh field,
 per-element, coordinates, deformation, locked range, clip, crop, mirror,
 replicate, cyclic, layers, colour map and bands), units, groups switched off,
-element sets ticked and hidden, node sets and surfaces ticked, elements hidden
-by hand, the path and the history node, the kept linearization lines, the
+element sets ticked and hidden, node sets and surfaces ticked, the element sets'
+opacities and the ties and contact pairs drawn, elements hidden by hand, the path and the history node, the kept linearization lines, the
 comparison run, the imported STL files (each with its look; the path relative to
 the model's folder when the file lies in it, so the folder can move), the
 measurements, the named selections, the labels and the symbols. It is written a moment after a change
