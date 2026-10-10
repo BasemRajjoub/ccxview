@@ -1,7 +1,8 @@
 /* ui_contact.c -- the Contact window (Layers > Contact...): the model and its element
    sets see-through, the ties and contact pairs in their slave and master colours with
    the slave nodes tied or not, the contact elements of the .cel by increment or
-   iteration; and the key of those colours over the view (app_contact.c). */
+   iteration, the contact display (links, status, gap, solids: app_cdisp.c); and the key
+   of those colours over the view (app_contact.c). */
 #include "app.h"
 #include "ui.h"
 #include "sokol_app.h"
@@ -9,6 +10,8 @@
 #include "nk.h"
 #include "sokol_nuklear.h"
 #include "ui_int.h"
+#include "contact.h"
+#include <math.h>
 
 static struct nk_color key_col(int k) { return nk_rgb_f(cv_key_rgb[k][0], cv_key_rgb[k][1], cv_key_rgb[k][2]); }
 
@@ -117,25 +120,22 @@ static void section_cel(struct nk_context* ctx, float s, float row) {
     const cv_cel* c = app_contact_cel();
     nk_layout_row_dynamic(ctx, row, 1);
     nk_label_colored(ctx, "Contact elements", NK_TEXT_LEFT, P.accent);
-    if (!c) {
-        nk_label_colored(ctx, "no jobname.cel beside the model (*NODE FILE, CONTACT ELEMENTS)", NK_TEXT_LEFT, P.dim);
-        return;
-    }
     char lab[300];
-    snprintf(lab, sizeof lab, "%s: %d iterations", cv_basename(app_contact_cel_path()), c->nsets);
-    nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.dim);
+    if (!c) nk_label_colored(ctx, "no jobname.cel beside the model (*NODE FILE, CONTACT ELEMENTS)", NK_TEXT_LEFT, P.dim);
+    else {
+        snprintf(lab, sizeof lab, "%s: %d iterations", cv_basename(app_contact_cel_path()), c->nsets);
+        nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.dim);
+    }
     nk_layout_row_dynamic(ctx, row, 3);
-    tip(ctx, "Draw the contact elements: the slave node (orange), the master face it is paired with (blue),\n"
-             "a line from the node to the face's centre (white); surface to surface: the slave face outlined");
+    tip(ctx, "Draw the contact: the slave nodes as the display below chooses (links, status, gap, solids),\n"
+             "the master faces of the contact elements (blue); surface to surface: the slave faces outlined");
     if (nk_checkbox_label(ctx, "show", &G.cel_show)) app_contact_refresh();
     tip(ctx, "The master faces of the contact elements, filled blue");
     if (nk_checkbox_label(ctx, "master faces", &G.cel_master)) app_contact_refresh();
-    tip(ctx, "A line from each slave node (face) to the centre of its master face: the pairing");
-    if (nk_checkbox_label(ctx, "lines", &G.cel_links)) app_contact_refresh();
-    nk_layout_row_dynamic(ctx, row, 1);
-    tip(ctx, "The slave nodes and the lines in front of the model, so the contact zone shows inside an\n"
-             "assembly and on an exaggerated shape (where a slave node may sink into its master face)");
-    nk_checkbox_label(ctx, "slave nodes and lines in front of the model", &G.cel_front);
+    tip(ctx, "The slave nodes, links and status patches in front of the model, so the contact zone shows\n"
+             "inside an assembly, under a part and on an exaggerated shape");
+    nk_checkbox_label(ctx, "in front", &G.cel_front);
+    if (!c) return;
     /* which: the increment on screen (its last iteration), or any iteration of the file */
     nk_layout_row_template_begin(ctx, row);
     nk_layout_row_template_push_static(ctx, 70 * s);
@@ -167,6 +167,74 @@ static void section_cel(struct nk_context* ctx, float s, float row) {
     } else nk_label_colored(ctx, "none in the increment on screen", NK_TEXT_LEFT, P.dim);
 }
 
+/* a length that is 0 for automatic: its box, and the value in use beside it */
+static bool auto_row(struct nk_context* ctx, float s, float row, const char* lab, const char* id, float* v, float used, const char* help) {
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 110 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 110 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label(ctx, lab, NK_TEXT_LEFT);
+    tip(ctx, help);
+    float before = *v, step = CV_MAX(used, 1e-9f) * 0.1f;
+    nk_property_float(ctx, id, 0.f, v, 1e30f, step, step * 0.1f);
+    char t[48], n[24];
+    fmt_num(n, sizeof n, used);
+    snprintf(t, sizeof t, *v > 0 ? "%s" : "auto %s", n);
+    nk_label_colored(ctx, t, NK_TEXT_RIGHT, P.dim);
+    return *v != before;
+}
+
+static void section_display(struct nk_context* ctx, float s, float row) {
+    const cv_cinfo* I = app_cdisp_info();
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label_colored(ctx, "Contact display", NK_TEXT_LEFT, P.accent);
+    static const char* const names[4] = { "links", "status", "gap", "solids" };
+    static const char* const help[4] = {
+        "Links: each slave node a ball, filled when closed, a ring when open, and a line to its projection\n"
+        "on its master face, coloured by the true gap: red into the face, green at 0, blue open.\n"
+        "A closed node sits on its face: no line",
+        "Status: the slave faces in a patch per node, coloured by its contact status as Ansys and Abaqus\n"
+        "show it: far open, near open (within the near distance), sliding, sticking (|CSHEAR| < mu CPRESS),\n"
+        "penetrating (deeper than the tolerance)",
+        "Gap: the slave faces coloured by the gap (COPEN, else measured): red overclosed, white 0, blue open;\n"
+        "the two ends apart, so a small overclosure still reads against a wide gap",
+        "Solids: the contact elements of the .cel as CalculiX wrote them, see-through, from the slave node\n"
+        "to its master face: the gap is the layer's thickness, coloured as in Gap" };
+    nk_layout_row_dynamic(ctx, row, 4);
+    for (int i = 0; i < 4; i++) {
+        bool on = (G.cel_mode >> i) & 1;
+        tip(ctx, help[i]);
+        if (nk_checkbox_label(ctx, names[i], &on)) {
+            G.cel_mode = on ? G.cel_mode | 1 << i : G.cel_mode & ~(1 << i);
+            G.cel_show = true;
+            app_contact_refresh();
+        }
+    }
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "With the shape exaggerated (deformation scale not 1) the screen shows the initial gap plus\n"
+             "the scale times the motion: a closed node seems to sink into its face. At true scale the\n"
+             "slave nodes and links are drawn from their projection out by the true gap");
+    if (nk_checkbox_label(ctx, "links and solids at true scale (shape exaggerated)", &G.cel_true)) app_contact_refresh();
+    bool ch = false;
+    ch |= auto_row(ctx, s, row, "gap colours to", "#open", &G.cel_gap_max, I->hi,
+                   "The open end of the gap colours (blue): 0 for the widest gap shown");
+    ch |= auto_row(ctx, s, row, "overclosure to", "#in", &G.cel_pen_max, -I->lo,
+                   "The penetration end of the gap colours (red): 0 for the deepest shown, at least the tolerance");
+    ch |= auto_row(ctx, s, row, "tolerance", "#tol", &G.cel_tol, I->tol,
+                   "Closed within this gap where there is no CPRESS; penetrating deeper than it.\n0 for 0.5 % of the master faces' mean edge");
+    ch |= auto_row(ctx, s, row, "near distance", "#near", &G.cel_near, I->near,
+                   "Open within this gap: near open (Ansys' near field); beyond it far open.\n0 for 10 % of the master faces' mean edge");
+    if (ch) app_contact_refresh();
+    nk_layout_row_dynamic(ctx, row, 1);
+    char t[160];
+    if (I->nodes) {
+        snprintf(t, sizeof t, "closed %d / open %d / penetrating %d  (gap: %s)", I->closed, I->open, I->pen,
+                 I->copen && I->measured ? "COPEN, else measured" : I->copen ? "COPEN" : I->measured ? "measured" : "-");
+        nk_label(ctx, t, NK_TEXT_LEFT);
+    } else nk_label_colored(ctx, "no slave nodes: no contact pair in the deck, no .cel", NK_TEXT_LEFT, P.dim);
+}
+
 void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open;
     if (!G.show_contact || !G.loaded) { was_open = false; return; }
@@ -174,7 +242,7 @@ void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int 
     was_open = true;
     /* as tall as its rows: opacities, pairs (a tie two, and the slave nodes list), warning
        files, the contact elements' six, the key's box */
-    int nr = 6 + app_contact_nam_count() + (app_contact_cel() ? 6 : 1), ne = 0, ties = 0;
+    int nr = 13 + app_contact_nam_count() + (app_contact_cel() ? 6 : 3), ne = 0, ties = 0;
     const cv_inp* d = deck_get();
     for (int i = 0; d && i < d->nsets; i++) ne += d->sets[i].is_elem;
     for (int i = 0; d && i < d->nlinks; i++) { nr += d->links[i].kind == CV_LINK_TIE ? 2 : d->links[i].kind == CV_LINK_CONTACT; ties += d->links[i].kind == CV_LINK_TIE; }
@@ -188,6 +256,8 @@ void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int 
         uii_hsep(ctx, s);
         section_cel(ctx, s, row);
         uii_hsep(ctx, s);
+        section_display(ctx, s, row);
+        uii_hsep(ctx, s);
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, "The key of these colours in a corner of the view while any of them is drawn (drag it to move it)");
         nk_checkbox_label(ctx, "key over the view", &G.contact_key);
@@ -198,11 +268,35 @@ void uii_window_contact(struct nk_context* ctx, float s, float row, int fw, int 
 /* ---- the key: a swatch and a line per colour drawn, over the view ------------------ */
 static ov_drag key_drag;
 
+/* a gap colour bar across the key: the map, its ends and 0 below */
+static void gap_bar(struct nk_command_buffer* cv, const struct nk_user_font* f, float x, float y, float w, float lh,
+                    int map, const cv_cinfo* I, struct nk_color ink, float s) {
+    int n = 48;
+    float bh = lh * 0.42f, bw = w / (float)n;
+    for (int i = 0; i < n; i++) {
+        float g = I->lo + (I->hi - I->lo) * ((float)i + 0.5f) / (float)n, c[3];
+        cv_contact_gap_rgb(map, g, I->lo, I->hi, map == CV_CGAP_LINKS ? I->tol : 0.f, c);
+        nk_fill_rect(cv, nk_rect(x + bw * (float)i, y + lh * 0.3f, bw + 1.f, bh), 0, nk_rgb_f(c[0], c[1], c[2]));
+    }
+    nk_stroke_rect(cv, nk_rect(x, y + lh * 0.3f, w, bh), 0, 1, ink);
+    float z = x + w * (-I->lo) / (I->hi - I->lo);
+    nk_stroke_line(cv, z, y + lh * 0.18f, z, y + lh * 0.3f + bh + 2 * s, 1.5f * s, ink);
+    char a[24], b[24];
+    fmt_num(a, sizeof a, I->lo); fmt_num(b, sizeof b, I->hi);
+    float ty = y + lh, wa = ink_width(f, a, (int)strlen(a)), wb = ink_width(f, b, (int)strlen(b)), w0 = ink_width(f, "0", 1);
+    ink_text(cv, f, x, ty, wa + 4, a, ink);
+    ink_text(cv, f, x + w - wb, ty, wb + 4, b, ink);
+    float zx = CV_MAX(x + wa + 6 * s, CV_MIN(z - w0 * 0.5f, x + w - wb - w0 - 6 * s));
+    ink_text(cv, f, zx, ty, w0 + 4, "0", ink);
+}
+
 void uii_window_contact_key(struct nk_context* ctx, float s, float row) {
     int what[CV_KEY_N];
-    if (!G.loaded || !G.contact_key || !app_contact_drawn(what) || (!G.show_hl && !G.cel_show)) return;
-    enum { SW_FILL, SW_BALL, SW_FRAME, SW_LINE };
-    struct { int sw; struct nk_color c; char t[96]; } rows[CV_KEY_N + 1];
+    const cv_cinfo* I = app_cdisp_info();
+    bool disp = G.cel_show && I->drawn && I->nodes;
+    if (!G.loaded || !G.contact_key || (!app_contact_drawn(what) && !disp) || (!G.show_hl && !G.cel_show)) return;
+    enum { SW_FILL, SW_BALL, SW_FRAME, SW_LINE, SW_RING, SW_TEXT, SW_BAR_LINKS, SW_BAR_GAP };
+    struct { int sw; struct nk_color c; char t[96]; } rows[CV_KEY_N + 24];
     int n = 0;
     #define ROW(kind, col, ...) do { rows[n].sw = kind; rows[n].c = col; snprintf(rows[n].t, sizeof rows[n].t, __VA_ARGS__); n++; } while (0)
     if (what[CV_KEY_MASTER]) ROW(SW_FILL, key_col(CV_KEY_MASTER), "master surface");
@@ -213,20 +307,53 @@ void uii_window_contact_key(struct nk_context* ctx, float s, float row) {
     }
     if (what[CV_KEY_TIED]) ROW(SW_BALL, key_col(CV_KEY_TIED), "tied slave node  %d", what[CV_KEY_TIED]);
     if (what[CV_KEY_FREE]) ROW(SW_BALL, key_col(CV_KEY_FREE), "slave node not tied  %d", what[CV_KEY_FREE]);
-    if (what[CV_KEY_CSLAVE])
-        ROW(app_contact_s2s() ? SW_FRAME : SW_BALL, key_col(CV_KEY_CSLAVE), "%s  %u",
-            app_contact_s2s() ? "slave face in contact" : "slave node in contact", app_contact_cel_count());
-    if (what[CV_KEY_LINK]) ROW(SW_LINE, key_col(CV_KEY_LINK), "slave to master face");
+    if (what[CV_KEY_CSLAVE] && app_contact_s2s()) ROW(SW_FRAME, key_col(CV_KEY_CSLAVE), "slave face of a contact element");
+    struct nk_color ink = legend_ink();
+    if (disp) {
+        float c[3];
+        if (I->drawn & CV_CMODE_LINKS) {
+            cv_contact_gap_rgb(CV_CGAP_LINKS, 0, I->lo, I->hi, I->tol, c);
+            ROW(SW_BALL, nk_rgb_f(c[0], c[1], c[2]), "closed  %d", I->closed - I->pen);
+            if (I->pen) { cv_contact_gap_rgb(CV_CGAP_LINKS, I->lo, I->lo, I->hi, I->tol, c); ROW(SW_BALL, nk_rgb_f(c[0], c[1], c[2]), "penetrating  %d", I->pen); }
+            cv_contact_gap_rgb(CV_CGAP_LINKS, I->hi, I->lo, I->hi, I->tol, c);
+            ROW(SW_RING, nk_rgb_f(c[0], c[1], c[2]), "open  %d", I->open);
+            ROW(SW_TEXT, ink, "gap, line to the master face:");
+            ROW(SW_BAR_LINKS, ink, " ");
+            ROW(SW_TEXT, ink, " ");
+        }
+        if (I->drawn & CV_CMODE_STATUS) {
+            ROW(SW_TEXT, ink, "status (%d slave nodes):", I->nodes);
+            for (int k = 0; k < CV_CST_N; k++)
+                if (I->cat[k]) ROW(SW_FILL, nk_rgb_f(cv_cst_rgb[k][0], cv_cst_rgb[k][1], cv_cst_rgb[k][2]), "%s  %d", cv_cst_names[k], I->cat[k]);
+        }
+        if (I->drawn & (CV_CMODE_GAP | CV_CMODE_SOLIDS)) {
+            ROW(SW_TEXT, ink, "%s:", (I->drawn & CV_CMODE_GAP) ? ((I->drawn & CV_CMODE_SOLIDS) ? "gap, faces and solids" : "gap on the slave faces")
+                                                               : "gap, contact element solids");
+            ROW(SW_BAR_GAP, ink, " ");
+            ROW(SW_TEXT, ink, " ");
+        }
+        if (!(I->drawn & CV_CMODE_LINKS)) ROW(SW_TEXT, ink, "closed %d / open %d / penetrating %d", I->closed, I->open, I->pen);
+        float sc = G.deform ? G.deform_scale : 0.f;
+        if (G.disp && fabsf(sc - 1.f) > 1e-4f && (I->drawn & (CV_CMODE_LINKS | CV_CMODE_SOLIDS))) {
+            if (G.cel_true) ROW(SW_TEXT, ink, "gap drawn at true scale (shape x%.3g)", sc);
+            else ROW(SW_TEXT, ink, "gap on screen x%.3g, colours true scale", sc);
+        }
+        ROW(SW_TEXT, ink, "gap: %s", I->copen && I->measured ? "COPEN, else measured" : I->copen ? "COPEN" : I->measured ? "measured from the shape" : "-");
+    }
     #undef ROW
     const struct nk_user_font* f = ctx->style.font;
     char head[160] = "Contact";
     const cv_cel* c = app_contact_cel();
     int ks = app_contact_cel_set();
-    if (c && ks >= 0 && (what[CV_KEY_CSLAVE] || what[CV_KEY_LINK]) && c->sets[ks].step)
+    if (c && ks >= 0 && c->sets[ks].step)
         snprintf(head, sizeof head, "Contact  inc %d it %d", c->sets[ks].inc, c->sets[ks].it);
     float tw = ink_width(f, head, (int)strlen(head));
-    for (int i = 0; i < n; i++) tw = CV_MAX(tw, ink_width(f, rows[i].t, (int)strlen(rows[i].t)));
     float lh = row * 0.95f, sw = row * 1.1f;
+    for (int i = 0; i < n; i++) {
+        float wi = ink_width(f, rows[i].t, (int)strlen(rows[i].t));
+        tw = CV_MAX(tw, rows[i].sw == SW_TEXT ? wi - sw - 8 * s : wi);
+    }
+    tw = CV_MAX(tw, 150 * s);
     float w = tw + sw + 26 * s, h = (n + 1) * lh + 14 * s;
     cv_anchor a = G.ckey_pos.set ? G.ckey_pos : (cv_anchor){ true, CV_BL, 10, 112 };   /* above the axes gizmo */
     overlay_drag(ctx, &key_drag, "Contact key", cv_anchor_place(a, view_box(), w, h, s), 0, &G.ckey_pos, s);
@@ -240,7 +367,8 @@ void uii_window_contact_key(struct nk_context* ctx, float s, float row) {
         struct nk_command_buffer* cv = nk_window_get_canvas(ctx);
         nk_push_scissor(cv, r);
         float x = r.x + 8 * s, y = r.y + 6 * s;
-        struct nk_color ink = legend_ink(), rim = nk_rgb(30, 30, 30);
+        struct nk_color rim = nk_rgb(30, 30, 30);
+        ink = legend_ink();
         ink_text(cv, f, x, y + (lh - f->height) * 0.5f, w, head, ink);
         y += lh;
         for (int i = 0; i < n; i++) {
@@ -253,11 +381,19 @@ void uii_window_contact_key(struct nk_context* ctx, float s, float row) {
                 nk_stroke_line(cv, x + 1, cy, x + sw - 1, cy, 4 * s, rim);
                 nk_stroke_line(cv, x + 2, cy, x + sw - 2, cy, 2 * s, rows[i].c);
                 break;
+            case SW_RING:
+                nk_stroke_circle(cv, nk_rect(cx - rr, cy - rr, 2 * rr, 2 * rr), 3.f * s, rim);
+                nk_stroke_circle(cv, nk_rect(cx - rr, cy - rr, 2 * rr, 2 * rr), 2.f * s, rows[i].c);
+                break;
+            case SW_TEXT: case SW_BAR_LINKS: case SW_BAR_GAP: break;
             default:
                 nk_fill_circle(cv, nk_rect(cx - rr, cy - rr, 2 * rr, 2 * rr), rows[i].c);
                 nk_stroke_circle(cv, nk_rect(cx - rr, cy - rr, 2 * rr, 2 * rr), 1, rim);
             }
-            ink_text(cv, f, x + sw + 8 * s, y + (lh - f->height) * 0.5f, tw + 4, rows[i].t, ink);
+            if (rows[i].sw == SW_BAR_LINKS || rows[i].sw == SW_BAR_GAP)
+                gap_bar(cv, f, x + 2 * s, y, w - 20 * s, lh, rows[i].sw == SW_BAR_LINKS ? CV_CGAP_LINKS : CV_CGAP_CONTOUR, I, ink, s);
+            else if (rows[i].sw == SW_TEXT) ink_text(cv, f, x, y + (lh - f->height) * 0.5f, w, rows[i].t, legend_dim());
+            else ink_text(cv, f, x + sw + 8 * s, y + (lh - f->height) * 0.5f, tw + 4, rows[i].t, ink);
             y += lh;
         }
     }

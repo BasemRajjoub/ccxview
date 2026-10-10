@@ -168,6 +168,10 @@ int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
         snprintf(out[n].label, sizeof out[n].label, "%s", d->comp[c][0] ? d->comp[c] : "C?");
         out[n++].comp = c;
     }
+    if (!strcmp(d->name, "CONTACT") && n < max) {     /* far / near open, sliding, sticking ... per slave node */
+        snprintf(out[n].label, sizeof out[n].label, "STATUS");
+        out[n++].comp = CV_COMP_STATUS;
+    }
     return n;
 }
 

@@ -461,6 +461,7 @@ static void apply_load(cv_job* j) {
     else app_view(CV_VIEW_ISO);
     app_contact_model();                 /* the contact elements and warning node sets beside it */
     app_sidecar_load(reload);            /* what was set up for this model; the command line below wins */
+    if (!reload) { settings_apply_model(); app_contact_refresh(); }
     if (reload && G.crop_on && !app_busy()) app_groups_changed();   /* the crop box kept */
     G.watch_mtime = cv_file_mtime(G.path); G.watch_size = cv_file_size(G.path); G.watch_t = cv_now();
     if (O.fly) app_set_flight(true);

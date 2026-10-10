@@ -397,7 +397,7 @@ static const char* kFS =
     GLSL_HDR
     "uniform vec4 u_color;\n"                /* solid colour */
     "uniform vec4 u_rng;\n"                  /* min, max, bands, mode */
-    "uniform vec4 u_flags;\n"                /* x: unused, y: shade, z: on top, w: selected (tinted) */
+    "uniform vec4 u_flags;\n"                /* x: points as rings, y: shade, z: on top, w: selected (tinted) */
     "uniform vec4 u_oora;\n"                 /* values above the locked range: rgb, w: 0 the map's end, 1 the rgb, 3 hidden */
     "uniform vec4 u_oorb;\n"                 /* below */
     "uniform vec4 u_pz;\n"                   /* projection: z_clip = x*z + y, w_clip = z*z + w */
@@ -419,6 +419,7 @@ static const char* kFS =
     "  vec2 pc = gl_PointCoord * 2.0 - 1.0;\n"
     "  float d2 = dot(pc, pc);\n"
     "  if (d2 > 1.0) discard;\n"
+    "  if (u_flags.x > 0.5 && d2 < 0.36) discard;\n"      /* a ring: an open slave node */
     "  float nz = sqrt(1.0 - d2);\n"
     "  float vz = v_vpos.z + nz * v_r;\n"
     "  float zd = (u_pz.x * vz + u_pz.y) / (u_pz.z * vz + u_pz.w) * 0.5 + 0.5;\n"
@@ -465,6 +466,8 @@ static const char* kFS =
 typedef struct { float mvp[16]; float mv[16]; float p[4]; float q[4]; } vs_params;
 static float g_tint;                         /* the next layers are the selection: toned toward yellow (u_flags.w) */
 static float g_alpha = 1.f;                  /* the next layers' opacity (imported geometry): u_color.a */
+static float g_ring;                         /* the next points are rings (u_flags.x) */
+static sg_view g_cmap;                       /* the next layers' colour map instead of the field's (the contact maps) */
 typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; float oora[4]; float oorb[4]; } fs_params;
 
 /* ---- state ------------------------------------------------------------------- */
@@ -495,6 +498,7 @@ static struct {
     sg_buffer   body[2];  int body_n[2];                /* the unit body: round with both end discs; light, for great numbers */
     sg_image    cmap_img;  sg_view cmap_view;
     sg_image    div_img;   sg_view div_view;   /* cool-warm, fixed: the principal cross by value */
+    sg_image    cmap_c[3];  sg_view cview_c[3];  int cstat_n;   /* the contact maps: links, contour, status */
     sg_image    etex_img;  sg_view etex_view;
     sg_buffer   ib_grp;               /* skin triangles ordered by group */
     uint32_t*   grp_first;            /* ngroups + 1 */
@@ -568,6 +572,27 @@ static void make_cmap(int cm, bool reverse, bool grey, sg_image* img, sg_view* v
 }
 
 void cv_render_colormap(int cm, bool reverse, bool grey) { make_cmap(cm, reverse, grey, &R.cmap_img, &R.cmap_view); }
+
+static void make_table(const float* rgb, int n, sg_image* img, sg_view* view) {
+    uint8_t px[256 * 4];
+    n = n < 1 ? 1 : n > 256 ? 256 : n;
+    for (int i = 0; i < n; i++) {
+        for (int k = 0; k < 3; k++) px[4 * i + k] = (uint8_t)(clamp01(rgb ? rgb[3 * i + k] : 0.6f) * 255.f + 0.5f);
+        px[4 * i + 3] = 255;
+    }
+    if (view->id) sg_destroy_view(*view);
+    if (img->id) sg_destroy_image(*img);
+    *img = sg_make_image(&(sg_image_desc){ .width = n, .height = 1, .pixel_format = SG_PIXELFORMAT_RGBA8,
+                                           .data.mip_levels[0] = { px, (size_t)n * 4 } });
+    *view = sg_make_view(&(sg_view_desc){ .texture.image = *img });
+}
+
+void cv_render_contact_maps(const float* links, const float* contour, int n, const float* status, int ns) {
+    make_table(links, n, &R.cmap_c[0], &R.cview_c[0]);
+    make_table(contour, n, &R.cmap_c[1], &R.cview_c[1]);
+    make_table(status, ns, &R.cmap_c[2], &R.cview_c[2]);
+    R.cstat_n = ns < 1 ? 1 : ns > 256 ? 256 : ns;
+}
 
 static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, const char* fs_src) {
     return sg_make_shader(&(sg_shader_desc){
@@ -865,6 +890,7 @@ void cv_render_init(void) {
         .wrap_u = SG_WRAP_CLAMP_TO_EDGE, .wrap_v = SG_WRAP_CLAMP_TO_EDGE });
     cv_render_colormap(CV_CMAP_FAST, false, false);
     make_cmap(CV_CMAP_COOLWARM, false, false, &R.div_img, &R.div_view);
+    cv_render_contact_maps(NULL, NULL, 1, NULL, 1);
     float zero = 0;
     make_etex(&zero, 1, 1);
 }
@@ -968,7 +994,7 @@ static void uniforms(const cv_draw* d, bool has_disp, bool has_disp2, int mode, 
     fs_params fs = {
         .color = { rgb[0], rgb[1], rgb[2], g_alpha },
         .rng = { d->rmin, d->rmax, (float)d->bands, (float)mode },
-        .flags = { 0.f, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
+        .flags = { g_ring, shade ? 1.f : 0.f, on_top ? 1.f : 0.f, g_tint },
         .pz = { d->proj[10], d->proj[14], d->proj[11], d->proj[15] },
         .clip = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 1e30f },
         .oora = { d->oor[0][0], d->oor[0][1], d->oor[0][2], d->oor[0][3] },
@@ -991,7 +1017,7 @@ static void draw_layer(sg_pipeline pip, vset v, sg_buffer ib, int count, int mod
             [3] = v.disp2.id ? v.disp2 : v.pos,    /* no second part: its scale is 0 */
         },
         .index_buffer = ib,
-        .views = { [0] = R.cmap_view, [1] = R.etex_view },
+        .views = { [0] = g_cmap.id ? g_cmap : R.cmap_view, [1] = R.etex_view },
         .samplers = { [0] = R.smp_lin, [1] = R.smp_near },
     };
     sg_apply_bindings(&b);
@@ -1172,10 +1198,40 @@ static void draw_contact(const cv_draw* d) {
             draw_layer(R.pip_tri_ni, A[CV_AUX_CMST].v, NO_IB, (int)A[CV_AUX_CMST].n, CV_COLOR_SOLID, k[CV_KEY_MASTER], d->shade, d, 1, false, 3 * PULL, 0);
         if (A[CV_AUX_CMLN].n)
             draw_layer(R.pip_line_ni, A[CV_AUX_CMLN].v, NO_IB, (int)A[CV_AUX_CMLN].n, CV_COLOR_SOLID, mln, false, d, 1, false, 4 * PULL, 0);
+        /* the contact display: its own maps, over its own ranges, never banded or greyed */
+        cv_draw g = *d, st = *d;
+        g.rmin = d->cgap_lo; g.rmax = d->cgap_hi; g.bands = 0; memset(g.oor, 0, sizeof g.oor);
+        st.rmin = -0.5f; st.rmax = (float)R.cstat_n - 0.5f; st.bands = 0; memset(st.oor, 0, sizeof st.oor);
+        const float grey[3] = { 0.6f, 0.6f, 0.6f }, edge[3] = { 0.08f, 0.08f, 0.10f };
+        g_cmap = R.cview_c[1];
+        if (A[CV_AUX_CGAP].n)
+            draw_layer(R.pip_tri_ni, A[CV_AUX_CGAP].v, NO_IB, (int)A[CV_AUX_CGAP].n, CV_COLOR_NODAL, grey, d->shade, &g, 1, d->contact_front, 5 * PULL, 0);
+        g_cmap = R.cview_c[2];
+        if (A[CV_AUX_CSTAT].n)
+            draw_layer(R.pip_tri_ni, A[CV_AUX_CSTAT].v, NO_IB, (int)A[CV_AUX_CSTAT].n, CV_COLOR_NODAL, grey, d->shade, &st, 1, d->contact_front, 6 * PULL, 0);
+        if (A[CV_AUX_CSTPT].n)
+            draw_layer(R.pip_pt_ni, A[CV_AUX_CSTPT].v, NO_IB, (int)A[CV_AUX_CSTPT].n, CV_COLOR_NODAL, grey, false, &st, d->hl_size, d->contact_front, 0.f, 0);
+        g_cmap.id = 0;
         draw_inst_map(CV_INST_CSLN, CV_COLOR_SOLID, k[CV_KEY_CSLAVE], d, 1.1f, R.cmap_view, d->contact_front);
-        draw_inst_map(CV_INST_CLINK, CV_COLOR_SOLID, k[CV_KEY_LINK], d, 0.9f, R.cmap_view, d->contact_front);
+        draw_inst_map(CV_INST_CLINK, CV_COLOR_NODAL, k[CV_KEY_LINK], &g, 0.9f, R.cview_c[0], d->contact_front);
+        g_cmap = R.cview_c[0];
         if (A[CV_AUX_CSLV].n)
-            draw_layer(R.pip_pt_ni, A[CV_AUX_CSLV].v, NO_IB, (int)A[CV_AUX_CSLV].n, CV_COLOR_SOLID, k[CV_KEY_CSLAVE], false, d, d->hl_size, d->contact_front, 0.f, 0);
+            draw_layer(R.pip_pt_ni, A[CV_AUX_CSLV].v, NO_IB, (int)A[CV_AUX_CSLV].n, CV_COLOR_NODAL, k[CV_KEY_CSLAVE], false, &g, d->hl_size, d->contact_front, 0.f, 0);
+        if (A[CV_AUX_CSLVO].n) {
+            g_ring = 1.f;
+            draw_layer(R.pip_pt_ni, A[CV_AUX_CSLVO].v, NO_IB, (int)A[CV_AUX_CSLVO].n, CV_COLOR_NODAL, k[CV_KEY_CSLAVE], false, &g, d->hl_size * 1.15f, d->contact_front, 0.f, 0);
+            g_ring = 0.f;
+        }
+        g_cmap.id = 0;
+        if (A[CV_AUX_CSOLN].n)
+            draw_layer(R.pip_line_ni, A[CV_AUX_CSOLN].v, NO_IB, (int)A[CV_AUX_CSOLN].n, CV_COLOR_SOLID, edge, false, d, 1, false, 7 * PULL, 0);
+        if (A[CV_AUX_CSOL].n) {                    /* see-through, over everything drawn so far */
+            g_cmap = R.cview_c[1];
+            g_alpha = d->csol_alpha > 0 ? d->csol_alpha : 0.45f;
+            draw_layer(R.pip_tri_blend_ni, A[CV_AUX_CSOL].v, NO_IB, (int)A[CV_AUX_CSOL].n, CV_COLOR_NODAL, grey, d->shade, &g, 1, false, 0.f, 0);
+            g_alpha = 1.f;
+            g_cmap.id = 0;
+        }
     }
 }
 

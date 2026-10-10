@@ -324,6 +324,24 @@ static void refresh_extremes(const float* v, const uint32_t* ids, size_t n) {
    of the visible elements (skin.pt), or the visible elements in per-element
    mode. Hidden groups and the crop box change the range on purpose. Gauss
    point fields range over every point of the .dat block. */
+/* the field on screen is CONTACT's STATUS: categories, not amounts */
+static bool status_field(void) {
+    return G.field_src == 0 && G.has_field && G.comp == CV_COMP_STATUS && !strcmp(G.field_name, "CONTACT");
+}
+
+/* a field whose 0 is no middle: COPEN (overclosure a few microns, gaps of a millimetre: a
+   range made symmetric gives the overclosure and 0 one colour) and the status */
+static bool one_sided(void) {
+    if (G.field_src != 0 || strcmp(G.field_name, "CONTACT")) return false;
+    int fi = find_field(G.step, "CONTACT");
+    const cv_field_desc* d = fi >= 0 ? &G.frd.steps[G.step].fields[fi] : NULL;
+    return G.comp == CV_COMP_STATUS || (d && G.comp >= 0 && G.comp < d->ncomp && !strcmp(d->comp[G.comp], "COPEN"));
+}
+
+const char* app_field_category(double v) {
+    return status_field() ? app_cdisp_status_name(v) : NULL;
+}
+
 void app_refresh_range(void) {
     if (!G.has_field) return;
     const float* v = G.elem_mode ? G.elem_val : G.scalar;
@@ -354,7 +372,7 @@ void app_refresh_range(void) {
     if (app_label_on(CV_LABEL_MINMAX)) app_label_changed();
     if (!G.range_lock) {
         G.rmin = G.data_min; G.rmax = G.data_max;
-        if (G.center_zero) cv_center_zero(&G.rmin, &G.rmax);
+        if (G.center_zero && !one_sided()) cv_center_zero(&G.rmin, &G.rmax);
     }
 }
 
@@ -556,6 +574,8 @@ void refresh_field(void) {
             float* tv = G.comp >= 0 ? to_csys(d, &G.frd, vals) : NULL;   /* invariants need no turning */
             cv_field_scalar(tv ? tv : vals, d->ncomp, G.frd.n_nodes, G.comp, G.scalar);
             free(tv);
+            if (G.comp == CV_COMP_STATUS && !strcmp(d->name, "CONTACT") && !app_cdisp_status_field(G.scalar))
+                for (uint32_t i = 0; i < G.frd.n_nodes; i++) G.scalar[i] = NAN;
             bool diff = subtract_compare(d);
             cv_elem_mean(&G.frd, G.scalar, G.elem_val);
             G.has_field = true;
@@ -702,6 +722,8 @@ void app_cmap_rgb(float t, float rgb[3]) {
 
 void app_legend_fmt(char* out, size_t n, double v) {
     if (v != v) { snprintf(out, n, "-"); return; }
+    const char* cat = fabs(v - floor(v + 0.5)) < 1e-3 ? app_field_category(v) : NULL;
+    if (cat) { snprintf(out, n, "%s", cat); return; }
     if (G.legend_fmt == 1) {                 /* fixed decimals, unless the range is too small to show any: scientific then */
         double big = CV_MAX(fabs(G.rmin), fabs(G.rmax));
         if (big > 0 && big < pow(10.0, 1 - G.legend_decimals)) snprintf(out, n, "%.*e", G.legend_decimals, v);

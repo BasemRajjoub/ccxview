@@ -165,6 +165,8 @@ static void test_steps(void) {
         "*SURFACE, NAME=SB\nEB, S4\n"
         "*SURFACE, NAME=SM\nEA, S3\n"
         "*SURFACE, NAME=SS\nEB, S3\n"
+        "*SURFACE INTERACTION, NAME=I0\n*SURFACE BEHAVIOR, PRESSURE-OVERCLOSURE=HARD\n"
+        "*SURFACE INTERACTION, NAME=i1\n*SURFACE BEHAVIOR, PRESSURE-OVERCLOSURE=LINEAR\n1e6\n*FRICTION\n0.3, 5e4\n"
         "*CONTACT PAIR, INTERACTION=I1, TYPE=SURFACE TO SURFACE\nSS, SM\n"
         "*AMPLITUDE, NAME=RAMP\n0., 0., 1., 1., 2., 0.5\n"
         "*AMPLITUDE, NAME=TOT, TIME=TOTAL TIME, SHIFTY=1.\n0., 0.\n4., 4.\n"
@@ -247,6 +249,7 @@ static void test_steps(void) {
     int pair = -1;
     for (int k = 0; k < d.nlinks; k++) if (d.links[k].kind == CV_LINK_CONTACT) pair = k;
     CHECK(pair >= 0 && cv_inp_link_active(&d, 1, pair) && !cv_inp_link_active(&d, 2, pair));
+    if (pair >= 0) CHECK_NEAR(d.links[pair].mu, 0.3, 1e-6);          /* *FRICTION of its interaction, any case */
     cv_inp_free(&d); free(d.msgs.a);
 }
 

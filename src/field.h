@@ -10,8 +10,9 @@
    .frd writes XY YZ ZX, the .dat xy xz yz, hence two sets of codes. */
 enum { CV_COMP_MAG = -1, CV_COMP_MISES = -2,
        CV_COMP_P1 = -3, CV_COMP_P2 = -4, CV_COMP_P3 = -5,               /* shears XY YZ ZX */
-       CV_COMP_P1_XZ = -6, CV_COMP_P2_XZ = -7, CV_COMP_P3_XZ = -8 };     /* shears xy xz yz */
-#define CV_MAX_OPTS (CV_MAX_COMP + 5)   /* components + magnitude, von Mises, 3 principal */
+       CV_COMP_P1_XZ = -6, CV_COMP_P2_XZ = -7, CV_COMP_P3_XZ = -8,      /* shears xy xz yz */
+       CV_COMP_STATUS = -9 };   /* CONTACT: the contact status, worked out by the app (NaN here) */
+#define CV_MAX_OPTS (CV_MAX_COMP + 5)   /* components + magnitude, von Mises, 3 principal (or a status) */
 
 typedef struct {
     char label[40];

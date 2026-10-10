@@ -77,6 +77,7 @@ void window_probe(struct nk_context* ctx, float s, float row) {
     const float* x = G.frd.xyz + 3 * p->node;
     snprintf(ln[n++], 160, "node %u  (%.4g, %.4g, %.4g)", G.frd.node_id[p->node], x[0], x[1], x[2]);
     fmt_num(num, sizeof num, G.probe_value);
+    if (app_field_category(G.probe_value)) snprintf(num, sizeof num, "%s", app_field_category(G.probe_value));
     if (!G.has_field) snprintf(ln[n++], 160, "no field");
     else if (G.probe_ip) snprintf(ln[n++], 160, "point %d: %s = %s", G.probe_ip, G.field_label, num);
     else snprintf(ln[n++], 160, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);

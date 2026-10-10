@@ -65,6 +65,14 @@ ccxview contact.frd --contact-window --set STEEL_ON_STEEL --set-alpha ROCKER:0.3
 ccxview model.frd --cel run1.cel --opt cel_pick=4   # contact elements from another file (or a .nam); the list's
                                             #   iteration 4 (-1: the increment on screen); cel_show cel_master
                                             #   cel_links cel_front=0|1
+ccxview contact.frd --opt contact_mode=links,status --opt deform_scale=30 --opt cel_true=1
+                                            # the contact display: links (slave node to its projection, by
+                                            #   gap), status (far / near open, sliding, sticking), gap (contour
+                                            #   on the slave faces), solids (the .cel's elements), any mix;
+                                            #   the shape x30 with the gap drawn at true scale; cel_gap_max
+                                            #   cel_pen_max cel_tol cel_near: lengths, 0 automatic
+ccxview contact.frd --field CONTACT:STATUS --labels value   # the contact status as a field, named on the nodes
+ccxview model.frd --opt deform_scale=1 --opt deform=0        # a fixed deformation scale; undeformed
 ccxview tie.frd --set GLUE --opt tie_nodes=2 --opt model_alpha=0.4  # a tie's slave nodes: 0 tied and not tied,
                                             #   1 tied only, 2 not tied only, 3 none; the whole model see-through
 ccxview model.frd --step 3 --look +z        # a step, a view direction
@@ -104,7 +112,10 @@ ccxview --check model.frd                   # headless parse for CI
 ccxview --version
 ```
 
-`--opt` takes every key of `ccxview.ini`, for example `--opt bands=0`,
+`--opt` takes every key of `ccxview.ini`, for example `--opt bands=0`, and a few
+of the model's view: `deform=0|1`, `deform_scale=S` (a fixed scale, shown),
+`contact_mode=...`, `clip_*`, `elem_mode`, `rep*` (applied again once the model
+has loaded, over its `.ccxview`); more examples:
 `--opt clip_on=1 --opt clip_axis=0 --opt clip_pos=0.4`, `--opt ui_theme="Catppuccin Latte"`,
 `--opt sym_auto=0 --opt sym_size=5`, `--opt mid_faces=0`.
 
@@ -121,7 +132,7 @@ fit the model is skipped; a missing key leaves that setting as it is.
 | see | `elset_alpha`: `ROCKER 0.3, ...` the element sets see-through; `pairs_on`: the ties and contact pairs drawn, by name |
 | groups | `off_type`, `off_material`, `off_group`: the values switched off, as ranges (`1-4, 9`) |
 | hidden | `hidden_elems`: element ids hidden by hand, as ranges |
-| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q`, `model_alpha`, the contact elements (`cel_show`, `cel_master`, `cel_links`, `cel_front`, `cel_pick`), `tie_nodes` |
+| plain | symbols (`show_bc`, `show_loads`, `bc_scale` ...), legend look (`legend_fmt` ...), labels (`label_kinds`, `label_px` ...), `lin_asme`, `lin_q`, `model_alpha`, the contact elements (`cel_show`, `cel_master`, `cel_links`, `cel_front`, `cel_pick`), the contact display (`cel_mode`, `cel_true`, `cel_gap_max`, `cel_pen_max`, `cel_tol`, `cel_near`), `tie_nodes` |
 | units | `units` (the system), `unit_in_<quantity>` and `unit_<quantity>`: unit names (`MPa`), empty for the system's / as input |
 | view | the keys of a view state file: `cam_*`, `step`, `field`, `comp`, `calc`, `gauss_field`, `fail_field`, `mesh_field`, `elem_mode`, `csys*`, `deform*`, `range_lock`, `rmin`, `rmax`, `clip_*`, `crop_*`, `mirror*`, `rep*`, `cyc_*`, the layers, `faces_mode`, `cmap`, `bands` |
 | compare | `compare` (the other run's path), `compare_diff` |

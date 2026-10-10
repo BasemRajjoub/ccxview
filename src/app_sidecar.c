@@ -702,6 +702,7 @@ static const plain PLAIN[] = {
     PB(lin_asme), PI(lin_q, 0, 8),
     PF(rebar_fcd, 1e-12f, 1e30f), PF(rebar_fyd, 1e-12f, 1e30f), PF(rebar_cover, 1e-12f, 1e30f),
     PF(model_alpha, 0, 1), PB(cel_show), PB(cel_master), PB(cel_links), PB(cel_front), PI(cel_pick, -1, 100000), PI(tie_nodes, 0, 3),
+    PI(cel_mode, 0, CV_CMODE_ALL), PB(cel_true), PF(cel_gap_max, 0, 1e30f), PF(cel_pen_max, 0, 1e30f), PF(cel_tol, 0, 1e30f), PF(cel_near, 0, 1e30f),
 };
 #undef PB
 #undef PI
