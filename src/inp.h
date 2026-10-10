@@ -129,6 +129,7 @@ typedef struct {
     uint32_t  rot;          /* RIGID: the ROT NODE id (its DOFs 1-3 are the body's rotations), 0 = none */
     uint32_t* nodes;  uint32_t n;
     int       surf[2];      /* surface indices, -1 = none */
+    float     mu;           /* CONTACT: *FRICTION of its *SURFACE INTERACTION, 0 = none */
 } cv_link;
 
 /* A material's elastic constants and first yield stress as the deck gives them (the

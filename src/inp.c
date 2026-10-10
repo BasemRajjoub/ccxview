@@ -150,11 +150,12 @@ typedef struct { char ori[64], mat[64]; float t; } vlayer;
 typedef struct { char f[CV_OUT_N]; uint8_t proc; } outsys;   /* per *STEP: output systems, procedure */
 typedef struct { cv_amp a; CV_VEC(float) tv; } vamp;
 typedef struct { cv_submodel s; CV_VEC(uint32_t) nodes; CV_VEC(int) surf; } vsub;
+typedef struct { char name[64]; float mu; } vinter;   /* a *SURFACE INTERACTION and its *FRICTION */
 
 enum { S_SKIP, S_NODE, S_ELEM, S_NSET, S_ELSET, S_SURF, S_HEADING, S_BOUNDARY, S_CLOAD, S_DLOAD, S_SPRINGDOF,
        S_CFLUX, S_DFLUX, S_FILM, S_RADIATE, S_TEMP, S_PRETENSION, S_MPC, S_CYCLIC,
        S_EQUATION, S_DCOUP, S_TIE, S_CONTACT, S_TRANSFORM, S_ORIENT, S_OUTREQ, S_COMPOSITE,
-       S_ELASTIC, S_PLASTIC, S_AMP, S_PROC, S_MCHANGE, S_SUBMODEL };
+       S_ELASTIC, S_PLASTIC, S_AMP, S_PROC, S_MCHANGE, S_SUBMODEL, S_FRICTION };
 
 typedef struct {
     cv_inp* d;
@@ -194,6 +195,7 @@ typedef struct {
     CV_VEC(vamp) amps;
     CV_VEC(cv_mchange) mchg;
     CV_VEC(vsub) subs;
+    CV_VEC(vinter) inters;              /* the last one open: *FRICTION belongs to it */
     int16_t camp, csub;                 /* AMPLITUDE= and SUBMODEL, STEP= of the open load card */
     bool mc_add, mc_pair;               /* the open *MODEL CHANGE: ADD, TYPE=CONTACT PAIR */
     CV_VEC(uint32_t) shells;            /* ids of S3..S8R elements */
@@ -674,6 +676,18 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (v) p->st = S_TIE;
         return;
     }
+    if (strcmp(kw, "SURFACEINTERACTION") == 0) {
+        vinter v = { "", 0.f };
+        const char* nm = pget(prm, np, "NAME");
+        snprintf(v.name, sizeof v.name, "%s", nm ? nm : "");
+        upcase(v.name);
+        if (!cv_push(p->inters, v)) p->oom = true;
+        return;
+    }
+    if (strcmp(kw, "FRICTION") == 0) {
+        if (p->inters.n) p->st = S_FRICTION;
+        return;
+    }
     if (strcmp(kw, "CONTACTPAIR") == 0) {
         vlink* v = new_link(p, CV_LINK_CONTACT, pget(prm, np, "INTERACTION"));
         if (v) p->st = S_CONTACT;
@@ -1081,6 +1095,13 @@ static void do_data(P* p, const char* s, const char* e) {
             if (p->el_n >= w) { m->el = (uint8_t)p->el_type; p->st = S_SKIP; }
             return;
         }
+        case S_FRICTION: {                    /* mu, stick slope */
+            double v = 0;
+            int n = fields(s, e, f, 2);
+            if (n >= 1 && to_f(f[0], &v) && v >= 0) p->inters.a[p->inters.n - 1].mu = (float)v;
+            p->st = S_SKIP;
+            return;
+        }
         case S_PLASTIC: {                     /* stress, plastic strain, temperature */
             double v = 0;
             int n = fields(s, e, f, 3);
@@ -1290,6 +1311,8 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
         for (size_t j = 0; j < v->nodes.n; j++) if (!u || v->nodes.a[j] != v->nodes.a[u - 1]) v->nodes.a[u++] = v->nodes.a[j];
         cv_link* t = &d->links[d->nlinks++];
         *t = v->l;
+        for (size_t k = 0; t->kind == CV_LINK_CONTACT && k < p.inters.n; k++)
+            if (!strcmp(p.inters.a[k].name, t->name)) t->mu = p.inters.a[k].mu;
         t->nodes = v->nodes.a; t->n = (uint32_t)u;
         v->nodes.a = NULL;
     }
@@ -1462,7 +1485,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
     cv_free_vec(p.mats); cv_free_vec(p.mprop); cv_free_vec(p.sects); cv_free_vec(p.shoffs); cv_free_vec(p.sdofs);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
-    cv_free_vec(p.links);
+    cv_free_vec(p.links); cv_free_vec(p.inters);
     for (size_t i = 0; i < p.sets.n; i++) cv_free_vec(p.sets.a[i].ids);
     cv_free_vec(p.sets);
     for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); }
@@ -1481,7 +1504,7 @@ oom:
     cv_free_vec(p.bcs); cv_free_vec(p.cloads); cv_free_vec(p.dloads); cv_free_vec(p.disc); cv_free_vec(p.sdofs);
     cv_free_vec(p.body); cv_free_vec(p.temps); cv_free_vec(p.pret);
     for (size_t i = 0; i < p.links.n; i++) { cv_free_vec(p.links.a[i].nodes); cv_free_vec(p.links.a[i].elems); }
-    cv_free_vec(p.links);
+    cv_free_vec(p.links); cv_free_vec(p.inters);
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
     cv_free_vec(p.mats); cv_free_vec(p.mprop);
     for (size_t i = 0; i < p.sets.n; i++) cv_free_vec(p.sets.a[i].ids);

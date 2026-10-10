@@ -1,13 +1,10 @@
 /* app_contact.c -- contact and ties as CalculiX made them.
 
    The contact elements of jobname.cel (cel.h): for the increment on screen (the
-   last iteration of its last attempt), or any iteration picked, each drawn for
-   what it is rather than as the small solid ccx writes: the slave node a dot, the
-   master face it is paired with filled, a line from the node to the face's centre
-   (in closed contact the node lies on the face, so a line to its projection would
-   not show; the line to the centre shows the pairing). Surface to surface: the
-   slave face outlined, a line between the two faces' centres. Their nodes are the
-   model's, so they ride on the deformed shape.
+   last iteration of its last attempt), or any iteration picked: the master faces
+   they pair, filled, and for surface to surface the slave faces outlined. Their
+   nodes are the model's, so they ride on the deformed shape. What each slave node
+   is (its gap, its status) is drawn by the contact display, app_cdisp.c.
 
    The ties and contact pairs ticked under Groups > Couplings: the master surface
    blue, the slave surface crimson over it (half see-through, so where they overlap
@@ -56,6 +53,11 @@ const char* app_contact_nam(int i, uint32_t* n, bool* miss) {
 
 bool app_contact_s2s(void) { return K.s2s; }
 
+const uint32_t* app_contact_cel_uniq(uint32_t* n) {
+    *n = K.set >= 0 && K.uset == K.set ? K.nuniq : 0;
+    return *n ? K.uniq : NULL;
+}
+
 void app_contact_skin(void) { sk_free(); }
 
 bool app_contact_drawn(int what[CV_KEY_N]) {
@@ -67,8 +69,8 @@ bool app_contact_drawn(int what[CV_KEY_N]) {
 static void clear_aux(void) {
     static const int w[] = { CV_AUX_PMST, CV_AUX_PSLV, CV_AUX_PTIED, CV_AUX_PFREE, CV_AUX_CMST, CV_AUX_CMLN, CV_AUX_CSLV };
     for (size_t i = 0; i < CV_COUNT(w); i++) cv_render_aux(w[i], NULL, NULL, NULL, 0);
-    cv_render_inst(CV_INST_CLINK, NULL, 0);
     cv_render_inst(CV_INST_CSLN, NULL, 0);
+    app_cdisp_clear();
     memset(K.drawn, 0, sizeof K.drawn);
     K.s2s = false;
 }
@@ -232,19 +234,7 @@ static void vb_node(vbuf* b, uint32_t i) {
     push3(&b->p, G.frd.xyz + 3 * (size_t)i);
     push6(&b->d, d);
 }
-static void vb_pt(vbuf* b, const float p[3], const float d[6]) { push3(&b->p, p); push6(&b->d, d); }
 static void vb_up(vbuf* b, int which) { app_aux_upload(which, &b->p, &b->d, NULL); cv_free_vec(b->p); cv_free_vec(b->d); }
-
-/* the centre of nodes ix[0..n) and how it moves */
-static void centre(const uint32_t* ix, int n, float p[3], float d[6]) {
-    memset(p, 0, 3 * sizeof(float)); memset(d, 0, 6 * sizeof(float));
-    for (int j = 0; j < n; j++) {
-        float dj[6];
-        app_node_disp6(ix[j], dj);
-        for (int k = 0; k < 3; k++) p[k] += G.frd.xyz[3 * (size_t)ix[j] + k] / (float)n;
-        for (int k = 0; k < 6; k++) d[k] += dj[k] / (float)n;
-    }
-}
 
 /* a face (3 or 4 nodes) as triangles, its outline as lines */
 static void face_tri(vbuf* b, const uint32_t* ix, int n) {
@@ -401,6 +391,12 @@ static uint32_t* surf_nodes(const cv_inp* dk, int si, uint32_t* n) {
     return v.a;
 }
 
+uint32_t* app_contact_surf_nodes(int si, uint32_t* n) {
+    const cv_inp* dk = deck_get();
+    *n = 0;
+    return dk && G.loaded ? surf_nodes(dk, si, n) : NULL;
+}
+
 void app_contact_pair_nodes(int k, uint32_t* slave, uint32_t* nfree) {
     *slave = *nfree = 0;
     const cv_inp* dk = deck_get();
@@ -473,7 +469,7 @@ void app_contact_refresh(void) {
         }
         const uint32_t* u = K.uniq;
         uint32_t nu = K.nuniq;
-        vbuf cm = {0}, cl = {0}, cs = {0}, csl = {0}, lk = {0};
+        vbuf cm = {0}, cl = {0}, csl = {0};
         if (++SK.stamp == 0) { if (SK.seen) memset(SK.seen, 0, SK.cap * sizeof(uint32_t)); SK.stamp = 1; }
         for (uint32_t j = 0; j < nu; j++) {
             const cv_celem* e = &c->elem[u[j]];
@@ -490,24 +486,16 @@ void app_contact_refresh(void) {
                     K.drawn[CV_KEY_MASTER]++;
                 }
             }
-            float a[3], da[6], b[3], db[6];
-            centre(mi, e->nm, b, db);
-            if (e->kind == CV_CEL_N2S) {
-                vb_node(&cs, si[0]);
-                K.drawn[CV_KEY_CSLAVE]++;
-                memcpy(a, G.frd.xyz + 3 * (size_t)si[0], sizeof a);
-                app_node_disp6(si[0], da);
-            } else {
+            if (e->kind == CV_CEL_S2S) {
                 face_ln(&csl, si, e->ns);
                 K.drawn[CV_KEY_CSLAVE]++; K.s2s = true;
-                centre(si, e->ns, a, da);
             }
-            if (G.cel_links) { vb_pt(&lk, a, da); vb_pt(&lk, b, db); K.drawn[CV_KEY_LINK]++; }
         }
-        vb_up(&cm, CV_AUX_CMST); vb_up(&cl, CV_AUX_CMLN); vb_up(&cs, CV_AUX_CSLV);
+        vb_up(&cm, CV_AUX_CMST); vb_up(&cl, CV_AUX_CMLN);
         float r = 1e-6f * G.diag;                    /* hair lines, widened to a couple of pixels */
-        deck_lines_inst(CV_INST_CSLN, &csl.p, &csl.d, r); deck_lines_inst(CV_INST_CLINK, &lk.p, &lk.d, r);
-        cv_free_vec(csl.p); cv_free_vec(csl.d); cv_free_vec(lk.p); cv_free_vec(lk.d);
+        deck_lines_inst(CV_INST_CSLN, &csl.p, &csl.d, r);
+        cv_free_vec(csl.p); cv_free_vec(csl.d);
     }
+    app_cdisp_refresh();
     free(shown);
 }

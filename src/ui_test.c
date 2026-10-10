@@ -367,6 +367,12 @@ static void contact_end(struct nk_context* ctx) {
     app_contact_clear(); app_see_refresh();
 }
 static void layers_alpha(struct nk_context* ctx) { G.model_alpha = 1.f; app_see_refresh(); }
+/* the contact display's choices in the Contact window */
+static bool cmode_status(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_STATUS) && (G.cel_mode & CV_CMODE_LINKS); }
+static bool cmode_gap(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_GAP) != 0; }
+static bool cmode_solids(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_SOLIDS) != 0; }
+static bool ctrue_on(struct nk_context* ctx) { return G.cel_true; }
+static void cdisp_back(struct nk_context* ctx) { G.cel_mode = CV_CMODE_LINKS; G.cel_true = false; app_contact_refresh(); }
 static bool deck_gone(struct nk_context* ctx) { return !G.show_deck; }
 static bool deck_shown(struct nk_context* ctx) { return G.show_deck && win_of(ctx, "Deck"); }
 static void groups_first(struct nk_context* ctx) { G.tree[CV_TREE_LAYERS] = 0; G.tree[CV_TREE_GROUPS] = 1; }
@@ -1095,6 +1101,13 @@ static const step script[] = {
     AT_POPUP("Contact", 0.5f, 0.45f), CLICK, WAIT(3), EXPECT(contact_picked, "an iteration is drawn"),
     AT_TIP("Contact", "The faces' opacity: less to see into the model (a contact"), CLICK, WAIT(3), EXPECT(see_through, "the model is see-through"),
     DO(contact_end), WAIT(2), PANELS_ANSWER,
+    CASE("contact display: status, gap and solids ticked beside the links; links and solids at true scale"),
+    DO(close_all), DO(open_contact), WAIT(3),
+    AT_TIP("Contact", "Status: the slave faces in a patch per node"), CLICK, WAIT(2), EXPECT(cmode_status, "status drawn with the links"),
+    AT_TIP("Contact", "Gap: the slave faces coloured by the gap"), CLICK, WAIT(2), EXPECT(cmode_gap, "the gap contour drawn"),
+    AT_TIP("Contact", "Solids: the contact elements of the .cel"), CLICK, WAIT(2), EXPECT(cmode_solids, "the solids drawn"),
+    AT_TIP("Contact", "With the shape exaggerated (deformation scale not 1)"), CLICK, WAIT(2), EXPECT(ctrue_on, "at true scale"),
+    DO(cdisp_back), DO(contact_end), WAIT(2), PANELS_ANSWER,
     CLOSED_THEN_PANELS("Contact", open_contact, contact_gone),
     CASE("layers: the opacity slider makes the model see-through"),
     DO(contact_end), DO(close_all), DO(layers_first), WAIT(3), AT_TIP("Scene", "Opacity of the faces: less to see into the model"),

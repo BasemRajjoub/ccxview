@@ -8,6 +8,7 @@
    What belongs to one model (camera, mirror, replicate, clip, crop, the chosen
    field, sets, paths, kept lines) is in its <model>.ccxview instead (app_sidecar.c). */
 #include <stdarg.h>
+#include <math.h>
 #include "app_int.h"
 #include "web.h"
 #include "cfg.h"
@@ -45,7 +46,8 @@ static const setting S[] = {
     B(show_bc), B(show_loads), F(bc_scale, 0.01f, 100), F(load_scale, 0.01f, 100),
     B(sym_auto), F(sym_size, 0, 1e30f), F(sym_thick, 0.1f, 10), B(sym_thin),
     B(show_disc), B(show_links), B(show_hl), F(hl_size, 0.5f, 64), B(show_removed), F(model_alpha, 0, 1),
-    B(cel_show), B(cel_master), B(cel_links), B(cel_front), I(cel_pick, -1, 100000), I(tie_nodes, 0, 3), B(contact_key), { "ckey_pos", 'a', &G.ckey_pos, 0, 0 },
+    B(cel_show), B(cel_master), B(cel_links), B(cel_front), I(cel_pick, -1, 100000),
+    I(cel_mode, 0, CV_CMODE_ALL), B(cel_true), F(cel_gap_max, 0, 1e30f), F(cel_pen_max, 0, 1e30f), F(cel_tol, 0, 1e30f), F(cel_near, 0, 1e30f), I(tie_nodes, 0, 3), B(contact_key), { "ckey_pos", 'a', &G.ckey_pos, 0, 0 },
     B(vec_colored), F(vec_pct, 0.01f, 100),
     I(tensor_style, 0, CV_GLYPH_N - 1), B(tensor_colored), F(tensor_scale, 0.01f, 100),
     I(traj_which, 0, 2), F(traj_spacing, 0.2f, 50), F(geo_size, 0.5f, 64), B(show_markers), B(show_ghost), { "oor_above", 'i', &G.oor_mode[0], 0, 3 }, { "oor_below", 'i', &G.oor_mode[1], 0, 3 },
@@ -285,8 +287,40 @@ bool settings_apply(const char* kv) {
     if (!strcmp(key, "watch")) { G.watch = parse_bool(val); return true; }
     if (!strcmp(key, "elem_mode")) { G.elem_mode = parse_bool(val); return true; }
     if (!strcmp(key, "deform")) { G.deform = parse_bool(val); return true; }
+    if (!strcmp(key, "deform_scale")) {       /* a fixed scale, shown */
+        float x = (float)atof(val);
+        if (!(x >= 0) || isinf(x)) return false;
+        G.deform_scale = x; G.deform_auto = false; G.deform = x > 0;
+        return true;
+    }
+    if (!strcmp(key, "contact_mode")) {       /* links,status,gap,solids or the bits: the contact display, shown */
+        int m = app_cdisp_parse_mode(val);
+        if (m < 0) return false;
+        G.cel_mode = m; G.cel_show = true;
+        return true;
+    }
     if (!strcmp(key, "title_edit")) { G.title_edit = parse_bool(val); return true; }     /* its settings window open */
     return false;
+}
+
+/* What a model's load sets afresh (the deformation, from the file and its view; the
+   cut and the like, from the view): the --opt keys for them applied again after it,
+   so the command line wins as it does for the settings. */
+void settings_apply_model(void) {
+    /* exact keys, and prefixes (rep0 .. rep_gap2, the contact display's cel_*) */
+    static const char* const keys[] = { "deform", "deform_scale", "deform_auto", "clip_on", "clip_axis", "clip_flip",
+                                        "clip_pos", "elem_mode", "contact_mode" };
+    static const char* const pre[] = { "rep", "cel_" };
+    for (int i = 0; i < O.nopts; i++) {
+        const char* o = O.opts[i];
+        const char* eq = strchr(o, '=');
+        if (!eq) continue;
+        size_t n = (size_t)(eq - o);
+        bool hit = false;
+        for (size_t k = 0; k < sizeof keys / sizeof keys[0]; k++) hit |= strlen(keys[k]) == n && !strncmp(o, keys[k], n);
+        for (size_t k = 0; k < sizeof pre / sizeof pre[0]; k++) hit |= !strncmp(o, pre[k], strlen(pre[k]));
+        if (hit) settings_apply(o);
+    }
 }
 
 /* the window size is needed before there is a window: read it on its own */

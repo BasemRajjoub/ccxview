@@ -47,7 +47,7 @@ not built in: write them as a formula (`S1 - S3`, ...).
 | `FLUX` | `HFL` | magnitude, arrows, heat flux units; turned to global with `GLOBAL=NO` |
 | `RFL` | `RFL` | a scalar, a power for the units |
 | `ERROR`, `HERROR` | `ERR`, `HER` | the error estimate as written |
-| `CONTACT` | `CDIS`, `CSTR` | `COPEN CSLIP1 CSLIP2 CPRESS CSHEAR1 CSHEAR2` as components: the first three lengths, the others stresses for the units. Written for the slave nodes of the active contact elements only: they colour the slave surface, the rest has no value (grey). `COPEN` is negative where the surfaces overlap; `CPRESS` may be a little below 0 at the edge of the zone, which makes the range symmetric about 0 while Colours > center at zero is on |
+| `CONTACT` | `CDIS`, `CSTR` | `COPEN CSLIP1 CSLIP2 CPRESS CSHEAR1 CSHEAR2` as components: the first three lengths, the others stresses for the units. Written for the slave nodes of the active contact elements only: they colour the slave surface, the rest has no value (grey). `COPEN` is negative where the surfaces overlap (its range is never made symmetric about 0: an overclosure of microns and gaps of tenths would share a colour); `CPRESS` is -3 at open nodes CalculiX writes (c0 > 0), which makes the range symmetric about 0 while Colours > center at zero is on. A last option, `STATUS`, is the contact status worked out per slave node (features.md, Contact and ties) |
 | `VELO`, `V3DF` | `V`, `VF` | magnitude, arrows, velocity units; turned to global from a `*TRANSFORM` |
 | `ACC` | `A` | magnitude, arrows, acceleration units |
 | `SDV` | `SDV` | the state variables as components |
@@ -72,6 +72,11 @@ card per element, its id running on past the model's, its nodes the model's (no
 
 The iterations are matched to the `.frd` by step and increment (its `1PSTEP`
 record): the increment on screen shows the last iteration of its last attempt.
+For the gap a slave node is projected onto the face `m1 m2 m3 (m4)` (a bilinear
+quadrilateral, a flat triangle), its normal by the right-hand rule of that order
+(outward, as CalculiX orders a master face); with c0 left at its default ccx
+writes elements for the closed slave nodes only, with c0 > 0 for every slave node
+within reach, open or closed.
 Other element types in the file are skipped, with a count in the Messages window.
 
 `jobname_WarnNode*.nam`: `*NSET` files ccx writes for its warnings, read beside

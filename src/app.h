@@ -430,6 +430,13 @@ typedef struct {
     int       cel_pick;              /* the .cel set drawn: -1 the increment on screen, else its index */
     bool      cel_master, cel_links; /* ... with their master faces, with the lines slave -> master */
     bool      cel_front;             /* ... their slave nodes and lines in front of the model (inside an assembly) */
+    /* the contact display (app_cdisp.c): what is drawn of each slave node, CV_CMODE_* bits */
+    int       cel_mode;
+    bool      cel_true;              /* with the shape exaggerated, the slave nodes drawn at their true gap off the face */
+    float     cel_gap_max;           /* the gap colours' open end, 0 auto (the widest gap shown) */
+    float     cel_pen_max;           /* ... their penetration end, 0 auto (the deepest, at least the tolerance) */
+    float     cel_tol;               /* closed within this gap (without CPRESS), penetrating beyond it; 0 auto */
+    float     cel_near;              /* open within this gap: near open; 0 auto */
     int       tie_nodes;             /* a tie's slave nodes: 0 tied and not tied, 1 tied only, 2 not tied only, 3 none */
     bool      contact_key;           /* the colours' key over the view while any of it is drawn */
     cv_anchor ckey_pos;              /* ... dragged to (unset: bottom-left, above the axes) */
@@ -917,6 +924,37 @@ const char* app_contact_nam(int i, uint32_t* n, bool* miss);   /* its file's nam
 void app_contact_pair_nodes(int k, uint32_t* slave, uint32_t* untied);
 bool app_contact_drawn(int what[CV_KEY_N]);  /* what is drawn now, by CV_KEY_* (counts); false: nothing */
 bool app_contact_s2s(void);                  /* ... the contact elements surface to surface (slave faces) */
+/* the distinct contact elements of the set drawn (indices into its elem), NULL none */
+const uint32_t* app_contact_cel_uniq(uint32_t* n);
+/* the nodes of deck surface si as shown indices, each once (malloc'd, NULL none) */
+uint32_t* app_contact_surf_nodes(int si, uint32_t* n);
+
+/* app_cdisp.c: the contact display. Each slave node (of the .cel set drawn and of the
+   deck's contact pairs active in the step) against its master face: projected onto it
+   on the true deformed shape, its gap (COPEN, else measured), its status (contact.h).
+   Drawn as links (the node to its projection), a status patchwork or a gap contour on
+   the slave faces, and the contact elements as solids. */
+enum { CV_CMODE_LINKS = 1, CV_CMODE_STATUS = 2, CV_CMODE_GAP = 4, CV_CMODE_SOLIDS = 8, CV_CMODE_ALL = 15 };
+typedef struct {
+    int   nodes;                 /* slave nodes with a status */
+    int   cat[6];                /* ... by status (CV_CST_*) */
+    int   closed, open, pen;     /* closed (penetrating among them), open */
+    float lo, hi;                /* the gap colours' ends, lo < 0 < hi */
+    float tol, near;             /* as used (auto or set) */
+    float gmin, gmax;            /* the gaps found */
+    bool  copen;                 /* gaps from CalculiX's COPEN */
+    bool  measured;              /* gaps measured from the shape (where there is no COPEN) */
+    bool  faces;                 /* status and gap drawn on slave faces (else balls) */
+    int   drawn;                 /* the CV_CMODE_ bits drawn now */
+} cv_cinfo;
+void app_cdisp_refresh(void);                /* from app_contact_refresh */
+void app_cdisp_clear(void);
+const cv_cinfo* app_cdisp_info(void);
+int  app_cdisp_parse_mode(const char* s);    /* "links,status" or a number -> CV_CMODE_ bits; -1 not understood */
+/* the CONTACT field's STATUS: per node its CV_CST_ number, NaN where not a slave node;
+   false when there is no contact to classify */
+bool app_cdisp_status_field(float* out);
+const char* app_cdisp_status_name(double v); /* the name of a status number, NULL when not one */
 
 /* app_settings.c: the ini file */
 void settings_load(void);                    /* into G, before the first frame */
@@ -924,6 +962,7 @@ void settings_load_units(void);              /* the unit keys alone, for the hea
 void settings_window_size(int* w, int* h);   /* before the window exists */
 void settings_save(int win_w, int win_h);
 bool settings_apply(const char* key_eq_value);   /* --opt; false for an unknown key */
+void settings_apply_model(void);                 /* the --opt keys a model's load sets afresh, again after it */
 void settings_add_recent(const char* path);
 int  settings_recent(const char** out, int max);
 const char* settings_last_dir(void);
@@ -942,6 +981,7 @@ extern const char app_title_keys[];        /* the placeholders, for the help lin
 /* colour map lookup with the legend's reverse / grey applied */
 void app_cmap_rgb(float t, float rgb[3]);
 void app_legend_fmt(char* out, size_t n, double v);   /* a legend number in the chosen format */
+const char* app_field_category(double v);   /* a category field's name for value v (CONTACT STATUS), NULL for an amount */
 
 /* camera helpers */
 void cam_basis(const cv_camera* c, v3* eye, v3* fwd, v3* right, v3* up);
