@@ -1,7 +1,8 @@
 /* ui_title.c -- the title block: "Label: value" lines (app_title.c) in a corner
    of the 3D view, so screenshots and exports carry them, drawn in the legend's
    ink (or dark on its white box). Bottom-right until dragged, like the legend;
-   a right click opens its settings window: which lines, the date, free text. */
+   a right click opens its settings window: which lines, the date, free text,
+   and the text they make, which may be edited by hand. */
 #include "app.h"
 #include "ui.h"
 #include "sokol_app.h"
@@ -9,8 +10,10 @@
 #include "nk.h"
 #include "sokol_nuklear.h"
 #include "ui_int.h"
+#include "tbtext.h"
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
 
 enum { PIECES = 4 };            /* rows one value may wrap to */
 static ov_drag drag;
@@ -29,26 +32,31 @@ void window_title(struct nk_context* ctx, float s, float row) {
     if (!G.loaded || !G.title_on) return;
     char units[96];
     units_summary(units, sizeof units);
-    cv_title_line L[CV_TB_N + CV_TB_FREE];
-    int n = app_title_lines(L, CV_TB_N + CV_TB_FREE, units);
+    static cv_title_line L[CV_TB_LINES];
+    int n = app_title_lines(L, CV_TB_LINES, units);
     if (!n) return;
 
     /* two columns: the labels (dim) and the values, as wide as the widest of each;
-       a value wider than the block may grow wraps onto more rows */
+       a line without a label spans both. A value wider than the block may grow
+       wraps onto more rows. */
     const struct nk_user_font* f = ctx->style.font;
-    float pad = 8 * s, gap = 8 * s, lh = f->height + 5 * s, lw = 0, vw = 0;
-    char lab[CV_TB_N + CV_TB_FREE][40];
+    float pad = 8 * s, gap = 8 * s, lh = f->height + 5 * s, lw = 0, vw = 0, sw = 0;
+    static char lab[CV_TB_LINES][52];
+    bool labels = false;
     for (int i = 0; i < n; i++) {
-        snprintf(lab[i], sizeof lab[i], "%s:", L[i].label[0] ? L[i].label : "");
+        snprintf(lab[i], sizeof lab[i], "%s:", L[i].label);
+        if (L[i].span) { sw = CV_MAX(sw, text_w(f, L[i].text)); continue; }
+        labels = true;
         lw = CV_MAX(lw, text_w(f, lab[i]));
         vw = CV_MAX(vw, text_w(f, L[i].text));
     }
-    float w = CV_MIN(2 * pad + lw + gap + vw + 4 * s, CV_MIN(560 * s, G.vp_w * 0.6f));
-    float vavail = CV_MAX(w - 2 * pad - lw - gap - 2 * s, 40 * s);
-    int np[CV_TB_N + CV_TB_FREE], len[CV_TB_N + CV_TB_FREE][PIECES], rows = 0;
+    if (!labels) gap = 0;
+    float w = CV_MIN(2 * pad + CV_MAX(lw + gap + vw, sw) + 4 * s, CV_MIN(560 * s, G.vp_w * 0.6f));
+    float vavail = CV_MAX(w - 2 * pad - lw - gap - 2 * s, 40 * s), savail = CV_MAX(w - 2 * pad - 2 * s, 40 * s);
+    int np[CV_TB_LINES], len[CV_TB_LINES][PIECES], rows = 0;
     for (int i = 0; i < n; i++) {
         len[i][0] = (int)strlen(L[i].text);
-        rows += np[i] = CV_MAX(wrap_pieces(f, L[i].text, vavail, len[i], PIECES), 1);
+        rows += np[i] = CV_MAX(wrap_pieces(f, L[i].text, L[i].span ? savail : vavail, len[i], PIECES), 1);
     }
     float h = 2 * pad + rows * lh - 5 * s;
     cv_anchor a = G.title_pos.set ? G.title_pos : (cv_anchor){ true, CV_BR, 10, 10 };
@@ -68,17 +76,18 @@ void window_title(struct nk_context* ctx, float s, float row) {
         struct nk_color ink = legend_ink(), dim = legend_dim();
         float x = r.x + pad, y = r.y + pad, vx = x + lw + gap;
         for (int i = 0; i < n; i++) {
-            ink_text(cv, f, x, y, lw + 1, lab[i], dim);
+            float tx = L[i].span ? x : vx;
+            if (!L[i].span) ink_text(cv, f, x, y, lw + 1, lab[i], dim);
             for (int p = 0, at = 0; p < np[i]; at += len[i][p++], y += lh) {
-                char piece[160];
+                char piece[260];
                 snprintf(piece, sizeof piece, "%.*s", len[i][p], L[i].text + at);
-                ink_text(cv, f, vx, y, r.x + r.w - pad - vx, p ? piece + strspn(piece, " ") : piece, ink);
+                ink_text(cv, f, tx, y, r.x + r.w - pad - tx, p ? piece + strspn(piece, " ") : piece, ink);
             }
         }
         const struct nk_input* in = &ctx->input;
         if (nk_input_is_mouse_click_in_rect(in, NK_BUTTON_RIGHT, r)) G.title_edit = true;
         if (nk_input_is_mouse_hovering_rect(in, r) && !drag.moving)
-            tip_show(ctx, "Title block.  Drag: move it.  Right-click: its lines and free text");
+            tip_show(ctx, "Title block.  Drag: move it.  Right-click: its lines and text");
     }
     nk_end(ctx);
     nk_style_pop_color(ctx);
@@ -86,15 +95,78 @@ void window_title(struct nk_context* ctx, float s, float row) {
     nk_style_pop_style_item(ctx);
 }
 
-/* ---- settings: which lines, the date, three free lines, the box, the place */
+/* ---- settings ---------------------------------------------------------------- */
+
+/* the date format list: each preset as today's date in it; with the time or not */
+static void date_format(struct nk_context* ctx, float s, float row) {
+    size_t fl = strlen(G.title_date_fmt), tl = strlen(CV_TB_TIME_FMT);
+    bool timed = fl >= tl && !strcmp(G.title_date_fmt + fl - tl, CV_TB_TIME_FMT);
+    char base[48];
+    snprintf(base, sizeof base, "%.*s", (int)(timed ? fl - tl : fl), G.title_date_fmt);
+    time_t now_t = time(NULL);
+    struct tm now = { 0 }, *lt = localtime(&now_t);
+    if (lt) now = *lt;
+    char cur[96];
+    cv_tb_strftime(cur, sizeof cur, G.title_date_fmt, &now);
+
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 64 * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 110 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label(ctx, "Date as", NK_TEXT_LEFT);
+    tip(ctx, "How {date} and {date_file} write the date ({date:%d.%m.%Y} for one of its own)");
+    if (nk_combo_begin_label(ctx, cur[0] ? cur : G.title_date_fmt, nk_vec2(220 * s, (CV_TB_DATE_N + 1) * (row + 4 * s) + 12 * s))) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        for (int i = 0; i < CV_TB_DATE_N; i++) {
+            char f[64], ex[96];
+            snprintf(f, sizeof f, "%s%s", cv_tb_date_fmt[i], timed ? CV_TB_TIME_FMT : "");
+            cv_tb_strftime(ex, sizeof ex, f, &now);
+            if (nk_combo_item_label(ctx, ex, NK_TEXT_LEFT)) snprintf(G.title_date_fmt, sizeof G.title_date_fmt, "%s", f);
+        }
+        nk_combo_end(ctx);
+    }
+    tip(ctx, "The date with the time of day (hours:minutes)");
+    if (nk_checkbox_label(ctx, "with the time", &timed))
+        snprintf(G.title_date_fmt, sizeof G.title_date_fmt, "%s%s", base, timed ? CV_TB_TIME_FMT : "");
+}
+
+/* the text the block shows: made from the boxes, or typed; reset to the boxes */
+static void template_box(struct nk_context* ctx, float s, float row, float box_h) {
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 120 * s);
+    nk_layout_row_template_end(ctx);
+    if (G.title_hand) nk_label_colored(ctx, "Text: edited by hand", NK_TEXT_LEFT, P.warn);
+    else nk_label_colored(ctx, "Text: made from the boxes above", NK_TEXT_LEFT, P.dim);
+    tip(ctx, "Make the text from the boxes again, dropping what was typed");
+    if (nk_button_label(ctx, "reset to the boxes")) G.title_hand = false;
+    app_title_sync();
+
+    static char before[CV_TB_TEXT];
+    memcpy(before, G.title_text, sizeof before);
+    nk_layout_row_dynamic(ctx, box_h, 1);
+    tip(ctx, "The title block's text, one line per row: \"Label: value\" (no \": \", the line spans "
+             "the block). {placeholders} fill in; a line whose placeholders are all empty is left out");
+    nk_edit_string_zero_terminated(ctx, NK_EDIT_BOX, G.title_text, (int)sizeof G.title_text, nk_filter_default);
+    if (strcmp(before, G.title_text)) G.title_hand = true;
+
+    nk_layout_row_dynamic(ctx, row, 1);
+    static char help[512];
+    snprintf(help, sizeof help, "Placeholders: %s", app_title_keys);
+    tip(ctx, help);
+    nk_label_colored(ctx, "{file} {step} {date} {user} ...  (point here: all of them)", NK_TEXT_LEFT, P.dim);
+}
+
 void window_title_settings(struct nk_context* ctx, float s, float row) {
     static bool was_open;
     if (!G.title_edit || !G.loaded) { was_open = false; return; }
     if (!was_open) nk_window_show(ctx, "Title block", NK_SHOWN);
     was_open = true;
-    const struct nk_style_window* ws = &ctx->style.window;     /* 13 rows under the header */
-    float w = 340 * s, h = ctx->style.font->height + 2 * (ws->header.padding.y + ws->header.label_padding.y)
-                          + 13 * (row + ws->spacing.y) + 2 * ws->padding.y + 4 * s;
+    const struct nk_style_window* ws = &ctx->style.window;     /* 16 rows and the text box under the header */
+    float box_h = 8 * row, w = 440 * s;
+    float h = ctx->style.font->height + 2 * (ws->header.padding.y + ws->header.label_padding.y)
+              + 16 * (row + ws->spacing.y) + box_h + ws->spacing.y + 2 * ws->padding.y + 4 * s;
     if (nk_begin(ctx, "Title block", nk_rect(G.vp_x + G.vp_w - w - 180 * s, G.vp_y + 40 * s, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
         nk_layout_row_dynamic(ctx, row, 1);
@@ -126,6 +198,7 @@ void window_title_settings(struct nk_context* ctx, float s, float row) {
         if (nk_option_label(ctx, "today", !G.title_file_date)) G.title_file_date = false;
         tip(ctx, "The date line: when the solver wrote the result file (its header), else the file's time");
         if (nk_option_label(ctx, "result file", G.title_file_date)) G.title_file_date = true;
+        date_format(ctx, s, row);
 
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label_colored(ctx, "Free lines: label, text (empty text: no line)", NK_TEXT_LEFT, P.dim);
@@ -142,6 +215,7 @@ void window_title_settings(struct nk_context* ctx, float s, float row) {
             uii_test_mark(ctx, mk);
             nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, G.title_free[i][1], (int)sizeof G.title_free[i][1], nk_filter_default);
         }
+        template_box(ctx, s, row, box_h);
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, "A white box with a border behind the title block and the legend, for a picture on a page");
         nk_checkbox_label(ctx, "white box (as the legend's)", &G.legend_box);

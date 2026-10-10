@@ -140,6 +140,7 @@ static void init(void) {
     snprintf(G.title_free[0][0], sizeof G.title_free[0][0], "Project");
     snprintf(G.title_free[1][0], sizeof G.title_free[1][0], "Company");
     snprintf(G.title_free[2][0], sizeof G.title_free[2][0], "Checked");
+    snprintf(G.title_date_fmt, sizeof G.title_date_fmt, "%%Y-%%m-%%d");
     for (int q = 0; q < CV_Q_N; q++) G.unit_in[q] = G.unit_show[q] = -1;   /* the system's, as input */
     G.clip_pos = 0.5f;
     G.clip_cap = true;
@@ -1076,6 +1077,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--details")) O.details = true;
         else if (!strcmp(argv[i], "--about")) O.about = true;
         else if (!strcmp(argv[i], "--title-block") && O.nopts < 32) O.opts[O.nopts++] = "title_on=1";
+        else if (!strcmp(argv[i], "--title-window") && O.nopts < 31) { O.opts[O.nopts++] = "title_on=1"; O.opts[O.nopts++] = "title_edit=1"; }
         else if (!strcmp(argv[i], "--deck-window")) O.deck_window = true;
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
         else if (!strcmp(argv[i], "--range") && i + 1 < argc) O.range_set = sscanf(argv[++i], "%f,%f", &O.range[0], &O.range[1]) == 2;

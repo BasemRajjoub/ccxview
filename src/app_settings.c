@@ -14,6 +14,7 @@
 #include "ui.h"
 #include "quality.h"
 #include "app_fail.h"
+#include "tbtext.h"
 
 static cv_cfg C;
 static bool   loaded;
@@ -22,7 +23,8 @@ static bool   loaded;
 
 typedef struct {
     const char* key;       /* the section title for kind '#' */
-    char        kind;      /* 'b' bool, 'i' int, 'f' float, 'a' corner anchor (anchor.h), 's' text (hi: its size), '#' section header */
+    char        kind;      /* 'b' bool, 'i' int, 'f' float, 'a' corner anchor (anchor.h), 's' text (hi: its size),
+                              't' the title block's text: escaped (tbtext.h), over key, key_2 ... when long, '#' section header */
     void*       p;
     float       lo, hi;    /* accepted range (lo < hi); outside it the default stays */
 } setting;
@@ -78,10 +80,13 @@ static const setting S[] = {
     { "mq_lim_warp", 'f', &G.mq_lim[CV_MQ_WARP], 0, 90 }, { "mq_lim_shape", 'f', &G.mq_lim[CV_MQ_SHAPE], 0, 1 },
     SEC("Legend and axes gizmo: view corner (tl tr bl br), gap x, gap y; auto = default place"),
     { "legend_pos", 'a', &G.legend_pos, 0, 0 }, { "gizmo_pos", 'a', &G.gizmo_pos, 0, 0 },
-    SEC("Title block: on, its lines (1 shown), the date of the result file (0: today), three free lines, its place"),
+    SEC("Title block: on, its lines (1 shown), the date of the result file (0: today), three free lines, its place, "
+        "the date's strftime format, the text edited by hand (1) and that text (\\n between lines, in title_text, title_text_2 ...)"),
     B(title_on), TB("heading", CV_TB_TITLE), TB("file", CV_TB_FILE), TB("solver", CV_TB_SOLVER), TB("analysis", CV_TB_ANALYSIS),
     TB("step", CV_TB_STEP), TB("scale", CV_TB_SCALE), TB("units", CV_TB_UNITS), TB("user", CV_TB_USER), TB("date", CV_TB_DATE),
     B(title_file_date), TBFREE(1), TBFREE(2), TBFREE(3), { "title_pos", 'a', &G.title_pos, 0, 0 },
+    { "title_date_fmt", 's', G.title_date_fmt, 0, sizeof G.title_date_fmt }, B(title_hand),
+    { "title_text", 't', G.title_text, 0, sizeof G.title_text },
     SEC("Camera"),
     B(up_z), B(orbit_free), B(orbit_cursor), B(zoom_cursor), B(wheel_invert), B(show_pivot),
     { "cam_ortho", 'b', &G.cam.ortho, 0, 0 }, F(fly_speed, 0.005f, 10),
@@ -132,11 +137,41 @@ static bool set_from_text(const setting* e, const char* v) {
     case 'f': { float x = (float)atof(v); if (x != x || !in_range(e, x)) return false; *(float*)e->p = x; return true; }
     case 'a': return cv_anchor_parse(v, (cv_anchor*)e->p, 10);
     case 's': snprintf((char*)e->p, (size_t)e->hi, "%s", v); return true;
+    case 't': cv_tb_unescape(v, (char*)e->p, (size_t)e->hi); G.title_hand = true; return true;     /* typed: --opt */
     }
     return false;
 }
 
+enum { PIECE = 1000 };     /* a 't' value's piece per key, under the ini's 1024 */
+
+/* a 't' key's pieces joined: key, key_2, key_3 ...; NULL when absent (malloc'd) */
+static char* get_pieces(const char* key) {
+    const char* v = cv_cfg_get(&C, key, NULL);
+    if (!v) return NULL;
+    size_t n = strlen(v);
+    char* s = malloc(n + 1);
+    if (!s) return NULL;
+    memcpy(s, v, n + 1);
+    for (int k = 2;; k++) {
+        char kk[80];
+        snprintf(kk, sizeof kk, "%s_%d", key, k);
+        const char* p = cv_cfg_get(&C, kk, NULL);
+        if (!p) break;
+        size_t m = strlen(p);
+        char* t = realloc(s, n + m + 1);
+        if (!t) break;
+        s = t; memcpy(s + n, p, m + 1); n += m;
+    }
+    return s;
+}
+
 static void get_one(const setting* e) {
+    if (e->kind == 't') {
+        char* v = get_pieces(e->key);
+        if (v) cv_tb_unescape(v, (char*)e->p, (size_t)e->hi);
+        free(v);
+        return;
+    }
     const char* v = cv_cfg_get(&C, e->key, NULL);
     if (v) set_from_text(e, v);
 }
@@ -147,6 +182,30 @@ static void put_one(const setting* e) {
     case 'i': cv_cfg_set_int(&C, e->key, *(int*)e->p); break;
     case 'f': cv_cfg_set_float(&C, e->key, *(float*)e->p); break;
     case 's': cv_cfg_set(&C, e->key, (const char*)e->p); break;
+    case 't': {                     /* escaped, in pieces that the ini neither trims nor cuts */
+        size_t cap = 2 * (size_t)e->hi + 8;
+        char* t = malloc(cap);
+        if (!t) break;
+        cv_tb_escape((const char*)e->p, t, cap);
+        const char* p = t;
+        int k = 1;
+        do {
+            size_t m = cv_tb_cut(p, PIECE);
+            char kk[80], piece[PIECE + 1];
+            if (k == 1) snprintf(kk, sizeof kk, "%s", e->key); else snprintf(kk, sizeof kk, "%s_%d", e->key, k);
+            snprintf(piece, sizeof piece, "%.*s", (int)m, p);
+            cv_cfg_set(&C, kk, piece);
+            p += m; k++;
+        } while (*p);
+        for (;; k++) {              /* the tail of a longer text saved before */
+            char kk[80];
+            snprintf(kk, sizeof kk, "%s_%d", e->key, k);
+            if (!cv_cfg_get(&C, kk, NULL)) break;
+            cv_cfg_unset(&C, kk);
+        }
+        free(t);
+        break;
+    }
     case 'a': {
         char t[64];
         cv_anchor_format((const cv_anchor*)e->p, t, sizeof t);
@@ -225,6 +284,7 @@ bool settings_apply(const char* kv) {
     if (!strcmp(key, "watch")) { G.watch = parse_bool(val); return true; }
     if (!strcmp(key, "elem_mode")) { G.elem_mode = parse_bool(val); return true; }
     if (!strcmp(key, "deform")) { G.deform = parse_bool(val); return true; }
+    if (!strcmp(key, "title_edit")) { G.title_edit = parse_bool(val); return true; }     /* its settings window open */
     return false;
 }
 
@@ -274,8 +334,17 @@ static void sb_add(sbuf* b, const char* fmt, ...) {
     b->n += (size_t)k;
 }
 
+/* key_2, key_3 ... of a 't' setting: its owner, else NULL */
+static const setting* piece_of(const char* key) {
+    for (int i = 0; i < NS; i++) {
+        size_t n = strlen(S[i].key);
+        if (S[i].kind == 't' && !strncmp(key, S[i].key, n) && key[n] == '_' && atoi(key + n + 1) >= 2) return &S[i];
+    }
+    return NULL;
+}
+
 static bool known_key(const char* key) {
-    if (find(key)) return true;
+    if (find(key) || piece_of(key)) return true;
     for (size_t i = 0; i < sizeof OTHER / sizeof OTHER[0]; i++) if (!strcmp(OTHER[i], key)) return true;
     return !strncmp(key, "recent", 6) || fail_cfg_key(key);
 }
@@ -297,6 +366,12 @@ static void write_layout(void) {
     for (int i = 0; i < NS; i++) {
         if (S[i].kind == '#') sb_add(&b, "\n# ---- %s\n", S[i].key);
         else sb_key(&b, S[i].key);
+        for (int k = 2; S[i].kind == 't'; k++) {
+            char kk[80];
+            snprintf(kk, sizeof kk, "%s_%d", S[i].key, k);
+            if (!cv_cfg_get(&C, kk, NULL)) break;
+            sb_key(&b, kk);
+        }
     }
     sb_add(&b, "\n# ---- Strength materials (fmatN = name|kind=ud key=value ..., MPa, N/mm, deg)\n"
                "#      and which deck material uses which (fassignN = DECKMAT=name, * for any)\n");
