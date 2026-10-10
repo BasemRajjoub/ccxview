@@ -648,7 +648,7 @@ static void apply_load(cv_job* j) {
     else if (O.export_kind >= 5) {                 /* seq / mp4 / seqsteps / mp4steps */
         G.exp_video = O.export_kind == 6 || O.export_kind == 8;
         G.exp_kind = O.export_kind >= 7;
-        app_export_animation();
+        O.export_anim = true;                      /* frame(): the view's size without the panels known (H) */
     }
 }
 
