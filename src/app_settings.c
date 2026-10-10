@@ -46,9 +46,10 @@ static const setting S[] = {
     B(show_bc), B(show_loads), F(bc_scale, 0.01f, 100), F(load_scale, 0.01f, 100),
     B(sym_auto), F(sym_size, 0, 1e30f), F(sym_thick, 0.1f, 10), B(sym_thin),
     B(show_disc), B(show_links), B(show_hl), F(hl_size, 0.5f, 64), B(show_removed), F(model_alpha, 0, 1),
-    B(cel_show), B(cel_master), B(cel_links), B(cel_front), I(cel_pick, -1, 100000),
-    I(cel_mode, 0, CV_CMODE_ALL), B(cel_true), F(cel_gap_max, 0, 1e30f), F(cel_pen_max, 0, 1e30f), F(cel_tol, 0, 1e30f), F(cel_near, 0, 1e30f),
-    I(cel_layer_by, 0, CV_CLBY_N - 1), F(cel_layer_alpha, 0, 1), F(cel_layer_min, 0, 1e30f), B(cel_layer_edges), F(cel_layer_lo, 0, 1e30f), F(cel_layer_hi, 0, 1e30f), I(tie_nodes, 0, 3), B(contact_key), { "ckey_pos", 'a', &G.ckey_pos, 0, 0 },
+    B(cel_show), B(cel_master), B(cel_surfs), B(cel_front), I(cel_pick, -1, 100000),
+    I(cel_draw, 0, CV_CDRAW_N - 1), I(cel_by, 0, CV_CBY_N - 1), B(cel_closed), B(cel_open), B(cel_true),
+    F(cel_gap_max, 0, 1e30f), F(cel_pen_max, 0, 1e30f), F(cel_tol, 0, 1e30f), F(cel_near, 0, 1e30f), F(cel_lo, 0, 1e30f), F(cel_hi, 0, 1e30f),
+    F(cel_alpha, 0, 1), F(cel_ccx_alpha, 0, 1), F(cel_min, 0, 1e30f), B(cel_edges), I(tie_nodes, 0, 3), B(contact_key), { "ckey_pos", 'a', &G.ckey_pos, 0, 0 },
     B(vec_colored), F(vec_pct, 0.01f, 100),
     I(tensor_style, 0, CV_GLYPH_N - 1), B(tensor_colored), F(tensor_scale, 0.01f, 100),
     I(traj_which, 0, 2), F(traj_spacing, 0.2f, 50), F(geo_size, 0.5f, 64), B(show_markers), B(show_ghost), { "oor_above", 'i', &G.oor_mode[0], 0, 3 }, { "oor_below", 'i', &G.oor_mode[1], 0, 3 },
@@ -112,6 +113,7 @@ static const setting S[] = {
     TREE("display", CV_TREE_DISPLAY), TREE("mirror", CV_TREE_MIRROR), TREE("replicate", CV_TREE_REPLICATE),
     TREE("clip", CV_TREE_CLIP), TREE("file", CV_TREE_FILE), TREE("export", CV_TREE_EXPORT),
     TREE("symbols", CV_TREE_SYMBOLS), TREE("cyclic", CV_TREE_CYCLIC), TREE("labels", CV_TREE_LABELS), TREE("import", CV_TREE_IMPORT),
+    TREE("contact", CV_TREE_CONTACT),
 };
 enum { NS = sizeof S / sizeof S[0] };
 
@@ -263,12 +265,27 @@ bool settings_apply(const char* kv) {
     char key[64];
     snprintf(key, sizeof key, "%.*s", (int)CV_MIN(eq - kv, 63), kv);
     const char* val = eq + 1;
-    if (!strcmp(key, "cel_layer_by")) {      /* gap|cpress|cslip|cshear|status, or the number */
-        int b = app_clayer_parse_by(val);
-        if (b < 0) return false;
-        G.cel_layer_by = b;
+    /* the contact display by name: contact_draw=layer|links|ccx (shown), contact_by=gap|cpress|
+       cslip|cshear|status, contact_show=0|1; the cel_ keys take the names too */
+    if (!strcmp(key, "contact_draw") || !strcmp(key, "cel_draw")) {
+        int d = app_cdraw_parse(val);
+        if (d < 0) return false;
+        G.cel_draw = d;
+        if (key[1] == 'o') G.cel_show = true;
         return true;
     }
+    if (!strcmp(key, "contact_by") || !strcmp(key, "cel_by")) {
+        int b = app_cby_parse(val);
+        if (b < 0) return false;
+        G.cel_by = b;
+        return true;
+    }
+    if (!strcmp(key, "fields_open")) {        /* a subgroup of Fields (CONTACT, STRESS ...) opened and scrolled to */
+        snprintf(G.fields_open, sizeof G.fields_open, "%s", val);
+        G.tree[CV_TREE_FIELDS] = 1;
+        return true;
+    }
+    if (!strcmp(key, "contact_show")) { G.cel_show = parse_bool(val); return true; }
     const setting* e = find(key);
     if (e) { set_from_text(e, val); return true; }
     if (!strcmp(key, "ui_zoom")) { ui_set_zoom((float)atof(val)); return true; }
@@ -300,10 +317,9 @@ bool settings_apply(const char* kv) {
         G.deform_scale = x; G.deform_auto = false; G.deform = x > 0;
         return true;
     }
-    if (!strcmp(key, "contact_mode")) {       /* links,status,gap,solids,layer or the bits: the contact display, shown */
-        int m = app_cdisp_parse_mode(val);
-        if (m < 0) return false;
-        G.cel_mode = m; G.cel_show = true;
+    if (!strcmp(key, "contact_mode") || !strcmp(key, "cel_mode")) {   /* before 0.1.11: links,status,gap,solids,layer or the bits */
+        if (!app_cdisp_parse_mode(val, &G.cel_draw, &G.cel_by)) return false;
+        if (key[1] == 'o') G.cel_show = true;
         return true;
     }
     if (!strcmp(key, "title_edit")) { G.title_edit = parse_bool(val); return true; }     /* its settings window open */
@@ -316,8 +332,8 @@ bool settings_apply(const char* kv) {
 void settings_apply_model(void) {
     /* exact keys, and prefixes (rep0 .. rep_gap2, the contact display's cel_*) */
     static const char* const keys[] = { "deform", "deform_scale", "deform_auto", "clip_on", "clip_axis", "clip_flip",
-                                        "clip_pos", "elem_mode", "contact_mode" };
-    static const char* const pre[] = { "rep", "cel_" };
+                                        "clip_pos", "elem_mode" };
+    static const char* const pre[] = { "rep", "cel_", "contact_" };
     for (int i = 0; i < O.nopts; i++) {
         const char* o = O.opts[i];
         const char* eq = strchr(o, '=');

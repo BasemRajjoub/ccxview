@@ -467,12 +467,12 @@ static void apply_load(cv_job* j) {
     if (O.fly) app_set_flight(true);
     if (O.mesh_window) G.show_mesh = G.mesh_limits_open = true;
     if (O.measure_window) G.show_measure = true;
-    if (O.rebar_window) G.show_rebar = true;
+    if (O.rebar_window) snprintf(G.fields_open, sizeof G.fields_open, "REBAR");
     if (O.select_window) G.show_select = true;
     if (O.details) G.show_details = true;
     if (O.about) G.show_about = true;
     if (O.deck_window) G.show_deck = true;
-    if (O.contact_window) G.show_contact = true;
+    if (O.contact_window) { snprintf(G.fields_open, sizeof G.fields_open, "CONTACT"); G.show_contact = true; }
     for (int i = 0; i < O.ncel; i++) app_contact_open(O.cel[i]);    /* --cel FILE: a .cel or .nam */
     for (int i = 0; i < O.nset_alpha; i++) {                       /* --set-alpha NAME:A */
         char nm[64];

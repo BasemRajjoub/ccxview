@@ -97,8 +97,8 @@ void deck_set(cv_inp* d, const char* path) {
     for (int i = 0; D.set_alpha && i < D.d.nsets; i++) D.set_alpha[i] = 1.f;
     D.surf_on = calloc((size_t)CV_MAX(D.d.nsurfs, 1), sizeof(bool));
     D.link_on = calloc((size_t)CV_MAX(D.d.nlinks, 1), sizeof(bool));
-    for (int i = 0; D.link_on && i < D.d.nlinks; i++)           /* spiders on, surface pairs off */
-        D.link_on[i] = D.d.links[i].kind != CV_LINK_TIE && D.d.links[i].kind != CV_LINK_CONTACT;
+    for (int i = 0; D.link_on && i < D.d.nlinks; i++)           /* spiders and contact pairs on, ties off */
+        D.link_on[i] = D.d.links[i].kind != CV_LINK_TIE;
     for (size_t i = 0; i < D.d.msgs.n; i++) cv_msg_add(&G.msgs, D.d.msgs.a[i].where, false, D.d.msgs.a[i].text);
     if (D.d.cyc_n > 1) {                /* *CYCLIC SYMMETRY MODEL: the cyclic view is ready with its sectors and axis */
         const float* a = D.d.cyc_axis;

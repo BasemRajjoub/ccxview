@@ -27,7 +27,7 @@ static bool scale_slider(struct nk_context* ctx, float row, const char* label, c
     return *v != old;
 }
 
-/* Symbol sizes: supports, springs, loads, vector arrows, highlighted sets */
+/* Symbol sizes: supports, springs, loads, highlighted sets (arrows and glyphs: their field's options) */
 static void symbol_sizes(struct nk_context* ctx, float s, float row) {
     bool deck = deck_has_bc() || deck_has_loads() || deck_has_discrete();
     if (!sub_push(ctx, "Symbol sizes", CV_TREE_SYMBOLS)) return;
@@ -62,18 +62,6 @@ static void symbol_sizes(struct nk_context* ctx, float s, float row) {
             if (G.load_scale < 0) G.load_scale = 1.f;
         }
         if (ch) deck_refresh_highlight();
-    }
-    if (app_field_is_vector() && G.show_vec) {
-        if (scale_slider(ctx, row, "vectors %", "Longest vector arrow, percent of the model diagonal", &G.vec_pct, 0.2f, 50.f)) {
-            if (G.vec_pct < 0) G.vec_pct = 5.f;
-            app_vectors_changed();
-        }
-    }
-    if (app_field_is_tensor() && G.show_tensor) {
-        if (scale_slider(ctx, row, "tensors x", "Largest tensor glyph, times the mean element size", &G.tensor_scale, 0.1f, 10.f)) {
-            if (G.tensor_scale < 0) G.tensor_scale = 1.f;
-            app_tensors_changed();
-        }
     }
     scale_slider(ctx, row, "sets px", "Balls of a highlighted node set or surface, pixels", &G.hl_size, 2.f, 40.f);
     if (G.hl_size < 0) G.hl_size = 8.f;

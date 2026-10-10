@@ -40,7 +40,7 @@ does with the results is in [results.md](results.md).
 | `*RIGID BODY` | the reference node linked to its `NSET=` or `ELSET=`; on its `ROT NODE=` DOFs 1-3 are the body's rotations, so a `*CLOAD` there is drawn as a moment and a held DOF as a held rotation |
 | `*COUPLING` + `*KINEMATIC` / `*DISTRIBUTING` | the reference node linked to its `SURFACE=` |
 | `*DISTRIBUTING COUPLING` | the `DCOUP3D` element's node linked to the listed nodes |
-| `*TIE` | the slave (first) and master surfaces, drawn crimson and blue when ticked (Contact window, Groups > Couplings), the slave nodes green where CalculiX tied them and yellow where it could not (from `jobname_WarnNodeMissTiedContact.nam`); see [features.md](features.md#contact-and-ties) |
+| `*TIE` | the slave (first) and master surfaces, drawn crimson and blue when ticked (Fields > Contact, Groups > Couplings), the slave nodes green where CalculiX tied them and yellow where it could not (from `jobname_WarnNodeMissTiedContact.nam`); see [features.md](features.md#contact-and-ties) |
 | `*CONTACT PAIR` | the slave and master surfaces, as a tie's; named by its `INTERACTION=` |
 | `*TRANSFORM` | the node system of its `NSET=` (rectangular or cylindrical), to turn local nodal results back (below) |
 | `*ORIENTATION` | the element system (rectangular or cylindrical, with the extra rotation line), by `NAME=`; the sections that name it give it to their elements |

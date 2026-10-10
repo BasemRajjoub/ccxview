@@ -60,6 +60,17 @@ void uii_test_mark(struct nk_context* ctx, const char* text) {
     m->r = nk_widget_bounds(ctx);
 }
 
+/* the row a tree header lays out next (it sets its own row): where it will be */
+void uii_test_mark_row(struct nk_context* ctx, const char* text) {
+    if (!T.on || n_marks >= (int)(sizeof marks / sizeof marks[0]) || !ctx->current) return;
+    const struct nk_panel* l = ctx->current->layout;
+    mark* m = &marks[n_marks++];
+    snprintf(m->win, sizeof m->win, "%s", ctx->current->name_string);
+    snprintf(m->text, sizeof m->text, "%s", text);
+    m->r = nk_rect(l->at_x - (float)*l->offset_x, l->at_y + l->row.height - (float)*l->offset_y, l->bounds.w,
+                   ctx->style.font->height + 2 * ctx->style.tab.padding.y);
+}
+
 static const mark* find_mark(const char* win, const char* text) {
     size_t n = CV_MIN(strlen(text), sizeof marks[0].text - 1);
     for (int i = 0; i < n_marks; i++)
@@ -159,7 +170,7 @@ static void close_all(struct nk_context* ctx) {
     G.hist_open = G.path_open = false;
     G.title_edit = false;
     G.show_measure = false; app_measure_cancel();
-    G.show_rebar = false;
+    G.show_contact = false;
     G.show_select = false; G.sel_tool = CV_ST_NONE; G.sel_mode = CV_SEL_NEW;
     G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true; G.sel_open[CV_SELG_NAMED] = false;
 }
@@ -350,38 +361,109 @@ static void open_details(struct nk_context* ctx) { app_probe_at(0, false); G.sho
 static bool details_gone(struct nk_context* ctx) { return !G.show_details; }
 static void open_about(struct nk_context* ctx) { G.show_about = true; }
 static void open_deck(struct nk_context* ctx) { G.show_deck = true; }
-/* the Contact window with the contact sample's .cel read into the model on screen:
-   its iterations listed (their nodes need not be this model's) */
+/* the Contact subgroup of Fields with the contact sample's .cel read into the model on
+   screen (its nodes need not be this model's): Fields, Contact and its "more" open alone,
+   the sidebar at its top */
 static void open_contact(struct nk_context* ctx) {
     if (!app_contact_cel()) app_contact_open("samples/contact/contact.cel");
     G.cel_pick = -1; G.model_alpha = 1.f; app_see_refresh();
-    G.show_contact = true;
+    G.cel_show = true; G.cel_draw = CV_CDRAW_LAYER; G.cel_by = CV_CBY_GAP; app_contact_refresh();
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS || k == CV_TREE_CONTACT;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
 }
-static bool contact_gone(struct nk_context* ctx) { return !G.show_contact; }
-static bool contact_listed(struct nk_context* ctx) { return app_contact_cel() && app_contact_cel()->nsets == 11 && win_of(ctx, "Contact"); }
-static bool contact_popup(struct nk_context* ctx) { return popup_open(ctx, "Contact"); }
-static bool contact_picked(struct nk_context* ctx) { return G.cel_pick >= 0 && app_contact_cel_set() == G.cel_pick && !popup_open(ctx, "Contact"); }
+static bool contact_listed(struct nk_context* ctx) { return app_contact_cel() && app_contact_cel()->nsets == 11 && uii_contact_present(); }
+static bool contact_picked(struct nk_context* ctx) { return G.cel_pick >= 0 && app_contact_cel_set() == G.cel_pick && !popup_open(ctx, "Scene"); }
 static bool see_through(struct nk_context* ctx) { return G.model_alpha < 0.9f && cv_render_see_on(); }
 static void contact_end(struct nk_context* ctx) {
-    G.show_contact = false; G.cel_pick = -1; G.model_alpha = 1.f;
-    app_contact_clear(); app_see_refresh();
+    G.cel_pick = -1; G.model_alpha = 1.f; G.cel_show = true;
+    G.cel_draw = CV_CDRAW_LAYER; G.cel_by = CV_CBY_GAP; G.cel_true = false; G.cel_closed = G.cel_open = true;
+    G.cel_alpha = 1.f; G.cel_edges = true;
+    app_contact_clear(); app_see_refresh(); sections_open(ctx);
+    G.tree[CV_TREE_FIELDS] = 1; G.show_contact = false;
 }
 static void layers_alpha(struct nk_context* ctx) { G.model_alpha = 1.f; app_see_refresh(); }
-/* the contact display's choices in the Contact window */
-static bool cmode_status(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_STATUS) && (G.cel_mode & CV_CMODE_LINKS); }
-static bool cmode_gap(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_GAP) != 0; }
-static bool cmode_solids(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_SOLIDS) != 0; }
+/* the subgroup's choices */
+static bool cdraw_links(struct nk_context* ctx) { return G.cel_draw == CV_CDRAW_LINKS; }   /* the .cel's nodes are not the showcase's: nothing drawn */
+static bool cdraw_ccx(struct nk_context* ctx) { return G.cel_draw == CV_CDRAW_CCX; }
+static bool cdraw_layer(struct nk_context* ctx) { return G.cel_draw == CV_CDRAW_LAYER; }
 static bool ctrue_on(struct nk_context* ctx) { return G.cel_true; }
-static void cdisp_back(struct nk_context* ctx) { G.cel_mode = CV_CMODE_LINKS; G.cel_true = false; app_contact_refresh(); }
-/* the interface layer's rows */
-static bool cmode_layer(struct nk_context* ctx) { return (G.cel_mode & CV_CMODE_LAYER) != 0; }
-static bool clayer_popup(struct nk_context* ctx) { return popup_open(ctx, "Contact"); }
-static bool clayer_by(struct nk_context* ctx) { return G.cel_layer_by != CV_CLBY_GAP && !popup_open(ctx, "Contact"); }
-static bool clayer_alpha(struct nk_context* ctx) { return G.cel_layer_alpha < 0.95f; }
-static bool clayer_no_edges(struct nk_context* ctx) { return !G.cel_layer_edges; }
-static void clayer_back(struct nk_context* ctx) {
-    G.cel_mode = CV_CMODE_LINKS; G.cel_layer_by = CV_CLBY_GAP; G.cel_layer_alpha = 1.f; G.cel_layer_edges = true;
-    app_contact_refresh();
+static bool cshow_off(struct nk_context* ctx) { return !G.cel_show && app_cdisp_info()->draw < 0; }
+static bool cshow_on(struct nk_context* ctx) { return G.cel_show; }
+static bool cby_changed(struct nk_context* ctx) { return G.cel_by != CV_CBY_GAP && !popup_open(ctx, "Scene"); }
+static bool closed_off(struct nk_context* ctx) { return !G.cel_closed && G.cel_open; }
+static bool clayer_alpha(struct nk_context* ctx) { return G.cel_alpha < 0.95f; }
+static bool clayer_no_edges(struct nk_context* ctx) { return !G.cel_edges; }
+static bool settings_shown(struct nk_context* ctx) { return G.show_contact && win_of(ctx, "Contact settings"); }
+static bool contact_gone(struct nk_context* ctx) { return !G.show_contact; }
+static void open_contact_settings(struct nk_context* ctx) {
+    if (!app_contact_cel()) app_contact_open("samples/contact/contact.cel");
+    G.show_contact = true;
+}
+static bool contact_folded(struct nk_context* ctx) { return !G.tree[CV_TREE_CONTACT] && G.cel_show; }
+static bool contact_unfolded(struct nk_context* ctx) { return G.tree[CV_TREE_CONTACT] != 0; }
+/* a model with a contact pair (a copy of samples/contact under build/: its .ccxview stays
+   there): the pair's tick draws it or not, the CONTACT field and the colouring agree */
+static void copy_file(const char* from, const char* to) {
+    FILE* a = fopen(from, "rb"); FILE* b = a ? fopen(to, "wb") : NULL;
+    char buf[65536]; size_t n;
+    while (a && b && (n = fread(buf, 1, sizeof buf, a)) > 0) fwrite(buf, 1, n, b);
+    if (a) fclose(a);
+    if (b) fclose(b);
+}
+static void open_pair_model(struct nk_context* ctx) {
+    copy_file("samples/contact/contact.frd", "build/ui-test/model/contact.frd");
+    copy_file("samples/contact/contact.inp", "build/ui-test/model/contact.inp");
+    remove("build/ui-test/model/contact.ccxview");
+    app_open("build/ui-test/model/contact.frd");
+}
+static bool pair_model_open(struct nk_context* ctx) {
+    const cv_inp* d = deck_get();
+    return G.loaded && !app_busy() && d && d->nlinks > 0 && strstr(G.path, "model/contact.frd") && uii_contact_present();
+}
+static void pair_fields_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS || k == CV_TREE_CONTACT;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+    G.cel_show = true; G.cel_by = CV_CBY_GAP; app_contact_refresh();
+}
+static bool pair_off(struct nk_context* ctx) {
+    const cv_inp* d = deck_get();
+    for (int i = 0; d && i < d->nlinks; i++) if (d->links[i].kind == CV_LINK_CONTACT && deck_link_flags()[i]) return false;
+    return app_cdisp_info()->nodes == 0;
+}
+static bool pair_on(struct nk_context* ctx) { return app_cdisp_info()->nodes > 0; }
+static void pick_cpress(struct nk_context* ctx) {
+    int fi = -1;
+    for (int f = 0; f < G.frd.steps[G.step].nfields; f++) if (!strcmp(G.frd.steps[G.step].fields[f].name, "CONTACT")) fi = f;
+    for (int c = 0; fi >= 0 && c < G.frd.steps[G.step].fields[fi].ncomp; c++)
+        if (!strcmp(G.frd.steps[G.step].fields[fi].comp[c], "CPRESS")) app_select_src("CONTACT", c, 0);
+}
+static bool by_cpress(struct nk_context* ctx) { return G.cel_by == CV_CBY_CPRESS; }
+static bool field_follows(struct nk_context* ctx) {
+    int fi = -1;
+    for (int f = 0; f < G.frd.steps[G.step].nfields; f++) if (!strcmp(G.frd.steps[G.step].fields[f].name, "CONTACT")) fi = f;
+    return fi >= 0 && !strcmp(G.field_name, "CONTACT") && G.comp == app_cdisp_by_comp(G.cel_by) && G.cel_by != CV_CBY_CPRESS;
+}
+/* STRESS's options subgroup open (the tensor's controls), the sidebar at Fields */
+static void stress_options_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
+    *uii_fnode_state("STRESS", true) = 1; *uii_fnode_state("STRESS/options", false) = 1;
+    *uii_fnode_state("DISP", true) = 0;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+static void stress_options_close(struct nk_context* ctx) { *uii_fnode_state("STRESS/options", false) = 0; sections_open(ctx); }
+static bool options_open(struct nk_context* ctx) { return *uii_fnode_state("STRESS/options", false) == 1; }
+static bool options_closed(struct nk_context* ctx) { return *uii_fnode_state("STRESS/options", false) == 0; }
+/* the vector arrows from DISP's options while STRESS is shown: DISP shown with them */
+static void disp_options_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
+    *uii_fnode_state("STRESS", true) = 0; *uii_fnode_state("DISP", true) = 1; *uii_fnode_state("DISP/options", false) = 1;
+    G.show_vec = false; app_select("STRESS", CV_COMP_MISES);
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+static bool disp_arrows(struct nk_context* ctx) { return G.show_vec && !strcmp(G.field_name, "DISP"); }
+static void disp_options_close(struct nk_context* ctx) {
+    G.show_vec = false; app_vectors_changed(); *uii_fnode_state("DISP/options", false) = 0; *uii_fnode_state("DISP", true) = 0;
+    app_select("STRESS", CV_COMP_MISES); sections_open(ctx);
 }
 static bool deck_gone(struct nk_context* ctx) { return !G.show_deck; }
 static bool deck_shown(struct nk_context* ctx) { return G.show_deck && win_of(ctx, "Deck"); }
@@ -548,9 +630,25 @@ static bool fly_hides(struct nk_context* ctx) { return G.fly_clip == CV_EYE_HIDE
 static void fly_depth_low(struct nk_context* ctx) { G.fly_clip_depth = 0.f; }
 static bool fly_depth_up(struct nk_context* ctx) { return G.fly_clip_depth > 0.f; }
 static bool scene_still(struct nk_context* ctx) { return !scene_scrolled(ctx); }
-/* the Reinforcement window: its design values */
-static void open_rebar(struct nk_context* ctx) { G.show_rebar = true; }
-static bool rebar_gone(struct nk_context* ctx) { return !G.show_rebar; }
+/* REBAR's design values in its options in Fields: a copy of the elements sample (shells,
+   its deck) under build/, REBAR's subgroup and options asked open as --rebar-window does */
+static void open_rebar_model(struct nk_context* ctx) {
+    copy_file("samples/elements/elements.frd", "build/ui-test/model/elements.frd");
+    copy_file("samples/elements/elements.inp", "build/ui-test/model/elements.inp");
+    remove("build/ui-test/model/elements.ccxview");
+    app_open("build/ui-test/model/elements.frd");
+}
+static bool rebar_model_open(struct nk_context* ctx) {
+    if (!G.loaded || app_busy() || !strstr(G.path, "model/elements.frd") || !G.frd.n_steps) return false;
+    for (int f = 0; f < G.frd.steps[G.step].nfields; f++) if (!strcmp(G.frd.steps[G.step].fields[f].name, "REBAR")) return true;
+    return false;
+}
+static void rebar_options_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
+    for (int f = 0; f < G.frd.steps[G.step].nfields; f++) *uii_fnode_state(G.frd.steps[G.step].fields[f].name, false) = 0;
+    snprintf(G.fields_open, sizeof G.fields_open, "REBAR");
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
 static void rebar_usual(struct nk_context* ctx) { G.rebar_fcd = 20.f; G.rebar_fyd = 435.f; G.rebar_cover = 40.f; app_rebar_changed(); }
 static bool rebar_cover_up(struct nk_context* ctx) { return G.rebar_cover > 40.f; }
 /* measurements: armed from the probe, the menu or their window; picked by clicks */
@@ -956,16 +1054,16 @@ static const step script[] = {
     AT_POPUP("Scene", 0.5f, 0.75f), CLICK, EXPECT(faces_changed, "the faces mode changes"),
 
     CASE("sidebar: the tensor glyph list opens and picks"),
-    DO(sections_open), DO(select_stress), WAIT(3), DO(snapshot), AT_TIP("Scene", "#tensor style"), WAIT(30), CLICK,
+    DO(select_stress), DO(stress_options_open), WAIT(3), DO(snapshot), AT_TIP("Scene", "#tensor style"), WAIT(30), CLICK,
     EXPECT(scene_popup, "the glyph list opens"),
     AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(tensor_picked, "the style changes, the glyphs show"),
     DO(tensor_small), WAIT(2), AT_TIP("Scene", "#tensor size"), CLICK, EXPECT(tensor_resized, "the size slider answers"),
-    DO(tensor_off),
+    DO(tensor_off), DO(stress_options_close),
 
     CASE("sidebar: the trajectory list opens and picks"),
-    DO(sections_open), DO(select_stress), DO(traj_off), WAIT(3), DO(snapshot), AT_TIP("Scene", "#traj family"), WAIT(30), CLICK,
+    DO(select_stress), DO(traj_off), DO(stress_options_open), WAIT(3), DO(snapshot), AT_TIP("Scene", "#traj family"), WAIT(30), CLICK,
     EXPECT(scene_popup, "the trajectory list opens"),
-    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(traj_picked, "the family changes, the trajectories show"), DO(traj_off),
+    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(traj_picked, "the family changes, the trajectories show"), DO(traj_off), DO(stress_options_close),
 
     CASE("sidebar and toolbar tick boxes"),
     PANELS_ANSWER,
@@ -1055,7 +1153,6 @@ static const step script[] = {
     CLOSED_THEN_PANELS("About", open_about, about_gone),
     CLOSED_THEN_PANELS("Title block", open_title_settings, title_settings_gone),
     CLOSED_THEN_PANELS("Measurements", open_measure, measure_gone),
-    CLOSED_THEN_PANELS("Reinforcement", open_rebar, rebar_gone),
 
     CASE("measurements: armed from the probe, a second click on the model makes a distance"),
     DO(close_all), DO(meas_clear), DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2),
@@ -1105,30 +1202,49 @@ static const step script[] = {
     DO(integrals_end), WAIT(2), PANELS_ANSWER,
     CLOSED_THEN_PANELS("Deck", open_deck, deck_gone),
 
-    CASE("contact: the .cel's iterations listed, one picked; the model see-through from the window"),
-    DO(close_all), DO(open_contact), WAIT(3), EXPECT(contact_listed, "the window lists the 11 iterations"),
-    AT_TIP("Contact", "Which contact elements"), CLICK, WAIT(2), EXPECT(contact_popup, "the list opens"),
-    AT_POPUP("Contact", 0.5f, 0.45f), CLICK, WAIT(3), EXPECT(contact_picked, "an iteration is drawn"),
-    AT_TIP("Contact", "The faces' opacity: less to see into the model (a contact"), CLICK, WAIT(3), EXPECT(see_through, "the model is see-through"),
+    CASE("contact: the subgroup in Fields lists the .cel's iterations, one picked; the model see-through from its settings"),
+    DO(close_all), DO(open_contact), WAIT(3), EXPECT(contact_listed, "the .cel's 11 iterations, the subgroup shown"),
+    AT_TIP("Scene", "Which contact elements of the .cel"), CLICK, WAIT(2), EXPECT(scene_popup, "the list opens"),
+    AT_POPUP("Scene", 0.5f, 0.45f), CLICK, WAIT(3), EXPECT(contact_picked, "an iteration is drawn"),
+    AT_TIP("Scene", "Contact settings: true scale"), CLICK, WAIT(3), EXPECT(settings_shown, "more... opens Contact settings"),
+    AT_TIP("Contact settings", "The model's opacity: less to see into it"), CLICK, WAIT(3), EXPECT(see_through, "the model is see-through"),
     DO(contact_end), WAIT(2), PANELS_ANSWER,
-    CASE("contact display: status, gap and solids ticked beside the links; links and solids at true scale"),
+    CASE("contact: drawn as links, as ccx elements, as the layer; at true scale; show off and on"),
     DO(close_all), DO(open_contact), WAIT(3),
-    AT_TIP("Contact", "Status: the slave faces in a patch per node"), CLICK, WAIT(2), EXPECT(cmode_status, "status drawn with the links"),
-    AT_TIP("Contact", "Gap: the slave faces coloured by the gap"), CLICK, WAIT(2), EXPECT(cmode_gap, "the gap contour drawn"),
-    AT_TIP("Contact", "Solids: the contact elements of the .cel"), CLICK, WAIT(2), EXPECT(cmode_solids, "the solids drawn"),
-    AT_TIP("Contact", "With the shape exaggerated (deformation scale not 1)"), CLICK, WAIT(2), EXPECT(ctrue_on, "at true scale"),
-    DO(cdisp_back), DO(contact_end), WAIT(2), PANELS_ANSWER,
-    CASE("contact display: the interface layer ticked, coloured by another value, see-through, not outlined"),
+    AT_TIP("Scene", "Links: a line from each open slave node"), CLICK, WAIT(2), EXPECT(cdraw_links, "links drawn"),
+    AT_TIP("Scene", "ccx elements: the elements as CalculiX wrote them"), CLICK, WAIT(2), EXPECT(cdraw_ccx, "the .cel's elements drawn"),
+    AT_TIP("Scene", "Layer: an interface layer like an adhesive"), CLICK, WAIT(2), EXPECT(cdraw_layer, "the layer drawn"),
+    DO(open_contact_settings), WAIT(3),
+    AT_TIP("Contact settings", "With the shape exaggerated (deformation scale not 1)"), CLICK, WAIT(2), EXPECT(ctrue_on, "at true scale"),
+    AT_TIP("Scene", "Draw the contact: the slave nodes"), CLICK, WAIT(2), EXPECT(cshow_off, "nothing of it drawn"),
+    AT_TIP("Scene", "Draw the contact: the slave nodes"), CLICK, WAIT(2), EXPECT(cshow_on, "drawn again"),
+    DO(contact_end), WAIT(2), PANELS_ANSWER,
+    CASE("contact: coloured by another value from its list; closed nodes off; the layer see-through, not outlined"),
     DO(close_all), DO(open_contact), WAIT(3),
-    AT_TIP("Contact", "Layer: an interface layer drawn like an adhesive"), CLICK, WAIT(2), EXPECT(cmode_layer, "the layer drawn"),
-    AT_TIP("Contact", "What colours the interface layer"), CLICK, WAIT(2), EXPECT(clayer_popup, "its list opens"),
-    AT_POPUP("Contact", 0.5f, 0.5f), CLICK, WAIT(3), EXPECT(clayer_by, "coloured by another value"),
-    AT_TIP("Contact", "The interface layer's opacity"), CLICK, WAIT(2), EXPECT(clayer_alpha, "the layer see-through"),
-    AT_TIP("Contact", "The interface layer's edges outlined"), CLICK, WAIT(2), EXPECT(clayer_no_edges, "its outline off"),
-    DO(clayer_back), DO(contact_end), WAIT(2), PANELS_ANSWER,
-    CLOSED_THEN_PANELS("Contact", open_contact, contact_gone),
+    AT_TIP("Scene", "What colours the drawing"), CLICK, WAIT(2), EXPECT(scene_popup, "its list opens"),
+    AT_POPUP("Scene", 0.5f, 0.5f), CLICK, WAIT(3), EXPECT(cby_changed, "coloured by another value"),
+    AT_TIP("Scene", "The closed slave nodes as filled balls"), CLICK, WAIT(2), EXPECT(closed_off, "the closed nodes off"),
+    AT_TIP("Scene", "The interface layer's opacity"), CLICK, WAIT(2), EXPECT(clayer_alpha, "the layer see-through"),
+    DO(open_contact_settings), WAIT(3),
+    AT_TIP("Contact settings", "The interface layer's edges outlined"), CLICK, WAIT(2), EXPECT(clayer_no_edges, "its outline off"),
+    DO(contact_end), WAIT(2), PANELS_ANSWER,
+    CLOSED_THEN_PANELS("Contact settings", open_contact_settings, contact_gone),
+    CASE("contact: the subgroup folds and unfolds, its show tick stays"),
+    DO(close_all), DO(contact_end), DO(open_contact), WAIT(3),
+    AT_TIP("Scene", "#Contact header"), CLICK, WAIT(2), EXPECT(contact_folded, "Contact folded, still shown"),
+    AT_TIP("Scene", "#Contact header"), CLICK, WAIT(2), EXPECT(contact_unfolded, "Contact open again"),
+    DO(contact_end), WAIT(2), PANELS_ANSWER,
+    CASE("field options: STRESS's options fold open, the glyph list picks, the subgroup folds"),
+    DO(close_all), DO(select_stress), DO(stress_options_open), WAIT(3), EXPECT(options_open, "STRESS > options open"),
+    DO(snapshot), AT_TIP("Scene", "#tensor style"), CLICK, EXPECT(scene_popup, "the glyph list opens"),
+    AT_POPUP("Scene", 0.5f, 0.85f), CLICK, EXPECT(tensor_picked, "the style changes, the glyphs show"),
+    AT_TIP("Scene", "#STRESS options"), CLICK, WAIT(2), EXPECT(options_closed, "options folded"),
+    DO(tensor_off), DO(stress_options_close), WAIT(2), PANELS_ANSWER,
+    CASE("field options: DISP's arrows ticked while STRESS is shown show DISP with its arrows"),
+    DO(close_all), DO(disp_options_open), WAIT(3), AT_TIP("Scene", "The field as arrows at the nodes"), CLICK, WAIT(3),
+    EXPECT(disp_arrows, "DISP shown, its arrows on"), DO(disp_options_close), WAIT(2), PANELS_ANSWER,
     CASE("layers: the opacity slider makes the model see-through"),
-    DO(contact_end), DO(close_all), DO(layers_first), WAIT(3), AT_TIP("Scene", "Opacity of the faces: less to see into the model"),
+    DO(close_all), DO(layers_first), WAIT(3), AT_TIP("Scene", "Opacity of the faces: less to see into the model"),
     CLICK, WAIT(3), EXPECT(see_through, "the model is see-through"), DO(layers_alpha), WAIT(2), PANELS_ANSWER,
 
     CASE("menu: a right click on the model opens it, an item acts and closes it"),
@@ -1199,11 +1315,6 @@ static const step script[] = {
     AT_TIP_X("Mesh quality", "The limit for every element type", 0.95f), CLICK, EXPECT(mesh_limit_set, "the aspect limit changes"),
     DO(mesh_limits_usual), WAIT(3), PANELS_ANSWER,
 
-    CASE("reinforcement: its window opens, the cover answers"),
-    DO(close_all), DO(rebar_usual), DO(open_rebar), WAIT(5),
-    AT_TIP_X("Reinforcement", "c: from each face", 0.95f), CLICK, WAIT(2), EXPECT(rebar_cover_up, "the cover changes"),
-    DO(rebar_usual), DO(close_all), WAIT(3), PANELS_ANSWER,
-
     CASE("imported geometry: listed in Groups; shown, opacity, scale list, colour, removed"),
     DO(stl_add), WAIT(3), EXPECT(stl_listed, "the STL is listed and shown"),
     AT_TIP("Scene", "Show this imported file"), CLICK, WAIT(2), EXPECT(stl_hidden, "its box hides it"),
@@ -1269,6 +1380,22 @@ static const step script[] = {
     CASE("a model and an STL dropped together: the model opens, the STL joins it as imported geometry"),
     DO(drop_model_and_pin), WAIT(10), EXPECT(pin_joined, "the model is open with pin.stl listed"),
     DO(pin_clear), WAIT(3), PANELS_ANSWER,
+
+    CASE("contact: a model with a contact pair: its tick draws it or not; CONTACT CPRESS and the colouring agree"),
+    DO(open_pair_model), WAIT(30), EXPECT(pair_model_open, "the contact sample is open with its pair"),
+    DO(pair_fields_open), WAIT(3), EXPECT(pair_on, "the pair's slave nodes drawn"),
+    AT_TIP("Scene", "Contact pair"), CLICK, WAIT(3), EXPECT(pair_off, "unticked: none drawn"),
+    AT_TIP("Scene", "Contact pair"), CLICK, WAIT(3), EXPECT(pair_on, "ticked: drawn again"),
+    DO(pick_cpress), WAIT(3), EXPECT(by_cpress, "CONTACT CPRESS in the tree colours the contact by pressure"),
+    AT_TIP("Scene", "What colours the drawing"), CLICK, WAIT(2), EXPECT(scene_popup, "its list opens"),
+    AT_POPUP("Scene", 0.5f, 0.1f), CLICK, WAIT(3), EXPECT(field_follows, "the model's CONTACT component follows the colouring"),
+    DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("reinforcement: REBAR's options in Fields, the cover answers"),
+    DO(open_rebar_model), WAIT(30), EXPECT(rebar_model_open, "the shells sample is open with REBAR"),
+    DO(rebar_usual), DO(rebar_options_open), WAIT(3),
+    AT_TIP_X("Scene", "c: from each face", 0.95f), CLICK, WAIT(2), EXPECT(rebar_cover_up, "the cover changes"),
+    DO(rebar_usual), DO(close_all), DO(sections_open), WAIT(3), PANELS_ANSWER,
 
     { OP_END }
 };

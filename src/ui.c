@@ -208,6 +208,41 @@ bool sub_push(struct nk_context* ctx, const char* title, int t) {
     return nk_tree_state_push(ctx, NK_TREE_NODE, title, (enum nk_collapse_states*)&G.tree[t]);
 }
 
+bool uii_node_check(struct nk_context* ctx, const char* title, int* state, bool* on, const char* lab, const char* help) {
+    const struct nk_style* st = &ctx->style;
+    float h = st->font->height + 2 * st->tab.padding.y, lw = ink_width(st->font, lab, (int)strlen(lab)) + h + 12 * ui_scale();
+    nk_layout_row_template_begin(ctx, h);
+    nk_layout_row_template_push_static(ctx, st->font->height + st->tab.padding.x);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, lw);
+    nk_layout_row_template_end(ctx);
+    float x0 = nk_widget_bounds(ctx).x;
+    bool max = *state == NK_MAXIMIZED;            /* the triangle and the title as a tree node's */
+    if (nk_button_symbol_styled(ctx, max ? &st->tab.node_maximize_button : &st->tab.node_minimize_button,
+                                max ? st->tab.sym_maximize : st->tab.sym_minimize)) *state = !max;
+    if (nk_widget_is_mouse_clicked(ctx, NK_BUTTON_LEFT)) *state = !max;
+    char mark[64];
+    snprintf(mark, sizeof mark, "#%s header", title);
+    uii_test_mark(ctx, mark);
+    nk_label_colored(ctx, title, NK_TEXT_LEFT, st->tab.text);
+    tip(ctx, help);
+    nk_checkbox_label(ctx, lab, on);
+    if (*state != NK_MAXIMIZED) return false;
+    struct nk_panel* l = ctx->current->layout;       /* indented as nk_tree_state_push does */
+    l->at_x = x0 + (float)*l->offset_x + st->tab.indent;
+    l->bounds.w = CV_MAX(l->bounds.w, st->tab.indent) - (st->tab.indent + st->window.padding.x);
+    l->row.tree_depth++;
+    return true;
+}
+void uii_node_pop(struct nk_context* ctx) { nk_tree_state_pop(ctx); }
+
+void uii_scroll_here(struct nk_context* ctx) {
+    nk_uint x, y;
+    nk_window_get_scroll(ctx, &x, &y);
+    float top = nk_widget_bounds(ctx).y - ctx->current->layout->clip.y;   /* the next row, from the window's top */
+    nk_window_set_scroll(ctx, x, (nk_uint)CV_MAX(0.f, (float)y + top));
+}
+
 /* ---- frame ------------------------------------------------------------------------ */
 
 /* A press goes to the topmost window under the mouse that takes input. Nuklear
@@ -320,7 +355,6 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_nav(ctx, s);
     window_find(ctx, s, row);
     window_measure(ctx, s, row, fw, fh);
-    window_rebar(ctx, s, row, fw, fh);
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
     uii_window_integrals(ctx, s, row, fw, fh);

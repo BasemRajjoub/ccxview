@@ -82,7 +82,7 @@ Other element types in the file are skipped, with a count in the Messages window
 `jobname_WarnNode*.nam`: `*NSET` files ccx writes for its warnings, read beside
 the model with the `.inp` reader. Those named `...Miss...` list slave nodes not
 tied (`WarnNodeMissTiedContact` in ccx 2.22; `WarnNodeMissMasterIntersect`
-by its name): drawn yellow on the ties. The Contact window lists every one read
+by its name): drawn yellow on the ties. Fields > Contact > more... lists every one read
 with its count.
 
 ## Steps
