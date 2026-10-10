@@ -25,7 +25,7 @@ bool title_box(cv_box* b) {
     return shown;
 }
 
-static float text_w(const struct nk_user_font* f, const char* t) { return f->width(f->userdata, f->height, t, (int)strlen(t)); }
+static float text_w(const struct nk_user_font* f, const char* t) { return ink_width(f, t, (int)strlen(t)); }
 
 void window_title(struct nk_context* ctx, float s, float row) {
     shown = false;

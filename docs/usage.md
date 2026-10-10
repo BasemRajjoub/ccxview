@@ -74,6 +74,8 @@ ccxview model.frd --title-block --opt "title_text1=Bracket rev B"  # the title b
 ccxview model.frd --title-block --opt title_user=0 --opt title_file_date=1   # lines off by key: title_heading file solver analysis step scale units user date
 ccxview model.frd --title-block --opt "title_text=Project: Bracket\nResult file: {file}\nDate: {date}"
                                             # the block's text by hand (\n between lines; placeholders as in features.md)
+ccxview model.frd --title-block --opt "title_text=Step: {step_no:00}\nTime: {time:##0.000}\nScale: {scale:%.2f}" --export seqsteps
+                                            # numbers at a fixed width (000.000 zero-padded, ###.000 space-padded, %8.3f)
 ccxview model.frd --title-block --opt "title_date_fmt=%-d %b %Y"   # how {date} / {date_file} are written (strftime; %-d: no leading zero)
 ccxview model.frd --title-window            # the title block and its settings window open
 ccxview model.frd --labels node,value,loads # labels on the model, any mix of: node elem value evalue sets links loads supports materials gpvalue gpid minmax

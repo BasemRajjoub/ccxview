@@ -58,18 +58,72 @@ static bool buckling(const cv_step* st) {
     return d && d->proc && st->step >= 1 && st->step <= d->nsteps && d->proc[st->step - 1] == CV_PROC_BUCKLE;
 }
 
-static void step_text(const cv_step* st, char* out, size_t n) {
-    if (st->modal)
-        snprintf(out, n, "%d, mode %d, %s %.6g", st->step, st->mode ? st->mode : st->inc, buckling(st) ? "factor" : "f =", st->time);
-    else
-        snprintf(out, n, "%d, increment %d, time %.6g", st->step, st->inc, st->time);
+/* The numbers that change from step to step get one width over the whole file
+   (tbtext.h's cv_tb_fit), so the text holds still while the steps play or a
+   video is made: the step, increment and mode numbers padded to the largest, the
+   time and the frequency with the decimals the most precise of them needs.
+   Worked out once per file. */
+enum { W_STEP, W_INC, W_MODE, W_TIME, W_FREQ, W_N };
+static char widths[W_N][24];
+
+static void fit_widths(void) {
+    static uint64_t done = 1;                           /* a hash of the steps the widths are for */
+    int n = G.frd.n_steps;
+    uint64_t h = 1469598103934665603ull ^ (uint64_t)n;
+    for (int i = 0; i < n; i++) {
+        const cv_step* st = &G.frd.steps[i];
+        uint32_t tb;
+        memcpy(&tb, &st->time, 4);
+        uint64_t w[4] = { (uint64_t)st->step, (uint64_t)st->inc, (uint64_t)st->mode * 2u + st->modal, tb };
+        for (int k = 0; k < 4; k++) h = (h ^ w[k]) * 1099511628211ull;
+    }
+    if (h == done) return;
+    done = h;
+    double* x = malloc(sizeof(double) * (size_t)CV_MAX(n, 1) * W_N);
+    if (!x) { for (int k = 0; k < W_N; k++) snprintf(widths[k], sizeof widths[k], "%s", k < W_TIME ? "0" : "%g"); return; }
+    int m[W_N] = { 0 };
+    for (int i = 0; i < n; i++) {
+        const cv_step* st = &G.frd.steps[i];
+        double* row[W_N];
+        for (int k = 0; k < W_N; k++) row[k] = x + (size_t)k * (size_t)n;
+        row[W_STEP][m[W_STEP]++] = st->step;
+        if (st->modal) { row[W_MODE][m[W_MODE]++] = st->mode ? st->mode : st->inc; row[W_FREQ][m[W_FREQ]++] = st->time; }
+        else { row[W_INC][m[W_INC]++] = st->inc; row[W_TIME][m[W_TIME]++] = st->time; }
+    }
+    for (int k = 0; k < W_N; k++) cv_tb_fit(x + (size_t)k * (size_t)n, m[k], k < W_TIME ? 10 : 6, widths[k], sizeof widths[k]);
+    free(x);
 }
 
-static void scale_text(char* out, size_t n) {
+/* the step's text, its step number left as it is: the template's format, else W_STEP, goes there */
+static void step_text(const cv_step* st, char* out, size_t n) {
+    char a[64], b[64];
+    if (st->modal) {
+        cv_tb_num(widths[W_MODE], st->mode ? st->mode : st->inc, a, sizeof a);
+        cv_tb_num(widths[W_FREQ], st->time, b, sizeof b);
+        snprintf(out, n, "%d, mode %s, %s %s", st->step, a, buckling(st) ? "factor" : "f =", b);
+    } else {
+        cv_tb_num(widths[W_INC], st->inc, a, sizeof a);
+        cv_tb_num(widths[W_TIME], st->time, b, sizeof b);
+        snprintf(out, n, "%d, increment %s, time %s", st->step, a, b);
+    }
+}
+
+/* the deformation scale; *num when it shows one, with four digits in fmt (an auto
+   scale of a mode changes from step to step, mostly within a decade) */
+static void scale_text(char* out, size_t n, bool* num, char* fmt, size_t fn) {
+    *num = false;
+    fmt[0] = 0;
     if (find_field(G.step, "DISP") < 0) { out[0] = 0; return; }        /* nothing to deform with */
     if (!G.deform) snprintf(out, n, "undeformed");
     else if (G.deform_scale == 1.f) snprintf(out, n, "true scale (x1)");
-    else snprintf(out, n, "x%.4g%s", G.deform_scale, G.deform_auto ? " (auto)" : "");
+    else {
+        snprintf(out, n, "x%.4g%s", G.deform_scale, G.deform_auto ? " (auto)" : "");
+        double s = fabs((double)G.deform_scale);
+        int d = s > 0 ? 3 - (int)floor(log10(s)) : 3;
+        d = CV_MAX(0, CV_MIN(d, 6));
+        snprintf(fmt, fn, "0%s%.*s", d ? "." : "", d, "000000");
+        *num = true;
+    }
 }
 
 static void user_name(char* out, size_t n) {
@@ -101,7 +155,8 @@ static const char* const keys[K_N] = {
 };
 const char app_title_keys[] = "{title} {file} {path} {solver} {analysis} {step} {step_no} {increment} {time} {mode} "
                               "{freq} {factor} {scale} {units} {field} {component} {unit} {user} {host} "
-                              "{date} {date_file} {time_now}, {date:%d.%m.%Y %H:%M}; {{ writes a brace";
+                              "{date} {date_file} {time_now}, {date:%d.%m.%Y %H:%M}; a number at a fixed width: "
+                              "{time:000.000} (zeros), {time:###.000} (spaces), {time:%8.3f}; {{ writes a brace";
 
 /* each box's line in the template */
 static const char* const line_keys[CV_TB_N] = {
@@ -146,19 +201,34 @@ int app_title_lines(cv_title_line* out, int max, const char* units) {
     const char* ver = G.frd.head.version;
     if (!strncmp(ver, "Version ", 8)) ver += 8;
     snprintf(v[K_SOLVER], sizeof v[0], "%s%s%s", G.frd.head.pgm, G.frd.head.pgm[0] && ver[0] ? " " : "", ver);
+    /* the numbers among them: each written as plain text, and its value and the
+       file's width for it, which a format in the template replaces */
+    cv_tb_kv kv[K_N];
+    for (int k = 0; k < K_N; k++) kv[k] = (cv_tb_kv){ keys[k], v[k] };
     if (st) {
+        fit_widths();
         snprintf(v[K_ANALYSIS], sizeof v[0], "%s", analysis(st));
         step_text(st, v[K_STEP], sizeof v[0]);
         snprintf(v[K_STEP_NO], sizeof v[0], "%d", st->step);
+        kv[K_STEP] = (cv_tb_kv){ keys[K_STEP], v[K_STEP], true, st->step, widths[W_STEP] };
+        kv[K_STEP_NO] = (cv_tb_kv){ keys[K_STEP_NO], v[K_STEP_NO], true, st->step, widths[W_STEP] };
         if (st->modal) {
-            snprintf(v[K_MODE], sizeof v[0], "%d", st->mode ? st->mode : st->inc);
-            snprintf(v[buckling(st) ? K_FACTOR : K_FREQ], sizeof v[0], "%.6g", st->time);
+            int md = st->mode ? st->mode : st->inc, kf = buckling(st) ? K_FACTOR : K_FREQ;
+            snprintf(v[K_MODE], sizeof v[0], "%d", md);
+            snprintf(v[kf], sizeof v[0], "%.6g", st->time);
+            kv[K_MODE] = (cv_tb_kv){ keys[K_MODE], v[K_MODE], true, md, widths[W_MODE] };
+            kv[kf] = (cv_tb_kv){ keys[kf], v[kf], true, st->time, widths[W_FREQ] };
         } else {
             snprintf(v[K_INC], sizeof v[0], "%d", st->inc);
             snprintf(v[K_TIME], sizeof v[0], "%.6g", st->time);
+            kv[K_INC] = (cv_tb_kv){ keys[K_INC], v[K_INC], true, st->inc, widths[W_INC] };
+            kv[K_TIME] = (cv_tb_kv){ keys[K_TIME], v[K_TIME], true, st->time, widths[W_TIME] };
         }
     }
-    scale_text(v[K_SCALE], sizeof v[0]);
+    static char scale_fmt[16];
+    scale_text(v[K_SCALE], sizeof v[0], &kv[K_SCALE].num, scale_fmt, sizeof scale_fmt);
+    kv[K_SCALE].x = G.deform_scale;
+    kv[K_SCALE].fmt = scale_fmt[0] ? scale_fmt : NULL;
     if (units && strcmp(units, "not set")) snprintf(v[K_UNITS], sizeof v[0], "%s", units);
     if (G.has_field) {
         snprintf(v[K_FIELD], sizeof v[0], "%s", G.legend_lines[0]);
@@ -170,8 +240,6 @@ int app_title_lines(cv_title_line* out, int max, const char* units) {
     user_name(v[K_USER], sizeof v[0]);
     host_name(v[K_HOST], sizeof v[0]);
 
-    cv_tb_kv kv[K_N];
-    for (int k = 0; k < K_N; k++) kv[k] = (cv_tb_kv){ keys[k], v[k] };
     time_t now_t = time(NULL);
     struct tm now = { 0 }, file = { 0 }, *lt = localtime(&now_t);
     if (lt) now = *lt;

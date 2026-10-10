@@ -65,6 +65,65 @@ static void test_tbtext(void) {
     cv_tb_strftime(o, sizeof o, "%Y-%m-%d" CV_TB_TIME_FMT, &now); CHECK(!strcmp(o, "2026-10-09 07:05"));
     CHECK_EQ(cv_tb_strftime(o, 5, "%Y-%m-%d", &now), 4); CHECK(!strcmp(o, "2026"));    /* cut, terminated */
 
+    /* number formats: pictures (zeros pad with zeros, '#' with spaces), printf style */
+    static const struct { const char* pat; double x; const char* want; } nf[] = {
+        { "000.000", 3.14159, "003.142" }, { "###.000", 3.14159, "  3.142" }, { "%8.3f", 3.14159, "   3.142" },
+        { "00", 7, "07" }, { "0.00", 1.5, "1.50" }, { "#", 0, "0" }, { "##0", 42, " 42" }, { "#0.0", 0.24, " 0.2" },
+        { "0.0", 0.96, "1.0" }, { "0.00", 9.996, "10.00" }, { "00", 123, "123" }, { "##", 12345, "12345" },     /* rounding, overflow */
+        { "##0.0", -5, " -5.0" }, { "00.0", -5, "-05.0" }, { "#0", -12, "-12" },                   /* a minus takes a '#' */
+        { "0.0", -0.04, "0.0" }, { "000", -0.4, "000" }, { "+0.0", 2, "+2.0" }, { "+0.0", -2, "-2.0" }, { "+00", 0, "+00" },
+        { "%d", 2.6, "3" }, { "%3d", -2.4, " -2" }, { "%03d", 7, "007" }, { "%#4d", 3, "   3" }, { "%d", -0.2, "0" },
+        { "%+.2e", 12345, "+1.23e+04" }, { "%06.2f", -3.14159, "-03.14" }, { "%-6.1f", 2, "2.0   " }, { "%g", 0.5, "0.5" },
+        { "%.3g", 1234.5, "1.23e+03" }, { "% .1f", 1, " 1.0" },
+    };
+    for (size_t i = 0; i < sizeof nf / sizeof nf[0]; i++) {
+        CHECK(cv_tb_num(nf[i].pat, nf[i].x, o, sizeof o));
+        if (strcmp(o, nf[i].want)) printf("  num %s %g: '%s', want '%s'\n", nf[i].pat, nf[i].x, o, nf[i].want);
+        CHECK(!strcmp(o, nf[i].want));
+    }
+    static const char* const bad[] = { "", "%s", "%n", "%x", "%lf", "%5.3", "%123f", "%.123f", "%.3d", "%f%s", "%--5f",
+                                       "%.20f", "%*d", "0.", ".0", "0.#", "abc", "00 ", "+", "%", "0%" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        CHECK(!cv_tb_num(bad[i], 1.0, o, sizeof o));
+        CHECK(!o[0]);
+    }
+    CHECK(cv_tb_num("0.000", 1.0 / 0.0, o, sizeof o)); CHECK(!strcmp(o, "inf"));
+    CHECK(cv_tb_num("0000", 1, o, 3)); CHECK(!strcmp(o, "00"));          /* cut, terminated */
+    CHECK(cv_tb_num("%40.17f", -1e300, o, sizeof o));                   /* the widest printf there is: no overflow */
+
+    /* a picture that holds every value at one width */
+    static const struct { double x[4]; int n, sig; const char* want; } fit[] = {
+        { { 0.1, 0.2, 1.0 }, 3, 6, "0.0" }, { { 0.5, 12.25 }, 2, 6, "#0.00" }, { { 1, 2, 10 }, 3, 10, "#0" },
+        { { -1.5, 2 }, 2, 6, "#0.0" }, { { 1e-9, 1 }, 2, 6, "%.5e" }, { { 1e12 }, 1, 6, "%.5e" }, { { 0 }, 1, 6, "0" },
+        { { 0 }, 0, 6, "0" }, { { 1.0f / 3.0f }, 1, 6, "0.000000" }, { { 123, 7 }, 2, 10, "##0" }, { { 1.5 }, 1, 3, "0.0" },
+    };
+    for (size_t i = 0; i < sizeof fit / sizeof fit[0]; i++) {
+        char pat[32];
+        cv_tb_fit(fit[i].x, fit[i].n, fit[i].sig, pat, sizeof pat);
+        if (strcmp(pat, fit[i].want)) printf("  fit %zu: '%s', want '%s'\n", i, pat, fit[i].want);
+        CHECK(!strcmp(pat, fit[i].want));
+    }
+
+    /* in placeholders: the template's format, else the value's own, in place of its first number */
+    const cv_tb_kv nkv[] = {
+        { "time", "0.5", true, 0.5, "0.000" }, { "scale", "x1.5 (auto)", true, 1.5, NULL },
+        { "step", "1, increment 2", true, 1, "##" }, { "file", "plate.frd" }, { "freq", "", true, 0, "0.0" },
+        { "v", "f = -2.5 Hz", true, -2.5, NULL }, { "word", "undeformed", true, 1, NULL },
+    };
+    cv_tb_ctx nc = { nkv, 7, NULL, &now, &file };
+    static const char* const nt[][2] = {
+        { "{time}", "0.500" }, { "{time:00.0}", "00.5" }, { "{time:%6.2f}", "  0.50" }, { "{time:bad}", "{time:bad}" },
+        { "{time:%s}", "{time:%s}" }, { "{scale}", "x1.5 (auto)" }, { "{scale:0.00}", "x1.50 (auto)" },
+        { "{step}", " 1, increment 2" }, { "{step:00}", "01, increment 2" }, { "{file:0.00}", "plate.frd" },
+        { "{v:0.00}", "f = -2.50 Hz" }, { "{word:0.0}", "undeformed" }, { "{date:%Y}", "2026" },
+    };
+    for (size_t i = 0; i < sizeof nt / sizeof nt[0]; i++) {
+        CHECK(tb_line(&nc, nt[i][0], o, sizeof o, &sp));
+        if (strcmp(o, nt[i][1])) printf("  line %s: '%s', want '%s'\n", nt[i][0], o, nt[i][1]);
+        CHECK(!strcmp(o, nt[i][1]));
+    }
+    CHECK(!tb_line(&nc, "Freq: {freq:00.0}", o, sizeof o, &sp));          /* no value: the line still goes */
+
     /* very long: cut, terminated, the line kept */
     char longl[2000];
     memset(longl, 'x', sizeof longl - 1); longl[sizeof longl - 1] = 0;

@@ -311,6 +311,25 @@ it was left, and at first the filters and the kept ones are folded:
   without the time), or in a format of its own in one placeholder:
   {date:%d.%m.%Y %H:%M} (strftime codes; %-d, %-m, %-H without the leading zero).
   The text and the date format are kept in the settings.
+- Numbers that hold still in an animation: the title block's numbers keep their
+  width and their place while the steps play or a video or PNG sequence is made.
+  Its digits are drawn in cells of one width (tabular figures: the font's widest
+  digit, each digit centred in its cell, as are a sign before a number and the
+  spaces padding one), so numbers of the same length cover the same pixels; the
+  legend's numbers are drawn the same way. Without any typing the changing numbers
+  already have one width over the whole file: the step, increment and mode numbers
+  padded with spaces to the largest of them, the time and the frequency with the
+  decimals the most precise of them needs (time 0.5, 1.25 ... writes 0.50, 1.25),
+  the scale with four digits (x0.3288, x12.50). A number placeholder also takes a
+  format of its own after a colon: a picture, `{time:000.000}` (a '0' per digit,
+  padded with zeros, the decimals fixed), `{time:###.000}` (a '#' pads with a
+  space, and leaves room for a minus), `{step_no:00}`, `{scale:0.00}`, `{freq:+0.0}`
+  (a sign always); or printf style, `{time:%8.3f}`, `{factor:%.4e}`, `{mode:%3d}`
+  (f, e, g or d only, width and decimals of at most two digits; anything else is
+  left as typed). A number too wide for its picture is written whole. {step} and
+  {scale} format their first number (the step number; the factor in
+  "x1.5 (auto)"); placeholders without a number ({file}, {analysis} ...) ignore a
+  number format, and the dates keep their strftime formats.
 - The top bar holds what is used all the time: deformation on / off and its scale
   (auto and multiples of it, true scale), animation, fit, all symbol layers in
   one box, the colour map and bands, the field and its component, the standard
