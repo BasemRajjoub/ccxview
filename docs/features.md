@@ -320,6 +320,51 @@ with the warning file of the 24 slave nodes past the master's end
 (`scripts/gen_contact.py`, `scripts/gen_tie.py`, solved by
 `scripts/solve_showcase.sh contact contact_s2s` and `... tie`).
 
+### Contact showcase
+
+`samples/contact_showcase/contact_showcase.frd` holds five small, separate
+models in one deck, each with its own parts, contact pair (or tie), supports
+and loads, solved together in one static step of 8 fixed increments, so the
+time bar (or play) shows each behaviour develop. Their sets are named after
+them (`A_GAP_BLOCK`, `A_GAP_SLAVE`, `B_SLIDE_PLATE`, ...); A, B, C stand in one
+row, D and E in front of them:
+
+- A, gap closing (`A_GAP`): a block standing tilted on a plate, pushed down;
+  the contact spreads from its low edge, 7 of its 77 slave nodes closed in the
+  first increment, 51 in the last. Links, or status (open, near, closed); the
+  gap mode seen from below with `A_GAP_PLATE` hidden.
+- B, sliding (`B_SLIDE`, friction 0.3): a block pressed (increments 1-2), then
+  pushed along x: every node sticks until increment 4, increment 5 has 21
+  sticking and 42 sliding (from the leading edge back), from 6 on all slide;
+  `CSLIP1` grows to 0.026 mm. Status; `--field CONTACT:CSLIP1` from below.
+- C, lift-off (`C_LIFT`): a block pressed through a rigid top (a `*RIGID
+  BODY`), then the top turned about y: 35 of 77 nodes lift off, the gap at the
+  edge 0.038 mm. Links and status from the side, the shape exaggerated.
+- D, interface opening (`D_LAM`): a laminate, a thin top layer on a thicker one,
+  held down by a pressure while its end is pulled up 0.6 mm; the interface is a
+  frictionless contact that takes no tension, and it opens from the end, the
+  front running 12 to 25 mm in. CalculiX 2.22 has no cohesive contact, so
+  this is the opening of an interface without strength, not delamination.
+  Links and gap from the side.
+- E, tie (`E_TIE`): a block tied onto a base it overhangs, the meshes not
+  matching; ccx writes the 18 slave nodes past the base's end to
+  `contact_showcase_WarnNodeMissTiedContact.nam`. `--set E_TIE`.
+
+A surface to surface pair is not among them: ccx 2.22 stops ("element slave
+surface ... does not exist") when one deck mixes node to surface and surface to
+surface pairs (`samples/contact/contact_s2s` is one). Overview and a close-up:
+
+```sh
+ccxview samples/contact_showcase/contact_showcase.frd --opt contact_mode=status \
+  --opt model_alpha=0.35 --opt deform_scale=10 --faces plain --step 5
+ccxview samples/contact_showcase/contact_showcase.frd --field CONTACT:CSLIP1 \
+  --hide-set B_SLIDE_PLATE --look -z --target 75,0,0 --zoom 5 --step 8   # B from below
+```
+
+The contact key counts the slave nodes of every pair, also of the models
+hidden. `scripts/gen_contact_showcase.py` writes the deck,
+`scripts/solve_showcase.sh contact_showcase` solves it (about 10 s).
+
 ## Selection
 
 One floating window, Selection (S, the top bar's Select, View > Selection...,

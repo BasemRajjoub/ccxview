@@ -66,6 +66,10 @@ the same version.
 - `samples/vessel/`: a pressure vessel for the stress linearization.
 - `samples/cantilever/`: a cantilever under bending, torsion, both, and pressure,
   four steps for the tensor glyphs (`scripts/solve_showcase.sh cantilever`).
+- `samples/contact_showcase/`: five small contact models in one deck (gap
+  closing, sliding with friction, lift-off, interface opening, a tie with
+  untied nodes), 8 increments (`scripts/solve_showcase.sh contact_showcase`;
+  docs/features.md, Contact showcase).
 
 Regenerate and solve one with `scripts/solve_showcase.sh NAME` (needs `ccx`).
 

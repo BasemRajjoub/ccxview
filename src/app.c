@@ -550,6 +550,7 @@ static void frame(void) {
         if (G.png_alpha && G.png_alpha_arm < 2) G.png_alpha_arm++;
         else { G.export_req = false; G.png_alpha_arm = 0; export_now(); }
     }
+    if (O.export_anim && G.loaded && !app_busy()) { O.export_anim = false; app_export_animation(); }
     if (G.seq_left > 0 && !app_busy() && G.seq_warm > 0) G.seq_warm--;
     else if (G.seq_left > 0 && !app_busy()) {
         if (G.video) video_frame(); else export_now();
