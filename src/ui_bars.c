@@ -143,7 +143,8 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
         nk_layout_row_push(ctx, 24 * s);
         uii_vsep(ctx);
         nk_layout_row_push(ctx, 110 * s);
-        const char* fname = G.field_src == 0 ? G.field_name : G.field_src == 2 ? "calculated" : G.field_name;
+        const char* fname = G.field_src == 2 ? "calculated" : G.field_src == 3 ? "failure"   /* what shows, whatever its source */
+                          : G.field_src == 4 ? "mesh quality" : G.field_name;
         tip(ctx, "The result field shown (Fields tree: the same, with the calculated and failure fields)");
         if (nk_combo_begin_label(ctx, fname[0] ? fname : "field", nk_vec2(220 * s, CV_MIN(st->nfields, 12) * row + 20 * s))) {
             nk_layout_row_dynamic(ctx, row, 1);
