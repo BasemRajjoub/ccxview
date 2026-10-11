@@ -183,6 +183,16 @@ to it. Contact is the first subgroup (see Contact and ties).
   good, 1 at fail, 10 at worst), ANSYS Element Quality (C V / sqrt(sum e^2)^3)
   and the number of Abaqus Verify Mesh checks failed. The probe names the
   measure that sets the ccxview score.
+- Shells, plane stress / strain, axisymmetric and beam elements, which CalculiX
+  writes expanded into thin solids, are measured on the `.inp` element they were
+  made from (its type and nodes, the layers of a composite on their shell, moved
+  by the step's displacements) when the deck is beside the `.frd`: a shell's
+  aspect ratio, skewness, warpage and scores, not those of a sliver of brick.
+  The window says how many were measured so; without the deck, a mesh of mostly
+  thin bricks is flagged as looking expanded ("open the .inp beside it"), in
+  the window and the legend. A measure that applies to no element here says to
+  which it does apply (shape factor: triangles and tets only). A score or ratio
+  the same to four digits everywhere shows as one uniform value.
 - Strength materials: Xt, Xc, Yt, Yc, S12, S23, Puck inclinations, fracture
   toughness, yield and ultimate strengths. Templates of well documented
   materials (the WWFE plies, IM7/8552, T800S/M21, AS4/PEEK, structural,

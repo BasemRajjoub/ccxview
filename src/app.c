@@ -419,7 +419,10 @@ static void frame(void) {
         d.def_scale = G.deform ? G.deform_scale * G.anim_factor : 0.f;
         d.def_scale2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
         d.rmin = G.rmin; d.rmax = G.rmax;
-        if (!(d.rmax > d.rmin)) { d.rmin -= 0.5f; d.rmax += 0.5f; }  /* constant field */
+        if (!(d.rmax > d.rmin)) {                /* constant field: its value mid-band, not on a band edge */
+            float t = G.bands > 0 ? (float)(G.bands / 2 + 0.5) / (float)G.bands : 0.5f;
+            d.rmin -= t; d.rmax += 1.f - t;
+        }
         d.bands = G.bands;
         for (int k = 0; k < 2; k++) {            /* values outside a locked range */
             int m = G.range_lock ? G.oor_mode[k] : 0;

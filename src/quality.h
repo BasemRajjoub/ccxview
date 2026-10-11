@@ -55,6 +55,8 @@ typedef struct {
 const cv_mq_info* cv_mq(int q);
 int    cv_mq_find(const char* key);         /* by key or name, case blind; -1 none */
 int    cv_mq_dim(int frd_type);             /* 3 solid, 2 shell / plane, 1 beam, 0 unknown */
+/* the elements measure q applies to, when not all: "triangles and tets only"; NULL all */
+const char* cv_mq_applies(int q);
 
 /* the limit past which an element counts as poor: the user's (cv_mq_set_limit) or
    the usual one; NaN: none for this type. The scores are made against it. */

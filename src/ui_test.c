@@ -652,6 +652,38 @@ static bool rebar_model_open(struct nk_context* ctx) {
     for (int f = 0; f < G.frd.steps[G.step].nfields; f++) if (!strcmp(G.frd.steps[G.step].fields[f].name, "REBAR")) return true;
     return false;
 }
+/* mesh quality on shells: a copy of the shellplate sample (S8R, its deck) under build/.
+   CalculiX wrote each shell as a thin hex20; with the deck each is measured on its
+   square quad8, aspect 1, not on the brick (aspect 5) */
+static bool mq_def_was;
+static void open_shell_model(struct nk_context* ctx) {
+    copy_file("samples/shellplate/shellplate.frd", "build/ui-test/model/shellplate.frd");
+    copy_file("samples/shellplate/shellplate.inp", "build/ui-test/model/shellplate.inp");
+    remove("build/ui-test/model/shellplate.ccxview");
+    app_open("build/ui-test/model/shellplate.frd");
+}
+static bool shell_model_open(struct nk_context* ctx) {
+    return G.loaded && !app_busy() && strstr(G.path, "model/shellplate.frd") && deck_get();
+}
+static void shell_aspect(struct nk_context* ctx) {
+    mq_def_was = G.mesh_deformed;
+    G.mesh_deformed = false;
+    app_pick_mesh(CV_MQ_ASPECT);
+    G.show_mesh = true;
+}
+static bool shell_measured(struct nk_context* ctx) {
+    static mesh_stat st[CV_MQ_N];
+    mesh_info in;
+    if (!G.has_field || !mesh_stats(st, &in)) return false;
+    return in.on_deck == G.frd.n_elems && in.per_type[10] == G.frd.n_elems && st[CV_MQ_ASPECT].n &&
+           st[CV_MQ_ASPECT].max < 1.01 && st[CV_MQ_CCX].min > 0.99 && st[CV_MQ_SHAPE].n == 0;
+}
+static void shell_done(struct nk_context* ctx) {
+    G.mesh_deformed = mq_def_was;
+    mesh_changed();
+    G.show_mesh = false;
+    app_pick_field("DISP", CV_COMP_MAG, 0);
+}
 static void rebar_options_open(struct nk_context* ctx) {
     for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
     for (int f = 0; f < G.frd.steps[G.step].nfields; f++) *uii_fnode_state(G.frd.steps[G.step].fields[f].name, false) = 0;
@@ -1497,6 +1529,11 @@ static const step script[] = {
     DO(rebar_usual), DO(rebar_options_open), WAIT(3),
     AT_TIP_X("Scene", "c: from each face", 0.95f), CLICK, WAIT(2), EXPECT(rebar_cover_up, "the cover changes"),
     DO(rebar_usual), DO(close_all), DO(sections_open), WAIT(3), PANELS_ANSWER,
+
+    CASE("mesh quality on shells: measured on the .inp's quad8, not CalculiX's expanded hex20"),
+    DO(open_shell_model), WAIT(30), EXPECT(shell_model_open, "the shellplate sample is open with its deck"),
+    DO(shell_aspect), WAIT(5), EXPECT(shell_measured, "every element measured on its shell: aspect 1, quality 1, no shape factor"),
+    DO(shell_done), DO(close_all), DO(sections_open), WAIT(3), PANELS_ANSWER,
 
     { OP_END }
 };

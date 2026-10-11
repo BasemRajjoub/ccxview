@@ -1,5 +1,6 @@
 /* app_mesh.h -- mesh quality as a field (field_src 4): every quality measure of
-   every element (quality.c), worked out once per file on the undeformed mesh, and
+   every element (quality.c), on the undeformed or the step's deformed shape, expanded
+   shells and beams on their .inp element when the deck is there, and
    what the Mesh quality window says about them. */
 #ifndef CV_APP_MESH_H
 #define CV_APP_MESH_H
@@ -20,11 +21,13 @@ typedef struct {
 /* the mesh at a glance */
 typedef struct {
     uint32_t nodes, elems, used_nodes;
-    uint32_t per_type[16];  /* elements per .frd type */
+    uint32_t per_type[16];  /* elements per type measured (.frd, or the .inp element's) */
     uint32_t mats, groups;  /* distinct numbers */
     double   volume, area, length;   /* summed over solids, shells, beams; shown units */
     double   box[6];        /* bounding box min xyz, max xyz; shown units */
     uint32_t poor_any;      /* elements past any limit */
+    uint32_t on_deck;       /* expanded shells, planes, beams measured on their .inp element */
+    uint32_t thin;          /* of the rest, hexes and wedges thin like an expanded shell or beam */
 } mesh_info;
 
 /* fills G.scalar and G.elem_val with measure G.mesh_q: per element its value, per
@@ -35,6 +38,10 @@ bool mesh_stats(mesh_stat st[CV_MQ_N], mesh_info* info);   /* false: no mesh */
 /* every measure of an element, as the probe shows it */
 bool mesh_probe_text(uint32_t elem, char* out, size_t n);
 double mesh_value(uint32_t elem, int q);      /* shown units, NaN none */
+/* no deck, and most elements look like shells or beams CalculiX expanded into solids */
+bool mesh_looks_expanded(void);
+/* a few words for the legend on what was measured: "on the .inp elements"; "" */
+const char* mesh_note(void);
 unsigned mesh_gen(void);
 bool mesh_deformed_now(void);                /* the measures are of the step's deformed shape (else undeformed) */                     /* changes whenever the measures are worked out again */
 double mesh_len_scale(void);                 /* model -> shown lengths */

@@ -536,6 +536,11 @@ static bool refresh_field_mesh(void) {
         snprintf(G.field_label, sizeof G.field_label, "Mesh %s [%s]", kind, u);
         snprintf(G.legend_lines[2], sizeof G.legend_lines[2], "[%s]", u);
     }
+    const char* note = mesh_note();                  /* what was measured: the .inp's shells, or a hint */
+    if (ok && note[0]) {
+        size_t o = strlen(G.legend_lines[2]);
+        snprintf(G.legend_lines[2] + o, sizeof G.legend_lines[2] - o, "%s%s", o ? " " : "", note);
+    }
     return ok;
 }
 

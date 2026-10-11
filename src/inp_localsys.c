@@ -163,6 +163,13 @@ int cv_elemmap_axes(const cv_elemmap* m, const cv_inp* d, const cv_frd* f, uint3
     return cs->cyl ? 2 : 1;
 }
 
+uint32_t cv_elemmap_deck(const cv_elemmap* m, const cv_inp* d, uint32_t e) {
+    uint32_t c = m->comp ? m->comp[e] : UINT32_MAX;
+    if (c == LAYER_LOST) return UINT32_MAX;
+    if (c != UINT32_MAX) return cv_frd_elem_index(&d->mesh, d->comps[c].id);
+    return m->f2d ? m->f2d[e] : UINT32_MAX;
+}
+
 bool cv_elemmap_shell(const cv_elemmap* m, const cv_inp* d, uint32_t e, uint32_t* shell, double Q[3][3]) {
     uint32_t c = m->comp ? m->comp[e] : UINT32_MAX;
     if (c == LAYER_LOST) return false;

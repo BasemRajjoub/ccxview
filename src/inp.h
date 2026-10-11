@@ -297,6 +297,9 @@ int  cv_elemmap_mat(const cv_elemmap* m, const cv_inp* d, uint32_t e, float* thi
    (cylindrical), -1 cannot be rebuilt, -2 no element values (discrete) */
 int  cv_elemmap_axes(const cv_elemmap* m, const cv_inp* d, const cv_frd* f, uint32_t e,
                      const float* x, double Q[3][3]);
+/* the deck element (index) .frd element e stands for: a composite's layers all name
+   their shell; UINT32_MAX none */
+uint32_t cv_elemmap_deck(const cv_elemmap* m, const cv_inp* d, uint32_t e);
 /* .frd element e as part of a shell, for its section forces (shell.h): *shell the
    deck element (index) of the shell, the layers of a composite all naming theirs;
    Q its axes, rows e1 e2 e3 (the normal): the shell's *ORIENTATION, else the global
