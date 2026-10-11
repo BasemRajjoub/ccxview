@@ -71,7 +71,7 @@ static const setting S[] = {
     SEC("Reinforcement of concrete shells (the REBAR field), in the model's units: fcd and fyd (MPa with N, mm), the cover to the bars' centroid (mm)"),
     F(rebar_fcd, 1e-12f, 1e30f), F(rebar_fyd, 1e-12f, 1e30f), F(rebar_cover, 1e-12f, 1e30f),
     SEC("Mesh quality field: 0 size, 1 shortest edge, 2 longest edge, 3 aspect ratio, 4 scaled Jacobian, 5 Jacobian ratio, 6 skewness, 7 smallest angle, 8 largest angle, 9 warpage, 10 shape factor"),
-    I(mesh_q, 0, CV_MQ_N - 1), F(mesh_warn_pct, 0, 100),
+    I(mesh_q, 0, CV_MQ_N - 1), F(mesh_warn_pct, 0, 100), B(mesh_deformed),
     SEC("Labels on the model: the kinds as bits (2 node id, 4 element id, 8 node value, 16 element value, 32 sets, 64 couplings, 128 loads, 256 supports, 512 materials, 1024 Gauss value, 2048 Gauss id), size px, gap px, colours; measurements' labels (meas_show: 0 undeformed -> deformed, 1 undeformed, 2 deformed)"),
     { "label_kinds", 'i', &G.label_kinds, 0, (1 << CV_LABEL_N) - 1 }, I(minmax_n, 1, 100), F(label_px, 6, 48), F(label_spacing, 0, 400), B(label_sel_only), B(label_probe_only), B(label_front),
     { "label_r", 'f', &G.label_rgb[0], 0, 1 }, { "label_g", 'f', &G.label_rgb[1], 0, 1 }, { "label_b", 'f', &G.label_rgb[2], 0, 1 },

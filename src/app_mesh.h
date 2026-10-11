@@ -35,9 +35,11 @@ bool mesh_stats(mesh_stat st[CV_MQ_N], mesh_info* info);   /* false: no mesh */
 /* every measure of an element, as the probe shows it */
 bool mesh_probe_text(uint32_t elem, char* out, size_t n);
 double mesh_value(uint32_t elem, int q);      /* shown units, NaN none */
-unsigned mesh_gen(void);                     /* changes whenever the measures are worked out again */
+unsigned mesh_gen(void);
+bool mesh_deformed_now(void);                /* the measures are of the step's deformed shape (else undeformed) */                     /* changes whenever the measures are worked out again */
 double mesh_len_scale(void);                 /* model -> shown lengths */
 void mesh_clear(void);                       /* results freed (unload) */
-void mesh_limits_check(void);                /* G.mq_lim changed: measured again, the field too */
+void mesh_limits_check(void);
+void mesh_changed(void);                     /* G.mesh_deformed switched */                /* G.mq_lim changed: measured again, the field too */
 
 #endif

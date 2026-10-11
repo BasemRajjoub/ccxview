@@ -162,6 +162,7 @@ typedef struct {
     int       fail_out;
     int       mesh_q;         /* mesh quality field: the measure (CV_MQ_*) */
     float     mq_lim[16];     /* the user's quality limits by CV_MQ_* (quality.h), 0: the usual */
+    bool      mesh_deformed;  /* mesh quality on the deformed shape of the step on screen (true scale), else undeformed */
     float     mesh_warn_pct;  /* mesh verdict: up to this % of elements past a limit is a warning, more is poor */
     char      calc_expr[256]; /* the calculated field's formula (calc.h), kept across files */
     char      calc_err[128];  /* why the last formula did not compile, "" when it did */

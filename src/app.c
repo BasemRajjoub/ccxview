@@ -132,6 +132,7 @@ static void init(void) {
     G.bands = 12;
     G.mesh_q = CV_MQ_CCX;
     G.mesh_warn_pct = 1.f;
+    G.mesh_deformed = true;
     G.fail_crit = CV_FC_AUTO;
     G.center_zero = true;
     G.deform = true;

@@ -165,7 +165,10 @@ to it. Contact is the first subgroup (see Contact and ties).
   exposure, reserve factor, failure index, governing mode, fracture plane angle,
   or fibre and matrix exposure apart; the probe names the mode. LaRC in-situ
   strengths follow the ply's thickness and place in the laminate.
-- Mesh quality as a field, per element on the undeformed mesh: size (volume,
+- Mesh quality as a field, per element on the deformed shape of the step on
+  screen at true scale, so a nonlinear run shows its elements distort step by
+  step ("on the deformed shape", on by default; off, or a mode shape: the
+  undeformed mesh): size (volume,
   area, length), shortest and longest edge, aspect ratio, scaled Jacobian,
   Jacobian ratio (through the mid-side nodes), equiangle skewness, smallest and
   largest face angle, warpage, shape factor. The Mesh quality window sums up the

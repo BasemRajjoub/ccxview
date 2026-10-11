@@ -190,6 +190,14 @@ static void open_legend_settings(struct nk_context* ctx) { G.legend_edit = true;
 static void open_find(struct nk_context* ctx) { G.find_open = true; }
 static void open_browser(struct nk_context* ctx) { G.browser_open = true; }
 static void open_mesh(struct nk_context* ctx) { G.show_mesh = true; }
+/* mesh quality per step: the size of element 0 on step 1, then on step 2 */
+static double mq_was;
+static void mq_step1(struct nk_context* ctx) { G.mesh_deformed = true; app_set_step(0); app_pick_mesh(CV_MQ_SIZE); mq_was = mesh_value(0, CV_MQ_SIZE); }
+static void mq_step2(struct nk_context* ctx) { app_set_step(1); }
+static bool mq_moved(struct nk_context* ctx) { return mesh_deformed_now() && mesh_value(0, CV_MQ_SIZE) != mq_was; }
+static void mq_undeformed(struct nk_context* ctx) { G.mesh_deformed = false; mesh_changed(); mq_was = mesh_value(0, CV_MQ_SIZE); app_set_step(0); }
+static bool mq_same(struct nk_context* ctx) { return !mesh_deformed_now() && mesh_value(0, CV_MQ_SIZE) == mq_was; }
+static void mq_reset(struct nk_context* ctx) { G.mesh_deformed = true; app_set_step(0); app_pick_field("DISP", CV_COMP_MAG, 0); }
 static bool mesh_gone(struct nk_context* ctx) { return !G.show_mesh; }
 static bool mesh_limit_set(struct nk_context* ctx) { return G.mq_lim[CV_MQ_ASPECT] != 0; }
 static void mesh_limits_usual(struct nk_context* ctx) { memset(G.mq_lim, 0, sizeof G.mq_lim); G.show_mesh = false; }
@@ -1197,6 +1205,10 @@ static const step script[] = {
     CLOSED_THEN_PANELS("Find", open_find, find_gone),
     CLOSED_THEN_PANELS("Open file", open_browser, browser_gone),
     CLOSED_THEN_PANELS("Mesh quality", open_mesh, mesh_gone),
+
+    CASE("mesh quality: measured on each step's deformed shape, or undeformed the same on every step"),
+    DO(close_all), DO(mq_step1), WAIT(3), DO(mq_step2), WAIT(3), EXPECT(mq_moved, "the element's size changed with the step"),
+    DO(mq_undeformed), WAIT(3), EXPECT(mq_same, "undeformed: the same on another step"), DO(mq_reset), WAIT(3), PANELS_ANSWER,
     CLOSED_THEN_PANELS("Details", open_details, details_gone),
     CLOSED_THEN_PANELS("About", open_about, about_gone),
     CLOSED_THEN_PANELS("Title block", open_title_settings, title_settings_gone),

@@ -345,15 +345,17 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
 static void section_groups(struct nk_context* ctx, float s, float row) {
     /* groups */
     if (nk_tree_state_push(ctx, NK_TREE_TAB, "Groups", (enum nk_collapse_states*)&G.tree[CV_TREE_GROUPS])) {
-        if (app_any_hidden()) {                  /* something is hidden: say what is not listed below, and undo all */
-            uint32_t nh = app_hidden_by_hand();
+        {                                        /* Show all, always there; what is hidden said beside it */
+            bool any = app_any_hidden();
+            uint32_t nh = any ? app_hidden_by_hand() : 0;
             char lab[64];
-            if (nh) snprintf(lab, sizeof lab, "%u hidden by hand", nh); else snprintf(lab, sizeof lab, "some hidden below");
+            if (nh) snprintf(lab, sizeof lab, "%u hidden by hand", nh);
+            else snprintf(lab, sizeof lab, any ? "some hidden below" : "everything shown");
             nk_layout_row_template_begin(ctx, row);
             nk_layout_row_template_push_dynamic(ctx);
             nk_layout_row_template_push_static(ctx, 80 * s);
             nk_layout_row_template_end(ctx);
-            nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.warn);
+            nk_label_colored(ctx, lab, NK_TEXT_LEFT, any ? P.warn : P.dim);
             tip(ctx, "Every element shown again: types, materials, groups, element sets ('only' and hidden),\n"
                      "cgx sets, elements hidden by hand (right-click menu, Selection). The crop box, the clip\n"
                      "plane and *MODEL CHANGE keep their own switches");

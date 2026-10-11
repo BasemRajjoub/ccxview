@@ -1,7 +1,10 @@
 /* app_mesh.c -- mesh quality as a field (field_src 4).
 
-   Every measure of every element, from the undeformed .frd coordinates, worked out
-   on first use and kept for the file: a mesh does not change from step to step.
+   Every measure of every element, on the shape of the step on screen (the .frd
+   coordinates plus its displacements at true scale, G.mesh_deformed), or on the
+   undeformed mesh: a nonlinear run distorts its elements as the load grows, so
+   the measures follow the step. Mode shapes have no true amplitude: their step
+   is measured undeformed. Worked out on first use, again when the step changes.
    Stored in model units; lengths, areas and volumes turn to the shown length unit
    when read. Per element the value itself; per node the worst of its elements. */
 #include "app_int.h"
@@ -13,8 +16,14 @@ static struct {
     const cv_frd* f;
     uint32_t n;                         /* elements */
     float*   q;                         /* n * CV_MQ_N */
+    int      step;                      /* the step whose shape was measured, -1 undeformed */
 } M;
 static unsigned gen = 1;
+
+/* measured on the step's deformed shape: asked for, the step has displacements, not a mode shape */
+bool mesh_deformed_now(void) {
+    return G.mesh_deformed && G.disp && G.step >= 0 && G.step < G.frd.n_steps && !G.frd.steps[G.step].modal;
+}
 
 unsigned mesh_gen(void) {
     return gen;
@@ -22,7 +31,7 @@ unsigned mesh_gen(void) {
 
 enum { NTHREAD = 8 };
 
-typedef struct { const cv_frd* f; uint32_t e0, e1; } job;
+typedef struct { const cv_frd* f; const float* d; uint32_t e0, e1; } job;   /* d: displacement (model units), NULL undeformed */
 
 static void worker(void* p) {
     const job* J = p;
@@ -33,7 +42,10 @@ static void worker(void* p) {
         float* q = M.q + (size_t)e * CV_MQ_N;
         if (nn > 32) nn = 0;
         for (uint32_t i = 0; i < nn; i++)
-            for (int a = 0; a < 3; a++) x[i][a] = f->xyz[3 * (size_t)f->conn[b + i] + a];
+            for (int a = 0; a < 3; a++) {
+                size_t k = 3 * (size_t)f->conn[b + i] + a;
+                x[i][a] = f->xyz[k] + (J->d ? J->d[k] : 0.f);
+            }
         cv_mq_elem(f->etype[e], (int)nn, (const double (*)[3])x, out);
         for (int k = 0; k < CV_MQ_N; k++) q[k] = (float)out[k];
     }
@@ -50,6 +62,11 @@ static bool sync_limits(void) {
     return changed;
 }
 
+/* G.mesh_deformed switched: measured again on the shape now asked for, the field too */
+void mesh_changed(void) {
+    if (G.field_src == 4) app_mesh_set(G.mesh_q);
+}
+
 void mesh_limits_check(void) {
     if (!sync_limits() || !M.q) return;
     mesh_clear();                                    /* the scores were made against the old limits */
@@ -59,7 +76,9 @@ void mesh_limits_check(void) {
 static bool compute(void) {
     sync_limits();
     const cv_frd* f = &G.frd;
-    if (M.q && M.f == f && M.n == f->n_elems) return true;
+    bool def = mesh_deformed_now();
+    int step = def ? G.step : -1;
+    if (M.q && M.f == f && M.n == f->n_elems && M.step == step) return true;
     mesh_clear();
     M.q = malloc((size_t)CV_MAX(f->n_elems, 1) * CV_MQ_N * sizeof(float));
     if (!M.q) return false;
@@ -69,13 +88,13 @@ static bool compute(void) {
     bool started[NTHREAD] = { 0 };
     uint32_t E = f->n_elems, per = (E + NTHREAD - 1) / NTHREAD;
     for (int t = 0; t < NTHREAD; t++) {
-        J[t] = (job){ f, CV_MIN(E, per * (uint32_t)t), CV_MIN(E, per * (uint32_t)(t + 1)) };
+        J[t] = (job){ f, def ? G.disp : NULL, CV_MIN(E, per * (uint32_t)t), CV_MIN(E, per * (uint32_t)(t + 1)) };
         if (t && J[t].e0 < J[t].e1) started[t] = cv_thread_start(&th[t], worker, &J[t]);
         if (t && !started[t]) worker(&J[t]);
     }
     worker(&J[0]);
     for (int t = 1; t < NTHREAD; t++) if (started[t]) cv_thread_join(&th[t]);
-    M.f = f; M.n = E;
+    M.f = f; M.n = E; M.step = step;
     gen++;
     return true;
 }

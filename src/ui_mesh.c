@@ -33,6 +33,9 @@ void section_mesh(struct nk_context* ctx, float s, float row) {
         if (nk_option_label(ctx, cv_mq(q)->name, sel) != sel) app_pick_mesh(q);
     }
     if (active && !G.has_field) nk_label_colored(ctx, G.legend_lines[1], NK_TEXT_LEFT, P.warn);
+    tip(ctx, "Measure the elements as deformed in the step on screen (true scale), so a\n"
+             "nonlinear run shows how they distort step by step; off: the undeformed mesh");
+    if (nk_checkbox_label(ctx, "on the deformed shape", &G.mesh_deformed)) mesh_changed();
     tip(ctx, "The mesh at a glance: element types, size, and each measure's range,\n"
              "spread and worst element, against the usual limits");
     if (nk_button_label(ctx, "Mesh quality...")) G.show_mesh = !G.show_mesh;
@@ -223,6 +226,14 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
         }
         nk_layout_row_dynamic(ctx, row, 1);
         nk_label_colored(ctx, "Mesh", NK_TEXT_LEFT, P.accent);
+        nk_layout_row_dynamic(ctx, row, 2);
+        tip(ctx, "Measure the elements as deformed in the step on screen (true scale): a\n"
+                 "nonlinear run's elements distort as the load grows; off: the undeformed mesh");
+        if (nk_checkbox_label(ctx, "on the deformed shape", &G.mesh_deformed)) mesh_changed();
+        if (mesh_deformed_now()) snprintf(b, sizeof b, "measured: step %d, deformed", G.step + 1);
+        else snprintf(b, sizeof b, "measured: undeformed%s", G.mesh_deformed && G.loaded && G.step >= 0 && G.step < G.frd.n_steps &&
+                      G.frd.steps[G.step].modal ? " (mode shape)" : G.mesh_deformed && !G.disp ? " (no DISP)" : "");
+        nk_label_colored(ctx, b, NK_TEXT_LEFT, P.dim);
         nk_layout_row_dynamic(ctx, row, 2);
         snprintf(b, sizeof b, "elements %u   nodes %u", info.elems, info.used_nodes);
         tip(ctx, info.used_nodes < info.nodes ? "Nodes used by elements (the file has more: free nodes)" : "Nodes used by elements");
