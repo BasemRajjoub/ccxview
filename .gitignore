@@ -33,3 +33,6 @@ dist/
 !samples/contact/contact_s2s.frd
 !samples/tie/tie.frd
 !samples/tie/tie_WarnNodeMissTiedContact.nam
+
+# crash reports a run writes beside the program
+ccxview-crash.txt
