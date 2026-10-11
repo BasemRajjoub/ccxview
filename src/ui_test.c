@@ -813,6 +813,34 @@ static bool faces_still_material(struct nk_context* ctx) { return G.faces_mode =
 static void faces_end(struct nk_context* ctx) { G.show_mesh = false; app_select("STRESS", CV_COMP_MISES); app_set_faces_mode(FM_FIELD); sections_open(ctx); }
 static bool set_hidden(struct nk_context* ctx) { return deck_any_elset_hidden() && G.vis && !app_busy(); }
 static bool sets_shown(struct nk_context* ctx) { return !deck_any_elset_hidden(); }
+/* visibility: every filter composes, the panel shows it, Show all undoes it */
+static uint32_t n_vis(void) { uint32_t n = 0; for (uint32_t e = 0; G.vis && e < G.frd.n_elems; e++) n += G.vis[e] != 0; return n; }
+static bool type_hidden(struct nk_context* ctx) { return !G.groups.axis[CV_AXIS_TYPE].on[0] && !app_busy() && n_vis() == 0; }
+static bool type_shown(struct nk_context* ctx) { return G.groups.axis[CV_AXIS_TYPE].on[0] && !app_busy() && n_vis() == G.frd.n_elems; }
+static int n_only(void) {
+    const cv_inp* d = deck_get(); int n = 0;
+    for (int i = 0; d && i < d->nsets; i++) n += d->sets[i].is_elem && deck_set_flags()[i];
+    return n;
+}
+static bool one_only(struct nk_context* ctx) { return n_only() == 1 && !G.hide && !G.menu_on && !app_busy(); }
+static bool nothing_hidden(struct nk_context* ctx) {
+    return !app_any_hidden() && !app_busy() && n_vis() == G.frd.n_elems && !G.menu_on;
+}
+/* one of each: a set hidden, a set 'only', an element by hand, the element type */
+static void hide_every_way(struct nk_context* ctx) {
+    const cv_inp* d = deck_get();
+    for (int i = 0, k = 0; d && i < d->nsets; i++) if (d->sets[i].is_elem) { if (k++ == 0) deck_set_flags()[i] = true; else deck_set_hidden_flags()[i] = true; }
+    uint32_t e = 0;
+    app_hide_elems(&e, 1);
+    G.groups.axis[CV_AXIS_TYPE].on[0] = false;
+    app_groups_changed();
+}
+static void labels_probe_only(struct nk_context* ctx) {
+    G.label_kinds = 1 << CV_LABEL_NODE; G.label_probe_only = true; G.label_sel_only = false; app_label_changed();
+    labels_tree_open(ctx);
+}
+static bool labels_on_selection(struct nk_context* ctx) { return G.label_sel_only && !G.label_probe_only; }
+static bool labels_everywhere(struct nk_context* ctx) { return !G.label_sel_only && !G.label_probe_only; }
 /* a linearization line between two nodes of the model, its Path window open */
 static void lin_open(struct nk_context* ctx) {
     app_scl_clear();
@@ -1304,6 +1332,30 @@ static const step script[] = {
     DO(groups_open), WAIT(3), AT_TIP("Scene", "Hide this element set"), CLICK, WAIT(10), EXPECT(set_hidden, "the set is hidden"),
     AT_TIP("Scene", "Hidden: click to show"), CLICK, WAIT(10), EXPECT(sets_shown, "every set shown again"),
     DO(groups_close), WAIT(2), PANELS_ANSWER,
+
+    CASE("groups: an element type's eye hides it, its second click shows it"),
+    DO(groups_open), WAIT(3), AT_TIP("Scene", "Hide this element type"), CLICK, WAIT(10), EXPECT(type_hidden, "the type and its elements hidden"),
+    AT_TIP("Scene", "Hidden: click to show this element type"), CLICK, WAIT(10), EXPECT(type_shown, "every element back"),
+
+    CASE("groups: 'only' on an element set, then the panel's Show all"),
+    DO(groups_open), WAIT(3), AT_TIP("Scene", "Show only the sets marked"), CLICK, WAIT(10), EXPECT(one_only, "one set marked 'only'"),
+    AT_TIP("Scene", "Every element shown again"), CLICK, WAIT(10), EXPECT(nothing_hidden, "Show all clears it"),
+
+    CASE("menu: 'only' on a set marks it in Groups, nothing hidden by hand; Show all from the menu"),
+    DO(close_all), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu only set"), CLICK, WAIT(10),
+    EXPECT(one_only, "the set marked 'only', not an isolation by hand"),
+    AT_VIEW(0.04f, 0.06f), RCLICK, WAIT(2), AT_TIP("Menu", "#menu Show all"), CLICK, WAIT(10), EXPECT(nothing_hidden, "the menu offers Show all and it clears the set"),
+
+    CASE("show all: one click undoes every kind of hiding"),
+    DO(hide_every_way), WAIT(10), DO(groups_open), WAIT(3), AT_TIP("Scene", "Every element shown again"), CLICK, WAIT(10),
+    EXPECT(nothing_hidden, "types, sets 'only' and hidden, by hand: all back"),
+    DO(close_all), DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("labels: everywhere, the selection or the probed element, one at a time"),
+    DO(labels_probe_only), WAIT(3), AT_TIP("Scene", "Only the box selection's nodes"), CLICK, WAIT(2),
+    EXPECT(labels_on_selection, "the selection, the probed element's off"),
+    AT_TIP("Scene", "Labels on every shown node"), CLICK, WAIT(2), EXPECT(labels_everywhere, "everywhere"),
+    DO(ids_off), DO(close_all), DO(sections_open), WAIT(2), PANELS_ANSWER,
 
     CASE("colour by: a field picked in the tree takes the faces from the material colours (#26)"),
     DO(faces_by_material), WAIT(3), EXPECT(faces_still_material, "the faces by material"),

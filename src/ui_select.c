@@ -394,6 +394,7 @@ static void use_rows(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Labels on the selection only (Fields > Labels: what they show; node ids when none is chosen)");
     if (nk_checkbox_label(ctx, "labels", &lo)) {
         G.label_sel_only = lo;
+        if (lo) G.label_probe_only = false;          /* one place at a time (Fields > Labels) */
         if (lo && !G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE;
         app_label_changed();
     }

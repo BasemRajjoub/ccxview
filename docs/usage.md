@@ -94,7 +94,7 @@ ccxview model.frd --find 120 --details      # probe node 120, its Details window
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
 ccxview model.frd --range 50,150 --opt oor_above=3  # the legend locked to 50 .. 150; values above it hidden (oor_above / oor_below: 0 the map's end colour, 1 grey, 2 a colour, 3 hidden)
-ccxview model.frd --hide-set EHOLE         # hide a deck element set, the rest stays (repeatable; --set NAME ticks one)
+ccxview model.frd --hide-set EHOLE         # hide a deck element set, the rest stays (repeatable; --set NAME marks one "only")
 ccxview model.frd --title-block --opt "title_text1=Bracket rev B"  # the title block, a project line (title_label1..3 / title_text1..3)
 ccxview model.frd --title-block --opt title_user=0 --opt title_file_date=1   # lines off by key: title_heading file solver analysis step scale units user date
 ccxview model.frd --title-block --opt "title_text=Project: Bracket\nResult file: {file}\nDate: {date}"
@@ -214,8 +214,10 @@ It prints what it selected and the field's max and min over it.
   glyphs and trajectories of the field shown (their settings: its options in
   Fields), supports, loads, springs.
 - **Groups**: element types, materials, sets and surfaces of the deck (right
-  click a set or surface: integrate over it); the eye before an element set hides
-  it, the tick shows only the ticked sets; Imported geometry: STL files shown with
+  click a set or surface: integrate over it); the eye before a type, material,
+  group or element set shows or hides it, an element set's "only" shows only the
+  sets marked so; an element is shown when every filter lets it through (hiding
+  wins), and Show all at the top undoes every one but crop and clip; Imported geometry: STL files shown with
   the results, each with show / hide, colour, opacity and unit scale.
 - **Faces colouring**: one of field, type, material, group, plain (Layers >
   Faces). Picking any field colours the faces by it; a group's swatch or the

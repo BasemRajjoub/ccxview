@@ -42,13 +42,6 @@ static void pair(int hide, int only, int set, const char* fmt, ...) {
     va_list ap; va_start(ap, fmt); vsnprintf(m->label, sizeof m->label, fmt, ap); va_end(ap);
 }
 
-static bool any_hidden(void) {
-    if (G.hide) return true;
-    for (int a = 0; a < CV_AXIS_N; a++)
-        for (int i = 0; i < G.groups.axis[a].n; i++) if (!G.groups.axis[a].on[i]) return true;
-    return false;
-}
-
 static bool in_set(const cv_set* s, uint32_t id) {
     uint32_t lo = 0, hi = s->n;
     while (lo < hi) { uint32_t m = (lo + hi) / 2; if (s->ids[m] < id) lo = m + 1; else hi = m; }
@@ -118,7 +111,7 @@ static void build(void) {
     }
     add(M_SEP, 0, NULL);
     add(M_SEL_WIN, 0, "Selection... (S)");
-    if (any_hidden()) add(M_SHOW_ALL, 0, "Show all");
+    if (app_any_hidden()) add(M_SHOW_ALL, 0, "Show all");
     add(M_FIT, 0, "Fit (F)");
     add(M_LOOK, 0, NULL);
     if (!p->hit) {
