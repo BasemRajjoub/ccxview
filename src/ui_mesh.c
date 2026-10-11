@@ -144,6 +144,8 @@ static void copy_report(const mesh_stat* st, const mesh_info* info, int main_t) 
     OUT("Mesh quality: %s\n", G.path);
     OUT("elements %u, nodes %u, materials %u\n", info->elems, info->used_nodes, info->mats);
     for (int k = 1; k < 16; k++) if (info->per_type[k]) OUT("  %s %u\n", cv_frd_type_name(k), info->per_type[k]);
+    if (info->on_deck) OUT("shells, plane elements, beams measured on the .inp elements: %u\n", info->on_deck);
+    else if (mesh_looks_expanded()) OUT("looks like expanded shells or beams (%u of %u thin): measured as the .frd's solids\n", info->thin, info->elems);
     OUT("%u elements (%.2f %%) past at least one limit; %s (warning up to %g %%)\n\n", info->poor_any,
         info->elems ? 100.0 * info->poor_any / info->elems : 0, verdict(info, &col), G.mesh_warn_pct);
     OUT("%-22s %12s %12s %12s %12s %16s %10s\n", "measure", "min", "mean", "max", "limit", "poor", "worst");
@@ -241,8 +243,25 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
         snprintf(b, sizeof b, "materials %u   groups %u", info.mats, info.groups);
         nk_label(ctx, b, NK_TEXT_LEFT);
         nk_layout_row_dynamic(ctx, row, 1);
-        tip(ctx, "Elements of each .frd type");
+        tip(ctx, info.on_deck ? "Elements of each type measured: the .frd's, the expanded ones as their .inp element"
+                              : "Elements of each .frd type");
         nk_label(ctx, t, NK_TEXT_LEFT);
+        /* what was measured: CalculiX writes shells, plane and beam elements expanded into solids */
+        if (info.on_deck) {
+            snprintf(t, sizeof t, "shells, plane elements, beams measured on the .inp elements (%u)", info.on_deck);
+            if (info.on_deck < info.elems) snprintf(t + strlen(t), sizeof t - strlen(t), ", solids %u", info.elems - info.on_deck);
+            tip(ctx, "CalculiX expands each shell, plane and beam element into a solid (a shell a\n"
+                     "brick one thickness across) and writes those. Each is measured on the .inp\n"
+                     "element it was made from: its type and nodes, moved by the step's displacements");
+            nk_label_colored(ctx, t, NK_TEXT_LEFT, P.text);
+        } else if (mesh_looks_expanded()) {
+            snprintf(t, sizeof t, "looks like expanded shells or beams (%u of %u thin): open the .inp beside it", info.thin, info.elems);
+            tip(ctx, "Most bricks are thin in one direction (or two): CalculiX's expansion of shells,\n"
+                     "plane or beam elements into solids. Measured as solids each is a sliver, past\n"
+                     "the aspect limit and at the worst score. With the .inp beside the .frd (File >\n"
+                     "Open deck) the shells themselves are measured");
+            nk_label_colored(ctx, t, NK_TEXT_LEFT, P.warn);
+        }
         const char* u = mesh_unit(CV_MQ_EDGE_MIN);
         o = 0;
         t[0] = 0;
@@ -295,13 +314,17 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
             const mesh_stat* m = &st[q];
             if (i == CV_MQ_N - CV_MQ_SCORE0) uii_hsep(ctx, s);
             const cv_mq_info* in = cv_mq(q);
-            nk_layout_row(ctx, NK_DYNAMIC, row, 8, cols);
+            const float cols_na[] = { 0.2f, 0.8f };            /* applies to no element: say to which */
+            if (m->n) nk_layout_row(ctx, NK_DYNAMIC, row, 8, cols);
+            else nk_layout_row(ctx, NK_DYNAMIC, row, 2, cols_na);
             tip(ctx, in->tip);
             bool on = G.field_src == 4 && G.mesh_q == q;
             if (nk_select_label(ctx, in->name, NK_TEXT_LEFT, on) != on) app_pick_mesh(q);
             if (!m->n) {
-                nk_label_colored(ctx, "does not apply", NK_TEXT_RIGHT, P.dim);
-                for (int k = 0; k < 6; k++) nk_label(ctx, "", NK_TEXT_LEFT);
+                const char* ap = cv_mq_applies(q);
+                if (ap) snprintf(t, sizeof t, "does not apply here: applies to %s", ap);
+                else snprintf(t, sizeof t, "does not apply here");
+                nk_label_colored(ctx, t, NK_TEXT_LEFT, P.dim);
                 continue;
             }
             num(a, sizeof a, m->min); nk_label(ctx, a, NK_TEXT_RIGHT);
@@ -325,9 +348,10 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
         }
         explain(ctx, s, row, main_t);
         nk_layout_row_dynamic(ctx, row, 1);
-        snprintf(t, sizeof t, "Lengths in %s, angles in degrees. Undeformed mesh; quadratic elements on their corners", u[0] ? u : "model units");
+        snprintf(t, sizeof t, "Lengths in %s, angles in degrees. Quadratic elements on their corners", u[0] ? u : "model units");
         tip(ctx, "Except the Jacobian ratio, which sees curved edges through the mid-side nodes.\n"
-                 "Shells and beams CalculiX expanded to solids show as the .frd has them");
+                 "Shells and beams CalculiX expanded to solids: on their .inp element with the\n"
+                 "deck beside the .frd, else as the .frd has them");
         nk_label_colored(ctx, t, NK_TEXT_LEFT, P.dim);
         nk_label_colored(ctx, "Limits: Abaqus Verify Mesh, ANSYS shape checking, Verdict (Sandia) scaled Jacobian;", NK_TEXT_LEFT, P.dim);
         nk_label_colored(ctx, "scores: ANSYS Element Quality, HyperMesh quality index, Abaqus Verify Mesh", NK_TEXT_LEFT, P.dim);

@@ -240,6 +240,44 @@ static void test_quality(void) {
     cv_mq_elem(12, 3, (const double (*)[3])x, q);
     for (int k = CV_MQ_SCORE0; k < CV_MQ_N; k++) CHECK(q[k] != q[k]);
 
+    /* a shell CalculiX expanded: the thin hex20 (16.67 x 15 x 1) against its quad8
+       mid-surface. The brick is a sliver past the aspect limit, the shell near ideal */
+    {
+        const double h[3] = { 25.0 / 3, 7.5, 0.5 };
+        double qs[CV_MQ_N];
+        q_natural(4, 20, 1, x);
+        for (int i = 0; i < 20; i++) for (int a = 0; a < 3; a++) x[i][a] *= h[a];
+        cv_mq_elem(4, 20, (const double (*)[3])x, q);
+        CHECK_NEAR(q[CV_MQ_ASPECT], 50.0 / 3, 1e-9);
+        CHECK_NEAR(q[CV_MQ_CCX], 0, 0);
+        CHECK_EQ(cv_mq_governing(4, q), CV_MQ_ASPECT);
+        CHECK(q[CV_MQ_HMQI] >= 1);
+        CHECK_NEAR(q[CV_MQ_ABAQUS], 1, 0);
+        CHECK(q[CV_MQ_ANSYS] < 0.2);
+        q_natural(10, 8, 1, x);
+        for (int i = 0; i < 8; i++) for (int a = 0; a < 3; a++) x[i][a] *= h[a];
+        cv_mq_elem(10, 8, (const double (*)[3])x, qs);
+        CHECK_NEAR(qs[CV_MQ_SIZE], 250, 1e-9);
+        CHECK_NEAR(qs[CV_MQ_ASPECT], 10.0 / 9, 1e-9);
+        CHECK_NEAR(qs[CV_MQ_SJAC], 1, 1e-12);
+        CHECK_NEAR(qs[CV_MQ_WARP], 0, 1e-9);
+        CHECK_NEAR(qs[CV_MQ_CCX], 1 - log(10.0 / 9) / log(10.0), 1e-9);
+        CHECK_NEAR(qs[CV_MQ_HMQI], 0, 1e-12);
+        CHECK_NEAR(qs[CV_MQ_ANSYS], 4 * 250 / (2 * (h[0] * h[0] + h[1] * h[1]) * 4), 1e-9);
+        CHECK_NEAR(qs[CV_MQ_ABAQUS], 0, 0);
+        /* a measure that does not apply (shape factor on both) is NaN, and the scores
+           skip it: never NaN or 0 because of it */
+        CHECK(q[CV_MQ_SHAPE] != q[CV_MQ_SHAPE] && qs[CV_MQ_SHAPE] != qs[CV_MQ_SHAPE]);
+        CHECK(cv_mq_score(CV_MQ_SHAPE, 10, NAN) != cv_mq_score(CV_MQ_SHAPE, 10, NAN));
+        CHECK(cv_mq_penalty(CV_MQ_SHAPE, 10, NAN) != cv_mq_penalty(CV_MQ_SHAPE, 10, NAN));
+        CHECK(!cv_mq_poor(CV_MQ_SHAPE, 10, NAN));
+        for (int k = CV_MQ_SCORE0; k < CV_MQ_N; k++) CHECK(qs[k] == qs[k]);
+        qs[CV_MQ_WARP] = NAN;                            /* one more missing: still the same scores */
+        CHECK_EQ(cv_mq_governing(10, qs), CV_MQ_ASPECT);
+        CHECK(cv_mq_applies(CV_MQ_SHAPE) && strstr(cv_mq_applies(CV_MQ_SHAPE), "tets"));
+        CHECK(!cv_mq_applies(CV_MQ_SIZE));
+    }
+
     /* unknown type, too few nodes */
     cv_mq_elem(99, 4, (const double (*)[3])x, q);
     CHECK(q[CV_MQ_SIZE] != q[CV_MQ_SIZE]);

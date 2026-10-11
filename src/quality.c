@@ -93,6 +93,15 @@ int cv_mq_dim(int t) {
     return 0;
 }
 
+const char* cv_mq_applies(int q) {
+    switch (q) {
+    case CV_MQ_SIZE: case CV_MQ_EDGE_MIN: case CV_MQ_EDGE_MAX: return NULL;
+    case CV_MQ_SHAPE: return "triangles and tets only";
+    case CV_MQ_WARP:  return "quad faces only";
+    }
+    return "solids and shells only";
+}
+
 static const int kCorners[] = { 0, 8, 6, 4, 3, 4, 2 };
 
 static double user_lim[CV_MQ_N];                     /* 0: the usual */
