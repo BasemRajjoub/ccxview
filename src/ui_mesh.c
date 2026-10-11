@@ -30,7 +30,7 @@ void section_mesh(struct nk_context* ctx, float s, float row) {
             nk_label_colored(ctx, i ? "Measures" : "Overall scores", NK_TEXT_LEFT, P.dim);
         bool sel = active && G.mesh_q == q;
         tip(ctx, cv_mq(q)->tip);
-        if (nk_option_label(ctx, cv_mq(q)->name, sel) && !sel) app_mesh_set(q);
+        if (nk_option_label(ctx, cv_mq(q)->name, sel) != sel) app_pick_mesh(q);
     }
     if (active && !G.has_field) nk_label_colored(ctx, G.legend_lines[1], NK_TEXT_LEFT, P.warn);
     tip(ctx, "The mesh at a glance: element types, size, and each measure's range,\n"
@@ -287,7 +287,7 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
             nk_layout_row(ctx, NK_DYNAMIC, row, 8, cols);
             tip(ctx, in->tip);
             bool on = G.field_src == 4 && G.mesh_q == q;
-            if (nk_select_label(ctx, in->name, NK_TEXT_LEFT, on) && !on) app_mesh_set(q);
+            if (nk_select_label(ctx, in->name, NK_TEXT_LEFT, on) != on) app_pick_mesh(q);
             if (!m->n) {
                 nk_label_colored(ctx, "does not apply", NK_TEXT_RIGHT, P.dim);
                 for (int k = 0; k < 6; k++) nk_label(ctx, "", NK_TEXT_LEFT);
@@ -306,7 +306,7 @@ void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh) {
                 snprintf(a, sizeof a, "%u", G.frd.elem_id[m->worst]);
                 tip(ctx, "Find this element: probe it and centre the view on it");
                 if (nk_button_label(ctx, a)) {
-                    if (!(G.field_src == 4 && G.mesh_q == q)) app_mesh_set(q);
+                    if (!(G.field_src == 4 && G.mesh_q == q)) app_pick_mesh(q);
                     app_find(G.frd.elem_id[m->worst], true);
                 }
             } else nk_label(ctx, "", NK_TEXT_LEFT);

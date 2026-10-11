@@ -547,7 +547,7 @@ static void apply_load(cv_job* j) {
     if (O.find) {
         bool el = O.find[0] == 'e' || O.find[0] == 'E';
         if (!app_find((uint32_t)strtoul(O.find + (el ? 1 : 0), NULL, 10), el)) cv_msg_add(&G.msgs, 0, false, "--find: not in this model");
-        else { G.label_probe_only = true; if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE; app_label_changed(); }
+        else { G.label_probe_only = true; G.label_sel_only = false; if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE; app_label_changed(); }
     }
     if ((O.nsets || O.nhide_sets) && deck_loaded()) {
         const cv_inp* dk = deck_get();
@@ -636,6 +636,8 @@ static void apply_load(cv_job* j) {
             }
         }
     }
+    /* a field asked for on the command line shows on the faces, unless --faces says otherwise */
+    if ((O.field || O.calc || O.fail || O.mesh || O.gauss) && O.faces < 0 && !G.reload_keep && G.has_field) app_faces_show_field();
     if (O.crop_set) {
         G.crop_on = true;
         for (int k = 0; k < 3; k++) { G.crop_lo[k] = O.crop[2 * k]; G.crop_hi[k] = O.crop[2 * k + 1]; }

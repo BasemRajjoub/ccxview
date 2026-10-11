@@ -42,7 +42,7 @@ static bool log_row(struct nk_context* ctx, float row, const char* lab, const ch
 }
 
 /* the field shown, if it is not: its usual component */
-static void show_field(const cv_field_desc* d, bool active, int comp) { if (!active) app_select_src(d->name, comp, 0); }
+static void show_field(const cv_field_desc* d, bool active, int comp) { if (!active) app_pick_field(d->name, comp, 0); }
 
 static void vector_rows(struct nk_context* ctx, float row, const cv_field_desc* d, bool active) {
     nk_layout_row_dynamic(ctx, row, 2);

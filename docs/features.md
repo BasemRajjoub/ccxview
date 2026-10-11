@@ -45,6 +45,19 @@ and the shape follow every node; the full list is in
 
 ## Fields
 
+What colours the faces (#26): the field, the element type, the material, the
+group, or one plain colour, one at a time (Layers > Faces). Choosing a field
+takes precedence: picking any field -- a component in the Fields tree or the
+top bar, a calculated formula, a failure criterion, a mesh quality measure,
+SHELL / REBAR, CONTACT, a `.dat` field, `--field` / `--calc` / `--fail` /
+`--mesh` -- colours the faces by it at once, even when they were coloured by
+material or group, and clicking the field already chosen does it too. The
+other way round, picking a group's colour swatch (Groups) or an entry of the
+Faces list colours them by that. While the faces show something else, Fields
+says so ("faces: by material") with a "show field" button, and the legend
+lists the groups' colours by the names Groups shows. A saved view or a reload
+keeps the colouring it had; `--faces material` wins over `--field`.
+
 The Fields section is a tree: each field (DISP, STRESS, ... SHELL, REBAR,
 Calculated, Failure, Mesh quality, a `.dat` field) is a subgroup listing its
 components, and holds its own controls in a nested "options" subgroup where it
@@ -621,11 +634,30 @@ it was left, and at first the filters and the kept ones are folded:
   (the cut filled) or hide whole elements there, to see inside.
 - Convergence plot from `.sta` / `.cvg`.
 - Groups by element type, material and set; named sets and surfaces from the
-  deck, highlighted on the model. An element set is ticked to show only the
-  ticked sets, or hidden by the eye before its name while everything else stays
-  (to look at what it covers); a hidden set wins over a ticked one, its name is
-  dimmed, and "show everything" or Show all brings it back. Hide set in the
-  right-click menu does the same.
+  deck, highlighted on the model (node sets, surfaces and couplings: ticked).
+  Every element type, material, group and element set shows and hides the same
+  way: the eye before its name (or a click on the name), dimmed while hidden;
+  "show all" / "hide all" over a list. An element set also has "only": the sets
+  marked so are shown and nothing else (several: together; none marked: no such
+  filter); "show every set" clears the marks and the hidden sets. `--set NAME`
+  marks one "only", `--hide-set NAME` hides one; the view file keeps both
+  (`elsets_on`, `elsets_hidden`, as before the eye replaced the tick).
+- Visibility rules: an element is drawn when it passes every filter at once --
+  its type, material and group are shown, it is in a set marked "only" (if any
+  is), it is in no hidden set, it is not hidden by hand (right-click menu,
+  Selection: hide, isolate), *MODEL CHANGE has not taken it out in the step on
+  screen, and it lies inside the crop box when that is on; the clip plane then
+  cuts what is drawn. So hiding wins: a set marked "only" and hidden shows
+  nothing, a material hidden stays hidden inside an "only" set. The right-click
+  menu's hide / only act on the same switches as the panel (a material, an
+  element type, a set: "only" on a set marks it "only", it no longer hides the
+  rest by hand), so the panel always shows what is hidden; elements hidden by
+  hand are counted at the top of Groups. Show all (there, and in the right-click
+  menu whenever anything is hidden) brings back every element: types,
+  materials, groups, element sets' "only" and hidden, cgx sets, hidden by hand.
+  It leaves the crop box, the clip plane, *MODEL CHANGE and the highlights,
+  which have their own switches. Labels go everywhere, on the selection only or
+  on the probed element only: one of the three (Fields > Labels).
 - Imported geometry (#23): parts of the assembly that were not analysed (a pin, a
   clamp, the housing) added from STL files for a picture of the whole: Groups >
   Imported geometry > Import STL..., View > File > Import STL..., a `.stl` dropped

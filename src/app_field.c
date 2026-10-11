@@ -706,6 +706,21 @@ void app_select(const char* field, int comp) {
     app_cdisp_field_chosen(G.field_name, G.comp);   /* a CONTACT component colours the contact display too */
 }
 
+/* ---- a field the user chose: it shows on the faces at once (#26) ----------------- */
+
+void app_faces_show_field(void) {
+    if (G.faces_mode != FM_FIELD) app_set_faces_mode(FM_FIELD);
+}
+
+void app_pick_field(const char* field, int comp, int src) { app_select_src(field, comp, src); app_faces_show_field(); }
+bool app_pick_calc(const char* expr) {
+    if (!app_calc_set(expr)) return false;
+    app_faces_show_field();
+    return true;
+}
+void app_pick_fail(int crit, int out) { app_fail_set(crit, out); app_faces_show_field(); }
+void app_pick_mesh(int q) { app_mesh_set(q); app_faces_show_field(); }
+
 void app_set_elem_mode(bool on) {
     G.elem_mode = on;
     refresh_field();

@@ -28,11 +28,43 @@ static void axis_label(char* out, size_t n, int axis, uint32_t v, uint32_t count
 
 static int g_pick_axis = -1, g_pick_idx = -1;   /* open colour picker (group swatch) */
 
+/* Every group row's visibility, the same way: an eye (open: shown), then the name,
+   which toggles it too and is dimmed while hidden. true: toggled. */
+static bool eye_row(struct nk_context* ctx, const char* lab, bool shown, const char* tip_shown, const char* tip_hidden) {
+    tip(ctx, shown ? tip_shown : tip_hidden);
+    bool ch = nk_button_label(ctx, shown ? IC_EYE : IC_EYE_OFF);
+    struct nk_style_selectable* st = &ctx->style.selectable;
+    nk_style_push_style_item(ctx, &st->normal, nk_style_item_hide());   /* plain text, lit under the mouse */
+    nk_style_push_color(ctx, &st->text_normal, shown ? P.text : P.dim);
+    nk_style_push_color(ctx, &st->text_hover, shown ? P.text : P.dim);
+    ch |= nk_select_label(ctx, lab, NK_TEXT_LEFT, nk_false) != 0;
+    nk_style_pop_color(ctx); nk_style_pop_color(ctx); nk_style_pop_style_item(ctx);
+    return ch;
+}
+
+/* a toggle button that reads as on: the accent colour behind it */
+static bool lit_toggle(struct nk_context* ctx, const char* lab, bool* on) {
+    struct nk_style_selectable* st = &ctx->style.selectable;
+    nk_style_push_style_item(ctx, &st->normal_active, nk_style_item_color(P.accent));
+    nk_style_push_style_item(ctx, &st->hover_active, nk_style_item_color(P.accent));
+    nk_style_push_color(ctx, &st->text_normal_active, nk_rgb(20, 20, 20));
+    nk_style_push_color(ctx, &st->text_hover_active, nk_rgb(20, 20, 20));
+    nk_bool v = *on;
+    bool ch = nk_selectable_label(ctx, lab, NK_TEXT_CENTERED, &v) != 0;
+    *on = v;
+    nk_style_pop_color(ctx); nk_style_pop_color(ctx);
+    nk_style_pop_style_item(ctx); nk_style_pop_style_item(ctx);
+    return ch;
+}
+
 /* A right click on a set's row (laid out next): integrate over it, select it. kind:
    what the set holds (elements: a volume, faces: a surface, nodes: a sum). */
+static void set_menu_at(struct nk_context* ctx, float s, float row, int kind, const char* name, bool surf, struct nk_rect b);
 static void set_menu(struct nk_context* ctx, float s, float row, int kind, const char* name, bool surf) {
-    struct nk_rect b = nk_widget_bounds(ctx);
     uii_test_mark(ctx, "#set menu");
+    set_menu_at(ctx, s, row, kind, name, surf, nk_widget_bounds(ctx));
+}
+static void set_menu_at(struct nk_context* ctx, float s, float row, int kind, const char* name, bool surf, struct nk_rect b) {
     static const char* what[CV_IK_N] = { "Integrate over set %s", "Integrate over surface %s", "Sum over set %s" };
     char lab[96];
     snprintf(lab, sizeof lab, what[kind], name);
@@ -51,9 +83,10 @@ static void set_menu(struct nk_context* ctx, float s, float row, int kind, const
     }
 }
 
-/* The deck's named sets: element sets are a display group (tick to show only
-   them; none ticked = everything; the eye hides one, whatever is ticked), node
-   sets and surfaces are highlights. */
+/* The deck's named sets: element sets show and hide like the other groups (the
+   eye), and "only" shows the sets marked so and nothing else (several: together;
+   none marked: no such filter); a hidden set stays hidden even when marked. Node
+   sets and surfaces are highlights, ticked. */
 static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
     const cv_inp* d = deck_get();
     if (!d) return;
@@ -72,7 +105,8 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
         bool* hid = deck_set_hidden_flags();
         if (deck_any_elset_on() || deck_any_elset_hidden()) {
             nk_layout_row_dynamic(ctx, row, 1);
-            if (nk_button_label(ctx, "show everything")) {
+            tip(ctx, "Every element set shown again, none marked 'only'");
+            if (nk_button_label(ctx, "show every set")) {
                 for (int i = 0; i < d->nsets; i++) if (d->sets[i].is_elem) on[i] = hid[i] = false;
                 app_groups_changed();
             }
@@ -85,19 +119,17 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
             nk_layout_row_template_begin(ctx, row);
             nk_layout_row_template_push_static(ctx, row * 1.4f);
             nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 44 * s);
             nk_layout_row_template_end(ctx);
-            tip(ctx, hid[i] ? "Hidden: click to show this element set again"
-                            : "Hide this element set, everything else stays (tick: show only the ticked sets)");
-            if (nk_button_label(ctx, hid[i] ? IC_EYE_OFF : IC_EYE)) { hid[i] = !hid[i]; app_groups_changed(); }
-            if (hid[i]) {                            /* a hidden set's name dimmed */
-                struct nk_style_toggle* t = &ctx->style.checkbox;
-                nk_style_push_color(ctx, &t->text_normal, P.dim);
-                nk_style_push_color(ctx, &t->text_hover, P.dim);
-                nk_style_push_color(ctx, &t->text_active, P.dim);
-            }
-            set_menu(ctx, s, row, CV_IK_VOLUME, d->sets[i].name, false);
-            if (nk_checkbox_label(ctx, lab, &on[i])) app_groups_changed();
-            if (hid[i]) for (int c = 0; c < 3; c++) nk_style_pop_color(ctx);
+            struct nk_rect rb = nk_widget_bounds(ctx);      /* the right click menu: over the whole row */
+            rb.w = ctx->current->layout->bounds.w;
+            uii_test_mark(ctx, "#set menu");
+            if (eye_row(ctx, lab, !hid[i], "Hide this element set, everything else stays",
+                        "Hidden: click to show this element set again")) { hid[i] = !hid[i]; app_groups_changed(); }
+            tip(ctx, "Show only the sets marked 'only' (several: together); none marked: every set.\n"
+                     "A hidden set stays hidden; types and materials hidden above stay hidden too");
+            if (lit_toggle(ctx, "only", &on[i])) app_groups_changed();
+            set_menu_at(ctx, s, row, CV_IK_VOLUME, d->sets[i].name, false, rb);
         }
         nk_tree_pop(ctx);
     }
@@ -143,15 +175,17 @@ static void panel_deck_sets(struct nk_context* ctx, float s, float row) {
     }
 }
 
-/* cgx sets: tick to show only what they hold (their geometry, and their
-   elements when cgx meshed the script). */
-static void panel_geo_sets(struct nk_context* ctx, float row) {
+/* cgx sets: "only" shows only what the marked ones hold (their geometry, and
+   their elements when cgx meshed the script), as the deck's element sets. */
+static void panel_geo_sets(struct nk_context* ctx, float s, float row) {
     const cv_fbd* g = geo_get();
     if (!g || !g->nsets) return;
     bool* on = geo_set_flags();
     if (!nk_tree_push_id(ctx, NK_TREE_NODE, "cgx sets", NK_MAXIMIZED, 43)) return;
-    nk_layout_row_dynamic(ctx, row, 1);
-    if (geo_any_on() && nk_button_label(ctx, "show everything")) geo_show_all();
+    if (geo_any_on()) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        if (nk_button_label(ctx, "show every set")) geo_show_all();
+    }
     char lab[96];
     for (int i = 0, k = 0; i < g->nsets && k < 500; i++) {
         const cv_gset* st = &g->sets[i];
@@ -161,7 +195,13 @@ static void panel_geo_sets(struct nk_context* ctx, float row) {
         if (st->nel) snprintf(lab, sizeof lab, "%s  (%u el)", st->name, st->nel);
         else if (ng) snprintf(lab, sizeof lab, "%s  (%u)", st->name, ng);
         else snprintf(lab, sizeof lab, "%s  (%u nodes)", st->name, st->nnod);
-        if (nk_checkbox_label(ctx, lab, &on[i])) geo_set_toggled(i);
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_push_static(ctx, 44 * s);
+        nk_layout_row_template_end(ctx);
+        nk_label(ctx, lab, NK_TEXT_LEFT);
+        tip(ctx, "Show only what the sets marked 'only' hold (several: together); none marked: everything");
+        if (lit_toggle(ctx, "only", &on[i])) geo_set_toggled(i);
     }
     nk_tree_pop(ctx);
 }
@@ -305,20 +345,35 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
 static void section_groups(struct nk_context* ctx, float s, float row) {
     /* groups */
     if (nk_tree_state_push(ctx, NK_TREE_TAB, "Groups", (enum nk_collapse_states*)&G.tree[CV_TREE_GROUPS])) {
+        if (app_any_hidden()) {                  /* something is hidden: say what is not listed below, and undo all */
+            uint32_t nh = app_hidden_by_hand();
+            char lab[64];
+            if (nh) snprintf(lab, sizeof lab, "%u hidden by hand", nh); else snprintf(lab, sizeof lab, "some hidden below");
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 80 * s);
+            nk_layout_row_template_end(ctx);
+            nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.warn);
+            tip(ctx, "Every element shown again: types, materials, groups, element sets ('only' and hidden),\n"
+                     "cgx sets, elements hidden by hand (right-click menu, Selection). The crop box, the clip\n"
+                     "plane and *MODEL CHANGE keep their own switches");
+            if (nk_button_label(ctx, "Show all")) app_show_all();
+        }
         for (int a = 0; a < CV_AXIS_N; a++) {
             cv_axis* ax = &G.groups.axis[a];
             if (!nk_tree_push_id(ctx, NK_TREE_NODE, cv_axis_name(a), a == 0 ? NK_MAXIMIZED : NK_MINIMIZED, a))
                 continue;
             if (ax->n > 1) {
                 nk_layout_row_dynamic(ctx, row, 2);
-                if (nk_button_label(ctx, "all"))  { for (int i = 0; i < ax->n; i++) ax->on[i] = true;  app_groups_changed(); }
-                if (nk_button_label(ctx, "none")) { for (int i = 0; i < ax->n; i++) ax->on[i] = false; app_groups_changed(); }
+                if (nk_button_label(ctx, "show all"))  { for (int i = 0; i < ax->n; i++) ax->on[i] = true;  app_groups_changed(); }
+                if (nk_button_label(ctx, "hide all")) { for (int i = 0; i < ax->n; i++) ax->on[i] = false; app_groups_changed(); }
             }
             int shown = CV_MIN(ax->n, 500);            /* keep the list usable */
             for (int i = 0; i < shown; i++) {
                 char lab[64];
                 axis_label(lab, sizeof lab, a, ax->value[i], ax->count[i]);
                 nk_layout_row_template_begin(ctx, row);
+                nk_layout_row_template_push_static(ctx, row * 1.4f);
                 nk_layout_row_template_push_static(ctx, row * 1.4f);
                 nk_layout_row_template_push_dynamic(ctx);
                 nk_layout_row_template_end(ctx);
@@ -359,7 +414,10 @@ static void section_groups(struct nk_context* ctx, float s, float row) {
                         g_pick_axis = g_pick_idx = -1;
                     }
                 }
-                if (nk_checkbox_label(ctx, lab, &ax->on[i])) app_groups_changed();
+                static const char* const shown_tip[CV_AXIS_N] = { "Hide this element type", "Hide this material", "Hide this group" };
+                static const char* const hidden_tip[CV_AXIS_N] = { "Hidden: click to show this element type again",
+                    "Hidden: click to show this material again", "Hidden: click to show this group again" };
+                if (eye_row(ctx, lab, ax->on[i], shown_tip[a], hidden_tip[a])) { ax->on[i] = !ax->on[i]; app_groups_changed(); }
             }
             if (ax->n > shown) {
                 nk_layout_row_dynamic(ctx, row, 1);
@@ -367,7 +425,7 @@ static void section_groups(struct nk_context* ctx, float s, float row) {
             }
             nk_tree_pop(ctx);
         }
-        if (geo_loaded()) panel_geo_sets(ctx, row);   /* cgx sets drive the mesh's too */
+        if (geo_loaded()) panel_geo_sets(ctx, s, row);   /* cgx sets drive the mesh's too */
         else panel_deck_sets(ctx, s, row);
         section_stl(ctx, s, row);
         nk_tree_pop(ctx);
@@ -446,7 +504,7 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Colour the model by the formula");
     if (nk_button_label(ctx, "Show")) go = true;
     if (go && calc_buf[0]) {
-        if (app_calc_set(calc_buf)) snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
+        if (app_pick_calc(calc_buf)) snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
     } else if (go) {
         G.calc_err[0] = 0;
     }
@@ -468,13 +526,31 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
             tip(ctx, calc_examples[i][2]);
             if (nk_button_label(ctx, calc_examples[i][0])) {
                 calc_draft_set(calc_examples[i][0]);
-                app_calc_set(calc_buf);
+                app_pick_calc(calc_buf);
                 snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
             }
         }
         nk_tree_pop(ctx);
     }
     nk_tree_pop(ctx);
+}
+
+/* The faces coloured by something else than the field (Layers > Faces, a group's
+   swatch): say so above the fields, with one click back. Picking any field does it too. */
+static void faces_note(struct nk_context* ctx, float s, float row) {
+    if (G.faces_mode == FM_FIELD || !G.show_faces) return;
+    static const char* const by[FM_N] = { "", "element type", "material", "group", "one plain colour" };
+    char lab[64];
+    snprintf(lab, sizeof lab, "faces: by %s", by[G.faces_mode]);
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 90 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.warn);
+    tip(ctx, "The faces show the groups' colours, not the field (Layers > Faces).\n"
+             "Colour them by the field again; picking any field below does it too");
+    if (nk_button_label(ctx, "show field")) app_faces_show_field();
+    nk_layout_row_dynamic(ctx, row, 1);
 }
 
 /* ---- Fields of the current step, and the .dat ones */
@@ -491,6 +567,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             nk_bool em = G.elem_mode;
             tip(ctx, "One value per element (mean of its nodes) instead of a smooth nodal field");
             if (nk_checkbox_label(ctx, "Per element (flat)", &em)) app_set_elem_mode(em);
+            faces_note(ctx, s, row);
             {   /* components of vectors and tensors in a cylindrical system */
                 static const char* cs[] = { "coordinates: global x y z", "cylindrical about X", "cylindrical about Y", "cylindrical about Z" };
                 tip(ctx, "Vector and tensor components in a cylindrical system: r radial, t hoop, a axial (.frd fields; invariants stay)");
@@ -534,7 +611,10 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 nk_layout_row_dynamic(ctx, row, 1);
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;
-                    if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(d->name, opts[i].comp, 0);
+                    char mk[96];
+                    snprintf(mk, sizeof mk, "#comp %s %s", d->name, opts[i].label);
+                    uii_test_mark(ctx, mk);
+                    if (nk_option_label(ctx, opts[i].label, sel) != sel) app_pick_field(d->name, opts[i].comp, 0);   /* the shown one again: back on the faces */
                 }
                 uii_field_options(ctx, s, row, d, active);
                 if (!strcmp(G.fields_open, d->name)) G.fields_open[0] = 0;
@@ -576,7 +656,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 nk_layout_row_dynamic(ctx, row, 1);
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;
-                    if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(names[f], opts[i].comp, 1);
+                    if (nk_option_label(ctx, opts[i].label, sel) != sel) app_pick_field(names[f], opts[i].comp, 1);
                 }
                 uii_gauss_options(ctx, s, row, names[f]);
                 nk_tree_state_pop(ctx);

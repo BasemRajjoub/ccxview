@@ -542,6 +542,15 @@ void app_select_src(const char* field, int comp, int src);
 bool app_calc_set(const char* expr);
 void app_fail_set(int crit, int out);   /* show the failure field (field_src 3) */
 void app_mesh_set(int q);               /* show a mesh quality measure (field_src 4), per element */
+/* The same, as the user's choice (Fields tree, top bar, a window, the command line):
+   a chosen field takes precedence over a colouring by type, material, group or a
+   plain colour, so the faces switch to it (#26). Restoring a view or a reload uses
+   the plain setters above and keeps the colouring that was saved. */
+void app_pick_field(const char* field, int comp, int src);
+bool app_pick_calc(const char* expr);
+void app_pick_fail(int crit, int out);
+void app_pick_mesh(int q);
+void app_faces_show_field(void);        /* faces coloured by the field, if they were not */
 void app_set_elem_mode(bool on);
 void app_groups_changed(void);
 void app_fit(void);
@@ -626,8 +635,16 @@ bool app_pick(float px, float py, cv_pick* out, float o[3], float d[3]);
    these, or show everything again (the hand-hidden ones and every group) */
 void app_hide_elems(const uint32_t* elems, uint32_t n);
 void app_isolate_elems(const uint32_t* elems, uint32_t n);
-void app_hide_set(const char* name, bool isolate);  /* a deck element set */
+/* a deck element set: hidden (its eye), or the only one shown (its "only", the
+   others' cleared); both in Groups > Element sets, where they can be undone */
+void app_hide_set(const char* name, bool only);
+/* Show all: every visibility filter of the elements back to "shown" -- types,
+   materials and groups, the element sets' "only" and hidden, cgx sets, elements
+   hidden by hand. The crop box, the clip plane, *MODEL CHANGE and the node sets'
+   and surfaces' highlights are left as they are (their own switches). */
 void app_show_all(void);
+bool app_any_hidden(void);           /* anything Show all would bring back */
+uint32_t app_hidden_by_hand(void);   /* elements hidden by hand (menu, Selection) */
 /* the axis clip plane through p, across the axis nearest the normal n, cutting
    away the side the eye is on */
 void app_clip_at(const float p[3], const float n[3]);
@@ -801,8 +818,8 @@ bool deck_loaded(void);
 unsigned deck_gen(void);             /* bumped when the deck changes: what was derived from it is stale */
 const cv_inp* deck_get(void);
 const char* deck_path(void);
-bool* deck_set_flags(void);          /* per set: an elset ticked (show only the ticked), a node set highlighted */
-bool* deck_set_hidden_flags(void);   /* per set: an elset hidden (wins over ticked); NULL without a deck */
+bool* deck_set_flags(void);          /* per set: an elset marked "only" (show only the marked), a node set highlighted */
+bool* deck_set_hidden_flags(void);   /* per set: an elset hidden (wins over "only"); NULL without a deck */
 bool* deck_surf_flags(void);
 float* deck_set_alpha(void);         /* per set: an elset's opacity, 1 opaque (app_see.c); NULL without a deck */
 bool deck_file_reader(void* user, const char* path, char** data, size_t* size);

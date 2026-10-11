@@ -143,7 +143,8 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
         nk_layout_row_push(ctx, 24 * s);
         uii_vsep(ctx);
         nk_layout_row_push(ctx, 110 * s);
-        const char* fname = G.field_src == 0 ? G.field_name : G.field_src == 2 ? "calculated" : G.field_name;
+        const char* fname = G.field_src == 2 ? "calculated" : G.field_src == 3 ? "failure"   /* what shows, whatever its source */
+                          : G.field_src == 4 ? "mesh quality" : G.field_name;
         tip(ctx, "The result field shown (Fields tree: the same, with the calculated and failure fields)");
         if (nk_combo_begin_label(ctx, fname[0] ? fname : "field", nk_vec2(220 * s, CV_MIN(st->nfields, 12) * row + 20 * s))) {
             nk_layout_row_dynamic(ctx, row, 1);
@@ -151,7 +152,7 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
                 if (nk_combo_item_label(ctx, st->fields[f].name, NK_TEXT_LEFT)) {
                     cv_scalar_opt o[CV_MAX_OPTS];
                     int n = app_field_options(&st->fields[f], o, CV_MAX_OPTS);
-                    app_select_src(st->fields[f].name, n ? o[0].comp : 0, 0);
+                    app_pick_field(st->fields[f].name, n ? o[0].comp : 0, 0);
                 }
             nk_combo_end(ctx);
         }
@@ -165,7 +166,7 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
             tip(ctx, "The component or invariant of the field");
             if (nk_combo_begin_label(ctx, ci >= 0 ? o[ci].label : "component", nk_vec2(200 * s, CV_MIN(n, 12) * row + 20 * s))) {
                 nk_layout_row_dynamic(ctx, row, 1);
-                for (int i = 0; i < n; i++) if (nk_combo_item_label(ctx, o[i].label, NK_TEXT_LEFT)) app_select_src(cur->name, o[i].comp, 0);
+                for (int i = 0; i < n; i++) if (nk_combo_item_label(ctx, o[i].label, NK_TEXT_LEFT)) app_pick_field(cur->name, o[i].comp, 0);
                 nk_combo_end(ctx);
             }
         }
@@ -431,7 +432,9 @@ static void panel_group_legend(struct nk_context* ctx, float s, float row) {
             nk_stroke_rect(nk_window_get_canvas(ctx), sw, 0, 1, legend_ink());   /* a swatch of the background's colour */
         }
         char lab[64];
+        const char* mat = a == CV_AXIS_MAT ? deck_material_name(ax->value[i]) : NULL;   /* the names Groups shows */
         if (a == CV_AXIS_TYPE) snprintf(lab, sizeof lab, "%s", cv_frd_type_name((int)ax->value[i]));
+        else if (mat) snprintf(lab, sizeof lab, "%s", mat);
         else snprintf(lab, sizeof lab, "%s %u", a == CV_AXIS_MAT ? "Material" : "Group", ax->value[i]);
         ink_label(ctx, lab);
     }

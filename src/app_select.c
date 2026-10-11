@@ -381,27 +381,36 @@ void app_isolate_elems(const uint32_t* el, uint32_t n) {
     app_groups_changed();
 }
 
-/* hide: the set's flag (Groups > Element sets shows it, and it can be undone there);
-   isolate: only its elements left, by hand */
-void app_hide_set(const char* name, bool isolate) {
+/* hide: the set's eye; only: its "only" and no other's, and not hidden. Both are
+   the set's flags, so Groups > Element sets shows them and they undo there (an
+   "only" from the menu used to hide the rest by hand, which nothing showed). */
+void app_hide_set(const char* name, bool only) {
     const cv_inp* d = deck_get();
     const cv_set* s = d ? cv_inp_set(d, name, true) : NULL;
     if (!s) return;
-    if (!isolate) {
-        deck_set_hidden_flags()[s - d->sets] = true;
-        G.probe_on = false;
-        app_sel_clear();
-        app_groups_changed();
-        return;
+    int k = (int)(s - d->sets);
+    if (!only) deck_set_hidden_flags()[k] = true;
+    else {
+        bool* on = deck_set_flags();
+        for (int i = 0; i < d->nsets; i++) if (d->sets[i].is_elem) on[i] = i == k;
+        deck_set_hidden_flags()[k] = false;
     }
-    uint32_t* el = malloc((size_t)CV_MAX(s->n, 1) * sizeof *el), n = 0;
-    if (!el) return;
-    for (uint32_t i = 0; i < s->n; i++) {
-        uint32_t e = cv_frd_elem_index(&G.frd, s->ids[i]);
-        if (e != UINT32_MAX) el[n++] = e;
-    }
-    app_isolate_elems(el, n);
-    free(el);
+    G.probe_on = false;
+    app_sel_clear();
+    app_groups_changed();
+}
+
+uint32_t app_hidden_by_hand(void) {
+    uint32_t n = 0;
+    for (uint32_t e = 0; G.hide && e < G.frd.n_elems; e++) n += G.hide[e] != 0;
+    return n;
+}
+
+bool app_any_hidden(void) {
+    if (G.hide) return true;
+    for (int a = 0; a < CV_AXIS_N; a++)
+        for (int i = 0; i < G.groups.axis[a].n; i++) if (!G.groups.axis[a].on[i]) return true;
+    return deck_any_elset_on() || deck_any_elset_hidden() || geo_any_on();
 }
 
 void app_show_all(void) {
@@ -409,8 +418,10 @@ void app_show_all(void) {
     free(G.hide); G.hide = NULL;
     for (int a = 0; a < CV_AXIS_N; a++)
         for (int i = 0; i < G.groups.axis[a].n; i++) G.groups.axis[a].on[i] = true;
+    if (geo_any_on()) geo_show_all();                  /* its sets drive the element sets of the same name */
     const cv_inp* d = deck_get();
-    for (int i = 0; d && i < d->nsets; i++) deck_set_hidden_flags()[i] = false;
+    for (int i = 0; d && i < d->nsets; i++)
+        if (d->sets[i].is_elem) deck_set_flags()[i] = deck_set_hidden_flags()[i] = false;   /* node sets: highlights, kept */
     app_groups_changed();
 }
 

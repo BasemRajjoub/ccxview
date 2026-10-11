@@ -145,7 +145,7 @@ void geo_show_all(void) {
     geo_refresh();
     const cv_inp* d = deck_get();
     if (d) {
-        for (int k = 0; k < d->nsets; k++) deck_set_flags()[k] = false;
+        for (int k = 0; k < d->nsets; k++) if (d->sets[k].is_elem) deck_set_flags()[k] = false;   /* node sets: highlights */
         app_groups_changed();
     }
 }

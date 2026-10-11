@@ -84,10 +84,17 @@ void section_label(struct nk_context* ctx, float s, float row) {
         nk_property_float(ctx, "#size", 6.f, &G.label_px, 48.f, 1.f, 0.2f);
         tip(ctx, "The gap kept between labels, pixels; 0 shows every one, overlapping (a carpet on a fine mesh)");
         nk_property_float(ctx, "#gap", 0.f, &G.label_spacing, 400.f, 2.f, 0.5f);
-        tip(ctx, "Only the box selection's nodes and elements");
-        if (nk_checkbox_label(ctx, "selection only", &G.label_sel_only)) app_label_changed();
-        tip(ctx, "Only the probed element and its nodes (the Probe's labels box)");
-        if (nk_checkbox_label(ctx, "probed element only", &G.label_probe_only)) app_label_changed();
+        {   /* where: one of three (both "only"s at once meant their overlap, rarely anything) */
+            int at = G.label_probe_only ? 2 : G.label_sel_only ? 1 : 0, was = at;
+            nk_layout_row_dynamic(ctx, row, 3);
+            tip(ctx, "Labels on every shown node and element (as the gap allows)");
+            if (nk_option_label(ctx, "everywhere", at == 0)) at = 0;
+            tip(ctx, "Only the box selection's nodes and elements");
+            if (nk_option_label(ctx, "selection", at == 1)) at = 1;
+            tip(ctx, "Only the probed element and its nodes (the Probe's labels box)");
+            if (nk_option_label(ctx, "probed", at == 2)) at = 2;
+            if (at != was) { G.label_sel_only = at == 1; G.label_probe_only = at == 2; app_label_changed(); }
+        }
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, "Labels in front of everything, never cut by a face (nodes facing away get none anyway).\n"
                  "Off: hidden by what is nearer, as the model is; a face at a steep angle may cut into one");

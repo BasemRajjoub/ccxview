@@ -416,7 +416,7 @@ bool app_sel_spec(const char* spec) {
     if (!strcasecmp(spec, "csv")) return app_sel_csv();
     if (!strncasecmp(spec, "inp:", 4)) return app_sel_inp_save(spec + 4);
     if (!strcasecmp(spec, "labels")) {
-        G.label_sel_only = true;
+        G.label_sel_only = true; G.label_probe_only = false;   /* one place at a time */
         if (!G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE;
         app_label_changed();
         return true;
