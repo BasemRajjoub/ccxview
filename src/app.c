@@ -796,7 +796,7 @@ static void drag_move(float dx, float dy, bool shift) {
             break;
         }
         case CV_NAV_ZOOM: {                          /* drag up: closer */
-            float f = powf(1.01f, dy);
+            float f = app_zoom_factor(powf(1.01f, dy));
             if (G.zoom_cursor) G.cam.target = v3_add(drag.pivot, v3_scale(v3_sub(G.cam.target, drag.pivot), f));
             G.cam.dist *= f;
             nav_mark(CV_NAV_ZOOM, G.zoom_cursor ? drag.pivot : G.cam.target);
@@ -965,7 +965,7 @@ static void event(const sapp_event* ev) {
                     if (now - g_wheel_t > 0.5) app_view_push();
                     g_wheel_t = now;
                     /* toward the cursor: scaling the view about the point under it keeps that point in place */
-                    float f = powf(0.88f, G.wheel_invert ? -ev->scroll_y : ev->scroll_y);
+                    float f = app_zoom_factor(powf(0.88f, G.wheel_invert ? -ev->scroll_y : ev->scroll_y));
                     v3 p; bool on;
                     if (G.zoom_cursor && app_cursor_point(ev->mouse_x, ev->mouse_y, &p, &on))
                         G.cam.target = v3_add(p, v3_scale(v3_sub(G.cam.target, p), f));

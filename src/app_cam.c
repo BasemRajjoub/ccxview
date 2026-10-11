@@ -448,6 +448,20 @@ void app_fit(void) {
     G.cam.dist = r / sinf(fit) * 1.05f;
 }
 
+/* the farthest the eye may back off: the model still about 2.5 % of the view's
+   height. Further out it is less than a pixel and is no longer drawn, as if gone */
+float app_dist_max(void) {
+    float r = 0.5f * CV_MAX(CV_MAX(G.vdiag, G.diag), 1e-6f);
+    return 40.f * r / sinf(G.cam.fovy * 0.5f);
+}
+
+/* a zoom factor on the distance, held so the eye stays within app_dist_max */
+float app_zoom_factor(float f) {
+    float lim = app_dist_max();
+    if (f > 1.f && G.cam.dist * f > lim) f = CV_MAX(lim / CV_MAX(G.cam.dist, 1e-30f), 1.f);
+    return f;
+}
+
 bool app_project(v3 p, float* sx, float* sy) {
     float mvp[16], mv[16];
     cam_matrices(mvp, mv, NULL);
@@ -647,14 +661,15 @@ void cam_matrices(float* mvp, float* mv, float* proj_out) {
     /* depth range from the eye's distance to the model (deformed + undeformed box),
        not to the orbit target: in free flight the eye can be far from, or inside, it */
     v3 c = v3_scale(v3_add(G.vmin, G.vmax), 0.5f);
-    v3 ec = v3_sub(eye, c);
-    float dc = sqrtf(v3_dot(ec, ec));
+    /* depth runs along the line of sight: a model off the view's centre (zoomed out
+       toward the cursor) lies nearer than its straight distance and was cut away */
+    float dc = v3_dot(v3_sub(c, eye), fwd);
     if (G.cam.ortho) {
         float hh = G.cam.dist * tanf(G.cam.fovy * 0.5f);
         m4_ortho(proj, hh * aspect, hh, dc - 2 * diag, dc + 2 * diag);
     } else {
-        float farp = dc + diag;
         float nearp = CV_MAX(dc - diag, diag * 1e-3f);
+        float farp = CV_MAX(dc + diag, 2.f * nearp);   /* the model behind the eye (flight): still a valid range */
         m4_perspective(proj, G.cam.fovy, aspect, nearp, farp);
     }
     memcpy(mv, view, sizeof view);

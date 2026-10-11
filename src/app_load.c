@@ -569,7 +569,7 @@ static void apply_load(cv_job* j) {
     if (O.conv) G.show_conv = true;
     if (O.look >= 0) app_view(O.look);
     if (O.target_set) G.cam.target = v3_make(O.target[0], O.target[1], O.target[2]);
-    if (O.zoom > 0) G.cam.dist /= O.zoom;
+    if (O.zoom > 0) G.cam.dist = fminf(G.cam.dist / O.zoom, app_dist_max());   /* never so far the model is gone */
     if (O.field && G.frd.n_steps > 0) {     /* NAME, or NAME:COMPONENT as the Fields tree names it (SHELL:Mxx) */
         char name[64];
         const char* colon = strchr(O.field, ':');

@@ -596,6 +596,7 @@ static void range_free(struct nk_context* ctx) { G.range_lock = false; app_refre
 static bool find_gone(struct nk_context* ctx) { return !G.find_open; }
 static bool browser_gone(struct nk_context* ctx) { return !G.browser_open; }
 static bool zoomed(struct nk_context* ctx) { return G.cam.dist != was.cam.dist; }
+static bool zoom_held(struct nk_context* ctx) { return G.cam.dist <= app_dist_max() * 1.0001f && G.cam.dist > was.cam.dist; }
 static bool not_zoomed(struct nk_context* ctx) { return G.cam.dist == was.cam.dist; }
 static bool turned(struct nk_context* ctx) { return memcmp(&G.cam, &was.cam, sizeof G.cam) != 0; }
 static bool scene_scrolled(struct nk_context* ctx) { struct nk_window* w = win_of(ctx, "Scene"); return w && (float)w->scrollbar.y != was.scroll; }
@@ -1086,6 +1087,10 @@ static const step script[] = {
     EXPECT(scene_still, "the sidebar does not scroll with it"),
     DO(snapshot), WHEEL(3), WAIT(2), EXPECT(scene_still, "nor on the way back"),
     AT_WIN("Scene", 0.5f, 0.5f), WHEEL(30), WAIT(2),
+
+    CASE("wheel: zooming far out stops while the model is still in sight"),
+    DO(close_all), DO(fit_view), WAIT(2), DO(snapshot), AT_VIEW(0.8f, 0.2f), WHEEL(-60), WAIT(2), WHEEL(-60), WAIT(2), WHEEL(-60), WAIT(2),
+    EXPECT(zoom_held, "the distance is held at its limit"), DO(fit_view), WAIT(2),
 
     CASE("view: a drag turns the model"),
     DO(snapshot), AT_VIEW(0.5f, 0.5f), PRESS, AT_VIEW(0.6f, 0.55f), AT_VIEW(0.7f, 0.6f), RELEASE, EXPECT(turned, "the camera turns"),

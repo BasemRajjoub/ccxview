@@ -724,6 +724,8 @@ bool cam_roll(float a);                          /* about the view axis; false: 
 bool app_center_at(float px, float py);         /* the point under the pixel to the view centre (and pivot) */
 bool app_normal_to(float px, float py);         /* look straight at the face under the pixel */
 void app_box_zoom(float x0, float y0, float x1, float y1);
+float app_dist_max(void);                        /* the farthest zoom out: the model still a few % of the view */
+float app_zoom_factor(float f);                  /* a zoom factor on the distance, held within app_dist_max */
 float app_pixel_size(v3 p);                      /* world length of one pixel at p's depth */
 void app_view_push(void);                        /* remember the view for undo */
 bool app_view_undo(int dir);                     /* -1: back, +1: forward */
