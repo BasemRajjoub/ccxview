@@ -525,7 +525,7 @@ void window_calc_help(struct nk_context* ctx, float s, float row, int fw, int fh
         if (apply) {
             calc_draft_set(t);
             if (!t[0]) { G.calc_err[0] = 0; }
-            else if (!app_calc_set(t)) close = false;      /* keep the window: the error shows below */
+            else if (!app_pick_calc(t)) close = false;      /* keep the window: the error shows below */
         }
         nk_layout_row_dynamic(ctx, row, 1);
         if (G.calc_err[0] && strcmp(t, G.calc_expr)) nk_label_colored(ctx, G.calc_err, NK_TEXT_LEFT, P.warn);

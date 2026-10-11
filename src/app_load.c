@@ -636,6 +636,8 @@ static void apply_load(cv_job* j) {
             }
         }
     }
+    /* a field asked for on the command line shows on the faces, unless --faces says otherwise */
+    if ((O.field || O.calc || O.fail || O.mesh || O.gauss) && O.faces < 0 && !G.reload_keep && G.has_field) app_faces_show_field();
     if (O.crop_set) {
         G.crop_on = true;
         for (int k = 0; k < 3; k++) { G.crop_lo[k] = O.crop[2 * k]; G.crop_hi[k] = O.crop[2 * k + 1]; }

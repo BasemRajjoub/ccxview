@@ -217,6 +217,9 @@ It prints what it selected and the field's max and min over it.
   click a set or surface: integrate over it); the eye before an element set hides
   it, the tick shows only the ticked sets; Imported geometry: STL files shown with
   the results, each with show / hide, colour, opacity and unit scale.
+- **Faces colouring**: one of field, type, material, group, plain (Layers >
+  Faces). Picking any field colours the faces by it; a group's swatch or the
+  Faces list colours them by groups again.
 - **Fields**: a tree. Contact first (when there is contact: show, pairs, how
   it is drawn and coloured, nodes, increment, opacity; more... for its
   settings window), then the results of the step, each a subgroup with its

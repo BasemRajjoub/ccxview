@@ -446,7 +446,7 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Colour the model by the formula");
     if (nk_button_label(ctx, "Show")) go = true;
     if (go && calc_buf[0]) {
-        if (app_calc_set(calc_buf)) snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
+        if (app_pick_calc(calc_buf)) snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
     } else if (go) {
         G.calc_err[0] = 0;
     }
@@ -468,13 +468,31 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
             tip(ctx, calc_examples[i][2]);
             if (nk_button_label(ctx, calc_examples[i][0])) {
                 calc_draft_set(calc_examples[i][0]);
-                app_calc_set(calc_buf);
+                app_pick_calc(calc_buf);
                 snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
             }
         }
         nk_tree_pop(ctx);
     }
     nk_tree_pop(ctx);
+}
+
+/* The faces coloured by something else than the field (Layers > Faces, a group's
+   swatch): say so above the fields, with one click back. Picking any field does it too. */
+static void faces_note(struct nk_context* ctx, float s, float row) {
+    if (G.faces_mode == FM_FIELD || !G.show_faces) return;
+    static const char* const by[FM_N] = { "", "element type", "material", "group", "one plain colour" };
+    char lab[64];
+    snprintf(lab, sizeof lab, "faces: by %s", by[G.faces_mode]);
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 90 * s);
+    nk_layout_row_template_end(ctx);
+    nk_label_colored(ctx, lab, NK_TEXT_LEFT, P.warn);
+    tip(ctx, "The faces show the groups' colours, not the field (Layers > Faces).\n"
+             "Colour them by the field again; picking any field below does it too");
+    if (nk_button_label(ctx, "show field")) app_faces_show_field();
+    nk_layout_row_dynamic(ctx, row, 1);
 }
 
 /* ---- Fields of the current step, and the .dat ones */
@@ -491,6 +509,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             nk_bool em = G.elem_mode;
             tip(ctx, "One value per element (mean of its nodes) instead of a smooth nodal field");
             if (nk_checkbox_label(ctx, "Per element (flat)", &em)) app_set_elem_mode(em);
+            faces_note(ctx, s, row);
             {   /* components of vectors and tensors in a cylindrical system */
                 static const char* cs[] = { "coordinates: global x y z", "cylindrical about X", "cylindrical about Y", "cylindrical about Z" };
                 tip(ctx, "Vector and tensor components in a cylindrical system: r radial, t hoop, a axial (.frd fields; invariants stay)");
@@ -534,7 +553,10 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 nk_layout_row_dynamic(ctx, row, 1);
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;
-                    if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(d->name, opts[i].comp, 0);
+                    char mk[96];
+                    snprintf(mk, sizeof mk, "#comp %s %s", d->name, opts[i].label);
+                    uii_test_mark(ctx, mk);
+                    if (nk_option_label(ctx, opts[i].label, sel) != sel) app_pick_field(d->name, opts[i].comp, 0);   /* the shown one again: back on the faces */
                 }
                 uii_field_options(ctx, s, row, d, active);
                 if (!strcmp(G.fields_open, d->name)) G.fields_open[0] = 0;
@@ -576,7 +598,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 nk_layout_row_dynamic(ctx, row, 1);
                 for (int i = 0; i < n; i++) {
                     bool sel = active && G.comp == opts[i].comp;
-                    if (nk_option_label(ctx, opts[i].label, sel) && !sel) app_select_src(names[f], opts[i].comp, 1);
+                    if (nk_option_label(ctx, opts[i].label, sel) != sel) app_pick_field(names[f], opts[i].comp, 1);
                 }
                 uii_gauss_options(ctx, s, row, names[f]);
                 nk_tree_state_pop(ctx);

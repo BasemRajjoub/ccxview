@@ -542,6 +542,15 @@ void app_select_src(const char* field, int comp, int src);
 bool app_calc_set(const char* expr);
 void app_fail_set(int crit, int out);   /* show the failure field (field_src 3) */
 void app_mesh_set(int q);               /* show a mesh quality measure (field_src 4), per element */
+/* The same, as the user's choice (Fields tree, top bar, a window, the command line):
+   a chosen field takes precedence over a colouring by type, material, group or a
+   plain colour, so the faces switch to it (#26). Restoring a view or a reload uses
+   the plain setters above and keeps the colouring that was saved. */
+void app_pick_field(const char* field, int comp, int src);
+bool app_pick_calc(const char* expr);
+void app_pick_fail(int crit, int out);
+void app_pick_mesh(int q);
+void app_faces_show_field(void);        /* faces coloured by the field, if they were not */
 void app_set_elem_mode(bool on);
 void app_groups_changed(void);
 void app_fit(void);

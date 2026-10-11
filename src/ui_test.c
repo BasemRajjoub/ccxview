@@ -796,6 +796,21 @@ static void groups_open(struct nk_context* ctx) {
     if (w) w->scrollbar.y = 0;
 }
 static void groups_close(struct nk_context* ctx) { memcpy(G.tree, groups_tree, sizeof groups_tree); }
+/* #26: a field chosen takes the faces from a colouring by groups */
+static void faces_by_material(struct nk_context* ctx) {
+    app_select("STRESS", CV_COMP_MISES); app_set_faces_mode(FM_MAT);
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
+    for (int f = 0; f < G.frd.steps[G.step].nfields; f++) *uii_fnode_state(G.frd.steps[G.step].fields[f].name, false) = 0;
+    *uii_fnode_state("STRESS", true) = 1; *uii_fnode_state("STRESS/options", false) = 0; *uii_fnode_state("DISP", false) = 1;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
+static void faces_by_group(struct nk_context* ctx) { app_select("STRESS", CV_COMP_MISES); app_set_faces_mode(FM_GRP); }
+static bool faces_field(struct nk_context* ctx) { return G.faces_mode == FM_FIELD && G.has_field; }
+static bool faces_field_disp(struct nk_context* ctx) { return faces_field(ctx) && G.field_src == 0 && !strcmp(G.field_name, "DISP"); }
+static bool faces_field_mises(struct nk_context* ctx) { return faces_field(ctx) && G.field_src == 0 && G.comp == CV_COMP_MISES; }
+static bool faces_field_mesh(struct nk_context* ctx) { return faces_field(ctx) && G.field_src == 4 && G.mesh_q == CV_MQ_ASPECT; }
+static bool faces_still_material(struct nk_context* ctx) { return G.faces_mode == FM_MAT; }
+static void faces_end(struct nk_context* ctx) { G.show_mesh = false; app_select("STRESS", CV_COMP_MISES); app_set_faces_mode(FM_FIELD); sections_open(ctx); }
 static bool set_hidden(struct nk_context* ctx) { return deck_any_elset_hidden() && G.vis && !app_busy(); }
 static bool sets_shown(struct nk_context* ctx) { return !deck_any_elset_hidden(); }
 /* a linearization line between two nodes of the model, its Path window open */
@@ -1289,6 +1304,23 @@ static const step script[] = {
     DO(groups_open), WAIT(3), AT_TIP("Scene", "Hide this element set"), CLICK, WAIT(10), EXPECT(set_hidden, "the set is hidden"),
     AT_TIP("Scene", "Hidden: click to show"), CLICK, WAIT(10), EXPECT(sets_shown, "every set shown again"),
     DO(groups_close), WAIT(2), PANELS_ANSWER,
+
+    CASE("colour by: a field picked in the tree takes the faces from the material colours (#26)"),
+    DO(faces_by_material), WAIT(3), EXPECT(faces_still_material, "the faces by material"),
+    AT_TIP("Scene", "#comp DISP"), CLICK, WAIT(3), EXPECT(faces_field_disp, "DISP picked: the faces show it"),
+    DO(faces_by_material), WAIT(3), AT_TIP("Scene", "#comp STRESS von Mises"), CLICK, WAIT(3),
+    EXPECT(faces_field_mises, "the field already chosen, clicked again: back on the faces"),
+    DO(faces_by_material), WAIT(3), AT_TIP("Scene", "The faces show the groups' colours"), CLICK, WAIT(3),
+    EXPECT(faces_field_mises, "the note's button shows the field"),
+
+    CASE("colour by: a field from the top bar takes the faces from the group colours (#26)"),
+    DO(faces_by_group), WAIT(3), AT_TIP("Toolbar", "The result field shown"), CLICK, WAIT(2), EXPECT(toolbar_popup, "the field list opens"),
+    AT_POPUP("Toolbar", 0.5f, 0.15f), CLICK, WAIT(3), EXPECT(faces_field, "the field shows on the faces"),
+
+    CASE("colour by: a mesh quality measure picked in material view shows (#26)"),
+    DO(faces_by_material), DO(open_mesh), WAIT(3), AT_TIP("Mesh quality", "Longest over shortest edge"), CLICK, WAIT(3),
+    EXPECT(faces_field_mesh, "aspect ratio on the faces"),
+    DO(faces_end), WAIT(3), PANELS_ANSWER,
 
     CASE("linearization: a line kept, another shown, the kept one picked from the list, forgotten"),
     DO(lin_open), WAIT(3), AT_TIP("Path", "Keep this line"), CLICK, WAIT(2), EXPECT(lin_kept, "the line is kept, the list shows it"),

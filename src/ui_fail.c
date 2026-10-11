@@ -33,11 +33,11 @@ void section_failure(struct nk_context* ctx, float s, float row) {
              "Auto: LaRC05 for UD plies, von Mises for metals and plastics, Mohr-Coulomb\n"
              "for brittle ones. Any other: the materials of the other kind by their auto one");
     int c = nk_combo(ctx, names, CV_FC_N, G.fail_crit, (int)row, nk_vec2(260 * s, CV_FC_N * (row + 4 * s) + 20 * s));
-    if (c != G.fail_crit) app_fail_set(c, G.fail_out);
+    if (c != G.fail_crit) app_pick_fail(c, G.fail_out);
     for (int o = 0; o < CV_FO_N; o++) {
         bool sel = active && G.fail_out == o;
         tip(ctx, fail_out_tip(o));
-        if (nk_option_label(ctx, fail_out_name(o), sel) && !sel) app_fail_set(G.fail_crit, o);
+        if (nk_option_label(ctx, fail_out_name(o), sel) != sel) app_pick_fail(G.fail_crit, o);
     }
     const char* why = G.has_field ? G.legend_lines[2] : G.legend_lines[1];   /* "(...)": not shown, or not all */
     if (active && why[0] == '(') {

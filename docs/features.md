@@ -45,6 +45,19 @@ and the shape follow every node; the full list is in
 
 ## Fields
 
+What colours the faces (#26): the field, the element type, the material, the
+group, or one plain colour, one at a time (Layers > Faces). Choosing a field
+takes precedence: picking any field -- a component in the Fields tree or the
+top bar, a calculated formula, a failure criterion, a mesh quality measure,
+SHELL / REBAR, CONTACT, a `.dat` field, `--field` / `--calc` / `--fail` /
+`--mesh` -- colours the faces by it at once, even when they were coloured by
+material or group, and clicking the field already chosen does it too. The
+other way round, picking a group's colour swatch (Groups) or an entry of the
+Faces list colours them by that. While the faces show something else, Fields
+says so ("faces: by material") with a "show field" button, and the legend
+lists the groups' colours by the names Groups shows. A saved view or a reload
+keeps the colouring it had; `--faces material` wins over `--field`.
+
 The Fields section is a tree: each field (DISP, STRESS, ... SHELL, REBAR,
 Calculated, Failure, Mesh quality, a `.dat` field) is a subgroup listing its
 components, and holds its own controls in a nested "options" subgroup where it
