@@ -56,16 +56,37 @@ void cmap_combo(struct nk_context* ctx, float s, float row) {
    looks (colormap, bands, range) below. Camera controls live in the View tree. */
 void panel_toolbar(struct nk_context* ctx, float s, float row) {
     /* line 1: deformation */
-    nk_layout_row_begin(ctx, NK_STATIC, row, 15);
+    nk_layout_row_begin(ctx, NK_STATIC, row, 17);
     nk_layout_row_push(ctx, 80 * s);
     tip(ctx, "Draw the shape displaced by DISP x scale");
     nk_checkbox_label(ctx, "Deform", &G.deform);
-    nk_layout_row_push(ctx, 140 * s);
-    float before = G.deform_scale;
-    tip(ctx, "Displacement multiplier. Editing it switches auto off");
-    nk_property_float(ctx, "#scale", 0.f, &G.deform_scale, 1e9f, CV_MAX(G.deform_scale * 0.1f, 0.01f),
-                      CV_MAX(G.deform_scale * 0.01f, 0.001f));
-    if (G.deform_scale != before) G.deform_auto = false;
+    /* the scale spans many decades (a mass-normalised mode shape wants 1e-5, a stiff
+       part 1e4): arrows step it by a quarter, the box takes any number typed (1e-5
+       too) and shows four figures. Changing it by hand switches auto off */
+    {
+        static char buf[32];
+        static bool editing;
+        float was = G.deform_scale;
+        nk_layout_row_push(ctx, 24 * s);
+        tip(ctx, "Smaller: the scale x0.8");
+        if (nk_button_symbol(ctx, NK_SYMBOL_TRIANGLE_LEFT)) G.deform_scale *= 0.8f;
+        nk_layout_row_push(ctx, 92 * s);
+        if (!editing) snprintf(buf, sizeof buf, "%.4g", G.deform_scale);
+        tip(ctx, "Displacement multiplier: type any number, 1e-5 too (Enter). Editing it switches auto off");
+        nk_flags ef = nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, buf, (int)sizeof buf, nk_filter_default);
+        editing = (ef & NK_EDIT_ACTIVE) != 0;
+        if (ef & (NK_EDIT_COMMITED | NK_EDIT_DEACTIVATED)) {
+            char* e;
+            double x = strtod(buf, &e);
+            if (e != buf && x >= 0 && x < 1e12) G.deform_scale = (float)x;
+            editing = false;
+            if (ef & NK_EDIT_COMMITED) nk_edit_unfocus(ctx);
+        }
+        nk_layout_row_push(ctx, 24 * s);
+        tip(ctx, "Larger: the scale x1.25");
+        if (nk_button_symbol(ctx, NK_SYMBOL_TRIANGLE_RIGHT)) G.deform_scale = G.deform_scale > 0 ? G.deform_scale * 1.25f : 1e-6f;
+        if (G.deform_scale != was) { G.deform_auto = false; G.deform = true; }
+    }
     nk_layout_row_push(ctx, 74 * s);
     tip(ctx, "Scale so the largest displacement is ~10% of the model (never below 1), or a multiple of that");
     if (nk_combo_begin_label(ctx, "auto", nk_vec2(120 * s, 5 * row + 20 * s))) {

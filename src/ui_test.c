@@ -223,6 +223,9 @@ static void traj_off(struct nk_context* ctx) { G.show_traj = false; G.traj_which
 static void tensor_off(struct nk_context* ctx) { G.show_tensor = false; app_tensors_changed(); }
 static void scale_big(struct nk_context* ctx) { G.deform_scale = 50.f; G.deform_auto = true; }
 static bool scale_true(struct nk_context* ctx) { return G.deform_scale == 1.f && !G.deform_auto && G.deform; }
+static void scale_one(struct nk_context* ctx) { G.deform_scale = 1.f; G.deform_auto = false; G.deform = true; }
+static bool scale_tiny(struct nk_context* ctx) { return fabsf(G.deform_scale - 1e-5f) < 1e-10f && !G.deform_auto; }
+static bool scale_smaller(struct nk_context* ctx) { return fabsf(G.deform_scale - 8e-6f) < 1e-10f; }
 static bool box_armed(struct nk_context* ctx) { return G.box_arm; }
 static void arm_box(struct nk_context* ctx) { G.box_arm = true; }
 static bool nodes_selected(struct nk_context* ctx) { return G.sel_nodes && G.seln_n > 0 && G.boxq.on; }
@@ -973,6 +976,9 @@ static const step script[] = {
 
     CASE("toolbar: the 1:1 button sets the true scale"),
     DO(scale_big), WAIT(2), AT_TIP("Toolbar", TIP_TRUE), CLICK, EXPECT(scale_true, "the scale is 1, auto off"),
+    DO(scale_one), WAIT(2), AT_TIP("Toolbar", "Displacement multiplier"), CLICK, WAIT(2), TYPE("\b\b\b\b1e-5\n"), WAIT(3),
+    EXPECT(scale_tiny, "a typed 1e-5 is taken, auto off"),
+    AT_TIP("Toolbar", "Smaller: the scale"), CLICK, WAIT(2), EXPECT(scale_smaller, "the arrow steps it down by a fifth"),
 
     CASE("max in a box: armed by its button, a drag over the view probes the max"),
     DO(open_legend_settings), WAIT(3), AT_TIP("Legend settings", TIP_BOX), CLICK, EXPECT(box_armed, "the next drag is a box"),
@@ -1641,9 +1647,16 @@ void ui_test_frame(struct nk_context* ctx) {
         case OP_WHEEL:   send(SAPP_EVENTTYPE_MOUSE_SCROLL, 0, s->y); T.wait = 1; break;
         case OP_TYPE:                           /* one character a frame */
             if (s->b[T.phase]) {
-                sapp_event ev = { .type = SAPP_EVENTTYPE_CHAR, .frame_count = T.frame, .char_code = (uint32_t)(unsigned char)s->b[T.phase],
+                char ch = s->b[T.phase];
+                sapp_event ev = { .type = SAPP_EVENTTYPE_CHAR, .frame_count = T.frame, .char_code = (uint32_t)(unsigned char)ch,
                                   .mouse_x = T.mx, .mouse_y = T.my, .window_width = sapp_width(), .window_height = sapp_height(),
                                   .framebuffer_width = sapp_width(), .framebuffer_height = sapp_height() };
+                if (ch == '\n' || ch == '\b') {      /* Enter, Backspace: as keys */
+                    ev.type = SAPP_EVENTTYPE_KEY_DOWN; ev.char_code = 0;
+                    ev.key_code = ch == '\n' ? SAPP_KEYCODE_ENTER : SAPP_KEYCODE_BACKSPACE;
+                    T.send(&ev);
+                    ev.type = SAPP_EVENTTYPE_KEY_UP;
+                }
                 T.send(&ev);
                 T.phase++;
                 n_marks = 0;
