@@ -253,7 +253,7 @@ static inline uint32_t hash_u32(uint32_t x, uint32_t mask) {
 
 static uint32_t map_get(const cv_idmap* m, uint32_t id) {
     if (m->flat) return id < m->flat_n ? m->flat[id] : UINT32_MAX;
-    if (!m->keys) return UINT32_MAX;
+    if (!m->keys || id == UINT32_MAX) return UINT32_MAX;     /* UINT32_MAX marks an empty slot */
     uint32_t mask = m->hcap - 1;
     for (uint32_t h = hash_u32(id, mask);; h = (h + 1) & mask) {
         if (m->keys[h] == id) return m->vals[h];

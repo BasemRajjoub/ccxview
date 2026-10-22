@@ -377,6 +377,29 @@ static void test_missing_node(void) {
     free(b.p);
 }
 
+/* Sparse ids (hash map). A node reference of -1 (read as UINT32_MAX, the map's empty
+   slot) or to an absent id must drop the element, never index with a stale value. */
+static void test_bad_node_ref_hash(void) {
+    FILE* o = tmp_open();
+    uint32_t id[2] = { 1, 2000 };
+    double xyz[6] = { 0,0,0, 1,0,0 };
+    uint32_t conn[8] = { 1, 2000, 1, 4294967295u, 2000, 77, 1, 1 };
+    uint32_t eid[4] = { 1, 2, 3, 4 };
+    fw_nodes(o, 2, id, xyz, 0);
+    fw_elems(o, 4, eid, 11, 2, conn, NULL, 0);
+    fprintf(o, "9999\n");
+    buf_t b = slurp(o);
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, b.p, b.n));
+    CHECK(f.idmap.keys && !f.idmap.flat);
+    CHECK_EQ(cv_frd_node_index(&f, 4294967295u), UINT32_MAX);
+    CHECK_EQ(f.n_elems, 2);
+    for (uint32_t j = 0; j < f.eoff[f.n_elems]; j++) CHECK(f.conn[j] < f.n_nodes);
+    cv_frd_free(&f);
+    free(f.msgs.a);
+    free(b.p);
+}
+
 /* >6 components use -2 continuation lines in ASCII; a value for an unknown node
    is ignored and nodes without values read as NaN. */
 static void test_continuation_and_nan(void) {
@@ -1639,6 +1662,7 @@ int main(void) {
     test_modal_flag();
     test_frd_head();
     test_missing_node();
+    test_bad_node_ref_hash();
     test_continuation_and_nan();
     test_shear_order();
     test_field_math();
