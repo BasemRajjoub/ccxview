@@ -1,5 +1,6 @@
 build/
 *.png
+!docs/img/*.png
 *.frd
 !samples/showcase/showcase.frd
 samples/showcase/showcase.12d
