@@ -2,6 +2,33 @@
 
 What ccxview does, in full. The short version is in the [README](../README.md).
 
+## Overview
+
+![demo](demo.gif)
+
+- **Results as you expect them.** Contours on faces, edges and nodes, deformed
+  shape, animation, vectors, principal stresses, tensor glyphs, stress
+  trajectories, Gauss points, probe with full node and element details,
+  CAD-style box selection with its max and min, history and path plots.
+  Labels on the model: ids, values, the n largest and smallest, set and
+  material names, loads and supports, any mix, thinned to stay readable.
+- **The deck on the model.** Supports, loads, thermal loads, bolts, springs and
+  constraints of the step on screen, each with its own 3D symbol.
+- **True to the element.** Quadratic elements are drawn and cut through their
+  mid-side nodes; shells and beams as CalculiX expands them.
+- **Engineering tools.** ASME VIII-2 stress linearization, shell section
+  forces and moments per width (Nxx .. Mxy, Qx Qy) from the expanded shells'
+  stresses and the reinforcement of concrete shells from them (sandwich model,
+  Wood-Armer), calculated fields from a formula (`S1 - S3`, `MISES / 235`),
+  composite and metal failure criteria (Hashin, Puck, LaRC05, Tsai-Wu, von
+  Mises, ...) with built-in composite, metal and plastic presets, mesh quality
+  (aspect ratio, Jacobians, skew, warpage, ...) with your own limits and a
+  report, unit conversion, comparison of two runs, cylindrical systems.
+- **Cut and copy.** Clip plane with a filled cut, crop box, mirror, cyclic
+  symmetry, replicate. Fly through the model: the eye cuts its way in, or
+  hides the elements in front of it.
+- **Export.** PNG, MP4, CSV, VTK, all scriptable from the command line.
+
 ## Speed
 
 - A 5 million element model (800 MB binary `.frd`) is read in under half a
