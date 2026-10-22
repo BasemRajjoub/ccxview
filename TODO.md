@@ -1,13 +1,22 @@
 # To do
 
-Open points left after the 9 Oct 2026 batch (sidecar #5, hide sets #25, title block
-#15, keywords #2, shell forces #19, STL layers #23, measurements, integrals, movable
-labels, the Selection window #16) and the fixes after it. Pre-processing stays out
-of scope.
+Open points. Pre-processing stays out of scope.
+
+## Interface
+- Left panel: a button at the top left to show or hide it, and a draggable edge
+  to resize it (width kept with the other settings).
+- Idle load: with a model loaded and nothing happening, GPU use stays high and
+  the CPU busy, because `frame_cb` (sokol_app) redraws the scene and the UI at
+  every vsync. Redraw only when something changes (input, animation, video,
+  loading, a window being dragged, a timer such as the message fade) and
+  otherwise drop to a low rate or reuse the last frame, without adding latency
+  to the first frame after input. Check native (D3D11/GL) and the browser.
 
 ## Shell forces (#19)
 - Reinforcement: transverse shear (the sandwich's core) and compression steel
   are not designed; the facet method (Capra-Maury) of Code_Aster is not offered.
+- The sandwich's lever arm is fixed at h - 2c; Annex F iterates the inner layer
+  (about 19 % more steel in pure bending than Code_Aster SSLS134).
 - Qx Qy at the mid-side nodes of quadratic shells come from two points through
   the thickness only.
 
@@ -26,7 +35,6 @@ of scope.
 - See-through STL layers are sorted as wholes, by their box centres: one layer
   inside another's box, or two interleaved, can still blend the wrong way
   (sorting triangles would fix it, at a cost per frame).
-- The History plot was reported to show the file's numbers under the shown unit:
-  not reproduced (DISP in m, by --opt and by the .ccxview, plots and writes the
-  converted values). The Integrals window did mix units (fixed): if it comes back,
-  note the field, the units and how the history was opened.
+- `--field NAME:COMP` with an unknown component falls back to the default field
+  and says so only in the message window; print it to stderr too, with the
+  valid labels.
