@@ -526,7 +526,8 @@ it was left, and at first the filters and the kept ones are folded:
 - The field's max and min over the selection with their node or element ids
   (over the selected nodes, or the selected elements' nodes; per element over
   the elements), kept up to date when the field or step changes; the probe sits
-  on the max.
+  on the max; a red ball on it, a blue one on the min, are Selection tab options
+  (off by default).
 - What it is: the count, the extremes with their ids, the deck sets it shares
   members with ("EHOLE 40/40").
 - What is done with it: hide it, show only it, put the crop box round it (the
