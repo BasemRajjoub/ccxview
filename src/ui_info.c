@@ -17,14 +17,18 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-/* the groups, each a tree node; the field's components, a face or edge open at first */
-enum { GR_FACE, GR_EDGE, GR_COMP, GR_NODE, GR_ELEM, GR_ENODES, GR_SEL, GR_N };
-static const char* gr_mark[GR_N] = { "#grp face", "#grp edge", "#grp components", "#grp node", "#grp element", "#grp element nodes", "#grp selection" };
-static int gr_open[GR_N] = { NK_MAXIMIZED, NK_MAXIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED, NK_MINIMIZED, NK_MINIMIZED };
+/* the groups, each a tree node with its "on tag" box (G.tag_groups); the field's
+   components, a face or edge, failure and mesh quality open at first */
+enum { GR_FACE = CV_TAG_FACE, GR_EDGE = CV_TAG_EDGE, GR_COMP = CV_TAG_COMP, GR_NODE = CV_TAG_NODE, GR_ELEM = CV_TAG_ELEM,
+       GR_CHECKS = CV_TAG_CHECKS, GR_ENODES = CV_TAG_ENODES, GR_SEL = CV_TAG_SEL, GR_N = CV_TAG_N };
+static const char* gr_mark[GR_N] = { "#grp face", "#grp edge", "#grp components", "#grp node", "#grp element", "#grp checks",
+                                     "#grp element nodes", "#grp selection" };
+static int gr_open[GR_N] = { NK_MAXIMIZED, NK_MAXIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED };
 
 enum { NL = 96, LW = 200 };
 static char L[NL][LW];
 static bool head[NL];                    /* a group's title */
+static bool notag[NL];                   /* a line the tag leaves out */
 static unsigned char grp[NL];
 static int nl, cur;                      /* cur: the group lines go to */
 
@@ -33,6 +37,7 @@ static void line(bool h, const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt); vsnprintf(L[nl], LW, fmt, ap); va_end(ap);
     grp[nl] = (unsigned char)cur;
+    notag[nl] = false;
     head[nl++] = h;
 }
 
@@ -125,9 +130,13 @@ static void elem_lines(uint32_t n, uint32_t e) {
     id_rows("nodes", ids, m);
     cur = GR_ELEM;
     if (G.has_field && G.elem_mode) { fmt_num(a, sizeof a, G.elem_val[e]); line(false, "%s (element) = %s", G.field_label, a); }
-    char t[LW];
-    if (G.has_field && fail_probe_text(n, e, t, sizeof t)) line(false, "failure   %s", t);
-    if (G.has_field && mesh_probe_text(e, t, sizeof t)) line(false, "mesh   %s", t);
+    char fl[LW], ml[LW];                              /* the checks, a group when one applies */
+    bool fo = G.has_field && fail_probe_text(n, e, fl, sizeof fl), mo = G.has_field && mesh_probe_text(e, ml, sizeof ml);
+    if (!fo && !mo) return;
+    cur = GR_CHECKS;
+    line(true, "%s", fo && mo ? "failure and mesh quality" : fo ? "failure" : "mesh quality");
+    if (fo) line(false, "failure   %s", fl);
+    if (mo) line(false, "mesh   %s", ml);
 
 }
 
@@ -204,7 +213,10 @@ static void sel_lines(void) {
     cur = GR_SEL;
     if (G.sel_n || G.seln_n) {
         line(true, "selection: %u elements, %u nodes", G.sel_n, G.seln_n);
-        if (G.sel_inside) line(false, "a box, %s", G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
+        if (G.sel_inside) {
+            line(false, "a box, %s", G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
+            notag[nl - 1] = true;
+        }
         if (G.boxq.on && G.boxq.gen == G.field_gen) {
             const uint32_t* id = G.boxq.elem ? f->elem_id : f->node_id;
             const char* what = G.boxq.elem ? "element" : "node";
@@ -242,7 +254,7 @@ static int order(int out[GR_N]) {
     if (k == CV_PK_EDGE) out[n++] = GR_EDGE;
     out[n++] = GR_COMP;
     if (k == CV_PK_NODE) out[n++] = GR_NODE;
-    out[n++] = GR_ELEM; out[n++] = GR_ENODES;
+    out[n++] = GR_ELEM; out[n++] = GR_CHECKS; out[n++] = GR_ENODES;
     if (k != CV_PK_NODE) out[n++] = GR_NODE;
     out[n++] = GR_SEL;
     return n;
@@ -276,14 +288,36 @@ void uii_details_body(struct nk_context* ctx, float s, float row) {
         for (int i = 0; i < nl && h < 0; i++) if (grp[i] == g && head[i]) h = i;
         if (h < 0) continue;
         uii_test_mark_row(ctx, gr_mark[g]);
-        if (!nk_tree_state_push(ctx, NK_TREE_NODE, L[h], (enum nk_collapse_states*)&gr_open[g])) continue;
+        bool on = G.tag_groups >> g & 1;
+        bool open = uii_node_check(ctx, L[h], &gr_open[g], &on, "on tag", "Show this group's lines on the tag in the view");
+        G.tag_groups = on ? G.tag_groups | 1 << g : G.tag_groups & ~(1 << g);
+        if (!open) continue;
         if (g == GR_ENODES) node_buttons(ctx, row);
         else {
             nk_layout_row_dynamic(ctx, row, 1);
             for (int i = 0; i < nl; i++) if (grp[i] == g && !head[i]) nk_label(ctx, L[i], NK_TEXT_LEFT);
         }
-        nk_tree_state_pop(ctx);
+        uii_node_pop(ctx);
     }
+}
+
+/* the tag's lines below its head: the groups ticked "on tag", in the tab's order,
+   each under its title (hd) but a face's, an edge's (the tag's head says it), the
+   checks' and the element nodes' (their lines do); max of them */
+int uii_details_tag(const char* out[], bool hd[], int max) {
+    if (!G.tag_groups || max <= 0) return 0;
+    build();
+    int ord[GR_N], no = order(ord), k = 0;
+    for (int o = 0; o < no && k < max; o++) {
+        int g = ord[o];
+        if (!(G.tag_groups >> g & 1)) continue;
+        for (int i = 0; i < nl && k < max; i++) {
+            if (grp[i] != g || notag[i] || (head[i] && (g == GR_FACE || g == GR_EDGE || g == GR_CHECKS || g == GR_ENODES))) continue;
+            hd[k] = head[i];
+            out[k++] = L[i];
+        }
+    }
+    return k;
 }
 
 /* every line to the clipboard, folded or not, a group at a time */

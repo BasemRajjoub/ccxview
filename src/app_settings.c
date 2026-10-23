@@ -109,8 +109,10 @@ static const setting S[] = {
     I(exp_kind, 0, 1), B(exp_video), I(exp_cycles, 1, 20), I(exp_fps, 1, 60), B(exp_lock_range), B(png_alpha),
     SEC("Panes: the Scene (left) and the Inspector (right) shown, their widths in pixels at scale 1"),
     B(scene_on), F(scene_w, 120, 2000), B(insp_on), F(insp_w, 120, 2000),
-    SEC("What a click in the view probes: 0 a node, 1 an element, 2 a face, 3 an edge; its tag in the view (what, the value)"),
-    I(pick_kind, 0, CV_PK_N - 1), B(probe_tag),
+    SEC("What a click in the view probes: 0 a node, 1 an element, 2 a face, 3 an edge; its tag in the view (what, the value); "
+        "the Inspect groups on the tag, a bit each: 1 face, 2 edge, 4 components, 8 node, 16 element, 32 failure and mesh, "
+        "64 element nodes, 128 selection"),
+    I(pick_kind, 0, CV_PK_N - 1), B(probe_tag), I(tag_groups, 0, (1 << CV_TAG_N) - 1),
     SEC("Panel sections: open (1) or closed (0)"),
     TREE("layers", CV_TREE_LAYERS), TREE("groups", CV_TREE_GROUPS), TREE("fields", CV_TREE_FIELDS),
     TREE("view", CV_TREE_VIEW), TREE("camera", CV_TREE_CAMERA), TREE("colours", CV_TREE_COLOURS),

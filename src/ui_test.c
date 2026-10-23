@@ -756,6 +756,17 @@ static bool tag_shown(struct nk_context* ctx) { return G.probe_tag && app_probe_
 static bool tag_hidden(struct nk_context* ctx) { return !G.probe_tag && !app_probe_tag_shown(NULL); }
 static void tag_reset(struct nk_context* ctx) { G.probe_tag_off[0] = G.probe_tag_off[1] = 0; }
 static void at_tag(struct nk_context* ctx) { float r[4]; if (app_probe_tag_shown(r)) move_to(r[0] + r[2] / 2, r[1] + r[3] / 2); }
+/* the node group's "on tag" box, at its row's right end; the tag's height before */
+static float tag_h0;
+static void at_node_on_tag(struct nk_context* ctx) {
+    const mark* m = find_mark("Inspector", "#grp node");
+    float r[4];
+    tag_h0 = app_probe_tag_shown(r) ? r[3] : 0;
+    if (m) move_to(m->r.x + m->r.w - 40 * ui_scale(), m->r.y + m->r.h / 2);
+}
+static float tag_h(void) { float r[4]; return app_probe_tag_shown(r) ? r[3] : 0; }
+static bool tag_node_on(struct nk_context* ctx) { return (G.tag_groups >> CV_TAG_NODE & 1) && tag_h() > tag_h0 + 20; }
+static bool tag_node_off(struct nk_context* ctx) { return !(G.tag_groups >> CV_TAG_NODE & 1) && tag_h() < tag_h0 - 20; }
 static bool tag_dragged(struct nk_context* ctx) {
     float s = ui_scale();
     return tag_shown(ctx) && fabsf(G.probe_tag_off[0] * s - 60) < 2 && fabsf(G.probe_tag_off[1] * s + 40) < 2 && !turned(ctx) && !app_label_dragging();
@@ -1350,12 +1361,14 @@ static const step script[] = {
     AT_TIP("Inspector", "A click picks a node"), CLICK, WAIT(3), EXPECT(node_kind, "back to the node"),
     DO(probe_close), WAIT(2), PANELS_ANSWER,
 
-    CASE("inspect: the probe's tag in the view, off and on by its box, dragged without turning the view"),
+    CASE("inspect: the probe's tag in the view, off and on by its box, dragged without turning the view, a group put on it"),
     DO(close_all), DO(fit_view), DO(tag_reset), WAIT(2), AT_MODEL, CLICK, WAIT(3), EXPECT(tag_shown, "the tag beside the node"),
     AT_TIP("Inspector", "A tag in the view beside"), CLICK, WAIT(2), EXPECT(tag_hidden, "tag in view off: gone"),
     AT_TIP("Inspector", "A tag in the view beside"), CLICK, WAIT(2), EXPECT(tag_shown, "on again"),
     DO(at_tag), WAIT(1), DO(snapshot), PRESS, WAIT(1), DO(nudge), WAIT(1), DO(nudge), WAIT(1), RELEASE, WAIT(2),
     EXPECT(tag_dragged, "the tag moved by the drag, the view kept"),
+    DO(at_node_on_tag), WAIT(2), CLICK, WAIT(3), EXPECT(tag_node_on, "the node group's 'on tag': its lines on the tag"),
+    DO(at_node_on_tag), WAIT(2), CLICK, WAIT(3), EXPECT(tag_node_off, "off again: the tag as it was"),
     DO(tag_reset), DO(probe_close), WAIT(2), PANELS_ANSWER,
 
     CASE("measure tab: its tab shows it, an angle armed there, another tab cancels it"),

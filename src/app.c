@@ -122,7 +122,7 @@ static void init(void) {
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
     G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 340.f;
-    G.probe_tag = true;
+    G.probe_tag = true; G.tag_groups = CV_TAG_DEFAULT;
     G.probe_face = G.probe_edge[0] = UINT32_MAX;
     G.model_alpha = 1.f;
     G.cel_show = G.cel_master = G.cel_front = G.contact_key = true;
@@ -1103,6 +1103,27 @@ static void app_log(const char* tag, uint32_t level, uint32_t item, const char* 
     slog_func(tag, level, item, msg, line, file, user);
 }
 
+const char* const cv_tag_names[CV_TAG_N] = { "face", "edge", "components", "node", "element", "checks", "nodes", "selection" };
+
+/* --tag-groups: a number (the bits) or names with commas, "none" */
+static int tag_groups_arg(const char* v) {
+    if (*v >= '0' && *v <= '9') return CV_MIN(atoi(v), (1 << CV_TAG_N) - 1);
+    int m = 0;
+    char t[200];
+    snprintf(t, sizeof t, "%s", v);
+    for (char* w = strtok(t, ", "); w; w = strtok(NULL, ", ")) {
+        int k = -1;
+        for (int q = 0; q < CV_TAG_N; q++) if (!strcmp(w, cv_tag_names[q])) k = q;
+        if (k >= 0) m |= 1 << k;
+        else if (strcmp(w, "none")) {
+            fprintf(stderr, "ccxview: --tag-groups %s: face, edge, components, node, element, checks (failure, mesh), "
+                            "nodes (the element's), selection, none, or a number\n", w);
+            return -1;
+        }
+    }
+    return m;
+}
+
 sapp_desc sokol_main(int argc, char* argv[]) {
 #ifdef __EMSCRIPTEN__
     cv_web_init();
@@ -1135,6 +1156,11 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--no-panels")) O.no_panels = true;
         else if (!strcmp(argv[i], "--inspector") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = atoi(argv[++i]) ? "insp_on=1" : "insp_on=0";
         else if (!strcmp(argv[i], "--probe-tag") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = atoi(argv[++i]) ? "probe_tag=1" : "probe_tag=0";
+        else if (!strcmp(argv[i], "--tag-groups") && i + 1 < argc && O.nopts < 32) {
+            static char opt[32];
+            int m = tag_groups_arg(argv[++i]);
+            if (m >= 0) { snprintf(opt, sizeof opt, "tag_groups=%d", m); O.opts[O.nopts++] = opt; }
+        }
         else if (!strcmp(argv[i], "--pick-kind") && i + 1 < argc && O.nopts < 32) {
             static const char* kinds[CV_PK_N] = { "node", "element", "face", "edge" };
             static const char* opt[CV_PK_N] = { "pick_kind=0", "pick_kind=1", "pick_kind=2", "pick_kind=3" };

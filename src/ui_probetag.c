@@ -1,6 +1,7 @@
 /* ui_probetag.c -- the probe's tag in the view: a small box beside what is probed
    (the node, the element, face or edge), what it is and the field's value there,
-   a leader line to it. Read live, as the Inspect tab is; inside the view, in the
+   below them the lines of the Inspect groups ticked "on tag" (G.tag_groups), a
+   leader line to it. Read live, as the Inspect tab is; inside the view, in the
    pictures; dragged by hand (app_labelpos.c), the leader follows. G.probe_tag, T. */
 #include "app.h"
 #include "ui.h"
@@ -12,33 +13,39 @@
 #include <math.h>
 #include <stdio.h>
 
-/* "node 123", "element 65", "face S2 of element 76", "edge 484 - 531" */
+/* "node 123, element 65", "element 65, node 123", "face S2 of element 76", "edge 484 - 531" */
 static void what_text(char* out, size_t n) {
     const cv_frd* f = &G.frd;
     uint32_t nd[8];
     int k = app_pick_nodes(nd);
     if (k && G.pick_kind == CV_PK_FACE) snprintf(out, n, "face S%u of element %u", (G.probe_face & 7) + 1, f->elem_id[G.probe_face >> 3]);
     else if (k) snprintf(out, n, "edge %u - %u", f->node_id[nd[0]], f->node_id[nd[k - 1]]);
-    else if (G.pick_kind == CV_PK_ELEM) snprintf(out, n, "element %u", f->elem_id[G.probe.elem]);
-    else snprintf(out, n, "node %u", f->node_id[G.probe.node]);
+    else if (G.pick_kind == CV_PK_ELEM) snprintf(out, n, "element %u, node %u", f->elem_id[G.probe.elem], f->node_id[G.probe.node]);
+    else snprintf(out, n, "node %u, element %u", f->node_id[G.probe.node], f->elem_id[G.probe.elem]);
 }
+
+enum { TAG_MAX = 12, TAG_W = 64 };              /* lines, characters a line */
 
 void uii_window_probe_tag(struct nk_context* ctx, float s) {
     float p[3], ax, ay;
     if (!G.probe_tag || !app_pick_anchor(p) || !app_project(v3_make(p[0], p[1], p[2]), &ax, &ay)) { app_probe_tag_box(NULL); return; }
-    char l1[96], l2[160];
-    const char* line[2] = { l1, l2 };
+    char l1[96], l2[160], more[TAG_MAX][TAG_W + 4];
+    const char* line[TAG_MAX] = { l1, l2 };
+    bool hd[TAG_MAX] = { 0 };
     what_text(l1, sizeof l1);
     uii_probe_value_text(l2, sizeof l2);
     int nl = G.has_field ? 2 : 1;
-    if (nl == 2 && G.pick_kind == CV_PK_ELEM && !G.probe_ip && !G.elem_mode && G.field_src != 1) {
-        size_t o = strlen(l2);                       /* a nodal field: the value at the node clicked */
-        snprintf(l2 + o, sizeof l2 - o, "  (node %u)", G.frd.node_id[G.probe.node]);
+    int nm = uii_details_tag(line + nl, hd + nl, TAG_MAX - nl);   /* the groups ticked "on tag", read live */
+    for (int i = nl; i < nl + nm; i++) {            /* a long line cut short */
+        size_t len = strlen(line[i]);
+        snprintf(more[i], sizeof more[i], len > TAG_W ? "%.*s..." : "%.*s", TAG_W - (len > TAG_W ? 3 : 0), line[i]);
+        line[i] = more[i];
     }
+    nl += nm;
     const struct nk_user_font* f = ctx->style.font;
     float pad = 5 * s, lh = f->height + 3 * s, w = 0;
     for (int i = 0; i < nl; i++) w = CV_MAX(w, f->width(f->userdata, f->height, line[i], (int)strlen(line[i])));
-    w += 2 * pad;
+    w = CV_MIN(w + 2 * pad, G.vp_w - 8 * s);
     float h = nl * lh + 2 * pad - 3 * s;
     /* up and right of the item, as dragged; inside the view */
     float x = ax + (24 + G.probe_tag_off[0]) * s, y = ay - h - (24 - G.probe_tag_off[1]) * s;
@@ -71,7 +78,7 @@ void uii_window_probe_tag(struct nk_context* ctx, float s) {
         nk_stroke_rect(cv, nk_rect(x, y, w, h), 3 * s, 1.f * s, gold);
         for (int i = 0; i < nl; i++)
             nk_draw_text(cv, nk_rect(x + pad, y + pad + i * lh, w - 2 * pad, f->height), line[i], (int)strlen(line[i]), f, bg,
-                         i ? ctx->style.text.color : P.accent);
+                         !i ? P.accent : hd[i] ? P.dim : ctx->style.text.color);
     }
     nk_end(ctx);
     nk_style_pop_float(ctx);

@@ -560,15 +560,20 @@ it was left, and at first the filters and the kept ones are folded:
   ends and on average); kept in the settings, `--pick-kind`. A node picked has
   a ball on it; an element, face or edge only its gold outline.
 - The probe's tag in the view (#28): a small box beside what is probed, what it
-  is (`node 123`, `face S2 of element 76`, `edge 484 - 531`) and the field's
-  value there (over a face or edge the average), a leader line to it. Read live
-  as the step or field changes, kept inside the view, in pictures; dragged
-  where it reads best. With the Inspector shown or hidden: for report pictures
-  the view alone (`H`) or `--inspector 0` and the tag. Inspect tab "tag in
-  view", `T`, kept in the settings, `--probe-tag 0|1`.
+  is (`node 123, element 65`, `face S2 of element 76`, `edge 484 - 531`) and the
+  field's value there (over a face or edge the average), a leader line to it.
+  Below them the lines of the Inspect groups ticked "on tag" (the box on each
+  group's row, up to 12 lines): by default failure and mesh quality where they
+  apply and the selection's count, max and min, as the old Probe window gave;
+  the field's components, the node, the element, the element's nodes, a face or
+  edge when asked. Read live as the step or field changes, kept inside the view,
+  in pictures; dragged where it reads best. With the Inspector shown or hidden:
+  for report pictures the view alone (`H`) or `--inspector 0` and the tag.
+  Inspect tab "tag in view", `T`, kept in the settings, `--probe-tag 0|1`; the
+  groups kept too, `--tag-groups node,element,...`.
 - Selection of elements and nodes (the Inspector's Selection tab, below), highlighted,
-  with the field's max over it marked (the min too when asked: compression, the
-  cold spot) and both in the window and the Inspect tab.
+  its max and min in the Inspect tab and on the probe's tag (balls on them when
+  asked).
 - Integrals of the field over a set, at every step (Integrals window: Fields >
   integrate..., right click a set in Groups, the view's context menu, or the
   probe's "integrate..." under a box selection). Over a volume (an element set,

@@ -183,6 +183,7 @@ void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for butt
 /* the rows of a tool window, without its window: to sit in a floating window or a pane tab */
 void uii_details_body(struct nk_context* ctx, float s, float row);      /* ui_info.c: all about the probe */
 void uii_details_copy(void);                                            /* ... its lines to the clipboard */
+int uii_details_tag(const char* out[], bool hd[], int max);                       /* ... the groups' lines on the tag */
 void uii_measure_body(struct nk_context* ctx, float s, float row);      /* ui_measure.c: the measurements */
 void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
 void window_deck(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_deck.c */

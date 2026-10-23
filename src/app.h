@@ -73,6 +73,10 @@ enum { CV_SELG_PICK, CV_SELG_NAMES, CV_SELG_USE, CV_SELG_NAMED, CV_SELG_N };
 /* the Inspector pane's tabs; what a click in the view probes */
 enum { CV_TAB_INSPECT, CV_TAB_SELECT, CV_TAB_MEASURE, CV_TAB_N };
 enum { CV_PK_NODE, CV_PK_ELEM, CV_PK_FACE, CV_PK_EDGE, CV_PK_N };
+/* the Inspect tab's groups, a bit each in G.tag_groups: their lines on the probe's tag too */
+enum { CV_TAG_FACE, CV_TAG_EDGE, CV_TAG_COMP, CV_TAG_NODE, CV_TAG_ELEM, CV_TAG_CHECKS, CV_TAG_ENODES, CV_TAG_SEL, CV_TAG_N };
+#define CV_TAG_DEFAULT ((1 << CV_TAG_CHECKS) | (1 << CV_TAG_SEL))   /* failure, mesh quality, the selection's extremes */
+extern const char* const cv_tag_names[CV_TAG_N];                  /* "face" ... "selection", as --tag-groups takes them */
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
@@ -363,6 +367,7 @@ typedef struct {
     uint32_t  probe_edge[3];         /* the edge probed: its corners, the mid-side node; [0] UINT32_MAX none */
     bool      probe_tag;             /* the probe's tag in the view: what and its value, a leader to it (T) */
     float     probe_tag_off[2];      /* the tag dragged from its place beside the item, px at scale 1 */
+    int       tag_groups;            /* 1 << CV_TAG_*: the Inspect groups whose lines the tag shows below its head */
     /* max in a box: the field's extremes among the shown nodes (elements) inside a dragged box */
     bool      box_arm;               /* the next left drag in the view draws that box */
     bool      box_pick;              /* the box being drawn is one (not a box zoom) */
