@@ -499,6 +499,11 @@ it was left, and at first the filters and the kept ones are folded:
   to nodes / elements, grow, shrink and boundary work on elements and nodes
   (greyed with only faces or edges ticked); the kept (named) selections hold
   elements and nodes, not faces or edges.
+- Totals per kind in the Inspect tab's selection group (and on the tag when
+  ticked): nodes, their count and the field's min, max and average; elements,
+  their volume and the volume-weighted average; faces, their area and the
+  area-weighted average of the face averages; edges, their length and the
+  length-weighted average. Sizes on the undeformed mesh.
 - Box, as in CAD (Ctrl+Shift+drag at any time, or the box button): left to
   right the elements wholly inside, right to left every element touched.
 - Click: while armed, a click in the view takes each kind ticked under the

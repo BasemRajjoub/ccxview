@@ -6,18 +6,16 @@ before it, so no step rewrites code an earlier one wrote. One commit per step.
 ## 1. GUI: after the Inspector pane (0.1.17)
 1. **#28:** reply once the user has tested the tag, the folded Inspect tab and the
    ball fix.
-2. **Multi-selection totals.** Faces: total area and area-weighted average; elements:
-   total volume and volume-weighted average (reuse integ.c); nodes: min / max /
-   average. Shift+click in Inspect adds to the pick; later edge selection (total
-   length, average).
-3. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
+2. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
    through recent picks.
-4. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
+3. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
    Formula, Strength materials, Mesh quality, About, Messages. Keep floating: History,
    Path, Convergence, Integrals (a bottom dock could come later). Candidates for more
    pane tabs: Find, Contact settings, Legend settings, Title block.
-5. **Known limits.** A face's area and normal and an edge's length are taken on the
-   undeformed mesh; on shells the normal is not oriented and the surface match uses
+4. **Known limits.** A face's area and normal, an edge's length and the selection's
+   totals (volume, area, length) are taken on the undeformed mesh; the named
+   selections and the selection's CSV and deck lines hold elements and nodes, not
+   the faces and edges selected; on shells the normal is not oriented and the surface match uses
    the deck's face number. `--find` with a restored `.ccxview` ends with nothing probed.
 
 ## 2. Idle load

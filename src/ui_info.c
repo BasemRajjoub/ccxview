@@ -206,6 +206,25 @@ static void edge_lines(void) {
     if (G.has_field) { fmt_num(a, sizeof a, app_pick_average_of(CV_PK_EDGE)); line(false, "average %s%s", a, G.elem_mode ? " (the element's value)" : ""); }
 }
 
+/* the selection's totals, two lines a kind selected: how many and their size (undeformed),
+   the field's min, max and average over them (weighted by the size) */
+static void kind_totals(void) {
+    static const char* what[CV_PK_N] = { "nodes", "elements", "faces", "edges" };
+    static const char* size[CV_PK_N] = { "", "volume", "area", "length" };
+    static const char* by[CV_PK_N] = { "", " by volume", " by area", " by length" };
+    const cv_selstat* st = app_selstats();
+    char a[32], b[32], c[32];
+    for (int k = 0; k < CV_PK_N; k++) {
+        if (!st[k].n) continue;
+        fmt_num(a, sizeof a, st[k].size);
+        if (k == CV_PK_NODE) line(false, "%u nodes", st[k].n);
+        else line(false, "%u %s, %s %s (undeformed)", st[k].n, what[k], size[k], a);
+        if (!st[k].nval) continue;
+        fmt_num(a, sizeof a, st[k].vmin); fmt_num(b, sizeof b, st[k].vmax); fmt_num(c, sizeof c, st[k].avg);
+        line(false, "   min %s, max %s, average%s %s", a, b, by[k], c);
+    }
+}
+
 /* the selection the probe came from */
 static void sel_lines(void) {
     const cv_frd* f = &G.frd;
@@ -218,6 +237,7 @@ static void sel_lines(void) {
             line(false, "a box, %s", G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
             notag[nl - 1] = true;
         }
+        kind_totals();
         if (G.boxq.on && G.boxq.gen == G.field_gen) {
             const uint32_t* id = G.boxq.elem ? f->elem_id : f->node_id;
             const char* what = G.boxq.elem ? "element" : "node";

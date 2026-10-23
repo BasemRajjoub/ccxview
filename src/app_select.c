@@ -70,6 +70,7 @@ static void marker(int which, uint32_t i, bool elem) {
    dots, the max and min as red and blue balls when asked; moves with the shape */
 void app_sel_refresh(void) {
     sel_upload_none();
+    app_selstats_dirty();
     if (!G.loaded || !app_sel_any()) return;
     cv_fvec pos = {0}, disp = {0}, tp = {0}, td = {0}, val = {0};
     const float* nv = G.has_field && !G.elem_mode ? G.scalar : NULL;

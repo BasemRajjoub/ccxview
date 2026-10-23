@@ -8,6 +8,7 @@
 #include "selset.h"
 #include "seltopo.h"
 #include "pickinfo.h"
+#include "selstats.h"
 #include <stdlib.h>
 
 /* what was selected before the box (its mode), and per skin face whether it faced
@@ -315,4 +316,25 @@ bool app_selfe_take(uint32_t face, const uint32_t edge[2], int mode) {
     }
     if (any) { base_forget(); app_sel_refresh(); }
     return any;
+}
+
+/* ---- the selection's totals per kind (selstats.c), kept until it or the field changes */
+
+static bool stats_dirty = true;
+void app_selstats_dirty(void) { stats_dirty = true; }
+
+const cv_selstat* app_selstats(void) {
+    static cv_selstat st[CV_PK_N];
+    static unsigned gen;
+    static const float* xyz;
+    if (!stats_dirty && gen == G.field_gen && xyz == G.frd.xyz) return st;
+    stats_dirty = false; gen = G.field_gen; xyz = G.frd.xyz;
+    bool per_e = G.elem_mode || G.field_src == 1;
+    const float* nv = G.has_field && !per_e ? G.scalar : NULL;
+    const float* ev = G.has_field && per_e ? G.elem_val : NULL;
+    cv_selstat_nodes(nv, G.seln, G.seln_n, &st[CV_PK_NODE]);
+    cv_selstat_elems(&G.frd, nv, ev, G.sel, G.sel_n, &st[CV_PK_ELEM]);
+    cv_selstat_faces(&G.frd, nv, ev, G.self, G.self_n, &st[CV_PK_FACE]);
+    cv_selstat_edges(&G.frd, nv, G.sele, G.sele_n, &st[CV_PK_EDGE]);
+    return st;
 }

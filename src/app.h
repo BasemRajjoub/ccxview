@@ -3,6 +3,7 @@
 #define CV_APP_H
 
 #include "frd.h"
+#include "selstats.h"
 #include "mesh.h"
 #include "field.h"
 #include "glyph.h"
@@ -619,6 +620,10 @@ uint32_t app_selfe_box(const uint8_t* inside, bool crossing, int mode, bool fres
 bool app_selfe_take(uint32_t face, const uint32_t edge[2], int mode);
 void app_selfe_draw(cv_fvec* lp, cv_fvec* ld, cv_fvec* tp, cv_fvec* td, cv_fvec* tv);
 bool app_selfe_drop_hidden(const uint8_t* shown_nodes);
+/* the selection's totals, one per kind (CV_PK_*: count, size, min, max, weighted average;
+   undeformed), kept until the selection or field changes */
+const cv_selstat* app_selstats(void);
+void app_selstats_dirty(void);
 /* app_seltools.c: the other ways to select, each by the mode given: elements bring
    their nodes when nodes are ticked (and go in only when elements are), nodes are
    nodes whatever is ticked; only what is shown */
