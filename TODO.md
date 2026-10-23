@@ -3,22 +3,18 @@
 Pre-processing stays out of scope. Work top to bottom: each step builds on the one
 before it, so no step rewrites code an earlier one wrote. One commit per step.
 
-## 1. GUI: Inspector pane (right) — then #28
-
-The pane is there (`ui_inspector.c`: under the toolbar at the right, `]` / `[` and the
-chevron buttons hide and show it and the Scene pane, inner edges drag, kept in the ini;
-tabs **Inspect | Selection | Measure**); Inspect holds the probe (Probe + Details, the
-model's summary when nothing is probed, a selection's summary on top); Selection and
-Measure hold what their floating windows did (S shows the pane on Selection); the
-Inspect tab's pick row (node, element, face, edge) is #28: reply on the issue and close
-it once the user has tested it.
-
-1. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
+## 1. GUI: after the Inspector pane (0.1.17)
+1. **#28 feedback.** Asked whether it works and what the Inspect tab should show or
+   drop (it reads bloated): trim it to the answer, then close the issue.
+2. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
    through recent picks.
-2. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
+3. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
    Formula, Strength materials, Mesh quality, About, Messages. Keep floating: History,
    Path, Convergence, Integrals (a bottom dock could come later). Candidates for more
    pane tabs: Find, Contact settings, Legend settings, Title block.
+4. **Known limits.** A face's area and normal and an edge's length are taken on the
+   undeformed mesh; on shells the normal is not oriented and the surface match uses
+   the deck's face number. `--find` with a restored `.ccxview` ends with nothing probed.
 
 ## 2. Idle load
 With a model loaded and nothing happening, GPU use stays high and the CPU busy,
@@ -26,7 +22,7 @@ because `frame_cb` (sokol_app) redraws the scene and the UI at every vsync. Redr
 only when something changes (input, animation, video, loading, a window or pane edge
 being dragged, a timer such as the message fade) and otherwise drop to a low rate or
 reuse the last frame, without adding latency to the first frame after input. Check
-native (D3D11/GL) and the browser. After 1, so the pane's drag and tabs are covered.
+native (D3D11/GL) and the browser. Cover the panes' edge drag and tab switches.
 
 ## 3. Open points (no order)
 
