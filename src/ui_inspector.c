@@ -238,7 +238,8 @@ static void selection_rows(struct nk_context* ctx, float s, float row) {
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 60 * s);
     nk_layout_row_template_end(ctx);
-    snprintf(t, sizeof t, "Selection: %u elements, %u nodes", G.sel_n, G.seln_n);
+    if (G.self_n || G.sele_n) snprintf(t, sizeof t, "Selection: %u el, %u nodes, %u faces, %u edges", G.sel_n, G.seln_n, G.self_n, G.sele_n);
+    else snprintf(t, sizeof t, "Selection: %u elements, %u nodes", G.sel_n, G.seln_n);
     nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
     tip(ctx, "Nothing selected (Esc in the view does the same)");
     if (nk_button_label(ctx, "clear")) { app_sel_clear(); G.sel_note[0] = 0; return; }
@@ -330,7 +331,7 @@ void uii_panel_inspector(struct nk_context* ctx, float s, float row) {
     switch (G.insp_tab) {
     case CV_TAB_INSPECT:
         kind_row(ctx, s, row);
-        if (G.sel_n || G.seln_n) selection_rows(ctx, s, row);
+        if (app_sel_any()) selection_rows(ctx, s, row);
         if (G.probe_on) probe_rows(ctx, s, row); else model_summary(ctx, s, row);
         break;
     case CV_TAB_SELECT:  uii_select_body(ctx, s, row); break;

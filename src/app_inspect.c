@@ -27,30 +27,34 @@ static float seg_d2(const float h[3], uint32_t a, uint32_t b) {
     return e;
 }
 
+void app_pick_face_edge(const cv_pick* p, const float o[3], const float d[3], uint32_t* face, uint32_t edge[3]) {
+    *face = edge[0] = edge[1] = edge[2] = UINT32_MAX;
+    if (!p->hit || p->elem >= G.frd.n_elems) return;
+    if (p->tri != UINT32_MAX) {
+        uint32_t k = cv_skin_face_of_tri(&G.frd, &G.skin, p->tri);
+        if (k != UINT32_MAX) *face = G.skin.face[k];
+    }
+    /* the element's edge nearest the point clicked */
+    float h[3] = { o[0] + d[0] * p->t, o[1] + d[1] * p->t, o[2] + d[2] * p->t };
+    uint32_t ed[32][3], ring[8];
+    int n = cv_elem_edges(&G.frd, p->elem, ed, 32), best = -1;
+    int nr = *face != UINT32_MAX ? cv_face_ring(&G.frd, *face >> 3, (int)(*face & 7), ring) : 0;
+    float bd = INFINITY;
+    for (int i = 0; i < n; i++) {
+        int on = 0;                                  /* one of the face clicked: not one running away behind it */
+        for (int j = 0; j < nr; j++) on += ring[j] == ed[i][0] || ring[j] == ed[i][1];
+        if (nr && on < 2) continue;
+        float e = ed[i][2] == UINT32_MAX ? seg_d2(h, ed[i][0], ed[i][1])
+                : CV_MIN(seg_d2(h, ed[i][0], ed[i][2]), seg_d2(h, ed[i][2], ed[i][1]));
+        if (e < bd) { bd = e; best = i; }
+    }
+    if (best >= 0) memcpy(edge, ed[best], sizeof ed[best]);
+}
+
 void app_pick_kind_apply(const float o[3], const float d[3]) {
     app_pick_clear();
-    if (!G.probe_on || G.probe.elem >= G.frd.n_elems) return;
-    /* both, whatever the kind: another kind picked in the Inspector shows at once */
-    if (G.probe.tri != UINT32_MAX) {
-        uint32_t k = cv_skin_face_of_tri(&G.frd, &G.skin, G.probe.tri);
-        if (k != UINT32_MAX) G.probe_face = G.skin.face[k];
-    }
-    {                                                /* the element's edge nearest the point clicked */
-        float h[3] = { o[0] + d[0] * G.probe.t, o[1] + d[1] * G.probe.t, o[2] + d[2] * G.probe.t };
-        uint32_t ed[32][3], ring[8];
-        int n = cv_elem_edges(&G.frd, G.probe.elem, ed, 32), best = -1;
-        int nr = G.probe_face != UINT32_MAX ? cv_face_ring(&G.frd, G.probe_face >> 3, (int)(G.probe_face & 7), ring) : 0;
-        float bd = INFINITY;
-        for (int i = 0; i < n; i++) {
-            int on = 0;                              /* one of the face clicked: not one running away behind it */
-            for (int j = 0; j < nr; j++) on += ring[j] == ed[i][0] || ring[j] == ed[i][1];
-            if (nr && on < 2) continue;
-            float e = ed[i][2] == UINT32_MAX ? seg_d2(h, ed[i][0], ed[i][1])
-                    : CV_MIN(seg_d2(h, ed[i][0], ed[i][2]), seg_d2(h, ed[i][2], ed[i][1]));
-            if (e < bd) { bd = e; best = i; }
-        }
-        if (best >= 0) memcpy(G.probe_edge, ed[best], sizeof G.probe_edge);
-    }
+    /* both, whatever the kinds: another kind ticked in the Inspector shows at once */
+    if (G.probe_on) app_pick_face_edge(&G.probe, o, d, &G.probe_face, G.probe_edge);
 }
 
 int app_pick_head(void) {

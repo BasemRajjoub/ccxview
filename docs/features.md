@@ -488,13 +488,21 @@ it was left, and at first the filters and the kept ones are folded:
 
 - Mode: what is picked next replaces the selection, is added to it, removed
   from it, or intersected with it. The mode applies to every way of selecting.
-- Takes: elements, nodes or both; only the side facing the camera (nodes on
-  faces turned toward it, elements with such a face) or through the model.
-  Changing a tick takes the last box again with the new ticks.
+- Takes: the same kind boxes as the Inspect tab's pick row (one setting):
+  nodes, elements, faces, edges, any of them. Faces: the outer faces with every
+  node in the box (right to left: any); edges: the outer faces' edges (and
+  beams') with both ends in it (either). Selected faces are toned and their
+  edges dotted, selected edges dotted along the mesh's own edge (through the mid
+  node when the faces are drawn so). Only the side facing the camera (nodes on
+  faces turned toward it, elements and faces turned so, their edges) or through
+  the model. Changing a tick takes the last box again with the new ticks. Invert,
+  to nodes / elements, grow, shrink and boundary work on elements and nodes
+  (greyed with only faces or edges ticked); the kept (named) selections hold
+  elements and nodes, not faces or edges.
 - Box, as in CAD (Ctrl+Shift+drag at any time, or the box button): left to
   right the elements wholly inside, right to left every element touched.
-- Click: while armed, a click in the view takes the element (and node) under
-  the cursor by the mode; with "select" a click on a selected one takes it out.
+- Click: while armed, a click in the view takes each kind ticked under the
+  cursor (the node, element, face, the face's nearest edge) by the mode; with "select" a click on a selected one takes it out.
   Esc puts the tool down.
 - Lasso: drawn round what you want with the left button held, the elements
   wholly inside (the nodes inside, when ticked).

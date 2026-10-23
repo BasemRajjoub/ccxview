@@ -378,7 +378,10 @@ typedef struct {
     uint32_t  sel_n;
     uint32_t* seln;                  /* the selected nodes (indices), seln_n of them */
     uint32_t  seln_n;
-    bool      sel_elems, sel_nodes;  /* what a box selects: elements, nodes, or both */
+    uint32_t* self;                  /* the selected faces: element << 3 | face (as G.skin.face), sorted, self_n of them */
+    uint32_t  self_n;
+    uint32_t* sele;                  /* the selected edges: corner node pairs low, high (2 an edge), sorted, sele_n of them */
+    uint32_t  sele_n;
     bool      sel_visible;           /* only the side facing the camera: nodes on faces turned toward it, elements with such a face */
     bool      sel_mark_max, sel_mark_min;   /* the balls on the selection's extremes, off by default (the values are in the probe either way) */
     uint8_t*  sel_inside;            /* per node, 1: it was in the last box (as dragged), to select again when they change */
@@ -597,14 +600,25 @@ bool app_project(v3 p, float* sx, float* sy);   /* world -> window pixels; false
    behind the front faces count; it goes in by G.sel_mode. */
 enum { CV_ST_NONE, CV_ST_CLICK, CV_ST_LASSO, CV_ST_FACE, CV_ST_CHAIN, CV_ST_PART, CV_ST_N };
 bool app_sel_apply(const uint32_t* el, uint32_t ne, const uint32_t* nd, uint32_t nn, int mode, int which);
-int  app_sel_which(void);                       /* what the ticks say a pick takes: 1 elements | 2 nodes */
+int  app_sel_which(void);                       /* what the ticks say a pick takes: 1 elements | 2 nodes; elements when neither */
+bool app_sel_any(void);                         /* anything selected: elements, nodes, faces or edges */
 bool app_box_select(float x_start, float y_start, float x_end, float y_end);
-bool app_box_reselect(void);                    /* the last box again (G.sel_elems / sel_nodes changed) */
+bool app_box_reselect(void);                    /* the last box again (G.pick_kinds or the facing side changed) */
 bool app_lasso_select(const float* xy, int n);  /* the lasso: the elements wholly inside it (window pixels) */
 void app_sel_clear(void);
 void app_sel_refresh(void);                     /* the outline again: the shape changed */
 void app_sel_field_changed(void);               /* the extremes again: the field changed */
-void app_sel_facing(uint8_t* node, uint8_t* elem);   /* the side facing the camera (per node, per element) */
+void app_sel_facing(uint8_t* node, uint8_t* elem, uint8_t* tri);   /* the side facing the camera (per node, element, skin triangle; tri may be NULL) */
+/* app_selfe.c: the selected faces G.self and edges G.sele (which: 1 faces, 2 edges;
+   NEW empties the other), taken by a box from its nodes (the kinds ticked), by a
+   click (app_selfe_take, NEW toggles), drawn on the skin (lines as vertex pairs,
+   the faces' triangles toned). Not in the named selections. */
+void app_selfe_clear(void);
+bool app_selfe_apply(const uint32_t* fc, uint32_t nf, const uint32_t* ed, uint32_t ne, int mode, int which);
+uint32_t app_selfe_box(const uint8_t* inside, bool crossing, int mode, bool fresh);
+bool app_selfe_take(uint32_t face, const uint32_t edge[2], int mode);
+void app_selfe_draw(cv_fvec* lp, cv_fvec* ld, cv_fvec* tp, cv_fvec* td, cv_fvec* tv);
+bool app_selfe_drop_hidden(const uint8_t* shown_nodes);
 /* app_seltools.c: the other ways to select, each by the mode given: elements bring
    their nodes when nodes are ticked (and go in only when elements are), nodes are
    nodes whatever is ticked; only what is shown */
@@ -676,6 +690,8 @@ void app_probe_pixel(float x, float y);          /* probe what lies under the pi
 static inline bool app_pk(int kind) { return (G.pick_kinds >> kind) & 1; }
 int  app_pick_head(void);                         /* the kind the probe's line names: a face, edge, node, element ticked */
 void app_pick_kind_apply(const float o[3], const float d[3]);
+/* the face (element << 3 | face) and the element's edge nearest a pick on the ray (corners, mid; UINT32_MAX none) */
+void app_pick_face_edge(const cv_pick* p, const float o[3], const float d[3], uint32_t* face, uint32_t edge[3]);
 void app_pick_clear(void);                        /* no face, no edge */
 void app_pick_sync(void);                         /* the outline again when what it rests on changed */
 int  app_pick_nodes_of(int kind, uint32_t out[8]);   /* CV_PK_FACE: the face's ring, CV_PK_EDGE: a, (mid,) b; 0 none */

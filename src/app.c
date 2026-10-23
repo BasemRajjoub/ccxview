@@ -94,7 +94,7 @@ static void init(void) {
     G.anim_factor = 1.f;
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
-    G.pick_kinds = CV_PK_DEFAULT; G.sel_elems = true; G.sel_visible = true;   /* no balls on the extremes: the values are in the Inspect tab */
+    G.pick_kinds = CV_PK_DEFAULT; G.sel_visible = true;   /* no balls on the extremes: the values are in the Inspect tab */
     G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true;   /* the kept ones folded */
     G.label_px = 13.f; G.minmax_n = 1; G.oor_mode[0] = G.oor_mode[1] = 1;
     G.oor_rgb[0][0] = 0.9f; G.oor_rgb[0][1] = 0.1f; G.oor_rgb[0][2] = 0.1f; G.oor_rgb[1][0] = 0.1f; G.oor_rgb[1][1] = 0.2f; G.oor_rgb[1][2] = 0.9f; G.label_spacing = 10.f; G.label_front = true;

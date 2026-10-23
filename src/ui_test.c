@@ -260,15 +260,16 @@ static bool scale_tiny(struct nk_context* ctx) { return fabsf(G.deform_scale - 1
 static bool scale_smaller(struct nk_context* ctx) { return fabsf(G.deform_scale - 8e-6f) < 1e-10f; }
 static bool box_armed(struct nk_context* ctx) { return G.box_arm; }
 static void arm_box(struct nk_context* ctx) { G.box_arm = true; }
-static bool nodes_selected(struct nk_context* ctx) { return G.sel_nodes && G.seln_n > 0 && G.boxq.on; }
-static void nodes_off(struct nk_context* ctx) { G.sel_nodes = false; G.sel_elems = true; G.sel_visible = true; }
+static bool nodes_selected(struct nk_context* ctx) { return app_pk(CV_PK_NODE) && G.seln_n > 0 && G.boxq.on; }
+static void nodes_off(struct nk_context* ctx) { G.pick_kinds = 1 << CV_PK_ELEM; G.sel_visible = true; }
+static void elems_only(struct nk_context* ctx) { G.pick_kinds = 1 << CV_PK_ELEM; }
 /* the nodes a box took stay its nodes: the camera turned, elements unticked, the same count */
 static uint32_t seln_was;
 static void remember_nodes(struct nk_context* ctx) { seln_was = G.seln_n; }
 static bool nodes_more(struct nk_context* ctx) { return !G.sel_visible && G.seln_n > seln_was; }
 static bool min_marked(struct nk_context* ctx) { return G.sel_mark_min && G.boxq.on; }
 static void remember_nodes_turn(struct nk_context* ctx) { seln_was = G.seln_n; G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }
-static bool nodes_kept(struct nk_context* ctx) { return !G.sel_elems && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
+static bool nodes_kept(struct nk_context* ctx) { return !app_pk(CV_PK_ELEM) && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
 /* the Selection window */
 /* the Selection tab: S (show_select) shows the pane on it */
 static void open_select(struct nk_context* ctx) { G.show_select = true; }
@@ -278,7 +279,7 @@ static bool select_shown(struct nk_context* ctx) { return G.show_select && G.ins
 static bool inspect_tab(struct nk_context* ctx) { return !G.show_select && G.insp_tab == CV_TAB_INSPECT && win_of(ctx, "Inspector"); }
 static uint32_t sel_was, seln_was2;
 static void sel_remember(struct nk_context* ctx) { sel_was = G.sel_n; seln_was2 = G.seln_n; }
-static void sel_none(struct nk_context* ctx) { app_sel_clear(); G.sel_elems = true; G.sel_nodes = false; G.sel_visible = true; G.probe_on = false; }
+static void sel_none(struct nk_context* ctx) { app_sel_clear(); G.pick_kinds = 1 << CV_PK_ELEM; G.sel_visible = true; G.probe_on = false; }
 static void ids_1_20(struct nk_context* ctx) { uii_select_ids("1-20, 9999, x9", false); }
 static void ids_10_30(struct nk_context* ctx) { uii_select_ids("10-30", false); }
 static bool sel_20(struct nk_context* ctx) { return G.sel_n == 20 && !G.seln_n && G.boxq.on && G.sel_note[0]; }   /* 9999 is not there, x9 is no id */
@@ -287,8 +288,8 @@ static bool sel_30(struct nk_context* ctx) { return G.sel_n == 30; }      /* 1-2
 static bool sel_9(struct nk_context* ctx) { return G.sel_n == 9; }        /* 1-30 without 10-30 */
 static bool sel_11(struct nk_context* ctx) { return G.sel_n == 11; }      /* 10-20: both */
 static bool sel_inverted(struct nk_context* ctx) { return G.sel_n == G.frd.n_elems - sel_was && G.sel_n > 0; }
-static bool sel_to_nodes(struct nk_context* ctx) { return !G.sel_n && G.seln_n > sel_was && G.sel_nodes && !G.sel_elems; }
-static bool sel_back(struct nk_context* ctx) { return G.sel_n == sel_was && !G.seln_n && G.sel_elems; }
+static bool sel_to_nodes(struct nk_context* ctx) { return !G.sel_n && G.seln_n > sel_was && app_pk(CV_PK_NODE) && !app_pk(CV_PK_ELEM); }
+static bool sel_back(struct nk_context* ctx) { return G.sel_n == sel_was && !G.seln_n && app_pk(CV_PK_ELEM); }
 static bool sel_touching(struct nk_context* ctx) { return G.sel_n > sel_was; }
 static bool sel_empty(struct nk_context* ctx) { return !G.sel_n && !G.seln_n && !G.boxq.on; }
 static bool sel_all(struct nk_context* ctx) { return G.sel_n == G.frd.n_elems && !G.seln_n; }
@@ -298,6 +299,13 @@ static bool sel_one(struct nk_context* ctx) { return G.sel_n == 1 && G.sel_tool 
 /* Ctrl held, elements picked, no tool armed */
 static void ctrl_on(struct nk_context* ctx) { sel_none(ctx); G.sel_tool = CV_ST_NONE; G.pick_kinds = 1 << CV_PK_ELEM; T.mods = SAPP_MODIFIER_CTRL; }
 static void ctrl_off(struct nk_context* ctx) { T.mods = 0; G.pick_kinds = CV_PK_DEFAULT; app_sel_clear(); }
+/* Ctrl held, faces picked: a face in, the probe on it, out again */
+static void ctrl_face_on(struct nk_context* ctx) { ctrl_on(ctx); G.pick_kinds = 1 << CV_PK_FACE; }
+static bool face_in(struct nk_context* ctx) { return G.self_n == 1 && !G.sel_n && !G.seln_n && G.probe_on && app_pick_head() == CV_PK_FACE; }
+static bool face_out(struct nk_context* ctx) { return !G.self_n && !G.sel_n && !G.seln_n; }
+/* Ctrl+Shift held, nodes alone ticked: the box takes nodes, no elements */
+static void box_nodes_on(struct nk_context* ctx) { sel_none(ctx); G.pick_kinds = 1 << CV_PK_NODE; T.mods = SAPP_MODIFIER_CTRL | SAPP_MODIFIER_SHIFT; }
+static bool box_nodes_only(struct nk_context* ctx) { return G.seln_n > 0 && !G.sel_n && !G.self_n && !G.sele_n; }
 static bool turned(struct nk_context* ctx);
 static bool ctrl_added(struct nk_context* ctx) { return G.sel_n == 1 && !G.seln_n && !turned(ctx); }
 static bool ctrl_removed(struct nk_context* ctx) { return !G.sel_n && !G.seln_n && !turned(ctx); }
@@ -1081,12 +1089,12 @@ static const step script[] = {
 
     CASE("max in a box: armed by its button, a drag over the view probes the max"),
     DO(open_legend_settings), WAIT(3), AT_TIP("Legend settings", TIP_BOX), CLICK, EXPECT(box_armed, "the next drag is a box"),
-    DO(close_all), WAIT(2), AT_VIEW(0.01f, 0.01f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.99f, 0.99f), RELEASE, WAIT(2),
+    DO(close_all), DO(elems_only), WAIT(2), AT_VIEW(0.01f, 0.01f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.99f, 0.99f), RELEASE, WAIT(2),
     EXPECT(box_found, "the probe sits on the field's max, the box line holds max and min"),
     EXPECT(box_window, "left to right: a window selection"),
 
     CASE("box selection: right to left is a crossing"),
-    DO(arm_box), AT_VIEW(0.6f, 0.6f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.4f, 0.4f), RELEASE, WAIT(2),
+    DO(elems_only), DO(arm_box), AT_VIEW(0.6f, 0.6f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.4f, 0.4f), RELEASE, WAIT(2),
     EXPECT(box_crossing, "a crossing selection, the probe on its max"),
     DO(open_select), WAIT(3),
     AT_TIP("Inspector", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
@@ -1195,6 +1203,17 @@ static const step script[] = {
     DO(close_all), DO(fit_view), WAIT(2), DO(ctrl_on), AT_MODEL, WAIT(1), DO(snapshot), CLICK, WAIT(3),
     EXPECT(ctrl_added, "the element in the selection, the view kept"),
     CLICK, WAIT(3), EXPECT(ctrl_removed, "out again"),
+    DO(ctrl_off), WAIT(2), PANELS_ANSWER,
+
+    CASE("selection: Ctrl+click with faces ticked puts the face under it in (the probe on it), again takes it out"),
+    DO(close_all), DO(fit_view), WAIT(2), DO(ctrl_face_on), AT_MODEL, WAIT(1), CLICK, WAIT(3),
+    EXPECT(face_in, "the face in the selection, probed"),
+    CLICK, WAIT(3), EXPECT(face_out, "out again"),
+    DO(ctrl_off), WAIT(2), PANELS_ANSWER,
+
+    CASE("selection: Ctrl+Shift box with nodes alone ticked takes nodes, no elements"),
+    DO(close_all), DO(fit_view), WAIT(2), DO(box_nodes_on), AT_VIEW(0.1f, 0.1f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.9f, 0.9f), RELEASE, WAIT(3),
+    EXPECT(box_nodes_only, "nodes, no elements, faces or edges"),
     DO(ctrl_off), WAIT(2), PANELS_ANSWER,
 
     CASE("selection: crop, clip, labels, deck lines to a file, CSV, isolate"),

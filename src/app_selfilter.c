@@ -64,7 +64,7 @@ bool app_sel_filter_facing(int mode) {
     uint8_t* fn = malloc(CV_MAX(G.frd.n_nodes, 1));
     uint8_t* fe = malloc(CV_MAX(G.frd.n_elems, 1));
     bool ok = false;
-    if (fn && fe) { app_sel_facing(fn, fe); ok = run(NULL, fn, fe, mode); }
+    if (fn && fe) { app_sel_facing(fn, fe, NULL); ok = run(NULL, fn, fe, mode); }
     free(fn); free(fe);
     return ok;
 }

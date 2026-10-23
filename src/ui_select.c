@@ -59,7 +59,8 @@ static void summary(struct nk_context* ctx, float s, float row) {
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 70 * s);
     nk_layout_row_template_end(ctx);
-    if (G.sel_n || G.seln_n) snprintf(t, sizeof t, "%u elements, %u nodes selected", G.sel_n, G.seln_n);
+    if (G.self_n || G.sele_n) snprintf(t, sizeof t, "%u el, %u nodes, %u faces, %u edges", G.sel_n, G.seln_n, G.self_n, G.sele_n);
+    else if (G.sel_n || G.seln_n) snprintf(t, sizeof t, "%u elements, %u nodes selected", G.sel_n, G.seln_n);
     else snprintf(t, sizeof t, "nothing selected");
     nk_label(ctx, t, NK_TEXT_LEFT);
     tip(ctx, "Nothing selected (Esc in the view does the same)");
@@ -73,7 +74,7 @@ static void summary(struct nk_context* ctx, float s, float row) {
         tip(ctx, "The field shown, over the selected nodes (the selected elements' nodes; per element: the elements).\n"
                  "The probe sits on the max");
         nk_label(ctx, t, NK_TEXT_LEFT);
-    } else nk_label_colored(ctx, G.sel_n || G.seln_n ? "no field values over it" : "", NK_TEXT_LEFT, P.dim);
+    } else nk_label_colored(ctx, app_sel_any() ? "no field values over it" : "", NK_TEXT_LEFT, P.dim);
     char sets[400];                                    /* always a line, so the rows below stay where they are */
     sets[0] = 0;
     if (G.sel_n || G.seln_n) app_sel_sets_overlap(sets, sizeof sets);
@@ -97,26 +98,32 @@ static void mode_row(struct nk_context* ctx, float s, float row) {
     }
 }
 
-/* what a pick takes: elements, nodes or both (never neither); the facing side; a change takes the box again */
+/* what a pick takes: the Inspect tab's kinds (G.pick_kinds, never none); the facing
+   side; a change takes the box again */
 static void takes_rows(struct nk_context* ctx, float s, float row) {
-    row_head(ctx, s, row, "takes", 3);
-    bool e = G.sel_elems, n = G.sel_nodes;
-    tip(ctx, "Elements: drag left to right for those wholly inside, right to left for every one touched");
-    nk_checkbox_label(ctx, "elements", &G.sel_elems);
-    tip(ctx, "Nodes inside the box; the max and min are then taken over them");
-    nk_checkbox_label(ctx, "nodes", &G.sel_nodes);
-    if (!G.sel_elems && !G.sel_nodes) { if (e) G.sel_nodes = true; else G.sel_elems = true; }   /* never nothing */
+    static const char* const tips[CV_PK_N] = {
+        "Nodes inside the box; the max and min are then taken over them (the Inspect tab's pick row: the same boxes)",
+        "Elements: drag left to right for those wholly inside, right to left for every one touched",
+        "Faces: the outer faces with every node inside the box (right to left: any node)",
+        "Edges: the outer faces' edges (and beams') with both ends inside the box (right to left: either end)",
+    };
+    row_head(ctx, s, row, "takes", CV_PK_N);
+    int was = G.pick_kinds;
+    uii_kind_boxes(ctx, tips);
     bool vis = G.sel_visible, mx = G.sel_mark_max, mn = G.sel_mark_min;
-    tip(ctx, "Only the side facing you: nodes on faces turned toward the camera, elements with such a face.\n"
-             "Off: everything inside the box, through the model");
+    row_head(ctx, s, row, "", 3);
+    tip(ctx, "Only the side facing you: nodes on faces turned toward the camera, elements with such a face, such faces\n"
+             "and their edges. Off: everything inside the box, through the model");
     nk_checkbox_label(ctx, "facing side", &G.sel_visible);
+    nk_label(ctx, "", NK_TEXT_LEFT);
+    nk_label(ctx, "", NK_TEXT_LEFT);
     row_head(ctx, s, row, "mark", 3);
     tip(ctx, "A red ball on the selection's maximum");
     nk_checkbox_label(ctx, "max", &G.sel_mark_max);
     tip(ctx, "A blue ball on the selection's minimum (compression, the cold spot); the value is in the probe either way");
     nk_checkbox_label(ctx, "min", &G.sel_mark_min);
     nk_label(ctx, "", NK_TEXT_LEFT);
-    if (e != G.sel_elems || n != G.sel_nodes || vis != G.sel_visible) app_box_reselect();
+    if (was != G.pick_kinds || vis != G.sel_visible) app_box_reselect();
     else if (mx != G.sel_mark_max || mn != G.sel_mark_min) app_sel_refresh();
 }
 
@@ -143,6 +150,8 @@ static void tools_rows(struct nk_context* ctx, float s, float row) {
     tool(ctx, "edge chain", CV_ST_CHAIN, "Click near a feature edge: the nodes along it, on through smooth turns up to\n"
                                           "a corner (the outline's crease angle)");
     tool(ctx, "part", CV_ST_PART, "Click an element: every shown element connected to it through shared nodes");
+    bool en = app_pk(CV_PK_NODE) || app_pk(CV_PK_ELEM);   /* elements and nodes only: greyed with faces or edges alone */
+    if (!en) nk_widget_disable_begin(ctx);
     row_head(ctx, s, row, "turn", 4);
     tip(ctx, "Invert: what is shown and not selected (elements, nodes or both, as selected or ticked)");
     if (nk_button_label(ctx, "invert")) app_sel_invert();
@@ -160,6 +169,7 @@ static void tools_rows(struct nk_context* ctx, float s, float row) {
     tip(ctx, "Boundary: the nodes on the outside of the selected elements (faces no other selected element shares),\n"
              "and the elements that have such a face");
     if (nk_button_label(ctx, "boundary")) app_sel_boundary();
+    if (!en) nk_widget_disable_end(ctx);
 }
 
 /* the deck's sets and surfaces, the element types and materials: a list, the mode's button */

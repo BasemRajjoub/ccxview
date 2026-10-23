@@ -38,9 +38,12 @@ static void lists_free(void) {
     free(G.seln); G.seln = NULL; G.seln_n = 0;
 }
 
+bool app_sel_any(void) { return G.sel_n || G.seln_n || G.self_n || G.sele_n; }
+
 void app_sel_clear(void) {
     bool had = G.sel_n || G.seln_n;
     lists_free();
+    app_selfe_clear();
     box_forget();
     if (had && G.label_sel_only) app_label_changed();
     G.boxq.on = false;
@@ -63,11 +66,12 @@ static void marker(int which, uint32_t i, bool elem) {
 }
 
 /* what shows the selection: the elements' outer faces toned yellow and outlined, the
-   nodes as magenta dots, the max and min as red and blue balls when asked; moves with the shape */
+   faces selected toned and outlined, the edges selected as dots, the nodes as magenta
+   dots, the max and min as red and blue balls when asked; moves with the shape */
 void app_sel_refresh(void) {
     sel_upload_none();
-    if (!G.loaded || (!G.sel_n && !G.seln_n)) return;
-    cv_fvec pos = {0}, disp = {0}, val = {0};
+    if (!G.loaded || !app_sel_any()) return;
+    cv_fvec pos = {0}, disp = {0}, tp = {0}, td = {0}, val = {0};
     const float* nv = G.has_field && !G.elem_mode ? G.scalar : NULL;
     const float* ev = G.has_field && G.elem_mode ? G.elem_val : NULL;
     if (G.sel_n) {
@@ -81,27 +85,27 @@ void app_sel_refresh(void) {
                                 : cv_elem_face_corners(&G.frd, e, (int)(G.skin.face[k] & 7), c);
             for (int j = 0; j < m; j++) { push_pt(&pos, &disp, c[j]); push_pt(&pos, &disp, c[(j + 1) % m]); }
         }
-        app_aux_upload(CV_AUX_SELLN, &pos, &disp, NULL);
-        app_aux_dots(CV_AUX_SELDOT, &pos, &disp);
-        pos.n = disp.n = 0;
         for (size_t t = 0; t < G.skin.n_tri; t++) {     /* their skin triangles, coloured as the faces are */
             uint32_t e = G.skin.tri_elem[t];
             if (e >= G.frd.n_elems || !on[e]) continue;
             for (int j = 0; j < 3; j++) {
                 uint32_t i = G.skin.tri[3 * t + j];
-                push_pt(&pos, &disp, i);
+                push_pt(&tp, &td, i);
                 if (cv_reserve(val, val.n + 1)) val.a[val.n++] = nv ? nv[i] : ev ? ev[e] : 0.f;
             }
         }
         free(on);
-        app_aux_upload(CV_AUX_SELTRI, &pos, &disp, nv || ev ? val.a : NULL);
     }
+    app_selfe_draw(&pos, &disp, &tp, &td, &val);         /* the faces and edges selected */
+    app_aux_upload(CV_AUX_SELLN, &pos, &disp, NULL);
+    app_aux_dots(CV_AUX_SELDOT, &pos, &disp);
+    app_aux_upload(CV_AUX_SELTRI, &tp, &td, nv || ev ? val.a : NULL);
     if (G.seln_n) {
         pos.n = disp.n = 0;
         for (uint32_t k = 0; k < G.seln_n; k++) push_pt(&pos, &disp, G.seln[k]);
         app_aux_upload(CV_AUX_SELPT, &pos, &disp, NULL);
     }
-    cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(val);
+    cv_free_vec(pos); cv_free_vec(disp); cv_free_vec(tp); cv_free_vec(td); cv_free_vec(val);
     if (G.boxq.on && G.boxq.gen == G.field_gen) {
         if (G.sel_mark_max) marker(CV_AUX_SELMAX, G.boxq.max_at, G.boxq.elem);
         if (G.sel_mark_min) marker(CV_AUX_SELMIN, G.boxq.min_at, G.boxq.elem);   /* off by default: on a selection it sits on the rim */
@@ -192,9 +196,10 @@ bool app_sel_apply(const uint32_t* el, uint32_t ne, const uint32_t* nd, uint32_t
 }
 
 void app_sel_drop_hidden(void) {
-    if (!G.sel_n && !G.seln_n) return;
+    if (!app_sel_any()) return;
     uint8_t* sn = cv_sel_shown_nodes(&G.frd, G.vis);
     if (!sn) { app_sel_clear(); return; }
+    app_selfe_drop_hidden(sn);
     uint32_t* el = dup_list(G.sel, G.sel_n);
     uint32_t* nd = dup_list(G.seln, G.seln_n);
     uint32_t ne = 0, nn = 0;
@@ -205,8 +210,11 @@ void app_sel_drop_hidden(void) {
     free(el); free(nd); free(sn);
 }
 
-/* what the ticks say a pick takes: 1 elements, 2 nodes, never neither */
-int app_sel_which(void) { return (G.sel_elems || !G.sel_nodes ? 1 : 0) | (G.sel_nodes ? 2 : 0); }
+/* the kinds ticked (G.pick_kinds): 1 elements | 2 nodes */
+static int kinds_en(void) { return (app_pk(CV_PK_ELEM) ? 1 : 0) | (app_pk(CV_PK_NODE) ? 2 : 0); }
+
+/* what the ticks say a tool by name takes: 1 elements, 2 nodes; elements when only a face or edge is ticked */
+int app_sel_which(void) { int w = kinds_en(); return w ? w : 1; }
 
 /* screen positions of the nodes, as drawn with the camera as it is now; ok[i] 0 behind the eye */
 static float* project_nodes(uint8_t** ok) {
@@ -244,11 +252,12 @@ static uint8_t* box_nodes(float x0, float y0, float x1, float y1) {
    eye, per element 1 when one of its does; a shell counts from both sides, and an element
    beam (no face to judge by) is 2; an interior solid element has no face toward the eye: 0.
    Triangles are oriented outward from the element's centre, as drawn (deformed). */
-void app_sel_facing(uint8_t* node, uint8_t* elem) {
+void app_sel_facing(uint8_t* node, uint8_t* elem, uint8_t* tri) {
     const cv_frd* f = &G.frd;
     const cv_skin* s = &G.skin;
     uint32_t N = f->n_nodes, E = f->n_elems;
     memset(node, 0, N); memset(elem, 0, E);
+    if (tri) memset(tri, 0, s->n_tri);
     for (uint32_t e = 0; e < E; e++) if (f->etype[e] == 11 || f->etype[e] == 12) elem[e] = 2;   /* beams: no face to judge by */
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f, sc2 = G.deform ? G.deform_scale * G.anim_factor2 : 0.f;
     v3 eye, fwd, right, up;
@@ -275,14 +284,16 @@ void app_sel_facing(uint8_t* node, uint8_t* elem) {
             if (dot <= 0) continue;
         }
         node[c[0]] = node[c[1]] = node[c[2]] = 1; elem[e] = 1;
+        if (tri) tri[t] = 1;
     }
 }
 
 /* The selection from the nodes a box (or a lasso) held, taken over: kept with the
-   selection so changed ticks take it again. The elements and / or nodes asked for,
-   combined with what was selected before by the mode. false: the box took nothing. */
+   selection so changed ticks take it again. The kinds ticked (elements, nodes, faces,
+   edges), combined with what was selected before by the mode. false: the box took nothing. */
 static bool select_from(uint8_t* inside, bool crossing) {
-    if (G.sel_inside != inside) {                    /* a new box: what was there before it */
+    bool fresh = G.sel_inside != inside;
+    if (fresh) {                                     /* a new box: what was there before it */
         box_forget();
         base.mode = G.sel_mode;
         if (base.mode != CV_SEL_NEW) {
@@ -292,7 +303,7 @@ static bool select_from(uint8_t* inside, bool crossing) {
         G.sel_inside = inside;
         G.sel_crossing = crossing;
     }
-    int which = app_sel_which();
+    int which = kinds_en();
     bool want_e = which & 1, want_n = which & 2;
     uint32_t N = G.frd.n_nodes, E = G.frd.n_elems;
     uint32_t* sel = malloc((size_t)CV_MAX(E, 1) * sizeof *sel);
@@ -304,7 +315,7 @@ static bool select_from(uint8_t* inside, bool crossing) {
        and kept with it, so a reselect after a turn takes the same nodes */
     if (G.sel_visible && !G.sel_front) {
         G.sel_front = malloc(CV_MAX(N, 1)); G.sel_front_e = malloc(CV_MAX(E, 1));
-        if (G.sel_front && G.sel_front_e) app_sel_facing(G.sel_front, G.sel_front_e);
+        if (G.sel_front && G.sel_front_e) app_sel_facing(G.sel_front, G.sel_front_e, NULL);
         else { free(G.sel_front); free(G.sel_front_e); G.sel_front = G.sel_front_e = NULL; }
     }
     uint8_t* nface = G.sel_visible ? G.sel_front : NULL; uint8_t* eface = G.sel_visible ? G.sel_front_e : NULL;
@@ -331,9 +342,10 @@ static bool select_from(uint8_t* inside, bool crossing) {
     lists_free();
     G.sel = dup_list(base.e, base.ne); G.sel_n = G.sel ? base.ne : 0;
     G.seln = dup_list(base.n, base.nn); G.seln_n = G.seln ? base.nn : 0;
+    uint32_t nfe = app_selfe_box(inside, crossing, base.mode, fresh);   /* the faces and edges, before the outline */
     apply(sel, n, seln, nn, base.mode, which);
     free(sel); free(seln);
-    return n || nn;
+    return n || nn || nfe;
 }
 
 bool app_box_select(float x0, float y0, float x1, float y1) {

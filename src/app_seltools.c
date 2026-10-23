@@ -41,7 +41,7 @@ static bool take_both(const uint32_t* el, uint32_t ne, const uint32_t* nd, uint3
 
 bool app_sel_take_elems(const uint32_t* el, uint32_t ne, int mode) {
     uint32_t nn = 0;
-    uint32_t* nd = G.sel_nodes ? cv_sel_elem_nodes(&G.frd, el, ne, &nn) : NULL;
+    uint32_t* nd = app_pk(CV_PK_NODE) ? cv_sel_elem_nodes(&G.frd, el, ne, &nn) : NULL;
     bool ok = take_both(el, ne, nd, nn, mode);
     free(nd);
     return ok;
@@ -57,16 +57,25 @@ static bool in_list(const uint32_t* a, uint32_t n, uint32_t v) {
     return lo < n && a[lo] == v;
 }
 
-/* the click tool: the element and node under the pixel. NEW toggles it: a click on
-   something selected takes it out, on anything else adds it */
-static bool click_one(const cv_pick* p) {
-    int mode = G.sel_mode, which = app_sel_which();
-    if (mode == CV_SEL_NEW) {
-        bool in = (which & 1) ? in_list(G.sel, G.sel_n, p->elem) : in_list(G.seln, G.seln_n, p->node);
-        mode = in ? CV_SEL_REMOVE : CV_SEL_ADD;
-    }
+/* What a click takes of the kinds ticked (G.pick_kinds): the node nearest the hit,
+   the element, the face, the face's edge nearest the hit, each by mode; NEW (the
+   click tool's select, Ctrl+click) toggles each: in if it is out, out if it is in */
+static bool click_kinds(const cv_pick* p, const float o[3], const float d[3], int mode) {
+    bool any = false;
     G.sel_note[0] = 0;
-    return app_sel_apply(&p->elem, 1, &p->node, 1, mode, which) || mode == CV_SEL_REMOVE;
+    for (int k = CV_PK_NODE; k <= CV_PK_ELEM; k++) {
+        if (!app_pk(k)) continue;
+        bool node = k == CV_PK_NODE;
+        int m = mode;
+        if (m == CV_SEL_NEW) m = (node ? in_list(G.seln, G.seln_n, p->node) : in_list(G.sel, G.sel_n, p->elem)) ? CV_SEL_REMOVE : CV_SEL_ADD;
+        any |= app_sel_apply(&p->elem, 1, &p->node, 1, m, node ? 2 : 1) || m == CV_SEL_REMOVE;
+    }
+    if (app_pk(CV_PK_FACE) || app_pk(CV_PK_EDGE)) {
+        uint32_t face, edge[3];
+        app_pick_face_edge(p, o, d, &face, edge);
+        any |= app_selfe_take(face, edge, mode);
+    }
+    return any;
 }
 
 /* the skin faces from face k up to the creases: their elements, the nodes of the faces */
@@ -135,7 +144,7 @@ bool app_sel_click(float px, float py) {
     float o[3], d[3];
     if (!app_pick(px, py, &p, o, d) || !p.hit) { say("nothing under the cursor%s", ""); return false; }
     switch (G.sel_tool) {
-    case CV_ST_CLICK: return click_one(&p);
+    case CV_ST_CLICK: return click_kinds(&p, o, d, G.sel_mode);
     case CV_ST_FACE: {
         uint32_t k = cv_skin_face_of_tri(&G.frd, &G.skin, p.tri);
         if (k == UINT32_MAX) { say("no outer face there%s", ""); return false; }
@@ -152,23 +161,14 @@ bool app_sel_click(float px, float py) {
     }
 }
 
-/* Ctrl+click in the view, as in CAD: the node (pick kind Node) and / or the element
-   (Element) under the pixel into the selection, each out if it is in */
+/* Ctrl+click in the view, as in CAD: each kind ticked under the pixel into the
+   selection, or out if it is in */
 bool app_sel_ctrl_click(float px, float py) {
-    if (!G.loaded || !(app_pk(CV_PK_NODE) || app_pk(CV_PK_ELEM))) return false;
+    if (!G.loaded) return false;
     cv_pick p;
     float o[3], d[3];
     if (!app_pick(px, py, &p, o, d) || !p.hit) { say("nothing under the cursor%s", ""); return false; }
-    bool any = false;
-    for (int k = CV_PK_NODE; k <= CV_PK_ELEM; k++) {
-        if (!app_pk(k)) continue;
-        bool node = k == CV_PK_NODE;
-        bool in = node ? in_list(G.seln, G.seln_n, p.node) : in_list(G.sel, G.sel_n, p.elem);
-        int mode = in ? CV_SEL_REMOVE : CV_SEL_ADD;
-        G.sel_note[0] = 0;
-        any |= app_sel_apply(&p.elem, 1, &p.node, 1, mode, node ? 2 : 1) || mode == CV_SEL_REMOVE;
-    }
-    return any;
+    return click_kinds(&p, o, d, CV_SEL_NEW);
 }
 
 bool app_sel_invert(void) {
@@ -189,7 +189,7 @@ bool app_sel_to_nodes(void) {
     if (!G.sel_n) { say("no elements selected%s", ""); return false; }
     uint32_t nn = 0;
     uint32_t* nd = cv_sel_elem_nodes(&G.frd, G.sel, G.sel_n, &nn);
-    G.sel_elems = false; G.sel_nodes = true;          /* the tools take nodes now */
+    G.pick_kinds = (G.pick_kinds & ~(1 << CV_PK_ELEM)) | 1 << CV_PK_NODE;   /* the tools take nodes now */
     G.sel_note[0] = 0;
     bool ok = app_sel_apply(NULL, 0, nd, nn, CV_SEL_NEW, 2);
     free(nd);
@@ -200,7 +200,7 @@ bool app_sel_to_elems(bool any) {
     if (!G.seln_n) { say("no nodes selected%s", ""); return false; }
     uint32_t ne = 0;
     uint32_t* el = cv_sel_node_elems(&G.frd, G.vis, G.seln, G.seln_n, any, &ne);
-    G.sel_elems = true; G.sel_nodes = false;
+    G.pick_kinds = (G.pick_kinds & ~(1 << CV_PK_NODE)) | 1 << CV_PK_ELEM;
     G.sel_note[0] = 0;
     bool ok = app_sel_apply(el, ne, NULL, 0, CV_SEL_NEW, 1);
     if (!ok) say(any ? "no shown element has a selected node%s" : "no shown element has every node selected%s", "");
@@ -467,10 +467,18 @@ bool app_sel_spec(const char* spec) {
     }
     if (!strncasecmp(spec, "takes:", 6)) {               /* what the next ones take */
         const char* w = spec + 6;
-        G.sel_elems = !strcasecmp(w, "elements") || !strcasecmp(w, "both");
-        G.sel_nodes = !strcasecmp(w, "nodes") || !strcasecmp(w, "both");
-        if (!G.sel_elems && !G.sel_nodes) { G.sel_elems = true; say("takes: elements, nodes or both, not %s", w); return false; }
-        return true;
+        int m = !strcasecmp(w, "both") ? CV_PK_DEFAULT : 0;   /* or the kinds by name, comma separated */
+        char t[64];
+        snprintf(t, sizeof t, "%s", w);
+        for (char* q = strtok(t, ","); q && strcasecmp(w, "both"); q = strtok(NULL, ",")) {
+            int k = -1;
+            for (int i = 0; i < CV_PK_N; i++)
+                if (!strncasecmp(q, cv_pk_names[i], strlen(cv_pk_names[i]))) k = i;   /* "elements", "nodes" too */
+            if (k < 0) { say("takes: node, element, face, edge (comma separated) or both, not %s", w); return false; }
+            m |= 1 << k;
+        }
+        if (m) G.pick_kinds = m;
+        return m != 0;
     }
     if (!strncasecmp(spec, "facing:", 7)) { G.sel_visible = !strcasecmp(spec + 7, "on"); return true; }
     return app_sel_by_name(spec, mode);

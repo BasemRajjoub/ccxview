@@ -180,7 +180,7 @@ SPEC may start with a mode, `new:` (the default), `add:`, `remove:` or `and:`
 | `part:EID` | every element connected to element EID |
 | `face:EID:S3`, `face:EID` | the outer faces from that face of the element (any of its outer faces) up to the feature edges |
 | `chain:NID` | the nodes along the feature edges through node NID, up to the corners |
-| `takes:elements\|nodes\|both`, `facing:on\|off` | what the next steps take |
+| `takes:node,element,face,edge` (any of them; `both`: node,element), `facing:on\|off` | what the next steps take (the pick kinds) |
 | `filter:x>10`, `filter:10<y<20`, `filter:r<5`, `filter:theta>30`, `filter:axial<2` | keep what lies there (of the selection, or of everything shown when nothing is) |
 | `axis:z@x,y,z` | the axis r, theta and axial are about (through 0,0,0 when no point is given) |
 | `field>100`, `field<5`, `top:5` | keep what the field shown puts above, below 100 / 5, in its top 5 % |

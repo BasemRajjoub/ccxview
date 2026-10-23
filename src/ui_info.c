@@ -211,8 +211,9 @@ static void sel_lines(void) {
     const cv_frd* f = &G.frd;
     char a[32], b[32];
     cur = GR_SEL;
-    if (G.sel_n || G.seln_n) {
-        line(true, "selection: %u elements, %u nodes", G.sel_n, G.seln_n);
+    if (app_sel_any()) {
+        if (G.self_n || G.sele_n) line(true, "selection: %u el, %u nodes, %u faces, %u edges", G.sel_n, G.seln_n, G.self_n, G.sele_n);
+        else line(true, "selection: %u elements, %u nodes", G.sel_n, G.seln_n);
         if (G.sel_inside) {
             line(false, "a box, %s", G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
             notag[nl - 1] = true;
