@@ -40,7 +40,7 @@ static void tip_draw(struct nk_context* ctx, float s, float fw, float fh) {
     const struct nk_input* in = &ctx->input;
     bool busy = in->mouse.buttons[NK_BUTTON_LEFT].down || in->mouse.buttons[NK_BUTTON_RIGHT].down ||
                 in->mouse.buttons[NK_BUTTON_MIDDLE].down || in->mouse.scroll_delta.x != 0 || in->mouse.scroll_delta.y != 0;
-    snprintf(tip_last, sizeof tip_last, "%s", busy ? "" : tip_text);
+    snprintf(tip_last, sizeof tip_last, "%s", busy || !G.tips ? "" : tip_text);
     tip_text[0] = 0;
     if (!tip_last[0]) return;
     const struct nk_user_font* f = ctx->style.font;

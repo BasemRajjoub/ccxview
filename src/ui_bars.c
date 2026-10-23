@@ -626,11 +626,12 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
     float sw = 14 * s;
     float ub = 150 * s;                    /* the units button */
     float ab = 60 * s;                     /* About */
-    nk_layout_row_begin(ctx, NK_STATIC, row, (exporting ? 5 : loading ? 4 : 3) + 6);
+    float tb = 60 * s;                     /* the tooltips switch */
+    nk_layout_row_begin(ctx, NK_STATIC, row, (exporting ? 5 : loading ? 4 : 3) + 8);
     nk_layout_row_push(ctx, pw);
     nk_label(ctx, G.loaded ? cv_basename(G.path) : "", NK_TEXT_LEFT);
     nk_layout_row_push(ctx, sw); uii_vsep(ctx);
-    float midw = CV_MAX(width - pw - bw - ub - ab - 8 * ctx->style.window.spacing.x - 4 * (sw + ctx->style.window.spacing.x), 10);
+    float midw = CV_MAX(width - pw - bw - ub - ab - tb - 10 * ctx->style.window.spacing.x - 5 * (sw + ctx->style.window.spacing.x), 10);
     if (exporting) {                       /* frame export: a real bar, the count, a stop button */
         nk_size cur = (nk_size)done;
         nk_layout_row_push(ctx, midw * 0.45f);
@@ -670,6 +671,10 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
     } else {
         nk_label(ctx, badge, NK_TEXT_RIGHT);
     }
+    nk_layout_row_push(ctx, sw); uii_vsep(ctx);
+    nk_layout_row_push(ctx, tb);
+    tip(ctx, "Tooltips like this one over the controls");
+    nk_checkbox_label(ctx, "tips", &G.tips);
     nk_layout_row_push(ctx, sw); uii_vsep(ctx);
     nk_layout_row_push(ctx, ab);
     tip(ctx, "Who made ccxview, its licence, and the libraries it is built with");

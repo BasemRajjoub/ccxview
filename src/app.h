@@ -368,6 +368,7 @@ typedef struct {
     int       pick_kinds;            /* 1 << CV_PK_*: what a click probes and a pick selects (never none) */
     uint32_t  probe_face;            /* the face probed: element << 3 | its face, UINT32_MAX none */
     uint32_t  probe_edge[3];         /* the edge probed: its corners, the mid-side node; [0] UINT32_MAX none */
+    bool      tips;                  /* tooltips over the controls (the status bar's "tips") */
     bool      probe_tag;             /* the probe's tag in the view: what and its value, a leader to it (T) */
     float     probe_tag_off[2];      /* the tag dragged from its place beside the item, px at scale 1 */
     int       tag_groups;            /* 1 << CV_TAG_*: the Inspect groups whose lines the tag shows below its head */

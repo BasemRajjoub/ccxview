@@ -532,6 +532,8 @@ static bool deck_shown(struct nk_context* ctx) { return G.show_deck && win_of(ct
 static void groups_first(struct nk_context* ctx) { G.tree[CV_TREE_LAYERS] = 0; G.tree[CV_TREE_GROUPS] = 1; }
 static void layers_first(struct nk_context* ctx) { G.tree[CV_TREE_LAYERS] = 1; G.tree[CV_TREE_GROUPS] = 0; }
 static bool about_gone(struct nk_context* ctx) { return !G.show_about; }
+static bool tips_off(struct nk_context* ctx) { (void)ctx; return !G.tips; }
+static bool tips_on(struct nk_context* ctx) { (void)ctx; return G.tips; }
 static bool about_shown(struct nk_context* ctx) { return G.show_about && win_of(ctx, "About"); }
 static bool turned(struct nk_context* ctx);
 static void fit_view(struct nk_context* ctx) { app_view(CV_VIEW_ISO); }
@@ -1601,6 +1603,10 @@ static const step script[] = {
     CASE("symbol sizes: thin crowded symbols"),
     DO(symbols_open), WAIT(3), AT_TIP("Scene", "Where supports or loads crowd"), CLICK, EXPECT(thin_on, "thinning turns on"),
     DO(thin_off), WAIT(2), PANELS_ANSWER,
+
+    CASE("tips: the status bar's switch turns the tooltips off and on"),
+    AT_TIP("Status", "Tooltips like this one"), CLICK, WAIT(2), EXPECT(tips_off, "tooltips are off"),
+    CLICK, WAIT(2), EXPECT(tips_on, "tooltips are on again"), PANELS_ANSWER,
 
     CASE("about: opened from the status bar"),
     AT_TIP("Status", "Who made ccxview"), CLICK, WAIT(2), EXPECT(about_shown, "the About window opens"),

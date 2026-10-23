@@ -218,6 +218,7 @@ It prints what it selected and the field's max and min over it.
 | [ / ] | hide or show the Scene pane (left) / the Inspector (right); the chevron buttons at their top corners do the same, and their inner edge drags them wider or narrower (both kept in the settings) |
 | click the legend's unit / right-click the legend | units / legend settings |
 | right-click the title block | its lines, date format, free text and the text they make, editable by hand (drag it to move it, like the legend) |
+| tips (status bar) | tooltips on or off (kept in the settings) |
 | Ctrl+O / Ctrl+E / Ctrl+F | open / export PNG / find |
 | Esc | cancel a pending pick (path end, measurement nodes), close the menu, put a selection tool down, clear the selection |
 

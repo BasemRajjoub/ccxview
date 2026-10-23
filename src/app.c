@@ -122,6 +122,7 @@ static void init(void) {
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
     G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 340.f;
+    G.tips = true;
     G.probe_tag = true; G.tag_groups = CV_TAG_DEFAULT;
     G.probe_face = G.probe_edge[0] = UINT32_MAX;
     G.model_alpha = 1.f;
