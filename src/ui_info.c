@@ -126,6 +126,24 @@ static void build(void) {
     }
 }
 
+/* the rows: every line, the section titles in the accent colour; copy all */
+void uii_details_body(struct nk_context* ctx, float s, float row) {
+    build();
+    nk_layout_row_dynamic(ctx, row, 1);
+    for (int i = 0; i < nl; i++) {
+        if (head[i] && i) { uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 1); }
+        if (head[i]) nk_label_colored(ctx, L[i], NK_TEXT_LEFT, P.accent); else nk_label(ctx, L[i], NK_TEXT_LEFT);
+    }
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "All of it to the clipboard, a line each");
+    if (nk_button_label(ctx, "copy all")) {
+        static char txt[NL * LW];
+        size_t o = 0;
+        for (int i = 0; i < nl && o < sizeof txt - LW - 2; i++) o += (size_t)snprintf(txt + o, sizeof txt - o, "%s\n", L[i]);
+        sapp_set_clipboard_string(txt);
+    }
+}
+
 void window_details(struct nk_context* ctx, float s, float row, int fw, int fh) {
     static bool was_open;
     if (!G.show_details || !G.probe_on || !G.loaded) { was_open = false; return; }
@@ -141,21 +159,8 @@ void window_details(struct nk_context* ctx, float s, float row, int fw, int fh) 
     float bottom = pw ? pw->bounds.y - 6 * s : G.vp_y + G.vp_h - 10 * s;
     float h = CV_MIN(bottom - G.vp_y - 10 * s, row * (nl + 3.5f) + 16 * s);
     if (nk_begin(ctx, "Details", nk_rect(G.vp_x + 10 * s, bottom - h, w, h),
-                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER)) {
-        nk_layout_row_dynamic(ctx, row, 1);
-        for (int i = 0; i < nl; i++) {
-            if (head[i] && i) { uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 1); }
-            if (head[i]) nk_label_colored(ctx, L[i], NK_TEXT_LEFT, P.accent); else nk_label(ctx, L[i], NK_TEXT_LEFT);
-        }
-        nk_layout_row_dynamic(ctx, row, 1);
-        tip(ctx, "All of it to the clipboard, a line each");
-        if (nk_button_label(ctx, "copy all")) {
-            static char txt[NL * LW];
-            size_t o = 0;
-            for (int i = 0; i < nl && o < sizeof txt - LW - 2; i++) o += (size_t)snprintf(txt + o, sizeof txt - o, "%s\n", L[i]);
-            sapp_set_clipboard_string(txt);
-        }
-    }
+                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER))
+        uii_details_body(ctx, s, row);
     if (nk_window_is_hidden(ctx, "Details")) G.show_details = false;
     nk_end(ctx);
 }

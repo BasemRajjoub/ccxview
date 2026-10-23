@@ -186,6 +186,10 @@ void rows_rebar(struct nk_context* ctx, float s, float row);    /* ui_rebar.c: R
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
 void window_probe(struct nk_context* ctx, float s, float row);
 void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_info.c */
+/* the rows of a tool window, without its window: to sit in a floating window or a pane tab */
+void uii_probe_body(struct nk_context* ctx, float s, float row);        /* the probed node and element */
+void uii_details_body(struct nk_context* ctx, float s, float row);      /* ui_info.c: everything about them */
+void uii_measure_body(struct nk_context* ctx, float s, float row);      /* ui_measure.c: the measurements */
 void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
 void window_deck(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_deck.c */
 void window_menu(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_menu.c */
@@ -224,6 +228,7 @@ void uii_gauss_options(struct nk_context* ctx, float s, float row, const char* n
 
 /* ---- ui_select.c: the Selection window */
 void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh);
+void uii_select_body(struct nk_context* ctx, float s, float row);       /* its rows */
 void uii_select_ids(const char* text, bool nodes);    /* the id box's text (the interface test) */
 void uii_select_name(const char* text);               /* the name box's text (the interface test) */
 

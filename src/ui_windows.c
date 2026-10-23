@@ -64,20 +64,18 @@ void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh)
 
 const char* path_dirs[] = { "to a node", "along normal", "along X", "along Y", "along Z" };
 
-void window_probe(struct nk_context* ctx, float s, float row) {
-    if (!G.probe_on || !G.loaded) return;
+/* the probe's lines, the value as shown in num; their count */
+enum { NPL = 7 };
+static int probe_lines(char ln[NPL][160], const char* tips[NPL], char* num, size_t nn) {
     const cv_pick* p = &G.probe;
-    /* the lines first: the window is as wide as the longest */
-    enum { NPL = 7 };
-    char ln[NPL][160], num[32];
-    const char* tips[NPL] = { 0 };
     int n = 0;
+    for (int i = 0; i < NPL; i++) tips[i] = NULL;
     snprintf(ln[n++], 160, "element %u  (%s)", G.frd.elem_id[p->elem], cv_frd_type_name(G.frd.etype[p->elem]));
     snprintf(ln[n++], 160, "material %u   group %u", G.frd.emat[p->elem], G.frd.egrp[p->elem]);
     const float* x = G.frd.xyz + 3 * p->node;
     snprintf(ln[n++], 160, "node %u  (%.4g, %.4g, %.4g)", G.frd.node_id[p->node], x[0], x[1], x[2]);
-    fmt_num(num, sizeof num, G.probe_value);
-    if (app_field_category(G.probe_value)) snprintf(num, sizeof num, "%s", app_field_category(G.probe_value));
+    fmt_num(num, nn, G.probe_value);
+    if (app_field_category(G.probe_value)) snprintf(num, nn, "%s", app_field_category(G.probe_value));
     if (!G.has_field) snprintf(ln[n++], 160, "no field");
     else if (G.probe_ip) snprintf(ln[n++], 160, "point %d: %s = %s", G.probe_ip, G.field_label, num);
     else snprintf(ln[n++], 160, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
@@ -92,17 +90,15 @@ void window_probe(struct nk_context* ctx, float s, float row) {
         tips[n++] = "The field's max (probed) and min over the selection\n"
                     "(its nodes; per element, the elements). Selection window: where they are";
     }
-    const struct nk_user_font* fnt = ctx->style.font;
-    float tw = 0;
-    for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
-    float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
-    float h = row * (n + 6.9f + (G.sel_n || G.seln_n ? 1.1f : 0.f));
-    struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
-    if (!nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
-        nk_end(ctx);
-        return;
-    }
-    nk_window_set_bounds(ctx, "Probe", r);
+    return n;
+}
+
+/* the probe's rows: its lines, then what can be done from the node */
+void uii_probe_body(struct nk_context* ctx, float s, float row) {
+    const cv_pick* p = &G.probe;
+    char ln[NPL][160], num[32];
+    const char* tips[NPL];
+    int n = probe_lines(ln, tips, num, sizeof num);
     nk_layout_row_dynamic(ctx, row, 1);
     for (int i = 0; i < n; i++) {
         if (tips[i]) tip(ctx, tips[i]);
@@ -153,6 +149,24 @@ void window_probe(struct nk_context* ctx, float s, float row) {
         char txt[400];
         snprintf(txt, sizeof txt, "element %u node %u %s = %s", G.frd.elem_id[p->elem], G.frd.node_id[p->node], G.field_label, num);
         sapp_set_clipboard_string(txt);
+    }
+}
+
+void window_probe(struct nk_context* ctx, float s, float row) {
+    if (!G.probe_on || !G.loaded) return;
+    /* the lines first: the window is as wide as the longest */
+    char ln[NPL][160], num[32];
+    const char* tips[NPL];
+    int n = probe_lines(ln, tips, num, sizeof num);
+    const struct nk_user_font* fnt = ctx->style.font;
+    float tw = 0;
+    for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
+    float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
+    float h = row * (n + 6.9f + (G.sel_n || G.seln_n ? 1.1f : 0.f));
+    struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
+    if (nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
+        nk_window_set_bounds(ctx, "Probe", r);
+        uii_probe_body(ctx, s, row);
     }
     nk_end(ctx);
 }
