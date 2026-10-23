@@ -1365,6 +1365,7 @@ void cv_render_draw(const cv_draw* d) {
     if (A[CV_AUX_SELLN].n) {   /* the box selection: its outer face edges, bright */
         static const float sel_rgb[3] = { 1.0f, 0.92f, 0.15f };
         draw_layer(R.pip_line_ni, A[CV_AUX_SELLN].v, NO_IB, (int)A[CV_AUX_SELLN].n, CV_COLOR_SOLID, sel_rgb, false, d, 1, false, PULL, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_SELDOT].v, NO_IB, (int)A[CV_AUX_SELDOT].n, CV_COLOR_SOLID, sel_rgb, false, d, d->marker_size * 0.3f, false, PULL, 0);
     }
     if (d->outline) {   /* after the edges and darker, so it reads over coloured ones; GL core lines have no width */
         const float rgb[3] = { d->edge_rgb[0] * 0.4f, d->edge_rgb[1] * 0.4f, d->edge_rgb[2] * 0.4f };
@@ -1390,7 +1391,8 @@ void cv_render_draw(const cv_draw* d) {
     if (A[CV_AUX_PICKLN].n) {                /* the probed element's, face's or edge's lines in the probe's gold, hidden where the model hides them */
         static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
         draw_layer(R.pip_line_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, 1, false, PULL, 0);
-        draw_layer(R.pip_pt_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size * 0.25f, false, PULL, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_PICKDOT].v, NO_IB, (int)A[CV_AUX_PICKDOT].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size * 0.3f, false, PULL, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size * 0.6f, false, PULL, 0);   /* its nodes */
     }
     if (A[CV_AUX_MEASLN].n) {                /* the measurements' lines, on top: dots along them make them read thicker */
         static const float meas_rgb[3] = { 0.1f, 0.85f, 1.0f };
@@ -1403,7 +1405,7 @@ void cv_render_draw(const cv_draw* d) {
     }
     if (A[CV_AUX_SELPT].n) {                 /* the selected nodes: small magenta dots (balls: a dark rim on any colour) */
         static const float node_rgb[3] = { 0.95f, 0.2f, 0.85f };
-        draw_layer(R.pip_pt_ni, A[CV_AUX_SELPT].v, NO_IB, (int)A[CV_AUX_SELPT].n, CV_COLOR_SOLID, node_rgb, false, d, d->marker_size * 0.5f, false, 0.f, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_SELPT].v, NO_IB, (int)A[CV_AUX_SELPT].n, CV_COLOR_SOLID, node_rgb, false, d, d->marker_size * 0.75f, false, 0.f, 0);
     }
     {   /* the selection's max (red) and min (blue) on top, each on a white ball a size larger
            drawn at its true depth, so the coloured one wins where they meet */

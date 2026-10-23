@@ -407,6 +407,26 @@ void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const f
     free(d);
 }
 
+void app_aux_dots(int which, const cv_fvec* pos, const cv_fvec* disp6) {
+    cv_fvec p = {0}, d = {0};
+    const float step = CV_MAX(G.diag, 1e-12f) * 0.0012f;
+    bool dd = disp6->n == 2 * pos->n;
+    for (size_t s = 0; s + 6 <= pos->n && p.n < 3 * 2000000; s += 6) {
+        const float* a = pos->a + s;
+        float l = sqrtf((a[3] - a[0]) * (a[3] - a[0]) + (a[4] - a[1]) * (a[4] - a[1]) + (a[5] - a[2]) * (a[5] - a[2]));
+        int n = (int)CV_MIN(CV_MAX(ceilf(l / step), 1.f), 1000.f);
+        if (!cv_reserve(p, p.n + 3 * (size_t)(n + 1)) || !cv_reserve(d, d.n + 6 * (size_t)(n + 1))) break;
+        for (int k = 0; k <= n; k++) {
+            float t = (float)k / (float)n;
+            for (int q = 0; q < 3; q++) p.a[p.n++] = a[q] + t * (a[3 + q] - a[q]);
+            for (int q = 0; q < 6; q++)
+                d.a[d.n++] = dd ? disp6->a[2 * s + q] + t * (disp6->a[2 * s + 6 + q] - disp6->a[2 * s + q]) : 0.f;
+        }
+    }
+    app_aux_upload(which, &p, &d, NULL);
+    cv_free_vec(p); cv_free_vec(d);
+}
+
 static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
     float d[6];
     app_node_disp6(i, d);

@@ -878,6 +878,9 @@ void deck_apply_removed(const cv_frd* f, uint8_t* vis); /* app_deck.c: *MODEL CH
 const uint32_t* deck_removed(int64_t* n);  /* the element ids removed in the step on screen */
 void app_node_disp6(uint32_t node, float d[6]);
 void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);
+/* lines (vertex pairs, as app_aux_upload takes them) as dots along them, close enough
+   to read as a thicker line: GL core lines are one pixel whatever the width asked */
+void app_aux_dots(int which, const cv_fvec* pos, const cv_fvec* disp6);
 bool app_field_is_vector(void);      /* the selected .frd field has 3 components */
 void app_vectors_changed(void);
 bool app_field_is_tensor(void);      /* app_tensor.c: the selected .frd field is a symmetric tensor */

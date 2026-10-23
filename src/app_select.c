@@ -5,6 +5,7 @@
 #include "app_int.h"
 #include "selset.h"
 #include "seltopo.h"
+#include "pickinfo.h"
 #include "web.h"
 #include <math.h>
 #include <stdio.h>
@@ -15,7 +16,7 @@ static void shown_pos(uint32_t n, float sc, float sc2, float p[3]) {
 }
 
 static void sel_upload_none(void) {
-    const int w[] = { CV_AUX_SELLN, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN };
+    const int w[] = { CV_AUX_SELLN, CV_AUX_SELDOT, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN };
     for (size_t k = 0; k < CV_COUNT(w); k++) cv_render_aux(w[k], NULL, NULL, NULL, 0);
 }
 
@@ -73,13 +74,15 @@ void app_sel_refresh(void) {
         uint8_t* on = calloc(CV_MAX(G.frd.n_elems, 1), 1);
         if (!on) return;
         for (uint32_t i = 0; i < G.sel_n; i++) on[G.sel[i]] = 1;
-        for (size_t k = 0; k < G.skin.n_face; k++) {     /* the corner edges of their exterior faces */
-            uint32_t e = G.skin.face[k] >> 3, c[4];
+        for (size_t k = 0; k < G.skin.n_face; k++) {     /* the edges of their exterior faces, as the mesh draws them */
+            uint32_t e = G.skin.face[k] >> 3, c[8];
             if (e >= G.frd.n_elems || !on[e]) continue;
-            int m = cv_elem_face_corners(&G.frd, e, (int)(G.skin.face[k] & 7), c);
+            int m = G.mid_faces ? cv_face_ring(&G.frd, e, (int)(G.skin.face[k] & 7), c)
+                                : cv_elem_face_corners(&G.frd, e, (int)(G.skin.face[k] & 7), c);
             for (int j = 0; j < m; j++) { push_pt(&pos, &disp, c[j]); push_pt(&pos, &disp, c[(j + 1) % m]); }
         }
         app_aux_upload(CV_AUX_SELLN, &pos, &disp, NULL);
+        app_aux_dots(CV_AUX_SELDOT, &pos, &disp);
         pos.n = disp.n = 0;
         for (size_t t = 0; t < G.skin.n_tri; t++) {     /* their skin triangles, coloured as the faces are */
             uint32_t e = G.skin.tri_elem[t];
