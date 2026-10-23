@@ -141,14 +141,6 @@ static void probe_rows(struct nk_context* ctx, float s, float row) {
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "The field at the probe (Node and Element below: all about them)");
     nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
-    if (G.sel_n || G.seln_n) {
-        nk_layout_row_dynamic(ctx, row, 2);
-        tip(ctx, "The Selection tab (S): what a box or a click takes, add / remove / intersect, invert, by name or id");
-        if (nk_button_label(ctx, "selection")) G.show_select = true;
-        tip(ctx, "The field integrated over the selected elements at every step (volume integral and average),\n"
-                 "or summed over the selected nodes (reaction forces)");
-        if (nk_button_label(ctx, "integrate...")) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");
-    }
     nk_layout_row_dynamic(ctx, row, 3);
     nk_bool lb = G.label_probe_only && G.label_kinds;
     tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");
@@ -189,7 +181,79 @@ static void probe_rows(struct nk_context* ctx, float s, float row) {
     uii_details_body(ctx, s, row);
 }
 
+/* a selection: its size, its extremes (a click goes there), what is done with it */
+static void selection_rows(struct nk_context* ctx, float s, float row) {
+    char t[200], a[32];
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, 60 * s);
+    nk_layout_row_template_end(ctx);
+    snprintf(t, sizeof t, "Selection: %u elements, %u nodes", G.sel_n, G.seln_n);
+    nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
+    tip(ctx, "Nothing selected (Esc in the view does the same)");
+    if (nk_button_label(ctx, "clear")) { app_sel_clear(); G.sel_note[0] = 0; return; }
+    if (G.boxq.on && G.boxq.gen == G.field_gen) {
+        const uint32_t* id = G.boxq.elem ? G.frd.elem_id : G.frd.node_id;
+        const char* w = G.boxq.elem ? "element" : "node";
+        for (int k = 0; k < 2; k++) {
+            uint32_t at = k ? G.boxq.min_at : G.boxq.max_at;
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 60 * s);
+            nk_layout_row_template_end(ctx);
+            fmt_num(a, sizeof a, k ? G.boxq.vmin : G.boxq.vmax);
+            snprintf(t, sizeof t, "%s %s at %s %u", k ? "min" : "max", a, w, id[at]);
+            nk_label(ctx, t, NK_TEXT_LEFT);
+            tip(ctx, k ? "Probe the selection's min, the view centred on it" : "Probe the selection's max, the view centred on it");
+            if (nk_button_label(ctx, "go to")) {
+                char q[sizeof G.boxq];                /* probing elsewhere forgets the box; the selection keeps it */
+                memcpy(q, &G.boxq, sizeof q);
+                app_view_push();
+                app_find(id[at], G.boxq.elem);
+                memcpy(&G.boxq, q, sizeof q);
+            }
+        }
+    }
+    nk_layout_row_dynamic(ctx, row, 4);
+    tip(ctx, "The field integrated over the selected elements at every step (volume integral and average),\n"
+             "or summed over the selected nodes (reaction forces)");
+    if (nk_button_label(ctx, "integrate")) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");
+    tip(ctx, "Hide the selected elements (right click > Show all brings them back)");
+    if (nk_button_label(ctx, "hide") && G.sel_n) app_hide_elems(G.sel, G.sel_n);
+    tip(ctx, "Show only the selected elements");
+    if (nk_button_label(ctx, "isolate") && G.sel_n) app_isolate_elems(G.sel, G.sel_n);
+    nk_bool lo = G.label_sel_only && G.label_kinds;
+    tip(ctx, "Labels on the selection only (Fields > Labels: what they show; node ids when none is chosen)");
+    if (nk_checkbox_label(ctx, "ids", &lo)) {
+        G.label_sel_only = lo;
+        if (lo) G.label_probe_only = false;
+        if (lo && !G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE;
+        app_label_changed();
+    }
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "The Selection tab (S): what a box or a click takes, add / remove / intersect, invert, by name or id");
+    if (nk_button_label(ctx, "more: the Selection tab")) G.insp_tab = CV_TAB_SELECT;
+    uii_hsep(ctx, s);
+}
+
 /* ---- the Inspector ------------------------------------------------------------- */
+
+/* S, the toolbar's Select, the menu, the View buttons set G.show_select (show_measure):
+   the pane shows on that tab, and back to Inspect when it is set false. Then they
+   follow the tab shown: a selection tool works while its tab is up. */
+void uii_tabs_sync(void) {
+    static bool sel_was, meas_was;
+    if (G.show_select && !sel_was) { G.insp_on = true; G.insp_tab = CV_TAB_SELECT; G.sel_note[0] = 0; }
+    else if (!G.show_select && sel_was && G.insp_tab == CV_TAB_SELECT) G.insp_tab = CV_TAB_INSPECT;
+    if (G.show_measure && !meas_was) { G.insp_on = true; G.insp_tab = CV_TAB_MEASURE; }
+    else if (!G.show_measure && meas_was && G.insp_tab == CV_TAB_MEASURE) G.insp_tab = CV_TAB_INSPECT;
+    bool on = G.loaded && G.insp_on;
+    G.show_select = on && G.insp_tab == CV_TAB_SELECT;
+    G.show_measure = on && G.insp_tab == CV_TAB_MEASURE;
+    if (sel_was && !G.show_select) G.sel_tool = CV_ST_NONE;
+    if (meas_was && !G.show_measure) app_measure_cancel();
+    sel_was = G.show_select; meas_was = G.show_measure;
+}
 
 static const char* tab_name[CV_TAB_N] = { "Inspect", "Selection", "Measure" };
 static const char* tab_tip[CV_TAB_N] = {
@@ -215,15 +279,10 @@ void uii_panel_inspector(struct nk_context* ctx, float s, float row) {
     uii_hsep(ctx, s);
     switch (G.insp_tab) {
     case CV_TAB_INSPECT:
+        if (G.sel_n || G.seln_n) selection_rows(ctx, s, row);
         if (G.probe_on) probe_rows(ctx, s, row); else model_summary(ctx, s, row);
         break;
-    case CV_TAB_SELECT:
-        nk_layout_row_dynamic(ctx, row, 1);
-        nk_label_colored(ctx, "S: the Selection window", NK_TEXT_LEFT, P.dim);
-        break;
-    case CV_TAB_MEASURE:
-        nk_layout_row_dynamic(ctx, row, 1);
-        nk_label_colored(ctx, "the Measurements window: View", NK_TEXT_LEFT, P.dim);
-        break;
+    case CV_TAB_SELECT:  uii_select_body(ctx, s, row); break;
+    case CV_TAB_MEASURE: uii_measure_body(ctx, s, row); break;
     }
 }

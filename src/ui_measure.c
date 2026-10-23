@@ -1,4 +1,4 @@
-/* ui_measure.c -- the Measurements window: the list with both values of each
+/* ui_measure.c -- the Inspector's Measure tab: the list with both values of each
    (undeformed and deformed), new ones armed from here, what their labels show,
    copy, CSV, delete; and the row of measure buttons the probe and the context
    menu share. */
@@ -94,18 +94,4 @@ void uii_measure_body(struct nk_context* ctx, float s, float row) {
     if (nk_button_label(ctx, "save CSV")) app_measure_csv();
     uii_test_mark(ctx, "#meas clear");
     if (nk_button_label(ctx, "clear all")) { app_measure_cancel(); app_measure_clear(); }
-}
-
-void window_measure(struct nk_context* ctx, float s, float row, int fw, int fh) {
-    static bool was_open;
-    if (!G.show_measure || !G.loaded) { was_open = false; return; }
-    if (!was_open) nk_window_show(ctx, "Measurements", NK_SHOWN);
-    was_open = true;
-    /* top-left of the view at first, under the toolbar */
-    float w = CV_MIN(620 * s, G.vp_w * 0.7f), h = CV_MIN((6.5f + 3.6f * CV_MAX(app_measure_count(), 1)) * row, G.vp_h * 0.6f);
-    if (nk_begin(ctx, "Measurements", nk_rect(G.vp_x + 10 * s, G.vp_y + 10 * s, w, h),
-                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER))
-        uii_measure_body(ctx, s, row);
-    if (nk_window_is_hidden(ctx, "Measurements")) { G.show_measure = false; app_measure_cancel(); }
-    nk_end(ctx);
 }

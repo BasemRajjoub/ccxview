@@ -300,6 +300,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     const float status_h = row + pad + 2;
     const float W = (float)fw, H = (float)fh;
     const nk_flags fixed = NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR;
+    uii_tabs_sync();
     uii_pane_widths(W, s, &panel_w, &insp_w);
 
     G.vp_x = (int)panel_w;
@@ -367,11 +368,9 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_title_settings(ctx, s, row);
     window_nav(ctx, s);
     window_find(ctx, s, row);
-    window_measure(ctx, s, row, fw, fh);
     window_path(ctx, s, row, fw, fh);
     window_history(ctx, s, row, fw, fh);
     uii_window_integrals(ctx, s, row, fw, fh);
-    uii_window_select(ctx, s, row, fw, fh);
     window_browser(ctx, s, row, fw, fh);
     tip_draw(ctx, s, W, H);
 }

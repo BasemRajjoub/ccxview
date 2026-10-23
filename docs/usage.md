@@ -44,7 +44,8 @@ ccxview model.frd --mesh quality            # mesh quality: scores quality hmqi 
                                             #   edgemin edgemax aspect sjac jratio skew anglemin anglemax warp shape
 ccxview model.frd --linearize 38,54         # ASME stress linearization, node 38 to 54
 ccxview model.frd --measure dist:16,71 --measure circle:16,419,1171 --measure-window
-                                            # measurements by node id, repeatable: dist:A,B  angle:A,B,C (at B)
+                                            # measurements by node id, repeatable: dist:A,B  angle:A,B,C (at B);
+                                            #   --measure-window: the Inspector on its Measure tab
                                             #   circle:A,B,C; --opt meas_show=0|1|2: their labels give
                                             #   undeformed -> deformed, the undeformed, the deformed value
 ccxview model.frd --field STRESS --integrate volume:EALL   # Integrals window: KIND volume (element set), surface
@@ -88,8 +89,9 @@ ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of i
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
 ccxview model.frd --select set:EHOLE --select add:ids:1-20 --selection-window
-                                            # selection steps, in order (see Selection below);
-                                            #   --opt sel_filters=1: the window's filter rows open;
+                                            # selection steps, in order (see Selection below), the
+                                            #   Inspector on its Selection tab;
+                                            #   --opt sel_filters=1: the tab's filter rows open;
                                             #   sel_open_pick / _names / _use / _named=0|1: its other parts
 ccxview model.frd --find 120 --details      # probe node 120, the Inspector shown on its Inspect tab
 ccxview --about                             # who made it, its licence, the libraries it uses
@@ -191,8 +193,8 @@ It prints what it selected and the field's max and min over it.
 | X / Y / Z held + drag | orbit about that world axis only |
 | drag a label | move it (the camera stays); right-click it: Reset label |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
-| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection window's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). the Inspector's Inspect tab shows all about the node, element and selection |
-| S | the Selection window: mode, box, click, lasso, faces, edge chain and part tools, invert, conversions, grow, shrink, boundary, by name, by id |
+| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection tab's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). the Inspector's Inspect tab shows all about the node, element and selection |
+| S | the Inspector's Selection tab (S again: back to Inspect): mode, box, click, lasso, faces, edge chain and part tools, invert, conversions, grow, shrink, boundary, by name, by id |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre); imported STL geometry counts as the model for this, for turning about the cursor, zooming to it, look at the face and box zoom |
 | right click (no drag) | context menu: on the model probe, inspect (the Inspector on its Inspect tab), centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; on imported STL geometry in front of the model hide it (and centre, look at the face); always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
@@ -234,7 +236,7 @@ It prints what it selected and the field's max and min over it.
   calculated fields, failure criteria (Strength materials... for the data),
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: camera, colours and legend, symbol sizes, mirror, replicate, cyclic
-  symmetry, clip and crop; the Measurements window.
+  symmetry, clip and crop; Measurements... and Selection... (the Inspector's tabs).
 - **Inspector** (right panel): tabs Inspect, Selection, Measure.
 - **Toolbar**: deformation scale, animation, colour map, bands.
 - **Status bar**: units, messages.

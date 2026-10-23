@@ -478,9 +478,11 @@ hidden. `scripts/gen_contact_showcase.py` writes the deck,
 
 ## Selection
 
-One floating window, Selection (S, the top bar's Select, View > Selection...,
-the context menu, or "selection..." in the probe), for everything that picks
-elements and nodes. Under what is selected its parts fold by their headers
+One tab of the Inspector pane, Selection (S, the top bar's Select, View >
+Selection..., the context menu, or "more: the Selection tab" in the Inspect
+tab), for everything that picks elements and nodes. While a selection exists
+the Inspect tab shows it on top: its size, max and min with a "go to" each,
+integrate, hide, isolate and ids on it. Under what is selected its parts fold by their headers
 (pick and tools, by name and id, filters, use, kept by name); each stays as
 it was left, and at first the filters and the kept ones are folded:
 
@@ -534,7 +536,7 @@ it was left, and at first the filters and the kept ones are folded:
   `*INCLUDE` in a deck (a file of its own: the model's input is never
   touched); labels on it alone; its history over the steps (the Integrals
   window over the selection).
-- Kept by name: a list in the window (select, add, remove, rename, forget),
+- Kept by name: a list in the tab (select, add, remove, rename, forget),
   stored as id ranges in the model's `.ccxview` and back when the model opens.
 - `--select SPEC` (repeatable, in order) does the same from the command line.
 
@@ -548,7 +550,7 @@ it was left, and at first the filters and the kept ones are folded:
   component of the field, the element's material, sets and nodes (a click on
   one probes it); with nothing probed, the model's counts, step, field range
   and units. The status bar keeps the probe in a line.
-- Selection of elements and nodes (the Selection window, below), highlighted,
+- Selection of elements and nodes (the Inspector's Selection tab, below), highlighted,
   with the field's max over it marked (the min too when asked: compression, the
   cold spot) and both in the window and the Inspect tab.
 - Integrals of the field over a set, at every step (Integrals window: Fields >
@@ -658,12 +660,12 @@ it was left, and at first the filters and the kept ones are folded:
   angle at the middle one of three, the circle through three (radius, centre and
   the normal of its plane; three nodes on a hole give the hole's radius). Started
   from the probe's "measure" row, the right-click menu on a node, or the
-  Measurements window (View, or Fields > Labels); the next clicks give the other
+  Inspector's Measure tab (also View or Fields > Labels: Measurements...); the next clicks give the other
   nodes, the status bar says which, Esc cancels. Each has two values: on the
   undeformed mesh, and deformed by the step's displacement at true scale, whatever
   the scale on screen. The label reads "d 80.0771 -> 80.0696 mm" (undeformed ->
   deformed), or one of them with its parts ("d 80.0771 mm (dx 80.0617 dy -1.5692
-  dz 0)", "113.623 deg", "R 20 mm (c 0, 0, 5)"), as the window chooses; a step
+  dz 0)", "113.623 deg", "R 20 mm (c 0, 0, 5)"), as the tab chooses; a step
   without displacement gives the one value. Their lines (the segment, the legs and
   an arc, the circle and a cross at its centre) move with the shape as drawn. The
   window lists both values of each, deletes one or all, copies them as text and

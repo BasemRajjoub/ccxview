@@ -122,7 +122,7 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     nk_layout_row_push(ctx, 24 * s);
     uii_vsep(ctx);
     nk_layout_row_push(ctx, 84 * s);
-    tip(ctx, "The Selection window (S): box, click, by set or id, add / remove / intersect, invert");
+    tip(ctx, "The Selection tab of the Inspector (S): box, click, by set or id, add / remove / intersect, invert");
     if (nk_selectable_label(ctx, IC_BOX "  Select", NK_TEXT_CENTERED, &G.show_select)) {}
     nk_layout_row_push(ctx, 24 * s);
     uii_vsep(ctx);

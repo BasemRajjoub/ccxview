@@ -8,19 +8,17 @@ before it, so no step rewrites code an earlier one wrote. One commit per step.
 The pane is there (`ui_inspector.c`: under the toolbar at the right, `]` / `[` and the
 chevron buttons hide and show it and the Scene pane, inner edges drag, kept in the ini;
 tabs **Inspect | Selection | Measure**); Inspect holds the probe (Probe + Details, the
-model's summary when nothing is probed). Next, the other tabs.
+model's summary when nothing is probed, a selection's summary on top); Selection and
+Measure hold what their floating windows did (S shows the pane on Selection).
 
-1. **Selection and Measure tabs.** `uii_select_body` and `uii_measure_body` in the pane; their floating
-   windows go (`S` opens the pane on the Selection tab). Multi-selection summary in
-   Inspect: count, max / min with go-to, integrate / hide / isolate / labels.
-2. **#28 — pick kind.** Row at the top of Inspect: Node · Element · Face · Edge; what
+1. **#28 — pick kind.** Row at the top of Inspect: Node · Element · Face · Edge; what
    is picked is highlighted in the view (reuse the selection highlight). Face / edge
    content: element + face number, surfaces it is on, area, normal, field average.
    Face pick exists in Selection; edge is new (feature edge chain code may help).
    Reply on the issue and close it (only after the user has tested it).
-3. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
+2. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
    through recent picks.
-4. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
+3. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
    Formula, Strength materials, Mesh quality, About, Messages. Keep floating: History,
    Path, Convergence, Integrals (a bottom dock could come later). Candidates for more
    pane tabs: Find, Contact settings, Legend settings, Title block.

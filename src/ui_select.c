@@ -1,4 +1,4 @@
-/* ui_select.c -- the Selection window (S): what is selected and its extremes, how
+/* ui_select.c -- the Inspector's Selection tab (S): what is selected and its extremes, how
    what is picked next goes with it (new / add / remove / intersect), what a pick
    takes (elements, nodes, the side facing the eye), the tools (box, click, lasso,
    faces up to the feature edges, a chain of feature edges, the connected part),
@@ -18,12 +18,13 @@
 #include <strings.h>
 #include "ui_int.h"
 
+enum { LW = 52 };          /* the rows' labels, px at scale 1: the pane is narrow */
 static const char* mode_verb[CV_SEL_MODES] = { "select", "add", "remove", "intersect" };
 
 /* "label:" then the cells of a row */
 static void row_head(struct nk_context* ctx, float s, float row, const char* label, int cells) {
     nk_layout_row_template_begin(ctx, row);
-    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_static(ctx, LW * s);
     for (int i = 0; i < cells; i++) nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_end(ctx);
     nk_label_colored(ctx, label, NK_TEXT_LEFT, P.dim);
@@ -192,9 +193,9 @@ static void names_row(struct nk_context* ctx, float s, float row) {
     }
     if (cur >= n) cur = 0;
     nk_layout_row_template_begin(ctx, row);
-    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_static(ctx, LW * s);
     nk_layout_row_template_push_dynamic(ctx);
-    nk_layout_row_template_push_static(ctx, 80 * s);
+    nk_layout_row_template_push_static(ctx, 64 * s);
     nk_layout_row_template_end(ctx);
     nk_label_colored(ctx, "by name", NK_TEXT_LEFT, P.dim);
     tip(ctx, "A deck element or node set, a surface (its elements and the nodes of its faces),\n"
@@ -217,10 +218,10 @@ static void ids_row(struct nk_context* ctx, float s, float row) {
     char* buf = ids_buf;
     int nodes = ids_nodes;
     nk_layout_row_template_begin(ctx, row);
-    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_static(ctx, LW * s);
     nk_layout_row_template_push_dynamic(ctx);
-    nk_layout_row_template_push_static(ctx, 90 * s);
     nk_layout_row_template_push_static(ctx, 80 * s);
+    nk_layout_row_template_push_static(ctx, 64 * s);
     nk_layout_row_template_end(ctx);
     nk_label_colored(ctx, "by id", NK_TEXT_LEFT, P.dim);
     tip(ctx, "Ids as you would write them: 1-100, 205, 300-310 (spaces, commas or semicolons; Enter takes them)");
@@ -261,11 +262,9 @@ static int filter_rows(struct nk_context* ctx, float s, float row) {
     int rows = 0;
     if (coord != q.coord || !(q.hi >= q.lo)) { coord = q.coord; coord_span(&q, &q.lo, &q.hi); }
     float step = (q.hi - q.lo) * 0.01f + 1e-6f;
-    /* a coordinate in a range */
+    /* a coordinate in a range: the coordinate and the button, the range under them */
     nk_layout_row_template_begin(ctx, row);
-    nk_layout_row_template_push_static(ctx, 70 * s);
-    nk_layout_row_template_push_static(ctx, 70 * s);
-    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_static(ctx, LW * s);
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 60 * s);
     nk_layout_row_template_end(ctx);
@@ -274,16 +273,22 @@ static int filter_rows(struct nk_context* ctx, float s, float row) {
     tip(ctx, "The coordinate: x y z, or r, theta (degrees) and the axial one about the axis below (undeformed;\n"
              "an element by its centre)");
     q.coord = nk_combo(ctx, coords, CV_SC_N, q.coord, (int)row, nk_vec2(110 * s, CV_SC_N * row + 20 * s));
+    tip(ctx, "Keep what lies in this range (add: what lies in it anywhere joins; remove: it leaves)");
+    if (nk_button_label(ctx, filter_verb())) { cv_selfilter f = q; f.kind = CV_SQ_COORD; app_sel_filter(&f, G.sel_mode); }
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, LW * s);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_end(ctx);
+    nk_spacing(ctx, 1);
     tip(ctx, "From");
     q.lo = nk_propertyf(ctx, "#from", -1e30f, q.lo, 1e30f, step, step * 0.2f);
     tip(ctx, "To");
     q.hi = nk_propertyf(ctx, "#to", -1e30f, q.hi, 1e30f, step, step * 0.2f);
-    tip(ctx, "Keep what lies in this range (add: what lies in it anywhere joins; remove: it leaves)");
-    if (nk_button_label(ctx, filter_verb())) { cv_selfilter f = q; f.kind = CV_SQ_COORD; app_sel_filter(&f, G.sel_mode); }
-    rows++;
+    rows += 2;
     if (q.coord >= CV_SC_R) {                          /* the axis r, theta and the axial coordinate are about */
         nk_layout_row_template_begin(ctx, row);
-        nk_layout_row_template_push_static(ctx, 70 * s);
+        nk_layout_row_template_push_static(ctx, LW * s);
         nk_layout_row_template_push_static(ctx, 70 * s);
         for (int k = 0; k < 3; k++) nk_layout_row_template_push_dynamic(ctx);
         nk_layout_row_template_end(ctx);
@@ -299,8 +304,8 @@ static int filter_rows(struct nk_context* ctx, float s, float row) {
     }
     /* the field */
     nk_layout_row_template_begin(ctx, row);
-    nk_layout_row_template_push_static(ctx, 70 * s);
-    nk_layout_row_template_push_static(ctx, 100 * s);
+    nk_layout_row_template_push_static(ctx, LW * s);
+    nk_layout_row_template_push_static(ctx, 76 * s);
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 60 * s);
     nk_layout_row_template_end(ctx);
@@ -335,7 +340,7 @@ static int filter_rows(struct nk_context* ctx, float s, float row) {
         }
     if (tm >= nt) tm = 0;
     nk_layout_row_template_begin(ctx, row);
-    nk_layout_row_template_push_static(ctx, 70 * s);
+    nk_layout_row_template_push_static(ctx, LW * s);
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 60 * s);
     nk_layout_row_template_end(ctx);
@@ -475,31 +480,4 @@ void uii_select_body(struct nk_context* ctx, float s, float row) {
     if (part_head(ctx, row, kept, "Kept by name: the selection kept under a name with the model (its .ccxview), and those kept",
                   &op[CV_SELG_NAMED]))
         named_rows(ctx, s, row);
-    nk_layout_row_dynamic(ctx, row, 2);
-    nk_label(ctx, "", NK_TEXT_LEFT);
-    tip(ctx, "Close (S)");
-    if (nk_button_label(ctx, "close")) G.show_select = false;
-}
-
-void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh) {
-    static bool was_open;
-    if (!G.show_select || !G.loaded) { if (was_open) G.sel_tool = CV_ST_NONE; was_open = false; return; }
-    if (!was_open) { nk_window_show(ctx, "Selection", NK_SHOWN); G.sel_note[0] = 0; }
-    was_open = true;
-    /* as tall as its rows, again when a part folds or opens or a selection is kept or forgotten */
-    static int shape = -1;
-    bool* op = G.sel_open;
-    int nk = op[CV_SELG_NAMED] ? CV_MIN(app_nsel_count(), 5) : 0;
-    int now = (G.sel_filters ? 1000 : 0) + op[CV_SELG_PICK] * 100 + op[CV_SELG_NAMES] * 200 + op[CV_SELG_USE] * 400 + op[CV_SELG_NAMED] * 2000 + nk;
-    float lines = 10.f + (op[CV_SELG_PICK] ? 7.f : 0.f) + (op[CV_SELG_NAMES] ? 2.f : 0.f) + (G.sel_filters ? 5.f : 0.f)
-                + (op[CV_SELG_USE] ? 3.f : 0.f) + (op[CV_SELG_NAMED] ? 1.f + nk : 0.f);
-    float w = CV_MIN(430 * s, fw * 0.5f), h = CV_MIN(lines * (row + ctx->style.window.spacing.y) + 2.6f * row, fh * 0.85f);
-    if (shape >= 0 && shape != now && nk_window_find(ctx, "Selection"))
-        nk_window_set_size(ctx, "Selection", nk_vec2(nk_window_find(ctx, "Selection")->bounds.w, h));
-    shape = now;
-    if (nk_begin(ctx, "Selection", nk_rect(G.vp_x + 10 * s, G.vp_y + 10 * s, w, h),   /* top left: the legend is top right */
-                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER))
-        uii_select_body(ctx, s, row);
-    if (nk_window_is_hidden(ctx, "Selection")) G.show_select = false;
-    nk_end(ctx);
 }

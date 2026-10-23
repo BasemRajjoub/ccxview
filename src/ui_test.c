@@ -241,7 +241,7 @@ static bool toolbar_popup(struct nk_context* ctx) { return popup_open(ctx, "Tool
 static bool toolbar_no_popup(struct nk_context* ctx) { return !popup_open(ctx, "Toolbar"); }
 static bool scene_popup(struct nk_context* ctx) { return popup_open(ctx, "Scene"); }
 static bool units_popup(struct nk_context* ctx) { return popup_open(ctx, "Units"); }
-static bool measure_popup(struct nk_context* ctx) { return popup_open(ctx, "Measurements"); }
+static bool measure_popup(struct nk_context* ctx) { return popup_open(ctx, "Inspector"); }
 static bool cmap_changed(struct nk_context* ctx) { return G.cmap != was.cmap; }
 static bool bands_changed(struct nk_context* ctx) { return G.bands != was.bands; }
 static bool faces_changed(struct nk_context* ctx) { return G.faces_mode != was.faces_mode; }
@@ -269,12 +269,15 @@ static bool min_marked(struct nk_context* ctx) { return G.sel_mark_min && G.boxq
 static void remember_nodes_turn(struct nk_context* ctx) { seln_was = G.seln_n; G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }
 static bool nodes_kept(struct nk_context* ctx) { return !G.sel_elems && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
 /* the Selection window */
-static void open_select(struct nk_context* ctx) { G.show_select = true; G.insp_on = false; }   /* room for the window */
-static bool select_gone(struct nk_context* ctx) { return !G.show_select; }
-static bool select_shown(struct nk_context* ctx) { return G.show_select && win_of(ctx, "Selection"); }
+/* the Selection tab: S (show_select) shows the pane on it */
+static void open_select(struct nk_context* ctx) { G.show_select = true; }
+static void press_s(struct nk_context* ctx) { G.show_select = !G.show_select; }
+static bool select_gone(struct nk_context* ctx) { return !G.show_select && G.insp_tab == CV_TAB_INSPECT && G.sel_tool == CV_ST_NONE; }
+static bool select_shown(struct nk_context* ctx) { return G.show_select && G.insp_tab == CV_TAB_SELECT && win_of(ctx, "Inspector"); }
+static bool inspect_tab(struct nk_context* ctx) { return !G.show_select && G.insp_tab == CV_TAB_INSPECT && win_of(ctx, "Inspector"); }
 static uint32_t sel_was, seln_was2;
 static void sel_remember(struct nk_context* ctx) { sel_was = G.sel_n; seln_was2 = G.seln_n; }
-static void sel_none(struct nk_context* ctx) { app_sel_clear(); G.sel_elems = true; G.sel_nodes = false; G.sel_visible = true; G.probe_on = false; G.insp_on = false; }
+static void sel_none(struct nk_context* ctx) { app_sel_clear(); G.sel_elems = true; G.sel_nodes = false; G.sel_visible = true; G.probe_on = false; }
 static void ids_1_20(struct nk_context* ctx) { uii_select_ids("1-20, 9999, x9", false); }
 static void ids_10_30(struct nk_context* ctx) { uii_select_ids("10-30", false); }
 static bool sel_20(struct nk_context* ctx) { return G.sel_n == 20 && !G.seln_n && G.boxq.on && G.sel_note[0]; }   /* 9999 is not there, x9 is no id */
@@ -295,7 +298,7 @@ static bool click_armed(struct nk_context* ctx) { return G.sel_tool == CV_ST_CLI
 static bool sel_mode_add(struct nk_context* ctx) { return G.sel_mode == CV_SEL_ADD; }
 static bool sel_mode_remove(struct nk_context* ctx) { return G.sel_mode == CV_SEL_REMOVE; }
 static bool sel_mode_and(struct nk_context* ctx) { return G.sel_mode == CV_SEL_AND; }
-static bool select_popup(struct nk_context* ctx) { return popup_open(ctx, "Selection"); }
+static bool select_popup(struct nk_context* ctx) { return popup_open(ctx, "Inspector"); }
 /* a box in add mode keeps what was there: more than the first box alone */
 static bool box_added(struct nk_context* ctx) { return G.sel_n > sel_was && sel_was > 0; }
 static bool lasso_armed(struct nk_context* ctx) { return G.sel_tool == CV_ST_LASSO; }
@@ -728,8 +731,7 @@ static void rebar_usual(struct nk_context* ctx) { G.rebar_fcd = 20.f; G.rebar_fy
 static bool rebar_cover_up(struct nk_context* ctx) { return G.rebar_cover > 40.f; }
 /* measurements: armed from the probe, the menu or their window; picked by clicks */
 static void open_measure(struct nk_context* ctx) { G.show_measure = true; }
-static bool measure_gone(struct nk_context* ctx) { return !G.show_measure; }
-static bool measure_shown(struct nk_context* ctx) { return G.show_measure && win_of(ctx, "Measurements"); }
+static bool measure_shown(struct nk_context* ctx) { return G.show_measure && G.insp_tab == CV_TAB_MEASURE && win_of(ctx, "Inspector"); }
 static void meas_clear(struct nk_context* ctx) { app_measure_cancel(); app_measure_clear(); G.meas_show = CV_MSHOW_BOTH; }
 static void meas_turn(struct nk_context* ctx) { G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }   /* the next click on the same pixel hits another node */
 static bool meas_dist_armed(struct nk_context* ctx) { return app_measure_armed() == CV_MEAS_DIST + 1 && strstr(app_measure_prompt(), "(2 of 2"); }
@@ -741,6 +743,16 @@ static bool meas_circle_armed(struct nk_context* ctx) { return app_measure_armed
 static bool meas_angle_armed(struct nk_context* ctx) { return app_measure_armed() == CV_MEAS_ANGLE + 1 && strstr(app_measure_prompt(), "(1 of 3"); }
 static void meas_cancel(struct nk_context* ctx) { app_pick_cancel(); }      /* as Esc */
 static bool meas_not_armed(struct nk_context* ctx) { return !app_measure_armed(); }
+static bool measure_left(struct nk_context* ctx) { return !app_measure_armed() && !G.show_measure && G.insp_tab == CV_TAB_INSPECT; }
+/* the Inspect tab's selection rows: the probe on its min, the box kept; isolate */
+static bool at_sel_min(struct nk_context* ctx) {
+    return G.probe_on && G.boxq.on && (G.boxq.elem ? G.probe.elem : G.probe.node) == G.boxq.min_at;
+}
+static bool sel_isolated(struct nk_context* ctx) {
+    uint32_t n = 0;
+    for (uint32_t e = 0; G.hide && e < G.frd.n_elems; e++) n += !G.hide[e];
+    return G.hide && sel_was > 0 && n == sel_was;
+}
 static bool meas_shows_def(struct nk_context* ctx) { return G.meas_show != CV_MSHOW_BOTH; }
 static bool meas_none(struct nk_context* ctx) { return app_measure_count() == 0; }
 static bool meas_labelled(struct nk_context* ctx) { return app_measure_count() == 1 && !G.label_kinds; }
@@ -1039,22 +1051,33 @@ static const step script[] = {
     DO(arm_box), AT_VIEW(0.6f, 0.6f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.4f, 0.4f), RELEASE, WAIT(2),
     EXPECT(box_crossing, "a crossing selection, the probe on its max"),
     DO(open_select), WAIT(3),
-    AT_TIP("Selection", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
-    DO(remember_nodes), AT_TIP("Selection", "Only the side facing you"), CLICK, WAIT(2), EXPECT(nodes_more, "through the model: more nodes"),
-    AT_TIP("Selection", "Only the side facing you"), CLICK, WAIT(2),
-    AT_TIP("Selection", "A blue ball on the selection's minimum"), CLICK, WAIT(2), EXPECT(min_marked, "the min gets its ball"),
-    AT_TIP("Selection", "A blue ball on the selection's minimum"), CLICK, WAIT(2),
-    DO(remember_nodes_turn), WAIT(2), AT_TIP("Selection", "Elements: drag left to right"), CLICK, WAIT(2),
+    AT_TIP("Inspector", "Nodes inside the box"), CLICK, WAIT(2), EXPECT(nodes_selected, "ticking nodes selects the nodes too"),
+    DO(remember_nodes), AT_TIP("Inspector", "Only the side facing you"), CLICK, WAIT(2), EXPECT(nodes_more, "through the model: more nodes"),
+    AT_TIP("Inspector", "Only the side facing you"), CLICK, WAIT(2),
+    AT_TIP("Inspector", "A blue ball on the selection's minimum"), CLICK, WAIT(2), EXPECT(min_marked, "the min gets its ball"),
+    AT_TIP("Inspector", "A blue ball on the selection's minimum"), CLICK, WAIT(2),
+    DO(remember_nodes_turn), WAIT(2), AT_TIP("Inspector", "Elements: drag left to right"), CLICK, WAIT(2),
     EXPECT(nodes_kept, "unticking elements after a turn keeps the same nodes, no elements"),
     DO(nodes_off), WAIT(2),
 
-    CLOSED_THEN_PANELS("Selection", open_select, select_gone),
+    CASE("selection tab: S shows the pane on it, the Inspect tab and S go back, a hidden pane comes back"),
+    DO(close_all), DO(press_s), WAIT(3), EXPECT(select_shown, "S: the Selection tab"),
+    AT_TIP("Inspector", "Inspect: what a click"), CLICK, WAIT(2), EXPECT(select_gone, "the Inspect tab: the selection's tools put down"),
+    DO(press_s), WAIT(3), EXPECT(select_shown, "S again: Selection"), DO(press_s), WAIT(3), EXPECT(inspect_tab, "and S: back on Inspect"),
+    TYPE("]"), WAIT(3), DO(press_s), WAIT(3), EXPECT(select_shown, "S shows the hidden pane on Selection"),
+    PANELS_ANSWER,
+
+    CASE("inspect: a box selection's rows, its min gone to, its elements isolated"),
+    DO(close_all), DO(fit_view), WAIT(2), DO(arm_box), AT_VIEW(0.3f, 0.3f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.7f, 0.7f), RELEASE, WAIT(2),
+    AT_TIP("Inspector", "Probe the selection's min"), CLICK, WAIT(2), EXPECT(at_sel_min, "the probe on the min, the box kept"),
+    DO(sel_remember), AT_TIP("Inspector", "Show only the selected elements"), CLICK, WAIT(10), EXPECT(sel_isolated, "only the selection shown"),
+    DO(use_end), WAIT(10), PANELS_ANSWER,
 
     CASE("selection: the top bar's Select opens it, a box in add mode joins the first"),
-    DO(sel_none), DO(fit_view), AT_TIP("Toolbar", "The Selection window (S)"), CLICK, WAIT(3), EXPECT(select_shown, "the window opens"),
+    DO(sel_none), DO(fit_view), AT_TIP("Toolbar", "The Selection tab of the Inspector (S)"), CLICK, WAIT(3), EXPECT(select_shown, "the window opens"),
     DO(arm_box), AT_VIEW(0.48f, 0.4f), PRESS, AT_VIEW(0.56f, 0.6f), AT_VIEW(0.66f, 0.8f), RELEASE, WAIT(2), DO(sel_remember),
-    AT_TIP("Selection", "What you pick next joins the selection"), CLICK, WAIT(2), EXPECT(sel_mode_add, "add mode"),
-    AT_TIP("Selection", "Drag a box in the view next"), CLICK, WAIT(2), EXPECT(box_armed, "the box tool arms the box"),
+    AT_TIP("Inspector", "What you pick next joins the selection"), CLICK, WAIT(2), EXPECT(sel_mode_add, "add mode"),
+    AT_TIP("Inspector", "Drag a box in the view next"), CLICK, WAIT(2), EXPECT(box_armed, "the box tool arms the box"),
     AT_VIEW(0.68f, 0.4f), PRESS, AT_VIEW(0.75f, 0.6f), AT_VIEW(0.85f, 0.8f), RELEASE, WAIT(2), EXPECT(box_added, "the second box adds"),
     DO(sel_none), WAIT(2),
 
@@ -1064,87 +1087,87 @@ static const step script[] = {
 
     CASE("selection: by id select, add, remove, intersect; invert; to nodes and back; clear"),
     DO(sel_none), DO(open_select), WAIT(3), DO(ids_1_20), WAIT(2),
-    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_20, "ids 1-20, the bad ones reported"),
-    AT_TIP("Selection", "What you pick next joins the selection"), CLICK, DO(ids_10_30), WAIT(2),
-    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_30, "add: 1-30"),
-    AT_TIP("Selection", "What you pick next leaves the selection"), CLICK, WAIT(2), EXPECT(sel_mode_remove, "remove mode"),
-    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_9, "remove: 1-9"),
-    DO(ids_1_20), AT_TIP("Selection", "What you pick next replaces"), CLICK, WAIT(2), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
-    DO(ids_10_30), AT_TIP("Selection", "Only what is both selected"), CLICK, WAIT(2), EXPECT(sel_mode_and, "intersect mode"),
-    AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_11, "intersect: 10-20"),
-    DO(sel_remember), AT_TIP("Selection", "Invert: what is shown"), CLICK, WAIT(2), EXPECT(sel_inverted, "invert: every other element"),
-    AT_TIP("Selection", "Invert: what is shown"), CLICK, WAIT(2), EXPECT(sel_11, "inverted twice: the same"),
-    DO(sel_remember), AT_TIP("Selection", "Elements to nodes"), CLICK, WAIT(2), EXPECT(sel_to_nodes, "their nodes, the elements dropped"),
-    AT_TIP("Selection", "Nodes to elements: the shown elements with every node"), CLICK, WAIT(2), EXPECT(sel_back, "the same elements back"),
-    AT_TIP("Selection", "Elements to nodes"), CLICK, WAIT(2),
-    AT_TIP("Selection", "Nodes to elements: the shown elements with any node"), CLICK, WAIT(2), EXPECT(sel_touching, "touching: more elements"),
-    AT_TIP("Selection", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "clear"),
+    AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_20, "ids 1-20, the bad ones reported"),
+    AT_TIP("Inspector", "What you pick next joins the selection"), CLICK, DO(ids_10_30), WAIT(2),
+    AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_30, "add: 1-30"),
+    AT_TIP("Inspector", "What you pick next leaves the selection"), CLICK, WAIT(2), EXPECT(sel_mode_remove, "remove mode"),
+    AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_9, "remove: 1-9"),
+    DO(ids_1_20), AT_TIP("Inspector", "What you pick next replaces"), CLICK, WAIT(2), AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2),
+    DO(ids_10_30), AT_TIP("Inspector", "Only what is both selected"), CLICK, WAIT(2), EXPECT(sel_mode_and, "intersect mode"),
+    AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2), EXPECT(sel_11, "intersect: 10-20"),
+    DO(sel_remember), AT_TIP("Inspector", "Invert: what is shown"), CLICK, WAIT(2), EXPECT(sel_inverted, "invert: every other element"),
+    AT_TIP("Inspector", "Invert: what is shown"), CLICK, WAIT(2), EXPECT(sel_11, "inverted twice: the same"),
+    DO(sel_remember), AT_TIP("Inspector", "Elements to nodes"), CLICK, WAIT(2), EXPECT(sel_to_nodes, "their nodes, the elements dropped"),
+    AT_TIP("Inspector", "Nodes to elements: the shown elements with every node"), CLICK, WAIT(2), EXPECT(sel_back, "the same elements back"),
+    AT_TIP("Inspector", "Elements to nodes"), CLICK, WAIT(2),
+    AT_TIP("Inspector", "Nodes to elements: the shown elements with any node"), CLICK, WAIT(2), EXPECT(sel_touching, "touching: more elements"),
+    AT_TIP("Inspector", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "clear"),
 
     CASE("selection: the lasso takes what it is drawn round, Esc puts it down"),
-    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Selection", "Draw round what you want"), CLICK, WAIT(2),
+    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Inspector", "Draw round what you want"), CLICK, WAIT(2),
     EXPECT(lasso_armed, "the lasso armed"),
     AT_VIEW(0.45f, 0.3f), PRESS, AT_VIEW(0.65f, 0.28f), AT_VIEW(0.85f, 0.35f), AT_VIEW(0.88f, 0.6f), AT_VIEW(0.8f, 0.8f),
     AT_VIEW(0.6f, 0.82f), AT_VIEW(0.46f, 0.7f), RELEASE, WAIT(2), EXPECT(lasso_took, "elements inside it, with their extremes"),
-    AT_TIP("Selection", "Draw round what you want"), CLICK, WAIT(2), EXPECT(tool_down, "the tool put down, the window stays"),
+    AT_TIP("Inspector", "Draw round what you want"), CLICK, WAIT(2), EXPECT(tool_down, "the tool put down, the window stays"),
     DO(sel_none), WAIT(2),
 
     CASE("selection: faces up to the feature edges, an edge chain, the part"),
-    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Selection", "Click an outer face"), CLICK, WAIT(2),
+    DO(sel_none), DO(fit_view), DO(open_select), WAIT(3), AT_TIP("Inspector", "Click an outer face"), CLICK, WAIT(2),
     AT_MODEL, CLICK, WAIT(2), EXPECT(faces_took, "the faces' elements"),
-    DO(sel_none), AT_TIP("Selection", "Click near a feature edge"), CLICK, WAIT(2), EXPECT(chain_armed, "the edge chain armed"), AT_MODEL, CLICK, WAIT(2),
+    DO(sel_none), AT_TIP("Inspector", "Click near a feature edge"), CLICK, WAIT(2), EXPECT(chain_armed, "the edge chain armed"), AT_MODEL, CLICK, WAIT(2),
     EXPECT(chain_took, "the nodes along a feature edge"),
-    DO(sel_none), AT_TIP("Selection", "Click an element: every shown element"), CLICK, WAIT(2), AT_MODEL, CLICK, WAIT(2),
+    DO(sel_none), AT_TIP("Inspector", "Click an element: every shown element"), CLICK, WAIT(2), AT_MODEL, CLICK, WAIT(2),
     EXPECT(part_took, "the whole part"),
     DO(sel_none), WAIT(2),
 
     CASE("selection: grow, shrink, boundary"),
-    DO(sel_none), DO(open_select), WAIT(3), DO(ids_some), WAIT(2), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
-    DO(sel_remember), AT_TIP("Selection", "Grow: one layer more"), CLICK, WAIT(2), EXPECT(sel_grew, "grow: more elements"),
-    DO(sel_remember), AT_TIP("Selection", "Shrink: one layer less"), CLICK, WAIT(2), EXPECT(sel_shrank, "shrink: fewer"),
-    AT_TIP("Selection", "Boundary: the nodes on the outside"), CLICK, WAIT(2), EXPECT(sel_boundary, "its boundary nodes and elements"),
+    DO(sel_none), DO(open_select), WAIT(3), DO(ids_some), WAIT(2), AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2),
+    DO(sel_remember), AT_TIP("Inspector", "Grow: one layer more"), CLICK, WAIT(2), EXPECT(sel_grew, "grow: more elements"),
+    DO(sel_remember), AT_TIP("Inspector", "Shrink: one layer less"), CLICK, WAIT(2), EXPECT(sel_shrank, "shrink: fewer"),
+    AT_TIP("Inspector", "Boundary: the nodes on the outside"), CLICK, WAIT(2), EXPECT(sel_boundary, "its boundary nodes and elements"),
     DO(sel_none), WAIT(2),
 
     CASE("selection: filters select where, add the field's top %, drop a type"),
     DO(sel_none), DO(filters_on), DO(open_select), WAIT(3),
-    AT_TIP("Selection", "Keep what lies in this range"), CLICK, WAIT(2), EXPECT(sel_all, "nothing selected: every element in the range"),
-    DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), DO(sel_remember),
-    AT_TIP("Selection", "What you pick next joins the selection"), CLICK, WAIT(2),
-    AT_TIP("Selection", "The field shown: above or below"), CLICK, WAIT(2), EXPECT(select_popup, "the field list opens"),
-    AT_POPUP("Selection", 0.5f, 0.82f), CLICK, WAIT(2),
-    AT_TIP("Selection", "Keep what the field puts there"), CLICK, WAIT(2), EXPECT(sel_some, "add: the field's top 5 % joins"),
-    AT_TIP("Selection", "What you pick next leaves the selection"), CLICK, WAIT(2),
-    AT_TIP("Selection", "Keep the elements of this type"), CLICK, WAIT(2), EXPECT(sel_empty, "remove: every Hex20 leaves"),
+    AT_TIP("Inspector", "Keep what lies in this range"), CLICK, WAIT(2), EXPECT(sel_all, "nothing selected: every element in the range"),
+    DO(ids_1_20), AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2), DO(sel_remember),
+    AT_TIP("Inspector", "What you pick next joins the selection"), CLICK, WAIT(2),
+    AT_TIP("Inspector", "The field shown: above or below"), CLICK, WAIT(2), EXPECT(select_popup, "the field list opens"),
+    AT_POPUP("Inspector", 0.5f, 0.82f), CLICK, WAIT(2),
+    AT_TIP("Inspector", "Keep what the field puts there"), CLICK, WAIT(2), EXPECT(sel_some, "add: the field's top 5 % joins"),
+    AT_TIP("Inspector", "What you pick next leaves the selection"), CLICK, WAIT(2),
+    AT_TIP("Inspector", "Keep the elements of this type"), CLICK, WAIT(2), EXPECT(sel_empty, "remove: every Hex20 leaves"),
     DO(filters_off), WAIT(2),
 
     CASE("selection: its parts fold and open by their headers"),
-    DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Selection", "Pick: the mode"), CLICK, WAIT(2), EXPECT(pick_folded, "pick folded, use still open"),
-    AT_TIP("Selection", "Pick: the mode"), CLICK, WAIT(2), EXPECT(pick_open, "pick open again"),
-    AT_TIP("Selection", "Kept by name: the selection kept"), CLICK, WAIT(2), EXPECT(named_unfolded, "kept by name opens"),
+    DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Inspector", "Pick: the mode"), CLICK, WAIT(2), EXPECT(pick_folded, "pick folded, use still open"),
+    AT_TIP("Inspector", "Pick: the mode"), CLICK, WAIT(2), EXPECT(pick_open, "pick open again"),
+    AT_TIP("Inspector", "Kept by name: the selection kept"), CLICK, WAIT(2), EXPECT(named_unfolded, "kept by name opens"),
 
     CASE("selection: kept by name, taken back, renamed, forgotten"),
-    DO(sel_none), DO(app_nsel_clear_ctx), DO(named_open), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2),
-    DO(name_holea), AT_TIP("Selection", "Keep the selection under this name"), CLICK, WAIT(3), EXPECT(kept_one, "kept as HOLEA"),
-    AT_TIP("Selection", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "cleared"),
-    AT_TIP("Selection", "#named sel HOLEA"), CLICK, WAIT(2), EXPECT(sel_20k, "HOLEA selected again"),
-    DO(name_hb), AT_TIP("Selection", "#named ren HOLEA"), CLICK, WAIT(2), EXPECT(renamed, "renamed HB"),
-    AT_TIP("Selection", "#named del HB"), CLICK, WAIT(2), EXPECT(none_kept, "forgotten"),
+    DO(sel_none), DO(app_nsel_clear_ctx), DO(named_open), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2),
+    DO(name_holea), AT_TIP("Inspector", "Keep the selection under this name"), CLICK, WAIT(3), EXPECT(kept_one, "kept as HOLEA"),
+    AT_TIP("Inspector", "Nothing selected"), CLICK, WAIT(2), EXPECT(sel_empty, "cleared"),
+    AT_TIP("Inspector", "#named sel HOLEA"), CLICK, WAIT(2), EXPECT(sel_20k, "HOLEA selected again"),
+    DO(name_hb), AT_TIP("Inspector", "#named ren HOLEA"), CLICK, WAIT(2), EXPECT(renamed, "renamed HB"),
+    AT_TIP("Inspector", "#named del HB"), CLICK, WAIT(2), EXPECT(none_kept, "forgotten"),
     DO(use_end), WAIT(2),
 
     CASE("selection: crop, clip, labels, deck lines to a file, CSV, isolate"),
-    DO(sel_none), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Selection", "Take them by the mode"), CLICK, WAIT(2), DO(name_holea),
-    AT_TIP("Selection", "The clip plane through the selection"), CLICK, WAIT(2), EXPECT(sel_clipped, "the clip plane on"),
-    AT_TIP("Selection", "Labels on the selection only"), CLICK, WAIT(2), EXPECT(labels_sel, "labels on the selection"),
-    AT_TIP("Selection", "The same lines to"), CLICK, WAIT(2), EXPECT(inp_saved, "<model>_HOLEA.inp with its *ELSET"),
-    AT_TIP("Selection", "The selected elements (or nodes) with their place"), CLICK, WAIT(2), EXPECT(csv_saved, "the CSV"),
-    AT_TIP("Selection", "The crop box round the selection"), CLICK, WAIT(10), EXPECT(cropped, "cropped, the selection kept"),
-    AT_TIP("Selection", "Show only the selected elements"), CLICK, WAIT(10), EXPECT(isolated, "only the 20 shown"),
+    DO(sel_none), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2), DO(name_holea),
+    AT_TIP("Inspector", "The clip plane through the selection"), CLICK, WAIT(2), EXPECT(sel_clipped, "the clip plane on"),
+    AT_TIP("Inspector", "Labels on the selection only"), CLICK, WAIT(2), EXPECT(labels_sel, "labels on the selection"),
+    AT_TIP("Inspector", "The same lines to"), CLICK, WAIT(2), EXPECT(inp_saved, "<model>_HOLEA.inp with its *ELSET"),
+    AT_TIP("Inspector", "The selected elements (or nodes) with their place"), CLICK, WAIT(2), EXPECT(csv_saved, "the CSV"),
+    AT_TIP("Inspector", "The crop box round the selection"), CLICK, WAIT(10), EXPECT(cropped, "cropped, the selection kept"),
+    AT_TIP("Inspector", "Show only the selected elements"), CLICK, WAIT(10), EXPECT(isolated, "only the 20 shown"),
     DO(use_end), WAIT(10),
 
     CASE("selection: a name from the list, the click tool toggles an element"),
-    DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Selection", "A deck element or node set"), CLICK, WAIT(2),
-    EXPECT(select_popup, "the name list opens"), AT_POPUP("Selection", 0.5f, 0.25f), CLICK, WAIT(2),
-    AT_TIP("Selection", "Take it by the mode"), CLICK, WAIT(2), EXPECT(sel_any, "the name picked is selected"),
-    DO(sel_none), DO(fit_view), WAIT(2), AT_TIP("Selection", "Click elements (nodes) in the view"), CLICK, WAIT(2), EXPECT(click_armed, "the click tool armed"),
+    DO(sel_none), DO(open_select), WAIT(3), AT_TIP("Inspector", "A deck element or node set"), CLICK, WAIT(2),
+    EXPECT(select_popup, "the name list opens"), AT_POPUP("Inspector", 0.5f, 0.25f), CLICK, WAIT(2),
+    AT_TIP("Inspector", "Take it by the mode"), CLICK, WAIT(2), EXPECT(sel_any, "the name picked is selected"),
+    DO(sel_none), DO(fit_view), WAIT(2), AT_TIP("Inspector", "Click elements (nodes) in the view"), CLICK, WAIT(2), EXPECT(click_armed, "the click tool armed"),
     AT_MODEL, CLICK, WAIT(2), EXPECT(sel_one, "a click selects the element under it"),
     AT_MODEL, CLICK, WAIT(2), EXPECT(sel_empty, "a second click takes it out"),
     DO(sel_none), WAIT(2),
@@ -1299,7 +1322,11 @@ static const step script[] = {
     DO(mq_undeformed), WAIT(3), EXPECT(mq_same, "undeformed: the same on another step"), DO(mq_reset), WAIT(3), PANELS_ANSWER,
     CLOSED_THEN_PANELS("About", open_about, about_gone),
     CLOSED_THEN_PANELS("Title block", open_title_settings, title_settings_gone),
-    CLOSED_THEN_PANELS("Measurements", open_measure, measure_gone),
+    CASE("measure tab: its tab shows it, an angle armed there, another tab cancels it"),
+    DO(close_all), DO(meas_clear), WAIT(2), AT_TIP("Inspector", "Measure: distances"), CLICK, WAIT(2), EXPECT(measure_shown, "the Measure tab"),
+    AT_TIP("Inspector", "#meas new angle"), CLICK, WAIT(2), EXPECT(meas_angle_armed, "an angle waits for its first node"),
+    AT_TIP("Inspector", "Inspect: what a click"), CLICK, WAIT(2), EXPECT(measure_left, "Inspect: the angle cancelled"),
+    PANELS_ANSWER,
 
     CASE("measurements: armed from the probe, a second click on the model makes a distance"),
     DO(close_all), DO(meas_clear), DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2),
@@ -1315,12 +1342,12 @@ static const step script[] = {
 
     CASE("measurements: the window arms one, its list picks what the labels show, a row is deleted"),
     DO(close_all), DO(meas_add_ids), DO(open_measure), WAIT(3), EXPECT(measure_shown, "the window opens"),
-    AT_TIP("Measurements", "#meas new angle"), CLICK, WAIT(2), EXPECT(meas_angle_armed, "an angle waits for its first node"),
+    AT_TIP("Inspector", "#meas new angle"), CLICK, WAIT(2), EXPECT(meas_angle_armed, "an angle waits for its first node"),
     DO(meas_cancel), WAIT(2),
-    AT_TIP("Measurements", "What the labels in the view give"), WAIT(30), CLICK, WAIT(2), EXPECT(measure_popup, "the list opens"),
-    AT_POPUP("Measurements", 0.5f, 0.85f), CLICK, WAIT(2), EXPECT(meas_shows_def, "the labels show one value"),
-    AT_TIP("Measurements", "Save them as"), CLICK, WAIT(2), EXPECT(meas_csv_saved, "the CSV holds both states"),
-    AT_TIP("Measurements", "#meas delete 1"), CLICK, WAIT(2), EXPECT(meas_none, "the row is deleted"),
+    AT_TIP("Inspector", "What the labels in the view give"), WAIT(30), CLICK, WAIT(2), EXPECT(measure_popup, "the list opens"),
+    AT_POPUP("Inspector", 0.5f, 0.85f), CLICK, WAIT(2), EXPECT(meas_shows_def, "the labels show one value"),
+    AT_TIP("Inspector", "Save them as"), CLICK, WAIT(2), EXPECT(meas_csv_saved, "the CSV holds both states"),
+    AT_TIP("Inspector", "#meas delete 1"), CLICK, WAIT(2), EXPECT(meas_none, "the row is deleted"),
     DO(meas_clear), DO(close_all), WAIT(2), PANELS_ANSWER,
     CLOSED_THEN_PANELS("Integrals", open_integrals, integrals_gone),
 

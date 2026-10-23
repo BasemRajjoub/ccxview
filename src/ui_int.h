@@ -59,7 +59,6 @@
 #define window_path             uii_window_path
 #define window_history          uii_window_history
 #define window_convergence      uii_window_convergence
-#define window_measure          uii_window_measure
 #define ui_measure_row          uii_measure_row
 #define rows_rebar              uii_rows_rebar
 
@@ -177,7 +176,6 @@ void section_failure(struct nk_context* ctx, float s, float row);
 void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_mesh.c */
 void section_mesh(struct nk_context* ctx, float s, float row);
 void section_label(struct nk_context* ctx, float s, float row);    /* ui_label.c */
-void window_measure(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_measure.c */
 /* "measure:  distance  angle  circle" on a row; the kind clicked, -1 none (the caller arms it) */
 int  ui_measure_row(struct nk_context* ctx, float s, float row, const char* mark);
 void rows_rebar(struct nk_context* ctx, float s, float row);    /* ui_rebar.c: REBAR's design values */
@@ -200,6 +198,7 @@ void uii_pane_edges(struct nk_context* ctx, float s, float W, float scene_x, flo
 bool uii_pane_edge_captured(float x, float y);       /* on an inner edge, or one is being dragged */
 void uii_pane_button(struct nk_context* ctx, int which);   /* hide / show: 0 the Scene pane, 1 the Inspector */
 void uii_panel_inspector(struct nk_context* ctx, float s, float row);
+void uii_tabs_sync(void);    /* G.show_select / show_measure set: the pane on that tab; and back */
 void uii_probe_readout(char* out, size_t n);           /* "node 123  element 4  S Mises = 4.5e2" */
 
 /* ---- ui_test.c: --ui-test. tip() reports its widget; widgets without a tooltip are
@@ -230,8 +229,7 @@ int* uii_fnode_state(const char* key, bool open);
 void uii_field_options(struct nk_context* ctx, float s, float row, const cv_field_desc* d, bool active);
 void uii_gauss_options(struct nk_context* ctx, float s, float row, const char* name);
 
-/* ---- ui_select.c: the Selection window */
-void uii_window_select(struct nk_context* ctx, float s, float row, int fw, int fh);
+/* ---- ui_select.c: the Inspector's Selection tab */
 void uii_select_body(struct nk_context* ctx, float s, float row);       /* its rows */
 void uii_select_ids(const char* text, bool nodes);    /* the id box's text (the interface test) */
 void uii_select_name(const char* text);               /* the name box's text (the interface test) */
