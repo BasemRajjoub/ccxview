@@ -48,6 +48,7 @@ static struct {
     bool case_failed, shot;
     char shot_path[1200];
     bool pressed; float px, py;         /* a press sent last frame: the window under it must be active now */
+    struct nk_window* pwin;             /* ... the window it hit */
     unsigned windows;                   /* how many windows there were before it */
     uint64_t frame;
 } T;
@@ -87,7 +88,13 @@ static void send(sapp_event_type type, int button, float scroll) {
     T.send(&ev);
 }
 static void move_to(float x, float y) { T.mx = roundf(x); T.my = roundf(y); send(SAPP_EVENTTYPE_MOUSE_MOVE, 0, 0); }
-static void press(int b) { if (!T.down[b]) { T.down[b] = true; send(SAPP_EVENTTYPE_MOUSE_DOWN, b, 0); T.pressed = b == 0; T.px = T.mx; T.py = T.my; } }
+static struct nk_window* input_window_at(struct nk_context* ctx, float x, float y);
+static struct nk_context* g_ctx;
+static void press(int b) {
+    if (T.down[b]) return;
+    T.pwin = g_ctx ? input_window_at(g_ctx, T.mx, T.my) : NULL;
+    T.down[b] = true; send(SAPP_EVENTTYPE_MOUSE_DOWN, b, 0); T.pressed = b == 0; T.px = T.mx; T.py = T.my;
+}
 static void release(int b) { if (T.down[b]) { T.down[b] = false; send(SAPP_EVENTTYPE_MOUSE_UP, b, 0); } }
 
 /* the window list, bottom to top, with what a failure usually turns on */
@@ -100,7 +107,6 @@ static void dump_windows(struct nk_context* ctx) {
     fprintf(stderr, "\n");
 }
 
-static struct nk_context* g_ctx;
 static void fail(const char* fmt, ...) {
     char msg[400];
     va_list ap;
@@ -144,13 +150,15 @@ static struct nk_window* input_window_at(struct nk_context* ctx, float x, float 
 
 /* Holds after every frame, whatever the script does: a press on a window leaves
    that window active and taking input. Not when the press opened a list in it (the
-   window is read only under its own list) or opened a new window (that one is active). */
+   window is read only under its own list), opened a new window (that one is active) or
+   closed the window it hit (its close button over another one). */
 static void check_always(struct nk_context* ctx) {
     if (T.pressed) {
         struct nk_window* w = input_window_at(ctx, T.px, T.py);
         bool list = w && w->popup.win && w->popup.active;
         bool opened = ctx->count > T.windows;
-        if (w && !list && !opened && !(w->flags & NK_WINDOW_BACKGROUND) && (ctx->active != w || (w->flags & NK_WINDOW_ROM)))
+        bool closed = T.pwin && T.pwin != w && (T.pwin->flags & (NK_WINDOW_HIDDEN | NK_WINDOW_CLOSED));
+        if (w && !list && !opened && !closed && !(w->flags & NK_WINDOW_BACKGROUND) && (ctx->active != w || (w->flags & NK_WINDOW_ROM)))
             fail("a press at %.0f,%.0f on '%s' left it %s (active: '%s')", T.px, T.py, w->name_string,
                  ctx->active != w ? "inactive" : "read only", ctx->active ? ctx->active->name_string : "none");
     }
@@ -172,8 +180,31 @@ static void close_all(struct nk_context* ctx) {
     G.show_measure = false; app_measure_cancel();
     G.show_contact = false;
     G.show_select = false; G.sel_tool = CV_ST_NONE; G.sel_mode = CV_SEL_NEW;
+    G.scene_on = G.insp_on = true;
     G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true; G.sel_open[CV_SELG_NAMED] = false;
 }
+/* the panes: both shown at their usual widths */
+static void panes_reset(struct nk_context* ctx) { G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 300.f; G.insp_tab = CV_TAB_INSPECT; }
+static bool insp_hidden(struct nk_context* ctx) { return !G.insp_on && !win_of(ctx, "Inspector"); }
+static bool insp_shown(struct nk_context* ctx) { return G.insp_on && win_of(ctx, "Inspector"); }
+static bool scene_hidden(struct nk_context* ctx) { return !G.scene_on && !win_of(ctx, "Scene") && G.vp_x == 0; }
+static bool scene_shown(struct nk_context* ctx) { return G.scene_on && win_of(ctx, "Scene") && G.vp_x > 0; }
+static float pane_was;
+static void at_insp_edge(struct nk_context* ctx) {
+    struct nk_window* w = win_of(ctx, "Inspector");
+    pane_was = G.insp_w;
+    if (w) move_to(w->bounds.x - 2, w->bounds.y + w->bounds.h * 0.5f);
+}
+static void at_scene_edge(struct nk_context* ctx) {
+    struct nk_window* w = win_of(ctx, "Scene");
+    pane_was = G.scene_w;
+    if (w) move_to(w->bounds.x + w->bounds.w + 2, w->bounds.y + w->bounds.h * 0.5f);
+}
+static void edge_left(struct nk_context* ctx) { move_to(T.mx - 40, T.my); }
+static void edge_right(struct nk_context* ctx) { move_to(T.mx + 40, T.my); }
+static bool turned(struct nk_context* ctx);
+static bool insp_wider(struct nk_context* ctx) { return G.insp_w > pane_was + 50 && !turned(ctx); }
+static bool scene_wider(struct nk_context* ctx) { return G.scene_w > pane_was + 50 && !turned(ctx); }
 static void snapshot(struct nk_context* ctx) {
     was.cmap = G.cmap; was.bands = G.bands; was.faces_mode = G.faces_mode; was.units = G.units; was.cyc_axis = G.cyc_axis;
     was.tensor_style = G.tensor_style; was.traj_which = G.traj_which;
@@ -238,12 +269,12 @@ static bool min_marked(struct nk_context* ctx) { return G.sel_mark_min && G.boxq
 static void remember_nodes_turn(struct nk_context* ctx) { seln_was = G.seln_n; G.cam.yaw += 0.7f; G.cam.pitch += 0.3f; }
 static bool nodes_kept(struct nk_context* ctx) { return !G.sel_elems && G.sel_n == 0 && G.seln_n == seln_was && seln_was > 0; }
 /* the Selection window */
-static void open_select(struct nk_context* ctx) { G.show_select = true; }
+static void open_select(struct nk_context* ctx) { G.show_select = true; G.insp_on = false; }   /* room for the window */
 static bool select_gone(struct nk_context* ctx) { return !G.show_select; }
 static bool select_shown(struct nk_context* ctx) { return G.show_select && win_of(ctx, "Selection"); }
 static uint32_t sel_was, seln_was2;
 static void sel_remember(struct nk_context* ctx) { sel_was = G.sel_n; seln_was2 = G.seln_n; }
-static void sel_none(struct nk_context* ctx) { app_sel_clear(); G.sel_elems = true; G.sel_nodes = false; G.sel_visible = true; G.probe_on = false; }
+static void sel_none(struct nk_context* ctx) { app_sel_clear(); G.sel_elems = true; G.sel_nodes = false; G.sel_visible = true; G.probe_on = false; G.insp_on = false; }
 static void ids_1_20(struct nk_context* ctx) { uii_select_ids("1-20, 9999, x9", false); }
 static void ids_10_30(struct nk_context* ctx) { uii_select_ids("10-30", false); }
 static bool sel_20(struct nk_context* ctx) { return G.sel_n == 20 && !G.seln_n && G.boxq.on && G.sel_note[0]; }   /* 9999 is not there, x9 is no id */
@@ -980,6 +1011,24 @@ static const step script[] = {
     EXPECT(scale_tiny, "a typed 1e-5 is taken, auto off"),
     AT_TIP("Toolbar", "Smaller: the scale"), CLICK, WAIT(2), EXPECT(scale_smaller, "the arrow steps it down by a fifth"),
 
+    CASE("panes: ] and its button hide and show the Inspector, [ and the buttons the Scene pane"),
+    DO(close_all), DO(panes_reset), WAIT(3), EXPECT(insp_shown, "the Inspector is shown at first"),
+    TYPE("]"), WAIT(3), EXPECT(insp_hidden, "] hides it"),
+    AT_TIP("Toolbar", "Show the Inspector"), CLICK, WAIT(3), EXPECT(insp_shown, "the toolbar's button shows it"),
+    AT_TIP("Toolbar", "Hide the Inspector"), CLICK, WAIT(3), EXPECT(insp_hidden, "and hides it"),
+    TYPE("]"), WAIT(3), EXPECT(insp_shown, "] shows it again"),
+    AT_TIP("Scene", "Hide the Scene pane"), CLICK, WAIT(3), EXPECT(scene_hidden, "the Scene's button hides it, the view takes its room"),
+    AT_TIP("Toolbar", "Show the Scene pane"), CLICK, WAIT(3), EXPECT(scene_shown, "the toolbar's button brings it back"),
+    TYPE("["), WAIT(3), EXPECT(scene_hidden, "[ hides it"), TYPE("["), WAIT(3), EXPECT(scene_shown, "[ shows it"),
+    PANELS_ANSWER,
+
+    CASE("panes: their inner edges drag wider, the model stays put"),
+    DO(close_all), DO(panes_reset), WAIT(3), DO(snapshot), DO(at_insp_edge), WAIT(2), PRESS, DO(edge_left), WAIT(1), DO(edge_left), WAIT(1),
+    RELEASE, WAIT(2), EXPECT(insp_wider, "the Inspector is wider"),
+    DO(snapshot), DO(at_scene_edge), WAIT(2), PRESS, DO(edge_right), WAIT(1), DO(edge_right), WAIT(1), RELEASE, WAIT(2),
+    EXPECT(scene_wider, "the Scene pane is wider"),
+    DO(panes_reset), WAIT(3), PANELS_ANSWER,
+
     CASE("max in a box: armed by its button, a drag over the view probes the max"),
     DO(open_legend_settings), WAIT(3), AT_TIP("Legend settings", TIP_BOX), CLICK, EXPECT(box_armed, "the next drag is a box"),
     DO(close_all), WAIT(2), AT_VIEW(0.01f, 0.01f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.99f, 0.99f), RELEASE, WAIT(2),
@@ -1107,13 +1156,13 @@ static const step script[] = {
     AT_TIP("Scene", "Labels in front of everything"), CLICK, EXPECT(labels_behind, "the front box toggles"), DO(labels_front),
     AT_TIP("Scene", "The field's value at every Gauss point"), CLICK, WAIT(4), EXPECT(labels_gauss, "Gauss point values show, the layer on"),
     DO(gauss_off),
-    DO(snapshot), AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "the model turns with labels up"),
+    DO(snapshot), AT_VIEW(0.45f, 0.04f), PRESS, AT_VIEW(0.5f, 0.07f), AT_VIEW(0.55f, 0.1f), RELEASE, EXPECT(turned, "the model turns with labels up"),
     DO(labels_off), WAIT(2),
 
     CASE("ids shown: a drag in the view still turns the model; closing the probe clears them"),
     DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2), DO(ids_on), WAIT(3), EXPECT(labels_shown, "the probed element's ids show"),
     DO(probe_close), WAIT(3), EXPECT(labels_none, "closing the probe leaves no labels"), AT_MODEL, CLICK, WAIT(3), DO(snapshot),
-    AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "the camera turns with the ids overlay on"),
+    AT_VIEW(0.45f, 0.04f), PRESS, AT_VIEW(0.5f, 0.07f), AT_VIEW(0.55f, 0.1f), RELEASE, EXPECT(turned, "the camera turns with the ids overlay on"),
     DO(ids_off), DO(close_all), DO(fit_view), WAIT(2),
 
     CASE("labels: a label dragged moves, not the camera; the menu and the panel reset it"),
@@ -1129,7 +1178,7 @@ static const step script[] = {
     CASE("details: open beside the probe, the model still turns"),
     DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2), AT_TIP("Probe", "Everything about this node"), CLICK, WAIT(3),
     EXPECT(details_shown, "the Details window opens"), EXPECT(details_clear_of_view, "it sits at the left, off the model's middle"),
-    DO(snapshot), AT_VIEW(0.75f, 0.3f), PRESS, AT_VIEW(0.8f, 0.35f), AT_VIEW(0.85f, 0.4f), RELEASE, EXPECT(turned, "a drag beside it turns the model"),
+    DO(snapshot), AT_VIEW(0.45f, 0.04f), PRESS, AT_VIEW(0.5f, 0.07f), AT_VIEW(0.55f, 0.1f), RELEASE, EXPECT(turned, "a drag beside it turns the model"),
     DO(close_all), DO(fit_view), WAIT(2),
     AT_VIEW(0.02f, 0.5f), CLICK, PANELS_ANSWER,
 
@@ -1504,7 +1553,7 @@ static const step script[] = {
 
     CASE("the view after a window closed over it: a drag turns the model at once"),
     DO(open_units), WAIT(3), AT_CLOSE("Units"), CLICK, EXPECT(units_gone, "Units is closed"),
-    DO(snapshot), PRESS, AT_VIEW(0.6f, 0.55f), AT_VIEW(0.7f, 0.6f), RELEASE, EXPECT(turned, "the camera turns"),
+    DO(snapshot), AT_VIEW(0.45f, 0.08f), PRESS, AT_VIEW(0.6f, 0.55f), AT_VIEW(0.7f, 0.6f), RELEASE, EXPECT(turned, "the camera turns"),
 
     CASE("two windows: closing the top one leaves the other and the panels usable"),
     DO(open_messages), WAIT(3), DO(open_units), WAIT(3), AT_CLOSE("Units"), CLICK, WAIT(2), EXPECT(units_gone, "Units is closed"),

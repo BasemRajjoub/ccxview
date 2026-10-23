@@ -150,7 +150,7 @@ void window_legend_settings(struct nk_context* ctx, float s, float row);
 void window_axes(struct nk_context* ctx, float s);
 /* overlays on the 3D view (legend, gizmo, title block): moved by a drag from any
    point of them, kept as a view corner (anchor.h); text in the legend's ink */
-typedef struct { bool down, moving, dropped; float px, py, ox, oy; } ov_drag;
+typedef struct { bool down, moving, dropped, clicked; float px, py, ox, oy; } ov_drag;   /* clicked: let go unmoved */
 cv_box view_box(void);
 void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box at, float keep_right,
                   cv_anchor* pos, float s);
@@ -197,6 +197,13 @@ void window_nav(struct nk_context* ctx, float s);
 void window_find(struct nk_context* ctx, float s, float row);
 void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh);
 void drop_hint(struct nk_context* ctx, float s, float row);
+
+/* ---- ui_inspector.c: the panes at the sides of the view, the Inspector at the right */
+void uii_pane_widths(float W, float s, float* sw, float* iw);   /* px this frame, 0 hidden */
+void uii_pane_edges(struct nk_context* ctx, float s, float W, float scene_x, float insp_x, float y0, float y1);
+bool uii_pane_edge_captured(float x, float y);       /* on an inner edge, or one is being dragged */
+void uii_pane_button(struct nk_context* ctx, int which);   /* hide / show: 0 the Scene pane, 1 the Inspector */
+void uii_panel_inspector(struct nk_context* ctx, float s, float row);
 
 /* ---- ui_test.c: --ui-test. tip() reports its widget; widgets without a tooltip are
    marked by a name starting with '#'. Nothing unless a test runs. */

@@ -749,9 +749,11 @@ void recent_buttons(struct nk_context* ctx, float row) {
 void panel_scene(struct nk_context* ctx, float s, float row) {
     /* open */
     nk_layout_row_template_begin(ctx, row);
+    if (G.loaded) nk_layout_row_template_push_static(ctx, 24 * s);    /* hide the pane */
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 76 * s);
     nk_layout_row_template_end(ctx);
+    if (G.loaded) uii_pane_button(ctx, 0);
     if (g_focus_open) { nk_edit_focus(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER); g_focus_open = false; }
     tip(ctx, "Path of a .frd / .inp / .fbd / .dat / .stl, then Enter  (Ctrl+L)");
     nk_flags ev = nk_edit_string(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, G.open_buf, &G.open_len,

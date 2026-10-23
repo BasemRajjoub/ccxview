@@ -70,6 +70,8 @@ enum { CV_CACHE_N = 8 };
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
 /* the Selection window's parts that fold */
 enum { CV_SELG_PICK, CV_SELG_NAMES, CV_SELG_USE, CV_SELG_NAMED, CV_SELG_N };
+/* the Inspector pane's tabs */
+enum { CV_TAB_INSPECT, CV_TAB_SELECT, CV_TAB_MEASURE, CV_TAB_N };
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
@@ -478,6 +480,9 @@ typedef struct {
     bool      hide_legend, hide_axes; /* View: legend and axes gizmo off */
     bool      legend_box;            /* a white box with a border behind the legend, for pictures on a page */
     bool      hide_panels;           /* H: the 3D view alone, for screenshots */
+    bool      scene_on, insp_on;     /* the Scene pane (left, [) and the Inspector (right, ]) shown */
+    float     scene_w, insp_w;       /* their widths, px at scale 1 (dragged by the inner edge) */
+    int       insp_tab;              /* CV_TAB_*: the Inspector's tab */
     /* legend look (right-click the legend) */
     bool      legend_reverse;        /* colour map turned around */
     bool      legend_grey;           /* greyscale, for printing */

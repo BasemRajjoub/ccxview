@@ -83,6 +83,7 @@ ccxview tie.frd --set GLUE --opt tie_nodes=2 --opt model_alpha=0.4  # a tie's sl
                                             #   1 tied only, 2 not tied only, 3 none; the whole model see-through
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --no-panels --shot v.png  # the view alone, as H does
+ccxview model.frd --inspector 0             # the Inspector pane hidden (1 shown); --opt scene_on=0, scene_w=, insp_w=
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
@@ -203,6 +204,7 @@ It prints what it selected and the field's max and min over it.
 | space, ← → | play, step |
 | G | free flight (WASD, Esc to leave); View > Camera: the "eye" list cuts what lies just ahead, or hides whole elements there, to fly through walls |
 | H | view only, for screenshots |
+| [ / ] | hide or show the Scene pane (left) / the Inspector (right); the chevron buttons at their top corners do the same, and their inner edge drags them wider or narrower (both kept in the settings) |
 | click the legend's unit / right-click the legend | units / legend settings |
 | right-click the title block | its lines, date format, free text and the text they make, editable by hand (drag it to move it, like the legend) |
 | Ctrl+O / Ctrl+E / Ctrl+F | open / export PNG / find |
@@ -233,5 +235,6 @@ It prints what it selected and the field's max and min over it.
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: camera, colours and legend, symbol sizes, mirror, replicate, cyclic
   symmetry, clip and crop; the Measurements window.
+- **Inspector** (right panel): tabs Inspect, Selection, Measure.
 - **Toolbar**: deformation scale, animation, colour map, bands.
 - **Status bar**: units, messages.

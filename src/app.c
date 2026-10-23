@@ -121,6 +121,7 @@ static void init(void) {
     G.sym_auto = true; G.sym_thick = 1.f;
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
+    G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 300.f;
     G.model_alpha = 1.f;
     G.cel_show = G.cel_master = G.cel_front = G.contact_key = true;
     G.cel_draw = CV_CDRAW_LAYER; G.cel_by = CV_CBY_GAP; G.cel_closed = G.cel_open = true;
@@ -977,6 +978,11 @@ static void event(const sapp_event* ev) {
                 }
             }
             break;
+        case SAPP_EVENTTYPE_CHAR:            /* by the character: [ and ] lie elsewhere on other keyboards */
+            if (g_nk && ui_text_focus(g_nk)) break;
+            if (ev->char_code == '[') G.scene_on = !G.scene_on;
+            else if (ev->char_code == ']') G.insp_on = !G.insp_on;
+            break;
         case SAPP_EVENTTYPE_KEY_UP:
             if ((int)ev->key_code >= 0 && (int)ev->key_code < (int)SAPP_MAX_KEYCODES) g_keys[ev->key_code] = false;
             break;
@@ -1118,6 +1124,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--deck-window")) O.deck_window = true;
         else if (!strcmp(argv[i], "--contact-window")) O.contact_window = true;
         else if (!strcmp(argv[i], "--no-panels")) O.no_panels = true;
+        else if (!strcmp(argv[i], "--inspector") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = atoi(argv[++i]) ? "insp_on=1" : "insp_on=0";
         else if (!strcmp(argv[i], "--cel") && i + 1 < argc && O.ncel < 4) O.cel[O.ncel++] = argv[++i];
         else if (!strcmp(argv[i], "--set-alpha") && i + 1 < argc && O.nset_alpha < 8) O.set_alpha[O.nset_alpha++] = argv[++i];
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];

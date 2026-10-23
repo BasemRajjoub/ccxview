@@ -55,8 +55,9 @@ void cmap_combo(struct nk_context* ctx, float s, float row) {
 /* Two lines: what the shape does (deform, animate) above, how the field
    looks (colormap, bands, range) below. Camera controls live in the View tree. */
 void panel_toolbar(struct nk_context* ctx, float s, float row) {
-    /* line 1: deformation */
-    nk_layout_row_begin(ctx, NK_STATIC, row, 17);
+    /* line 1: deformation; the panes' buttons at its ends */
+    nk_layout_row_begin(ctx, NK_STATIC, row, 20);
+    if (!G.scene_on) { nk_layout_row_push(ctx, 24 * s); uii_pane_button(ctx, 0); }
     nk_layout_row_push(ctx, 80 * s);
     tip(ctx, "Draw the shape displaced by DISP x scale");
     nk_checkbox_label(ctx, "Deform", &G.deform);
@@ -132,6 +133,12 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
         tip(ctx, "Every symbol layer at once: supports, loads, couplings, springs (Layers: each on its own)");
         if (nk_checkbox_label(ctx, "Symbols", &any)) G.show_bc = G.show_loads = G.show_links = G.show_disc = any;
     }
+    nk_layout_row_push(ctx, 1);                  /* the rest of the line, then the Inspector's button */
+    float x = nk_widget_bounds(ctx).x, end = ctx->current->layout->bounds.x + ctx->current->layout->bounds.w;
+    nk_layout_row_push(ctx, CV_MAX(end - x - 24 * s - ctx->style.window.spacing.x, 1));
+    nk_spacing(ctx, 1);
+    nk_layout_row_push(ctx, 24 * s);
+    uii_pane_button(ctx, 1);
     nk_layout_row_end(ctx);
 
     /* line 2: colours */
@@ -798,7 +805,7 @@ void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box a
     const struct nk_input* in = &ctx->input;
     const struct nk_mouse_button* lb = &in->mouse.buttons[NK_BUTTON_LEFT];
     float mx = in->mouse.pos.x, my = in->mouse.pos.y;
-    d->dropped = false;
+    d->dropped = d->clicked = false;
     if (!d->down && lb->down && lb->clicked) {
         float cx = lb->clicked_pos.x, cy = lb->clicked_pos.y;
         struct nk_window* w = window_at(ctx, cx, cy);
@@ -808,7 +815,7 @@ void overlay_drag(struct nk_context* ctx, ov_drag* d, const char* name, cv_box a
         }
     }
     if (!d->down) return;
-    if (!lb->down) { d->dropped = d->moving; d->down = d->moving = false; return; }
+    if (!lb->down) { d->dropped = d->moving; d->clicked = !d->moving; d->down = d->moving = false; return; }
     if (!d->moving && fabsf(mx - d->px) + fabsf(my - d->py) > 4) d->moving = true;
     if (d->moving) *pos = cv_anchor_from_box((cv_box){ mx - d->ox, my - d->oy, at.w, at.h }, view_box(), s);
 }
@@ -862,10 +869,11 @@ void window_legend(struct nk_context* ctx, float s, float row) {
                 if (nk_input_is_mouse_click_in_rect(&ctx->input, NK_BUTTON_RIGHT, b)) G.legend_edit = true;
                 if (by_group) panel_group_legend(ctx, s, row);
                 else panel_legend(ctx, s, row);
-                /* a click on the title, not the end of a drag: the units of that field */
+                /* a click on the title, pressed there too (not a close button over it), not the end
+                   of a drag: the units of that field */
                 const struct nk_input* in = &ctx->input;
                 struct nk_window* top = window_at(ctx, in->mouse.pos.x, in->mouse.pos.y);
-                if (by_field && !legend_drag.dropped && top && !strcmp(top->name_string, "Legend") &&
+                if (by_field && legend_drag.clicked && top && !strcmp(top->name_string, "Legend") &&
                     nk_input_is_mouse_released(in, NK_BUTTON_LEFT) &&
                     nk_input_is_mouse_hovering_rect(in, legend_title) &&
                     NK_INBOX(in->mouse.buttons[NK_BUTTON_LEFT].clicked_pos.x, in->mouse.buttons[NK_BUTTON_LEFT].clicked_pos.y,

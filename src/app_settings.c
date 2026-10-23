@@ -107,6 +107,8 @@ static const setting S[] = {
     B(deform_auto), I(anim_mode, 0, 1), F(anim_period, 0.2f, 20), F(fps, 0.1f, 60),
     SEC("Export"),
     I(exp_kind, 0, 1), B(exp_video), I(exp_cycles, 1, 20), I(exp_fps, 1, 60), B(exp_lock_range), B(png_alpha),
+    SEC("Panes: the Scene (left) and the Inspector (right) shown, their widths in pixels at scale 1"),
+    B(scene_on), F(scene_w, 120, 2000), B(insp_on), F(insp_w, 120, 2000),
     SEC("Panel sections: open (1) or closed (0)"),
     TREE("layers", CV_TREE_LAYERS), TREE("groups", CV_TREE_GROUPS), TREE("fields", CV_TREE_FIELDS),
     TREE("view", CV_TREE_VIEW), TREE("camera", CV_TREE_CAMERA), TREE("colours", CV_TREE_COLOURS),

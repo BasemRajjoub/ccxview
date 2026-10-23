@@ -6,6 +6,7 @@
      ui_bars.c     toolbar, time bar, status bar, legend and its settings, axes gizmo
      ui_windows.c  messages, formula builder, probe, find, overlay, navigation mark, file browser, drop hint
      ui_plots.c    linearization, path, history and convergence plots
+     ui_inspector.c  the panes' widths and buttons, the Inspector (right) and its tabs
    This file also answers the input focus queries and holds the small widget helpers. */
 #include "app.h"
 #include "ui.h"
@@ -119,6 +120,7 @@ bool ui_text_focus(struct nk_context* ctx) {
 
 bool ui_mouse_captured(struct nk_context* ctx, bool wheel) {
     float mx = ctx->input.mouse.pos.x, my = ctx->input.mouse.pos.y;
+    if (!wheel && uii_pane_edge_captured(mx, my)) return true;
     for (struct nk_window* w = ctx->begin; w; w = w->next) {
         if (w->flags & NK_WINDOW_HIDDEN) continue;
         const struct nk_window* p = w->popup.active ? w->popup.win : NULL;
@@ -272,6 +274,11 @@ static void click_focus(struct nk_context* ctx) {
 }
 
 void ui_frame(struct nk_context* ctx, int fw, int fh) {
+    /* Nuklear, closing the active window, makes the one below it the list's end but
+       leaves the closed one linked after it; a hovered window then raised to the end
+       cuts it off, nk_window_find no longer sees it, and its next nk_begin opens it
+       afresh (a close button over the legend reopened the dialog). Mend the end. */
+    while (ctx->end && ctx->end->next) ctx->end = ctx->end->next;
     /* Nuklear, closing a window, hands the focus to the one below without raising
        it; once another window is added on top, that one stays active but read only
        and its buttons ignore clicks. Raise it. */
@@ -286,45 +293,53 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     const float s = U.scale;
     const float row = U.px + 10.f * s;
     const float pad = ctx->style.window.padding.y * 2;
-    const float panel_w = roundf(310 * s);
+    float panel_w, insp_w;                               /* the panes: 0 when hidden */
     const float trow = roundf(row * 1.35f);              /* time bar: room for step ticks */
     const float bar_h = trow + pad + 2;
     const float tool_h = 2 * row + ctx->style.window.spacing.y + pad + 2;
     const float status_h = row + pad + 2;
     const float W = (float)fw, H = (float)fh;
     const nk_flags fixed = NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR;
+    uii_pane_widths(W, s, &panel_w, &insp_w);
 
     G.vp_x = (int)panel_w;
     G.vp_y = (int)tool_h;
-    G.vp_w = CV_MAX((int)(W - panel_w), 1);
+    G.vp_w = CV_MAX((int)(W - panel_w - insp_w), 1);
     G.vp_h = CV_MAX((int)(H - status_h - bar_h - tool_h), 1);
     if (G.hide_panels && G.loaded) {         /* H: the view alone, legend and gizmo stay */
         G.vp_x = 0; G.vp_y = 0; G.vp_w = fw; G.vp_h = fh;
     }
 
     struct nk_rect r = nk_rect(0, 0, panel_w, H - status_h);
-    if (!G.hide_panels && nk_begin(ctx, "Scene", r, NK_WINDOW_BORDER)) {
+    if (panel_w > 0 && nk_begin(ctx, "Scene", r, NK_WINDOW_BORDER)) {
         nk_window_set_bounds(ctx, "Scene", r);
         panel_scene(ctx, s, row);
     }
-    if (!G.hide_panels) nk_end(ctx);
+    if (panel_w > 0) nk_end(ctx);
 
     if (G.loaded && !G.hide_panels) {
-        r = nk_rect(panel_w, 0, W - panel_w, tool_h);
+        r = nk_rect(panel_w, 0, W - panel_w, tool_h);       /* over the Inspector too: it has room there */
         if (nk_begin(ctx, "Toolbar", r, fixed)) {
             nk_window_set_bounds(ctx, "Toolbar", r);
             panel_toolbar(ctx, s, row);
         }
         nk_end(ctx);
 
-        r = nk_rect(panel_w, H - status_h - bar_h, W - panel_w, bar_h);
+        r = nk_rect(panel_w, H - status_h - bar_h, W - panel_w - insp_w, bar_h);
         if (nk_begin(ctx, "Timebar", r, fixed)) {
             nk_window_set_bounds(ctx, "Timebar", r);
             panel_timebar(ctx, s, trow, r.w - 2 * ctx->style.window.padding.x);
         }
         nk_end(ctx);
 
+        r = nk_rect(W - insp_w, tool_h, insp_w, H - status_h - tool_h);
+        if (insp_w > 0 && nk_begin(ctx, "Inspector", r, NK_WINDOW_BORDER)) {
+            nk_window_set_bounds(ctx, "Inspector", r);
+            uii_panel_inspector(ctx, s, row);
+        }
+        if (insp_w > 0) nk_end(ctx);
     }
+    uii_pane_edges(ctx, s, W, panel_w > 0 && G.loaded ? panel_w : -1, insp_w > 0 ? W - insp_w : -1, tool_h, H - status_h);
     window_title(ctx, s, row);
     window_legend(ctx, s, row);
     uii_window_contact_key(ctx, s, row);
