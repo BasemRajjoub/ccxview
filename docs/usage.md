@@ -199,6 +199,7 @@ It prints what it selected and the field's max and min over it.
 | X / Y / Z held + drag | orbit about that world axis only |
 | drag a label | move it (the camera stays); right-click it: Reset label |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
+| Ctrl+click | as in CAD: the node (Inspect tab's pick Node) or element (pick Element) under the cursor into the selection, or out of it if it is in; a plain click probes and clears the selection |
 | Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection tab's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (balls on them: the Selection tab's mark max / min, off by default; also a button in Colours & legend). the Inspector's Inspect tab shows all about the node, element and selection |
 | S | the Inspector's Selection tab (S again: back to Inspect): mode, box, click, lasso, faces, edge chain and part tools, invert, conversions, grow, shrink, boundary, by name, by id |
 | Alt+drag, Alt+← → | roll about the line of sight |

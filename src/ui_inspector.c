@@ -121,8 +121,8 @@ void uii_probe_readout(char* out, size_t n) {
 static void kind_row(struct nk_context* ctx, float s, float row) {
     static const char* name[CV_PK_N] = { "Node", "Element", "Face", "Edge" };
     static const char* tips[CV_PK_N] = {
-        "A click picks a node (and the element it is on)",
-        "A click picks an element: outlined in the view, its details first",
+        "A click picks a node (and the element it is on); Ctrl+click puts it in the selection or takes it out",
+        "A click picks an element: outlined in the view, its details first; Ctrl+click: in or out of the selection",
         "A click picks a face of an element: its surfaces, area, normal, the field over it",
         "A click picks the element's edge nearest it: its nodes, length, the field along it",
     };

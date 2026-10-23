@@ -43,6 +43,7 @@ static struct {
     bool resetting;                     /* a case's start is closing a list left open */
     float mx, my;
     bool down[3];
+    uint32_t mods;                      /* SAPP_MODIFIER_* held with the mouse */
     const char* name;                   /* the running case */
     int cases, failed, shots;
     bool case_failed, shot;
@@ -82,7 +83,7 @@ static const mark* find_mark(const char* win, const char* text) {
 /* ---- events ---------------------------------------------------------------------- */
 static void send(sapp_event_type type, int button, float scroll) {
     sapp_event ev = { .type = type, .frame_count = T.frame, .mouse_button = (sapp_mousebutton)button,
-                      .mouse_x = T.mx, .mouse_y = T.my, .scroll_y = scroll,
+                      .mouse_x = T.mx, .mouse_y = T.my, .scroll_y = scroll, .modifiers = T.mods,
                       .window_width = sapp_width(), .window_height = sapp_height(),
                       .framebuffer_width = sapp_width(), .framebuffer_height = sapp_height() };
     T.send(&ev);
@@ -294,6 +295,12 @@ static bool sel_all(struct nk_context* ctx) { return G.sel_n == G.frd.n_elems &&
 static void app_nsel_clear_ctx(struct nk_context* ctx) { app_nsel_clear(); }
 static bool sel_any(struct nk_context* ctx) { return (G.sel_n || G.seln_n) && !G.sel_note[0]; }
 static bool sel_one(struct nk_context* ctx) { return G.sel_n == 1 && G.sel_tool == CV_ST_CLICK; }
+/* Ctrl held, elements picked, no tool armed */
+static void ctrl_on(struct nk_context* ctx) { sel_none(ctx); G.sel_tool = CV_ST_NONE; G.pick_kind = CV_PK_ELEM; T.mods = SAPP_MODIFIER_CTRL; }
+static void ctrl_off(struct nk_context* ctx) { T.mods = 0; G.pick_kind = CV_PK_NODE; app_sel_clear(); }
+static bool turned(struct nk_context* ctx);
+static bool ctrl_added(struct nk_context* ctx) { return G.sel_n == 1 && !G.seln_n && !turned(ctx); }
+static bool ctrl_removed(struct nk_context* ctx) { return !G.sel_n && !G.seln_n && !turned(ctx); }
 static bool click_armed(struct nk_context* ctx) { return G.sel_tool == CV_ST_CLICK; }
 static bool sel_mode_add(struct nk_context* ctx) { return G.sel_mode == CV_SEL_ADD; }
 static bool sel_mode_remove(struct nk_context* ctx) { return G.sel_mode == CV_SEL_REMOVE; }
@@ -1180,6 +1187,12 @@ static const step script[] = {
     DO(name_hb), AT_TIP("Inspector", "#named ren HOLEA"), CLICK, WAIT(2), EXPECT(renamed, "renamed HB"),
     AT_TIP("Inspector", "#named del HB"), CLICK, WAIT(2), EXPECT(none_kept, "forgotten"),
     DO(use_end), WAIT(2),
+
+    CASE("selection: Ctrl+click puts the element under it in, again takes it out; no box zoom"),
+    DO(close_all), DO(fit_view), WAIT(2), DO(ctrl_on), AT_MODEL, WAIT(1), DO(snapshot), CLICK, WAIT(3),
+    EXPECT(ctrl_added, "the element in the selection, the view kept"),
+    CLICK, WAIT(3), EXPECT(ctrl_removed, "out again"),
+    DO(ctrl_off), WAIT(2), PANELS_ANSWER,
 
     CASE("selection: crop, clip, labels, deck lines to a file, CSV, isolate"),
     DO(sel_none), DO(open_select), WAIT(3), DO(ids_1_20), AT_TIP("Inspector", "Take them by the mode"), CLICK, WAIT(2), DO(name_holea),

@@ -609,6 +609,7 @@ void app_sel_facing(uint8_t* node, uint8_t* elem);   /* the side facing the came
 bool app_sel_take_elems(const uint32_t* el, uint32_t ne, int mode);
 bool app_sel_take_nodes(const uint32_t* nd, uint32_t nn, int mode);
 bool app_sel_click(float px, float py);         /* the armed tool (G.sel_tool) at the pixel; false: not taken */
+bool app_sel_ctrl_click(float px, float py);    /* Ctrl+click: what the pick kind picks there in or out of the selection */
 bool app_sel_invert(void);                      /* the ticked kinds: what is shown and not selected */
 bool app_sel_to_nodes(void);                    /* the selected elements' nodes, the elements dropped */
 bool app_sel_to_elems(bool any);                /* the shown elements with every (any) node selected, the nodes dropped */

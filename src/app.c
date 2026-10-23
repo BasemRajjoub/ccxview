@@ -928,6 +928,8 @@ static void event(const sapp_event* ev) {
                 if (G.sel_tool == CV_ST_NONE || !G.show_select) do_pick(ev->mouse_x, ev->mouse_y);
                 else app_sel_click(ev->mouse_x, ev->mouse_y);   /* a selection tool is armed: the click is its */
             }
+            if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_LEFT && drag.mode == CV_NAV_BOX && !G.box_pick)
+                app_sel_ctrl_click(ev->mouse_x, ev->mouse_y);   /* Ctrl+click, no box zoom: in or out of the selection */
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_RIGHT && !G.flight)   /* a right click: the menu */
                 app_menu_open(ev->mouse_x, ev->mouse_y);
             if (drag.down && !drag.moved && drag.button == SAPP_MOUSEBUTTON_MIDDLE && !G.flight) {
