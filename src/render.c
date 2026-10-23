@@ -1387,10 +1387,10 @@ void cv_render_draw(const cv_draw* d) {
         static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
         draw_layer(R.pip_pt_ni, A[CV_AUX_PICKPT].v, NO_IB, (int)A[CV_AUX_PICKPT].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size, true, 0.f, 0);
     }
-    if (A[CV_AUX_PICKLN].n) {                /* the probed element's, face's or edge's lines, on top, in the probe's gold */
+    if (A[CV_AUX_PICKLN].n) {                /* the probed element's, face's or edge's lines in the probe's gold, hidden where the model hides them */
         static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
-        draw_layer(R.pip_line_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, 1, true, 0.f, 0);
-        draw_layer(R.pip_pt_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size * 0.25f, true, 0.f, 0);
+        draw_layer(R.pip_line_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, 1, false, PULL, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size * 0.25f, false, PULL, 0);
     }
     if (A[CV_AUX_MEASLN].n) {                /* the measurements' lines, on top: dots along them make them read thicker */
         static const float meas_rgb[3] = { 0.1f, 0.85f, 1.0f };

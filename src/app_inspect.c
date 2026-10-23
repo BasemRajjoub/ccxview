@@ -91,7 +91,7 @@ static void push_ring(cv_fvec* pos, cv_fvec* disp, const uint32_t* r, int n, boo
 }
 
 /* the outline and toned faces of what is probed: the element (its edges, its skin
-   triangles), the face (its ring, a fan over it), the edge (its line); a node has
+   triangles), the face (its ring, its skin triangles), the edge (its line); a node has
    its ball already (app_path.c) */
 static void refresh(void) {
     cv_render_aux(CV_AUX_PICKLN, NULL, NULL, NULL, 0);
@@ -114,9 +114,11 @@ static void refresh(void) {
     } else if (G.pick_kind == CV_PK_FACE) {
         int n = app_pick_nodes(r);
         push_ring(&pos, &disp, r, n, true);
-        for (int i = 1; i + 1 < n; i++) {             /* a fan from the first node: faces are near flat, convex */
-            uint32_t t3[3] = { r[0], r[i], r[i + 1] };
-            for (int j = 0; j < 3; j++) { push_node(&tp, &td, t3[j]); push_val(&val, t3[j]); }
+        for (size_t t = 0; t < G.skin.n_tri; t++) {  /* the face's own skin triangles: toned, not redrawn */
+            if (G.skin.tri_elem[t] != e) continue;
+            uint32_t k = cv_skin_face_of_tri(&G.frd, &G.skin, (uint32_t)t);
+            if (k == UINT32_MAX || G.skin.face[k] != G.probe_face) continue;
+            for (int j = 0; j < 3; j++) { push_node(&tp, &td, G.skin.tri[3 * t + j]); push_val(&val, G.skin.tri[3 * t + j]); }
         }
     } else if (G.pick_kind == CV_PK_EDGE) {
         int n = app_pick_nodes(r);
