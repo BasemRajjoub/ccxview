@@ -554,7 +554,8 @@ it was left, and at first the filters and the kept ones are folded:
   the view, its details first), a face of it (its ring outlined; S-number, the
   deck surfaces it is on, area, outward normal, the field's average over it),
   or the element's edge nearest the click (its nodes, length, the field at its
-  ends and on average); kept in the settings, `--pick-kind`.
+  ends and on average); kept in the settings, `--pick-kind`. A node picked has
+  a ball on it; an element, face or edge only its gold outline.
 - Selection of elements and nodes (the Inspector's Selection tab, below), highlighted,
   with the field's max over it marked (the min too when asked: compression, the
   cold spot) and both in the window and the Inspect tab.
