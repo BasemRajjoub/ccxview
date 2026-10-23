@@ -85,9 +85,16 @@ static float probe_value_now(void) {
     return G.scalar ? G.scalar[G.probe.node] : NAN;
 }
 
-/* "S Mises = 4.5e2", "point 3: S Mises = 4.5e2"; "no field" */
+/* "S Mises = 4.5e2", "point 3: S Mises = 4.5e2"; over a face or edge picked, the
+   average; "no field" */
 static void probe_value_text(char* out, size_t n) {
     char num[32];
+    uint32_t nd[8];
+    if (G.has_field && app_pick_nodes(nd)) {
+        fmt_num(num, sizeof num, app_pick_average());
+        snprintf(out, n, "%s average %s", G.field_label, num);
+        return;
+    }
     float v = probe_value_now();
     fmt_num(num, sizeof num, v);
     if (app_field_category(v)) snprintf(num, sizeof num, "%s", app_field_category(v));
@@ -99,8 +106,39 @@ static void probe_value_text(char* out, size_t n) {
 /* "node 123  element 4  S Mises = 4.5e2": the probe in a line (the status bar) */
 void uii_probe_readout(char* out, size_t n) {
     char v[160];
+    uint32_t nd[8];
+    int k = app_pick_nodes(nd);
     probe_value_text(v, sizeof v);
-    snprintf(out, n, "node %u  element %u  %s", G.frd.node_id[G.probe.node], G.frd.elem_id[G.probe.elem], v);
+    const uint32_t* id = G.frd.node_id;
+    if (k && G.pick_kind == CV_PK_FACE)
+        snprintf(out, n, "face S%u of element %u  %s", (G.probe_face & 7) + 1, G.frd.elem_id[G.probe_face >> 3], v);
+    else if (k) snprintf(out, n, "edge %u - %u  %s", id[nd[0]], id[nd[k - 1]], v);
+    else if (G.pick_kind == CV_PK_ELEM) snprintf(out, n, "element %u  node %u  %s", G.frd.elem_id[G.probe.elem], id[G.probe.node], v);
+    else snprintf(out, n, "node %u  element %u  %s", id[G.probe.node], G.frd.elem_id[G.probe.elem], v);
+}
+
+/* what a click picks: node, element, face, edge */
+static void kind_row(struct nk_context* ctx, float s, float row) {
+    static const char* name[CV_PK_N] = { "Node", "Element", "Face", "Edge" };
+    static const char* tips[CV_PK_N] = {
+        "A click picks a node (and the element it is on)",
+        "A click picks an element: outlined in the view, its details first",
+        "A click picks a face of an element: its surfaces, area, normal, the field over it",
+        "A click picks the element's edge nearest it: its nodes, length, the field along it",
+    };
+    nk_layout_row_template_begin(ctx, row);
+    nk_layout_row_template_push_static(ctx, 34 * s);
+    for (int k = 0; k < CV_PK_N; k++) nk_layout_row_template_push_dynamic(ctx);
+    nk_layout_row_template_end(ctx);
+    nk_label_colored(ctx, "pick", NK_TEXT_LEFT, P.dim);
+    for (int k = 0; k < CV_PK_N; k++) {
+        nk_bool on = G.pick_kind == k;
+        tip(ctx, tips[k]);
+        nk_style_push_color(ctx, &ctx->style.selectable.text_normal_active, P.accent);
+        nk_style_push_color(ctx, &ctx->style.selectable.text_hover_active, P.accent);
+        if (nk_selectable_label(ctx, name[k], NK_TEXT_CENTERED, &on)) G.pick_kind = k;
+        nk_style_pop_color(ctx); nk_style_pop_color(ctx);
+    }
 }
 
 /* nothing picked: the model in a few lines */
@@ -141,6 +179,10 @@ static void probe_rows(struct nk_context* ctx, float s, float row) {
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "The field at the probe (Node and Element below: all about them)");
     nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
+    uint32_t nd[8];
+    if ((G.pick_kind == CV_PK_FACE || G.pick_kind == CV_PK_EDGE) && !app_pick_nodes(nd))
+        nk_label_colored(ctx, G.pick_kind == CV_PK_FACE ? "no face picked: click one on the model" : "no edge picked: click near one",
+                         NK_TEXT_LEFT, P.dim);
     nk_layout_row_dynamic(ctx, row, 3);
     nk_bool lb = G.label_probe_only && G.label_kinds;
     tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");
@@ -279,6 +321,7 @@ void uii_panel_inspector(struct nk_context* ctx, float s, float row) {
     uii_hsep(ctx, s);
     switch (G.insp_tab) {
     case CV_TAB_INSPECT:
+        kind_row(ctx, s, row);
         if (G.sel_n || G.seln_n) selection_rows(ctx, s, row);
         if (G.probe_on) probe_rows(ctx, s, row); else model_summary(ctx, s, row);
         break;

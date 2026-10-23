@@ -493,6 +493,7 @@ void app_probe_at(uint32_t i, bool element) {
     G.probe_ip = 0;
     G.boxq.on = false;
     G.probe_value = !G.has_field ? NAN : G.elem_mode ? (e != UINT32_MAX ? G.elem_val[e] : NAN) : G.scalar[n];
+    app_pick_clear();
 }
 
 bool app_find(uint32_t id, bool element) {
@@ -765,6 +766,7 @@ void do_pick(float px, float py) {
             int ip; float v;
             if (gp_probe(G.probe.elem, h, sc, &ip, &v)) { G.probe_ip = ip; G.probe_value = v; }
         }
-    }
+        app_pick_kind_apply(o, d);
+    } else app_pick_clear();
 }
 

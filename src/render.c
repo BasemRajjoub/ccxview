@@ -1345,6 +1345,12 @@ void cv_render_draw(const cv_draw* d) {
         draw_layer(R.pip_tri_ni, A[CV_AUX_SELTRI].v, NO_IB, (int)A[CV_AUX_SELTRI].n, m, d->face_rgb, d->shade, d, 1, false, PULL, 0);
         g_tint = 0.f;
     }
+    if (d->faces && A[CV_AUX_PICKTRI].n) {   /* the probed element or face, toned as the selection is */
+        int m = d->faces_color == CV_COLOR_NODAL || d->faces_color == CV_COLOR_ELEM ? CV_COLOR_NODAL : CV_COLOR_SOLID;
+        g_tint = 1.f;
+        draw_layer(R.pip_tri_ni, A[CV_AUX_PICKTRI].v, NO_IB, (int)A[CV_AUX_PICKTRI].n, m, d->face_rgb, d->shade, d, 1, false, PULL, 0);
+        g_tint = 0.f;
+    }
     if (d->ghost && d->def_scale != 0.f) {   /* the shape before deformation, faint */
         static const float ghost_rgb[3] = { 0.55f, 0.55f, 0.55f };
         cv_draw g = *d;
@@ -1380,6 +1386,11 @@ void cv_render_draw(const cv_draw* d) {
     if (A[CV_AUX_PICKPT].n) {                /* the picked nodes, on top */
         static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
         draw_layer(R.pip_pt_ni, A[CV_AUX_PICKPT].v, NO_IB, (int)A[CV_AUX_PICKPT].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size, true, 0.f, 0);
+    }
+    if (A[CV_AUX_PICKLN].n) {                /* the probed element's, face's or edge's lines, on top, in the probe's gold */
+        static const float pick_rgb[3] = { 1.0f, 0.84f, 0.0f };
+        draw_layer(R.pip_line_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, 1, true, 0.f, 0);
+        draw_layer(R.pip_pt_ni, A[CV_AUX_PICKLN].v, NO_IB, (int)A[CV_AUX_PICKLN].n, CV_COLOR_SOLID, pick_rgb, false, d, d->marker_size * 0.25f, true, 0.f, 0);
     }
     if (A[CV_AUX_MEASLN].n) {                /* the measurements' lines, on top: dots along them make them read thicker */
         static const float meas_rgb[3] = { 0.1f, 0.85f, 1.0f };

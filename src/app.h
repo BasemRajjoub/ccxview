@@ -70,8 +70,9 @@ enum { CV_CACHE_N = 8 };
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
 /* the Selection window's parts that fold */
 enum { CV_SELG_PICK, CV_SELG_NAMES, CV_SELG_USE, CV_SELG_NAMED, CV_SELG_N };
-/* the Inspector pane's tabs */
+/* the Inspector pane's tabs; what a click in the view probes */
 enum { CV_TAB_INSPECT, CV_TAB_SELECT, CV_TAB_MEASURE, CV_TAB_N };
+enum { CV_PK_NODE, CV_PK_ELEM, CV_PK_FACE, CV_PK_EDGE, CV_PK_N };
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
 /* labels on the model (app_label.c): what they show */
 enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
@@ -357,6 +358,9 @@ typedef struct {
     bool      probe_on;
     cv_pick   probe;
     float     probe_value;
+    int       pick_kind;             /* CV_PK_*: what a click probes (the Inspect tab's row) */
+    uint32_t  probe_face;            /* the face probed: element << 3 | its face, UINT32_MAX none */
+    uint32_t  probe_edge[3];         /* the edge probed: its corners, the mid-side node; [0] UINT32_MAX none */
     /* max in a box: the field's extremes among the shown nodes (elements) inside a dragged box */
     bool      box_arm;               /* the next left drag in the view draws that box */
     bool      box_pick;              /* the box being drawn is one (not a box zoom) */
@@ -657,6 +661,13 @@ bool app_sel_csv(void);                          /* the selection to <model>_sel
 size_t app_sel_ids(char* out, size_t n);         /* its element ids, 16 a line, comma separated (an *ELSET body) */
 void app_menu_open(float x, float y);            /* the context menu at this pixel, what lies there picked */
 void app_probe_pixel(float x, float y);          /* probe what lies under the pixel, as a click does */
+/* app_inspect.c: the face or edge a click probes (G.pick_kind), from the ray o + t d;
+   what is probed outlined in the view; a face's ring or an edge's nodes, the field over them */
+void app_pick_kind_apply(const float o[3], const float d[3]);
+void app_pick_clear(void);                        /* no face, no edge */
+void app_pick_sync(void);                         /* the outline again when what it rests on changed */
+int  app_pick_nodes(uint32_t out[8]);             /* the face's ring, or the edge a, (mid,) b; 0 none */
+float app_pick_average(void);                     /* the field over those nodes (the element's value per element) */
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* app_label.c: labels on the model */
 const char* app_label_name(int kind);          /* "node id", ... for the panel */

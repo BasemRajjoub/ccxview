@@ -122,6 +122,7 @@ static void init(void) {
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
     G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 300.f;
+    G.probe_face = G.probe_edge[0] = UINT32_MAX;
     G.model_alpha = 1.f;
     G.cel_show = G.cel_master = G.cel_front = G.contact_key = true;
     G.cel_draw = CV_CDRAW_LAYER; G.cel_by = CV_CBY_GAP; G.cel_closed = G.cel_open = true;
@@ -372,6 +373,11 @@ static void frame(void) {
     update_title();
     tick_anim();
     tick_flight();
+    static int probe_wait = 3;                       /* --probe-at: once the view has the Inspector beside it */
+    if (O.probe_set && G.loaded && !app_busy() && G.vp_w > 0 && !probe_wait--) {
+        O.probe_set = false;
+        app_probe_pixel(G.vp_x + O.probe_at[0] * G.vp_w, G.vp_y + O.probe_at[1] * G.vp_h);
+    }
     if (O.menu_set && !O.box_set && G.loaded && !app_busy() && G.vp_w > 0) {   /* --menu: after --box */
         O.menu_set = false;
         app_menu_open(G.vp_x + O.menu[0] * G.vp_w, G.vp_y + O.menu[1] * G.vp_h);
@@ -506,6 +512,7 @@ static void frame(void) {
         app_stl_draw(&d);
     }
     app_marks_sync();
+    app_pick_sync();
     app_measure_sync();
     if (G.loaded) {
         app_label_frame(&d);
@@ -1125,10 +1132,20 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--contact-window")) O.contact_window = true;
         else if (!strcmp(argv[i], "--no-panels")) O.no_panels = true;
         else if (!strcmp(argv[i], "--inspector") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = atoi(argv[++i]) ? "insp_on=1" : "insp_on=0";
+        else if (!strcmp(argv[i], "--pick-kind") && i + 1 < argc && O.nopts < 32) {
+            static const char* kinds[CV_PK_N] = { "node", "element", "face", "edge" };
+            static const char* opt[CV_PK_N] = { "pick_kind=0", "pick_kind=1", "pick_kind=2", "pick_kind=3" };
+            const char* v = argv[++i];
+            int k = -1;
+            for (int q = 0; q < CV_PK_N; q++) if (!strcmp(v, kinds[q])) k = q;
+            if (k >= 0) O.opts[O.nopts++] = opt[k];
+            else fprintf(stderr, "ccxview: --pick-kind %s: node, element, face or edge\n", v);
+        }
         else if (!strcmp(argv[i], "--cel") && i + 1 < argc && O.ncel < 4) O.cel[O.ncel++] = argv[++i];
         else if (!strcmp(argv[i], "--set-alpha") && i + 1 < argc && O.nset_alpha < 8) O.set_alpha[O.nset_alpha++] = argv[++i];
         else if (!strcmp(argv[i], "--labels") && i + 1 < argc) O.labels = argv[++i];
         else if (!strcmp(argv[i], "--range") && i + 1 < argc) O.range_set = sscanf(argv[++i], "%f,%f", &O.range[0], &O.range[1]) == 2;
+        else if (!strcmp(argv[i], "--probe-at") && i + 1 < argc) O.probe_set = sscanf(argv[++i], "%f,%f", &O.probe_at[0], &O.probe_at[1]) == 2;
         else if (!strcmp(argv[i], "--menu") && i + 1 < argc) O.menu_set = sscanf(argv[++i], "%f,%f", &O.menu[0], &O.menu[1]) == 2;
         else if (!strcmp(argv[i], "--box") && i + 1 < argc)
             O.box_set = sscanf(argv[++i], "%f,%f,%f,%f", &O.box[0], &O.box[1], &O.box[2], &O.box[3]) == 4;

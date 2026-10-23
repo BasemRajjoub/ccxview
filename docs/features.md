@@ -549,7 +549,12 @@ it was left, and at first the filters and the kept ones are folded:
   the probe on its Inspect tab: the value, position, displacement, every
   component of the field, the element's material, sets and nodes (a click on
   one probes it); with nothing probed, the model's counts, step, field range
-  and units. The status bar keeps the probe in a line.
+  and units. The status bar keeps the probe in a line. The row at its top
+  chooses what a click picks (#28): a node, an element (outlined and toned in
+  the view, its details first), a face of it (its ring outlined; S-number, the
+  deck surfaces it is on, area, outward normal, the field's average over it),
+  or the element's edge nearest the click (its nodes, length, the field at its
+  ends and on average); kept in the settings, `--pick-kind`.
 - Selection of elements and nodes (the Inspector's Selection tab, below), highlighted,
   with the field's max over it marked (the min too when asked: compression, the
   cold spot) and both in the window and the Inspect tab.

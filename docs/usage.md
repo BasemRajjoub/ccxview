@@ -85,6 +85,8 @@ ccxview tie.frd --set GLUE --opt tie_nodes=2 --opt model_alpha=0.4  # a tie's sl
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --no-panels --shot v.png  # the view alone, as H does
 ccxview model.frd --inspector 0             # the Inspector pane hidden (1 shown); --opt scene_on=0, scene_w=, insp_w=
+ccxview model.frd --pick-kind face --probe-at 0.4,0.3   # what a click picks: node, element, face, edge;
+                                            #   a click at that point of the view (fractions)
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)

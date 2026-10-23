@@ -11,6 +11,7 @@
 #include "app_fail.h"
 #include "app_mesh.h"
 #include "os.h"
+#include "pickinfo.h"
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -45,14 +46,10 @@ static bool in_set(const cv_set* s, uint32_t id) {        /* ids sorted */
     return lo < s->n && s->ids[lo] == id;
 }
 
-static void build(void) {
-    const cv_pick* p = &G.probe;
+/* the node: where it is and goes, the field there, its every component, the elements on it */
+static void node_lines(uint32_t n) {
     const cv_frd* f = &G.frd;
-    uint32_t n = p->node, e = p->elem;
     char a[32], b[32], c[32], d[32];
-    nl = 0; nodes_at = -1;
-
-    /* the node */
     line(true, "Node %u", f->node_id[n]);
     const float* x = f->xyz + 3 * n;
     line(false, "position   %.6g, %.6g, %.6g", x[0], x[1], x[2]);
@@ -92,7 +89,12 @@ static void build(void) {
     }
     id_rows("elements on it", around, na);
 
-    /* the element */
+}
+
+/* the element: type, material, sets, nodes (buttons), its value, failure, mesh quality */
+static void elem_lines(uint32_t n, uint32_t e) {
+    const cv_frd* f = &G.frd;
+    char a[32];
     line(true, "Element %u   %s", f->elem_id[e], cv_frd_type_name(f->etype[e]));
     const char* mat = deck_material_name(f->emat[e]);
     line(false, "material %u%s%s   group %u", f->emat[e], mat ? "  " : "", mat ? mat : "", f->egrp[e]);
@@ -115,7 +117,76 @@ static void build(void) {
     if (G.has_field && fail_probe_text(n, e, t, sizeof t)) line(false, "failure   %s", t);
     if (G.has_field && mesh_probe_text(e, t, sizeof t)) line(false, "mesh   %s", t);
 
-    /* the box it came from */
+}
+
+/* the face picked: which, the surfaces it is on, area, normal, the field over it */
+static void face_lines(uint32_t e, int face) {
+    const cv_frd* f = &G.frd;
+    char a[32];
+    uint32_t r[8];
+    int n = app_pick_nodes(r);
+    line(true, "Face S%d of element %u", face + 1, f->elem_id[e]);
+    const cv_inp* dk = deck_get();
+    if (dk) {
+        char t[LW];
+        size_t o = (size_t)snprintf(t, sizeof t, "surfaces:");
+        int ns = 0;
+        for (int i = 0; i < dk->nsurfs && o < sizeof t - 70; i++) {
+            const cv_surface* sf = &dk->surfs[i];
+            bool on = false;
+            for (uint32_t k = 0; k < sf->n && !on; k++) on = sf->elem[k] == f->elem_id[e] && sf->face[k] == face;
+            if (on) { o += (size_t)snprintf(t + o, sizeof t - o, " %s", sf->name); ns++; }
+        }
+        line(false, "%s", ns ? t : "surfaces: none");
+    }
+    float p[24], nrm[3], fc[3] = { 0, 0, 0 }, ec[3] = { 0, 0, 0 };
+    for (int i = 0; i < n; i++) for (int k = 0; k < 3; k++) { p[3 * i + k] = f->xyz[3 * r[i] + k]; fc[k] += p[3 * i + k] / n; }
+    fmt_num(a, sizeof a, cv_poly_area(p, n, nrm));
+    line(false, "area %s (undeformed)", a);
+    bool solid = cv_elem_nfaces(f, e) > 1;            /* a solid's face: the normal out of it */
+    uint32_t ne = f->eoff[e + 1] - f->eoff[e];
+    for (uint32_t j = 0; j < ne; j++) for (int k = 0; k < 3; k++) ec[k] += f->xyz[3 * f->conn[f->eoff[e] + j] + k] / ne;
+    if (solid && (fc[0] - ec[0]) * nrm[0] + (fc[1] - ec[1]) * nrm[1] + (fc[2] - ec[2]) * nrm[2] < 0)
+        for (int k = 0; k < 3; k++) nrm[k] = -nrm[k];
+    for (int k = 0; k < 3; k++) if (fabsf(nrm[k]) < 5e-4f) nrm[k] = 0.f;     /* no "-0.000" */
+    line(false, "%s  %.3f, %.3f, %.3f", solid ? "outward normal" : "normal", nrm[0], nrm[1], nrm[2]);
+    if (G.has_field) {
+        fmt_num(a, sizeof a, app_pick_average());
+        line(false, "%s average %s", G.field_label, a);
+        line(false, "   %s", G.elem_mode ? "the element's value" : "over the face's nodes");
+    }
+    uint32_t ids[8];
+    for (int i = 0; i < n; i++) ids[i] = f->node_id[r[i]];
+    id_rows("its nodes", ids, (uint32_t)n);
+}
+
+/* the edge picked: its nodes, length, the field at its ends and along it */
+static void edge_lines(void) {
+    const cv_frd* f = &G.frd;
+    char a[32], b[32];
+    uint32_t r[8];
+    int n = app_pick_nodes(r);
+    if (n == 3) line(true, "Edge %u - %u - %u", f->node_id[r[0]], f->node_id[r[1]], f->node_id[r[2]]);
+    else line(true, "Edge %u - %u", f->node_id[r[0]], f->node_id[r[1]]);
+    double len = 0;
+    for (int i = 0; i + 1 < n; i++) {
+        double s = 0;
+        for (int k = 0; k < 3; k++) { double d = (double)f->xyz[3 * r[i + 1] + k] - f->xyz[3 * r[i] + k]; s += d * d; }
+        len += sqrt(s);
+    }
+    fmt_num(a, sizeof a, len);
+    line(false, "length %s (undeformed%s)", a, n == 3 ? ", through its mid node" : "");
+    if (G.has_field && G.scalar && !G.elem_mode) {
+        fmt_num(a, sizeof a, G.scalar[r[0]]); fmt_num(b, sizeof b, G.scalar[r[n - 1]]);
+        line(false, "%s at the ends %s, %s", G.field_label, a, b);
+    }
+    if (G.has_field) { fmt_num(a, sizeof a, app_pick_average()); line(false, "average %s%s", a, G.elem_mode ? " (the element's value)" : ""); }
+}
+
+/* the selection the probe came from */
+static void sel_lines(void) {
+    const cv_frd* f = &G.frd;
+    char a[32], b[32];
     if (G.sel_n || G.seln_n) {
         if (G.sel_inside) line(true, "Box selection: %u elements, %u nodes (%s)", G.sel_n, G.seln_n,
                                G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
@@ -129,6 +200,19 @@ static void build(void) {
             line(false, "over %u %s", G.boxq.n, G.boxq.elem ? "elements" : "nodes");
         }
     }
+}
+
+/* the lines, by what a click picks: a face or edge first, the element before the node
+   when elements are picked */
+static void build(void) {
+    const cv_pick* p = &G.probe;
+    nl = 0; nodes_at = -1;
+    int k = G.pick_kind;
+    if (k == CV_PK_FACE && G.probe_face != UINT32_MAX) face_lines(G.probe_face >> 3, (int)(G.probe_face & 7));
+    if (k == CV_PK_EDGE && G.probe_edge[0] != UINT32_MAX) edge_lines();
+    if (k == CV_PK_NODE) { node_lines(p->node); elem_lines(p->node, p->elem); }
+    else { elem_lines(p->node, p->elem); node_lines(p->node); }
+    sel_lines();
 }
 
 /* the probe's node moved to another of its element's nodes (index into conn) */

@@ -114,7 +114,7 @@ enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_
        CV_AUX_SELLN, CV_AUX_SELTRI, CV_AUX_SELPT, CV_AUX_SELMAX, CV_AUX_SELMIN, CV_AUX_MEASLN, CV_AUX_MEASPT,
        CV_AUX_PMST, CV_AUX_PSLV, CV_AUX_PTIED, CV_AUX_PFREE, CV_AUX_CMST, CV_AUX_CMLN, CV_AUX_CSLV,
        CV_AUX_CSLVO, CV_AUX_CSOL, CV_AUX_CSOLN,
-       CV_AUX_CLAY, CV_AUX_CLAYN, CV_AUX_CLAYP, CV_AUX_N };
+       CV_AUX_CLAY, CV_AUX_CLAYN, CV_AUX_CLAYP, CV_AUX_PICKLN, CV_AUX_PICKTRI, CV_AUX_N };
        /* the box selection: outline (vertex pairs), faces (toned), nodes (dots), its max and min;
           the measurements: their lines (vertex pairs) and nodes;
           ties and contact pairs (app_contact.c, CV_KEY_* colours): master faces, slave faces
@@ -125,7 +125,8 @@ enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_
           (cv_render_contact_map, over clay_lo .. clay_hi): the closed slave nodes (balls)
           and the open ones (rings), the contact elements as solids (see-through) and their
           edges; the interface layer (app_clayer.c): its triangles, its edges, the edges of
-          its faces penetrating (magenta) */
+          its faces penetrating (magenta); what the probe picked, an element, face or edge
+          (app_inspect.c): its lines (vertex pairs) and its faces (toned) */
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n);
 /* the same with the second displacement part (harmonic: -DISPI, scaled by def_scale2) */
 void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n);

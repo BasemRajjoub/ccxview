@@ -9,16 +9,13 @@ The pane is there (`ui_inspector.c`: under the toolbar at the right, `]` / `[` a
 chevron buttons hide and show it and the Scene pane, inner edges drag, kept in the ini;
 tabs **Inspect | Selection | Measure**); Inspect holds the probe (Probe + Details, the
 model's summary when nothing is probed, a selection's summary on top); Selection and
-Measure hold what their floating windows did (S shows the pane on Selection).
+Measure hold what their floating windows did (S shows the pane on Selection); the
+Inspect tab's pick row (node, element, face, edge) is #28: reply on the issue and close
+it once the user has tested it.
 
-1. **#28 — pick kind.** Row at the top of Inspect: Node · Element · Face · Edge; what
-   is picked is highlighted in the view (reuse the selection highlight). Face / edge
-   content: element + face number, surfaces it is on, area, normal, field average.
-   Face pick exists in Selection; edge is new (feature edge chain code may help).
-   Reply on the issue and close it (only after the user has tested it).
-2. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
+1. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
    through recent picks.
-3. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
+2. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
    Formula, Strength materials, Mesh quality, About, Messages. Keep floating: History,
    Path, Convergence, Integrals (a bottom dock could come later). Candidates for more
    pane tabs: Find, Contact settings, Legend settings, Title block.

@@ -1599,6 +1599,7 @@ static void test_localsys_requests(void) {
 #include "t_integ.h"
 #include "t_selset.h"
 #include "t_seltopo.h"
+#include "t_pickinfo.h"
 #include "t_selfilter.h"
 
 int main(void) {
@@ -1619,6 +1620,7 @@ int main(void) {
     test_integ();
     test_selset();
     test_seltopo();
+    test_pickinfo();
     test_selfilter();
     test_video();
     test_cfg();
