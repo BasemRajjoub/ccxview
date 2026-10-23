@@ -958,7 +958,8 @@ static void event(const sapp_event* ev) {
             if (drag.down) {
                 float dx = ev->mouse_x - drag.x, dy = ev->mouse_y - drag.y;
                 drag.x = ev->mouse_x; drag.y = ev->mouse_y;
-                if (!drag.moved && fabsf(drag.x - drag.x0) + fabsf(drag.y - drag.y0) > 4) {
+                float lim = drag.mode == CV_NAV_BOX && !G.box_pick ? 6.f : 4.f;   /* a Ctrl+click shaken a little is no box zoom */
+                if (!drag.moved && fabsf(drag.x - drag.x0) + fabsf(drag.y - drag.y0) > lim) {
                     drag.moved = true;
                     if (drag.mode == NAV_LABEL) { app_label_drag(drag.x - drag.x0, drag.y - drag.y0); break; }   /* the first move whole */
                     if (drag.mode != CV_NAV_BOX && drag.mode != CV_NAV_LASSO) {   /* the view before the drag, for Ctrl+Z */

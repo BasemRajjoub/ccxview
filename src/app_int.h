@@ -172,6 +172,7 @@ void sym_matrix(int copy, float* M);     /* model matrix of mirror copy `copy` (
 void copy_ray(int i, const float o[3], const float d[3], float mo[3], float md[3]);   /* world ray -> instance i's model frame */
 void cam_matrices(float* mvp, float* mv, float* proj_out);
 void do_pick(float px, float py);
+void app_probe_keep(float px, float py);      /* the probe there, the selection kept (Ctrl+click) */
 
 /* app_load.c: background jobs, opening files, dialogs */
 void unload(void);

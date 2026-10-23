@@ -748,16 +748,18 @@ bool app_pick(float px, float py, cv_pick* out, float o[3], float d[3]) {
 
 void app_probe_pixel(float x, float y) { do_pick(x, y); }
 
-void do_pick(float px, float py) {
+/* the probe to what lies under the pixel; keep: the selection kept, no path or
+   measurement fed (Ctrl+click) */
+static void probe_px(float px, float py, bool keep) {
     if (!G.loaded) return;
     float o[3], d[3];
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
     app_pick(px, py, &G.probe, o, d);
     G.probe_on = G.probe.hit;
-    app_sel_clear();
+    if (!keep) app_sel_clear();
     G.probe_ip = 0;
-    if (G.probe.hit && G.path_arm) app_path_end(G.probe.node);
-    if (G.probe.hit) app_measure_pick(G.probe.node);   /* when one waits for its nodes */
+    if (!keep && G.probe.hit && G.path_arm) app_path_end(G.probe.node);
+    if (!keep && G.probe.hit) app_measure_pick(G.probe.node);   /* when one waits for its nodes */
     if (G.probe.hit) {
         G.probe_value = !G.has_field ? NAN
                       : (G.elem_mode || G.field_src == 1) ? G.elem_val[G.probe.elem] : G.scalar[G.probe.node];
@@ -769,4 +771,7 @@ void do_pick(float px, float py) {
         app_pick_kind_apply(o, d);
     } else app_pick_clear();
 }
+
+void do_pick(float px, float py) { probe_px(px, py, false); }
+void app_probe_keep(float px, float py) { probe_px(px, py, true); }
 

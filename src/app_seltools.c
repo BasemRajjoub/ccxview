@@ -162,13 +162,15 @@ bool app_sel_click(float px, float py) {
 }
 
 /* Ctrl+click in the view, as in CAD: each kind ticked under the pixel into the
-   selection, or out if it is in */
+   selection, or out if it is in; the probe goes to it */
 bool app_sel_ctrl_click(float px, float py) {
     if (!G.loaded) return false;
     cv_pick p;
     float o[3], d[3];
     if (!app_pick(px, py, &p, o, d) || !p.hit) { say("nothing under the cursor%s", ""); return false; }
-    return click_kinds(&p, o, d, CV_SEL_NEW);
+    bool ok = click_kinds(&p, o, d, CV_SEL_NEW);
+    app_probe_keep(px, py);                          /* the Inspector on it, the selection kept */
+    return ok;
 }
 
 bool app_sel_invert(void) {
