@@ -546,9 +546,11 @@ it was left, and at first the filters and the kept ones are folded:
   playback. Undeformed ghost, min / max markers.
 - Probe a node or element, find by id, history of a node over all steps, path
   plots between nodes or through the wall. The Inspector pane (right, `]`) shows
-  the probe on its Inspect tab: the value, position, displacement, every
-  component of the field, the element's material, sets and nodes (a click on
-  one probes it); with nothing probed, the model's counts, step, field range
+  the probe on its Inspect tab: at the top what is picked and the value, the
+  buttons; below it groups that fold (open or closed kept across picks): the
+  field's every component, the node (position, displacement, elements on it),
+  the element (material, sets, failure, mesh quality), its nodes (a click on
+  one probes it), the face or edge, the selection; with nothing probed, the model's counts, step, field range
   and units. The status bar keeps the probe in a line. The row at its top
   chooses what a click picks (#28): a node, an element (outlined and toned in
   the view, its details first), a face of it (its ring outlined; S-number, the

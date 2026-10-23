@@ -175,9 +175,9 @@ static void model_summary(struct nk_context* ctx, float s, float row) {
 static void probe_rows(struct nk_context* ctx, float s, float row) {
     const cv_pick* p = &G.probe;
     char t[200];
-    uii_probe_value_text(t, sizeof t);
+    uii_probe_readout(t, sizeof t);
     nk_layout_row_dynamic(ctx, row, 1);
-    tip(ctx, "The field at the probe (Node and Element below: all about them)");
+    tip(ctx, "What is probed and the field there (below: all about it, in groups that fold)");
     nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
     uint32_t nd[8];
     if ((G.pick_kind == CV_PK_FACE || G.pick_kind == CV_PK_EDGE) && !app_pick_nodes(nd))

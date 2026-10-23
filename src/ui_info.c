@@ -1,5 +1,6 @@
 /* ui_info.c -- everything about the probed node and element (and the selection it
-   came from), the lower part of the Inspector's Inspect tab; and the About window:
+   came from), the lower part of the Inspector's Inspect tab, in groups that fold
+   (open or closed kept across picks); and the About window:
    who made ccxview, its licence, what it is built with. */
 #include "app.h"
 #include "ui.h"
@@ -16,16 +17,22 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+/* the groups, each a tree node; the field's components, a face or edge open at first */
+enum { GR_FACE, GR_EDGE, GR_COMP, GR_NODE, GR_ELEM, GR_ENODES, GR_SEL, GR_N };
+static const char* gr_mark[GR_N] = { "#grp face", "#grp edge", "#grp components", "#grp node", "#grp element", "#grp element nodes", "#grp selection" };
+static int gr_open[GR_N] = { NK_MAXIMIZED, NK_MAXIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED, NK_MINIMIZED, NK_MINIMIZED };
+
 enum { NL = 96, LW = 200 };
 static char L[NL][LW];
-static bool head[NL];                    /* a section title */
-static int nl;
-static int nodes_at = -1, nodes_end;     /* the element's node rows: drawn as buttons */
+static bool head[NL];                    /* a group's title */
+static unsigned char grp[NL];
+static int nl, cur;                      /* cur: the group lines go to */
 
 static void line(bool h, const char* fmt, ...) {
     if (nl >= NL) return;
     va_list ap;
     va_start(ap, fmt); vsnprintf(L[nl], LW, fmt, ap); va_end(ap);
+    grp[nl] = (unsigned char)cur;
     head[nl++] = h;
 }
 
@@ -50,7 +57,8 @@ static bool in_set(const cv_set* s, uint32_t id) {        /* ids sorted */
 static void node_lines(uint32_t n) {
     const cv_frd* f = &G.frd;
     char a[32], b[32], c[32], d[32];
-    line(true, "Node %u", f->node_id[n]);
+    cur = GR_NODE;
+    line(true, "node %u", f->node_id[n]);
     const float* x = f->xyz + 3 * n;
     line(false, "position   %.6g, %.6g, %.6g", x[0], x[1], x[2]);
     if (G.disp) {
@@ -70,7 +78,8 @@ static void node_lines(uint32_t n) {
     float v[CV_MAX_COMP];
     int k = app_field_comps(n, names, v, CV_MAX_COMP);
     if (k) {
-        line(false, "%s, every component (global, input units):", G.field_name);
+        cur = GR_COMP;
+        line(true, "field components: %s (global, input units)", G.field_name);
         char t[LW];
         size_t o = 0;
         t[0] = 0;
@@ -79,6 +88,7 @@ static void node_lines(uint32_t n) {
             o += (size_t)snprintf(t + o, sizeof t - o, "   %s %s", names[i], a);
             if (i % 2 == 1 || i == k - 1) { line(false, "%s", t); o = 0; t[0] = 0; }
         }
+        cur = GR_NODE;
     }
     static uint32_t around_for = UINT32_MAX, around[64], na;    /* elements on the node: a scan, so kept */
     static const cv_frd* around_f;
@@ -95,7 +105,8 @@ static void node_lines(uint32_t n) {
 static void elem_lines(uint32_t n, uint32_t e) {
     const cv_frd* f = &G.frd;
     char a[32];
-    line(true, "Element %u   %s", f->elem_id[e], cv_frd_type_name(f->etype[e]));
+    cur = GR_ELEM;
+    line(true, "element %u   %s", f->elem_id[e], cv_frd_type_name(f->etype[e]));
     const char* mat = deck_material_name(f->emat[e]);
     line(false, "material %u%s%s   group %u", f->emat[e], mat ? "  " : "", mat ? mat : "", f->egrp[e]);
     const cv_inp* dk = deck_get();
@@ -109,9 +120,10 @@ static void elem_lines(uint32_t n, uint32_t e) {
     }
     uint32_t ids[32], m = CV_MIN(f->eoff[e + 1] - f->eoff[e], 32u);
     for (uint32_t j = 0; j < m; j++) ids[j] = f->node_id[f->conn[f->eoff[e] + j]];
-    nodes_at = nl;
+    cur = GR_ENODES;
+    line(true, "element nodes (%u): a click probes one", m);
     id_rows("nodes", ids, m);
-    nodes_end = nl;
+    cur = GR_ELEM;
     if (G.has_field && G.elem_mode) { fmt_num(a, sizeof a, G.elem_val[e]); line(false, "%s (element) = %s", G.field_label, a); }
     char t[LW];
     if (G.has_field && fail_probe_text(n, e, t, sizeof t)) line(false, "failure   %s", t);
@@ -125,7 +137,8 @@ static void face_lines(uint32_t e, int face) {
     char a[32];
     uint32_t r[8];
     int n = app_pick_nodes(r);
-    line(true, "Face S%d of element %u", face + 1, f->elem_id[e]);
+    cur = GR_FACE;
+    line(true, "face S%d of element %u", face + 1, f->elem_id[e]);
     const cv_inp* dk = deck_get();
     if (dk) {
         char t[LW];
@@ -166,8 +179,9 @@ static void edge_lines(void) {
     char a[32], b[32];
     uint32_t r[8];
     int n = app_pick_nodes(r);
-    if (n == 3) line(true, "Edge %u - %u - %u", f->node_id[r[0]], f->node_id[r[1]], f->node_id[r[2]]);
-    else line(true, "Edge %u - %u", f->node_id[r[0]], f->node_id[r[1]]);
+    cur = GR_EDGE;
+    if (n == 3) line(true, "edge %u - %u - %u", f->node_id[r[0]], f->node_id[r[1]], f->node_id[r[2]]);
+    else line(true, "edge %u - %u", f->node_id[r[0]], f->node_id[r[1]]);
     double len = 0;
     for (int i = 0; i + 1 < n; i++) {
         double s = 0;
@@ -187,10 +201,10 @@ static void edge_lines(void) {
 static void sel_lines(void) {
     const cv_frd* f = &G.frd;
     char a[32], b[32];
+    cur = GR_SEL;
     if (G.sel_n || G.seln_n) {
-        if (G.sel_inside) line(true, "Box selection: %u elements, %u nodes (%s)", G.sel_n, G.seln_n,
-                               G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
-        else line(true, "Selection: %u elements, %u nodes", G.sel_n, G.seln_n);
+        line(true, "selection: %u elements, %u nodes", G.sel_n, G.seln_n);
+        if (G.sel_inside) line(false, "a box, %s", G.sel_crossing ? "crossing: elements with any node inside" : "window: elements wholly inside");
         if (G.boxq.on && G.boxq.gen == G.field_gen) {
             const uint32_t* id = G.boxq.elem ? f->elem_id : f->node_id;
             const char* what = G.boxq.elem ? "element" : "node";
@@ -206,7 +220,7 @@ static void sel_lines(void) {
    when elements are picked */
 static void build(void) {
     const cv_pick* p = &G.probe;
-    nl = 0; nodes_at = -1;
+    nl = 0;
     int k = G.pick_kind;
     if (k == CV_PK_FACE && G.probe_face != UINT32_MAX) face_lines(G.probe_face >> 3, (int)(G.probe_face & 7));
     if (k == CV_PK_EDGE && G.probe_edge[0] != UINT32_MAX) edge_lines();
@@ -221,45 +235,66 @@ static void probe_node(uint32_t n) {
     G.probe_value = !G.has_field ? NAN : G.elem_mode || G.field_src == 1 ? G.elem_val[G.probe.elem] : G.scalar[n];
 }
 
-/* the rows: every line, the section titles in the accent colour; the element's nodes
-   as buttons, a click probes that node */
-void uii_details_body(struct nk_context* ctx, float s, float row) {
-    build();
-    nk_layout_row_dynamic(ctx, row, 1);
-    for (int i = 0; i < nl; i++) {
-        if (i == nodes_at) {
-            const cv_frd* f = &G.frd;
-            uint32_t e = G.probe.elem, a = f->eoff[e], m = f->eoff[e + 1] - a;
-            char t[48];
-            snprintf(t, sizeof t, "nodes (%u): a click probes one", m);
-            nk_label(ctx, t, NK_TEXT_LEFT);
-            nk_layout_row_dynamic(ctx, row, 5);
-            for (uint32_t j = 0; j < m; j++) {
-                uint32_t n = f->conn[a + j];
-                char mk[24];
-                snprintf(t, sizeof t, "%u", f->node_id[n]);
-                snprintf(mk, sizeof mk, "#elem node %u", j + 1);
-                uii_test_mark(ctx, mk);
-                bool here = n == G.probe.node;
-                if (here) nk_style_push_color(ctx, &ctx->style.button.text_normal, P.accent);
-                if (nk_button_label(ctx, t)) probe_node(n);
-                if (here) nk_style_pop_color(ctx);
-            }
-            nk_layout_row_dynamic(ctx, row, 1);
-            i = nodes_end - 1;
-            continue;
-        }
-        if (head[i] && i) { uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 1); }
-        if (head[i]) nk_label_colored(ctx, L[i], NK_TEXT_LEFT, P.accent); else nk_label(ctx, L[i], NK_TEXT_LEFT);
+/* the groups in their order: what is picked first */
+static int order(int out[GR_N]) {
+    int n = 0, k = G.pick_kind;
+    if (k == CV_PK_FACE) out[n++] = GR_FACE;
+    if (k == CV_PK_EDGE) out[n++] = GR_EDGE;
+    out[n++] = GR_COMP;
+    if (k == CV_PK_NODE) out[n++] = GR_NODE;
+    out[n++] = GR_ELEM; out[n++] = GR_ENODES;
+    if (k != CV_PK_NODE) out[n++] = GR_NODE;
+    out[n++] = GR_SEL;
+    return n;
+}
+
+/* the element's nodes as buttons, a click probes that node */
+static void node_buttons(struct nk_context* ctx, float row) {
+    const cv_frd* f = &G.frd;
+    uint32_t e = G.probe.elem, a = f->eoff[e], m = f->eoff[e + 1] - a;
+    char t[24], mk[24];
+    nk_layout_row_dynamic(ctx, row, 5);
+    for (uint32_t j = 0; j < m; j++) {
+        uint32_t n = f->conn[a + j];
+        snprintf(t, sizeof t, "%u", f->node_id[n]);
+        snprintf(mk, sizeof mk, "#elem node %u", j + 1);
+        uii_test_mark(ctx, mk);
+        bool here = n == G.probe.node;
+        if (here) nk_style_push_color(ctx, &ctx->style.button.text_normal, P.accent);
+        if (nk_button_label(ctx, t)) probe_node(n);
+        if (here) nk_style_pop_color(ctx);
     }
 }
 
-/* every line to the clipboard */
+/* a tree node a group, its title the group's first line; the element's nodes as buttons */
+void uii_details_body(struct nk_context* ctx, float s, float row) {
+    (void)s;
+    build();
+    int ord[GR_N], no = order(ord);
+    for (int o = 0; o < no; o++) {
+        int g = ord[o], h = -1;
+        for (int i = 0; i < nl && h < 0; i++) if (grp[i] == g && head[i]) h = i;
+        if (h < 0) continue;
+        uii_test_mark_row(ctx, gr_mark[g]);
+        if (!nk_tree_state_push(ctx, NK_TREE_NODE, L[h], (enum nk_collapse_states*)&gr_open[g])) continue;
+        if (g == GR_ENODES) node_buttons(ctx, row);
+        else {
+            nk_layout_row_dynamic(ctx, row, 1);
+            for (int i = 0; i < nl; i++) if (grp[i] == g && !head[i]) nk_label(ctx, L[i], NK_TEXT_LEFT);
+        }
+        nk_tree_state_pop(ctx);
+    }
+}
+
+/* every line to the clipboard, folded or not, a group at a time */
 void uii_details_copy(void) {
     static char txt[NL * LW];
     size_t o = 0;
     build();
-    for (int i = 0; i < nl && o < sizeof txt - LW - 2; i++) o += (size_t)snprintf(txt + o, sizeof txt - o, "%s\n", L[i]);
+    int ord[GR_N], no = order(ord);
+    for (int k = 0; k < no; k++)
+        for (int i = 0; i < nl && o < sizeof txt - LW - 2; i++)
+            if (grp[i] == ord[k] && !(ord[k] == GR_ENODES && head[i])) o += (size_t)snprintf(txt + o, sizeof txt - o, "%s\n", L[i]);
     sapp_set_clipboard_string(txt);
 }
 

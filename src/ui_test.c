@@ -343,7 +343,9 @@ static bool pick_open(struct nk_context* ctx) { return G.sel_open[CV_SELG_PICK];
 static bool named_unfolded(struct nk_context* ctx) { return G.sel_open[CV_SELG_NAMED]; }
 static bool sel_some(struct nk_context* ctx) { return G.sel_n > sel_was && G.sel_n < G.frd.n_elems; }
 /* the Inspect tab: the probe's rows (its element's nodes as buttons), or the model's summary */
-static bool inspect_filled(struct nk_context* ctx) { return G.probe_on && G.insp_tab == CV_TAB_INSPECT && find_mark("Inspector", "#elem node 1"); }
+static bool inspect_filled(struct nk_context* ctx) { return G.probe_on && G.insp_tab == CV_TAB_INSPECT && find_mark("Inspector", "#grp node") && !find_mark("Inspector", "#elem node 1"); }
+static bool enodes_open(struct nk_context* ctx) { return G.probe_on && find_mark("Inspector", "#elem node 1"); }
+static bool enodes_closed(struct nk_context* ctx) { return G.probe_on && find_mark("Inspector", "#grp element nodes") && !find_mark("Inspector", "#elem node 1"); }
 static bool inspect_summary(struct nk_context* ctx) { return !G.probe_on && find_mark("Inspector", "#model summary"); }
 static uint32_t elem_was;
 static void remember_elem(struct nk_context* ctx) { elem_was = G.probe.elem; }
@@ -1214,8 +1216,11 @@ static const step script[] = {
     DO(labels_back), WAIT(2),
 
     CASE("inspect: a click on the model fills the Inspect tab, a node of its element probed, cleared; the model still turns"),
-    DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(3), EXPECT(inspect_filled, "the node and element in the Inspect tab"),
+    DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(3), EXPECT(inspect_filled, "the node and element in the Inspect tab, folded"),
+    AT_TIP("Inspector", "#grp element nodes"), CLICK, WAIT(2), EXPECT(enodes_open, "the element's nodes unfold"),
     DO(remember_elem), AT_TIP("Inspector", "#elem node 2"), CLICK, WAIT(2), EXPECT(node_moved, "the element's second node probed"),
+    EXPECT(enodes_open, "still open after the new pick"),
+    AT_TIP("Inspector", "#grp element nodes"), CLICK, WAIT(2), EXPECT(enodes_closed, "folded again"),
     AT_TIP("Inspector", "Clear the probe"), CLICK, WAIT(2), EXPECT(inspect_summary, "cleared: the model's summary"),
     DO(snapshot), AT_VIEW(0.45f, 0.04f), PRESS, AT_VIEW(0.5f, 0.07f), AT_VIEW(0.55f, 0.1f), RELEASE, EXPECT(turned, "a drag beside it turns the model"),
     DO(close_all), DO(fit_view), WAIT(2),
