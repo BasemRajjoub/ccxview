@@ -91,7 +91,7 @@ ccxview model.frd --select set:EHOLE --select add:ids:1-20 --selection-window
                                             # selection steps, in order (see Selection below);
                                             #   --opt sel_filters=1: the window's filter rows open;
                                             #   sel_open_pick / _names / _use / _named=0|1: its other parts
-ccxview model.frd --find 120 --details      # probe node 120, its Details window open
+ccxview model.frd --find 120 --details      # probe node 120, the Inspector shown on its Inspect tab
 ccxview --about                             # who made it, its licence, the libraries it uses
 ccxview model.frd --menu 0.5,0.5            # the context menu at that point of the view (fractions)
 ccxview model.frd --range 50,150 --opt oor_above=3  # the legend locked to 50 .. 150; values above it hidden (oor_above / oor_below: 0 the map's end colour, 1 grey, 2 a colour, 3 hidden)
@@ -191,15 +191,15 @@ It prints what it selected and the field's max and min over it.
 | X / Y / Z held + drag | orbit about that world axis only |
 | drag a label | move it (the camera stays); right-click it: Reset label |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |
-| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection window's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). "details..." in the Probe shows all about the node, element and selection |
+| Ctrl+Shift+drag | box selection, as in CAD: left to right takes the elements wholly inside (blue), right to left the ones it touches (green), by the Selection window's mode; selected elements are toned yellow and outlined, selected nodes are magenta dots, the probe goes to the field's max over them, the min beside it (also a button in Colours & legend). the Inspector's Inspect tab shows all about the node, element and selection |
 | S | the Selection window: mode, box, click, lasso, faces, edge chain and part tools, invert, conversions, grow, shrink, boundary, by name, by id |
 | Alt+drag, Alt+← → | roll about the line of sight |
 | middle click, C | centre the view on the point under the cursor (new rotation centre); imported STL geometry counts as the model for this, for turning about the cursor, zooming to it, look at the face and box zoom |
-| right click (no drag) | context menu: on the model probe, details, centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; on imported STL geometry in front of the model hide it (and centre, look at the face); always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
+| right click (no drag) | context menu: on the model probe, inspect (the Inspector on its Inspect tab), centre, look at the face, zoom to the element, history, path, through the wall, measure (distance, angle, circle from this node), clip here, copy, hide this element / material / type / set or show only it, integrate over its set; with a box selection hide or show only it, go to its max / min, copy its ids, save it as CSV, integrate over it; on imported STL geometry in front of the model hide it (and centre, look at the face); always fit, look from, show all, and on empty space reset, view back / forward, orthographic, free flight, save a picture |
 | N | look normal to the face under the cursor |
 | Ctrl+← → ↑ ↓ | turn the view 15° (with Shift 90°) |
 | Ctrl+Z / Ctrl+Y | view back / forward |
-| click / double-click | probe / zoom to element |
+| click / double-click | probe (the Inspector's Inspect tab, the status bar) / zoom to element |
 | F, R, 1..6 | fit, reset, look from ±X ±Y ±Z |
 | space, ← → | play, step |
 | G | free flight (WASD, Esc to leave); View > Camera: the "eye" list cuts what lies just ahead, or hides whole elements there, to fly through walls |

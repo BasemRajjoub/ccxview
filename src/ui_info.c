@@ -1,6 +1,6 @@
-/* ui_info.c -- the Details window: everything about the probed node and element
-   (and the box selection it came from) that the small Probe has no room for; and
-   the About window: who made ccxview, its licence, what it is built with. */
+/* ui_info.c -- everything about the probed node and element (and the selection it
+   came from), the lower part of the Inspector's Inspect tab; and the About window:
+   who made ccxview, its licence, what it is built with. */
 #include "app.h"
 #include "ui.h"
 #include "sokol_app.h"
@@ -19,6 +19,7 @@ enum { NL = 96, LW = 200 };
 static char L[NL][LW];
 static bool head[NL];                    /* a section title */
 static int nl;
+static int nodes_at = -1, nodes_end;     /* the element's node rows: drawn as buttons */
 
 static void line(bool h, const char* fmt, ...) {
     if (nl >= NL) return;
@@ -49,7 +50,7 @@ static void build(void) {
     const cv_frd* f = &G.frd;
     uint32_t n = p->node, e = p->elem;
     char a[32], b[32], c[32], d[32];
-    nl = 0;
+    nl = 0; nodes_at = -1;
 
     /* the node */
     line(true, "Node %u", f->node_id[n]);
@@ -59,12 +60,14 @@ static void build(void) {
         const float* u = G.disp + 3 * n;
         fmt_num(a, sizeof a, u[0]); fmt_num(b, sizeof b, u[1]); fmt_num(c, sizeof c, u[2]);
         fmt_num(d, sizeof d, sqrt((double)u[0] * u[0] + (double)u[1] * u[1] + (double)u[2] * u[2]));
-        line(false, "displacement   %s, %s, %s   (size %s)", a, b, c, d);
+        line(false, "displacement  %s, %s, %s", a, b, c);
+        line(false, "   its size  %s", d);
         line(false, "displaced to   %.6g, %.6g, %.6g", x[0] + u[0], x[1] + u[1], x[2] + u[2]);
     }
     if (G.has_field) {
         fmt_num(a, sizeof a, G.elem_mode ? NAN : G.scalar[n]);
         line(false, "%s = %s%s", G.field_label, a, G.elem_mode ? "  (shown per element, below)" : "");
+        if (G.probe_ip) { fmt_num(a, sizeof a, G.probe_value); line(false, "integration point %d: %s", G.probe_ip, a); }
     }
     char names[CV_MAX_COMP][12];
     float v[CV_MAX_COMP];
@@ -77,7 +80,7 @@ static void build(void) {
         for (int i = 0; i < k; i++) {
             fmt_num(a, sizeof a, v[i]);
             o += (size_t)snprintf(t + o, sizeof t - o, "   %s %s", names[i], a);
-            if (i % 3 == 2 || i == k - 1) { line(false, "%s", t); o = 0; t[0] = 0; }
+            if (i % 2 == 1 || i == k - 1) { line(false, "%s", t); o = 0; t[0] = 0; }
         }
     }
     static uint32_t around_for = UINT32_MAX, around[64], na;    /* elements on the node: a scan, so kept */
@@ -104,7 +107,9 @@ static void build(void) {
     }
     uint32_t ids[32], m = CV_MIN(f->eoff[e + 1] - f->eoff[e], 32u);
     for (uint32_t j = 0; j < m; j++) ids[j] = f->node_id[f->conn[f->eoff[e] + j]];
+    nodes_at = nl;
     id_rows("nodes", ids, m);
+    nodes_end = nl;
     if (G.has_field && G.elem_mode) { fmt_num(a, sizeof a, G.elem_val[e]); line(false, "%s (element) = %s", G.field_label, a); }
     char t[LW];
     if (G.has_field && fail_probe_text(n, e, t, sizeof t)) line(false, "failure   %s", t);
@@ -126,43 +131,52 @@ static void build(void) {
     }
 }
 
-/* the rows: every line, the section titles in the accent colour; copy all */
+/* the probe's node moved to another of its element's nodes (index into conn) */
+static void probe_node(uint32_t n) {
+    G.probe.node = n; G.probe_ip = 0;
+    G.probe_value = !G.has_field ? NAN : G.elem_mode || G.field_src == 1 ? G.elem_val[G.probe.elem] : G.scalar[n];
+}
+
+/* the rows: every line, the section titles in the accent colour; the element's nodes
+   as buttons, a click probes that node */
 void uii_details_body(struct nk_context* ctx, float s, float row) {
     build();
     nk_layout_row_dynamic(ctx, row, 1);
     for (int i = 0; i < nl; i++) {
+        if (i == nodes_at) {
+            const cv_frd* f = &G.frd;
+            uint32_t e = G.probe.elem, a = f->eoff[e], m = f->eoff[e + 1] - a;
+            char t[48];
+            snprintf(t, sizeof t, "nodes (%u): a click probes one", m);
+            nk_label(ctx, t, NK_TEXT_LEFT);
+            nk_layout_row_dynamic(ctx, row, 5);
+            for (uint32_t j = 0; j < m; j++) {
+                uint32_t n = f->conn[a + j];
+                char mk[24];
+                snprintf(t, sizeof t, "%u", f->node_id[n]);
+                snprintf(mk, sizeof mk, "#elem node %u", j + 1);
+                uii_test_mark(ctx, mk);
+                bool here = n == G.probe.node;
+                if (here) nk_style_push_color(ctx, &ctx->style.button.text_normal, P.accent);
+                if (nk_button_label(ctx, t)) probe_node(n);
+                if (here) nk_style_pop_color(ctx);
+            }
+            nk_layout_row_dynamic(ctx, row, 1);
+            i = nodes_end - 1;
+            continue;
+        }
         if (head[i] && i) { uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 1); }
         if (head[i]) nk_label_colored(ctx, L[i], NK_TEXT_LEFT, P.accent); else nk_label(ctx, L[i], NK_TEXT_LEFT);
     }
-    nk_layout_row_dynamic(ctx, row, 1);
-    tip(ctx, "All of it to the clipboard, a line each");
-    if (nk_button_label(ctx, "copy all")) {
-        static char txt[NL * LW];
-        size_t o = 0;
-        for (int i = 0; i < nl && o < sizeof txt - LW - 2; i++) o += (size_t)snprintf(txt + o, sizeof txt - o, "%s\n", L[i]);
-        sapp_set_clipboard_string(txt);
-    }
 }
 
-void window_details(struct nk_context* ctx, float s, float row, int fw, int fh) {
-    static bool was_open;
-    if (!G.show_details || !G.probe_on || !G.loaded) { was_open = false; return; }
-    if (!was_open) nk_window_show(ctx, "Details", NK_SHOWN);
-    was_open = true;
+/* every line to the clipboard */
+void uii_details_copy(void) {
+    static char txt[NL * LW];
+    size_t o = 0;
     build();
-    /* as wide as its longest line; above the Probe at the left, so the model stays free to turn */
-    const struct nk_user_font* fnt = ctx->style.font;
-    float tw = 0;
-    for (int i = 0; i < nl; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, L[i], (int)strlen(L[i])));
-    float w = CV_MIN(CV_MAX(300 * s, tw + 2 * ctx->style.window.padding.x + 30 * s), G.vp_w * 0.6f);
-    const struct nk_window* pw = nk_window_find(ctx, "Probe");
-    float bottom = pw ? pw->bounds.y - 6 * s : G.vp_y + G.vp_h - 10 * s;
-    float h = CV_MIN(bottom - G.vp_y - 10 * s, row * (nl + 3.5f) + 16 * s);
-    if (nk_begin(ctx, "Details", nk_rect(G.vp_x + 10 * s, bottom - h, w, h),
-                 NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER))
-        uii_details_body(ctx, s, row);
-    if (nk_window_is_hidden(ctx, "Details")) G.show_details = false;
-    nk_end(ctx);
+    for (int i = 0; i < nl && o < sizeof txt - LW - 2; i++) o += (size_t)snprintf(txt + o, sizeof txt - o, "%s\n", L[i]);
+    sapp_set_clipboard_string(txt);
 }
 
 /* ---- About ------------------------------------------------------------------------- */

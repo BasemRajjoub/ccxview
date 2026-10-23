@@ -599,6 +599,8 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
         snprintf(mid, sizeof mid, "%s", G.note);
     else if (G.loaded && G.flight)
         snprintf(mid, sizeof mid, "FREE FLIGHT   WASD move  E/Space up  Q down  Shift fast  drag look  wheel speed  Esc exit");
+    else if (G.loaded && G.probe_on)
+        uii_probe_readout(mid, sizeof mid);
     else if (G.loaded && geo_loaded())
         snprintf(mid, sizeof mid, "%u points   %u lines   %u surfaces   %u nodes   %u elements   loaded in %.2f s%s",
                  geo_get()->npts, geo_get()->ncrv, geo_get()->nsrf, G.frd.n_nodes, G.frd.n_elems, G.load_seconds,

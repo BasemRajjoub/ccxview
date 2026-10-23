@@ -353,8 +353,6 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
 
     drop_hint(ctx, s, row);
     window_axes(ctx, s);
-    window_probe(ctx, s, row);
-    window_details(ctx, s, row, fw, fh);
     window_about(ctx, s, row, fw, fh);
     window_deck(ctx, s, row, fw, fh);
     uii_window_contact(ctx, s, row, fw, fh);

@@ -469,7 +469,7 @@ static void apply_load(cv_job* j) {
     if (O.measure_window) G.show_measure = true;
     if (O.rebar_window) snprintf(G.fields_open, sizeof G.fields_open, "REBAR");
     if (O.select_window) G.show_select = true;
-    if (O.details) G.show_details = true;
+    if (O.details) { G.insp_on = true; G.insp_tab = CV_TAB_INSPECT; }
     if (O.about) G.show_about = true;
     if (O.deck_window) G.show_deck = true;
     if (O.contact_window) { snprintf(G.fields_open, sizeof G.fields_open, "CONTACT"); G.show_contact = true; }

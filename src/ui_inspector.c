@@ -9,6 +9,7 @@
 #include "nk.h"
 #include "sokol_nuklear.h"
 #include "icons.h"
+#include <math.h>
 #include "ui_int.h"
 
 /* ---- widths and the edges ------------------------------------------------------- */
@@ -73,6 +74,121 @@ void uii_pane_button(struct nk_context* ctx, int which) {
     if (nk_button_label(ctx, left ? IC_CHEVRON_LEFT : IC_CHEVRON_RIGHT)) *on = !*on;
 }
 
+/* ---- the Inspect tab ----------------------------------------------------------- */
+
+/* the field at the probe now: the field or the step may have changed since the click
+   (an integration point keeps the value found then) */
+static float probe_value_now(void) {
+    if (!G.has_field) return NAN;
+    if (G.probe_ip) return G.probe_value;
+    if ((G.elem_mode || G.field_src == 1) && G.elem_val) return G.elem_val[G.probe.elem];
+    return G.scalar ? G.scalar[G.probe.node] : NAN;
+}
+
+/* "S Mises = 4.5e2", "point 3: S Mises = 4.5e2"; "no field" */
+static void probe_value_text(char* out, size_t n) {
+    char num[32];
+    float v = probe_value_now();
+    fmt_num(num, sizeof num, v);
+    if (app_field_category(v)) snprintf(num, sizeof num, "%s", app_field_category(v));
+    if (!G.has_field) snprintf(out, n, "no field");
+    else if (G.probe_ip) snprintf(out, n, "point %d: %s = %s", G.probe_ip, G.field_label, num);
+    else snprintf(out, n, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
+}
+
+/* "node 123  element 4  S Mises = 4.5e2": the probe in a line (the status bar) */
+void uii_probe_readout(char* out, size_t n) {
+    char v[160];
+    probe_value_text(v, sizeof v);
+    snprintf(out, n, "node %u  element %u  %s", G.frd.node_id[G.probe.node], G.frd.elem_id[G.probe.elem], v);
+}
+
+/* nothing picked: the model in a few lines */
+static void model_summary(struct nk_context* ctx, float s, float row) {
+    char t[200], a[32], b[32];
+    nk_layout_row_dynamic(ctx, row, 1);
+    uii_test_mark(ctx, "#model summary");
+    nk_label_colored(ctx, cv_basename(G.path), NK_TEXT_LEFT, P.accent);
+    snprintf(t, sizeof t, "%u nodes, %u elements", G.frd.n_nodes, G.frd.n_elems);
+    nk_label(ctx, t, NK_TEXT_LEFT);
+    if (G.frd.n_steps > 0) {
+        const cv_step* st = &G.frd.steps[G.step];
+        snprintf(t, sizeof t, "step %d  increment %d  (%d of %d)", st->step, st->inc, G.step + 1, G.frd.n_steps);
+        nk_label(ctx, t, NK_TEXT_LEFT);
+        snprintf(t, sizeof t, st->modal ? "frequency %g" : "time %g", st->time);
+        nk_label(ctx, t, NK_TEXT_LEFT);
+    }
+    if (G.has_field) {
+        snprintf(t, sizeof t, "%s%s", G.field_label, G.elem_mode ? " (per element)" : "");
+        nk_label(ctx, t, NK_TEXT_LEFT);
+        fmt_num(a, sizeof a, G.data_min); fmt_num(b, sizeof b, G.data_max);
+        snprintf(t, sizeof t, "   from %s to %s", a, b);
+        nk_label(ctx, t, NK_TEXT_LEFT);
+    } else nk_label(ctx, "no field", NK_TEXT_LEFT);
+    units_summary(a, sizeof a);
+    snprintf(t, sizeof t, "units: %s", a);
+    nk_label(ctx, t, NK_TEXT_LEFT);
+    uii_hsep(ctx, s);
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label_colored(ctx, "click the model: a node and its element", NK_TEXT_LEFT, P.dim);
+}
+
+/* the probed node and element: the value, what can be done from them, then all about them */
+static void probe_rows(struct nk_context* ctx, float s, float row) {
+    const cv_pick* p = &G.probe;
+    char t[200];
+    probe_value_text(t, sizeof t);
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "The field at the probe (Node and Element below: all about them)");
+    nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
+    if (G.sel_n || G.seln_n) {
+        nk_layout_row_dynamic(ctx, row, 2);
+        tip(ctx, "The Selection tab (S): what a box or a click takes, add / remove / intersect, invert, by name or id");
+        if (nk_button_label(ctx, "selection")) G.show_select = true;
+        tip(ctx, "The field integrated over the selected elements at every step (volume integral and average),\n"
+                 "or summed over the selected nodes (reaction forces)");
+        if (nk_button_label(ctx, "integrate...")) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");
+    }
+    nk_layout_row_dynamic(ctx, row, 3);
+    nk_bool lb = G.label_probe_only && G.label_kinds;
+    tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");
+    if (nk_checkbox_label(ctx, "labels", &lb)) {           /* on: this element only; off: no labels at all */
+        G.label_probe_only = lb;
+        if (lb) G.label_sel_only = false;            /* one place at a time (Fields > Labels) */
+        if (lb && !G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE;
+        if (!lb) G.label_kinds = 0;
+        app_label_changed();
+    }
+    tip(ctx, "The field at this node (element in per-element mode) against time, over every step");
+    if (nk_button_label(ctx, "history")) app_hist_open(p->node, p->elem);
+    tip(ctx, "Clear the probe (and a pending path or measurement, the selection)");
+    if (nk_button_label(ctx, "clear")) { G.probe_on = false; G.path_arm = false; app_measure_cancel(); app_sel_clear(); return; }
+    static int pick_dir;
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "Where the path from this node goes: to a node you click next, or straight into the\n"
+             "solid along the surface normal or an axis, up to the face where it comes out");
+    pick_dir = nk_combo(ctx, path_dirs, 5, pick_dir, (int)row, nk_vec2(130 * s, 5 * row + 20 * s));
+    tip(ctx, pick_dir ? "The field on the line and the stress linearized on it (ASME), through the wall"
+                      : G.path_arm ? "Now click the end node (Esc cancels)"
+                      : "The field along the line from this node to the next one you click, and the\n"
+                        "stress linearized on it (ASME): for that, pick the ends facing each other across the wall");
+    if (nk_button_label(ctx, pick_dir ? "path" : G.path_arm ? "path: to?" : "path from")) {
+        if (pick_dir) app_path_ray(p->node, pick_dir); else app_path_start(p->node);
+    }
+    int mk = ui_measure_row(ctx, s, row, "#probe measure");
+    if (mk >= 0) app_measure_arm(mk, p->node);
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "Element, node and value to the clipboard");
+    if (nk_button_label(ctx, "copy")) {
+        uii_probe_readout(t, sizeof t);
+        sapp_set_clipboard_string(t);
+    }
+    tip(ctx, "All of it below to the clipboard, a line each");
+    if (nk_button_label(ctx, "copy all")) uii_details_copy();
+    uii_hsep(ctx, s);
+    uii_details_body(ctx, s, row);
+}
+
 /* ---- the Inspector ------------------------------------------------------------- */
 
 static const char* tab_name[CV_TAB_N] = { "Inspect", "Selection", "Measure" };
@@ -97,10 +213,17 @@ static void tab_bar(struct nk_context* ctx, float row) {
 void uii_panel_inspector(struct nk_context* ctx, float s, float row) {
     tab_bar(ctx, row);
     uii_hsep(ctx, s);
-    nk_layout_row_dynamic(ctx, row, 1);
     switch (G.insp_tab) {
-    case CV_TAB_INSPECT: nk_label_colored(ctx, "click the model to probe it", NK_TEXT_LEFT, P.dim); break;
-    case CV_TAB_SELECT:  nk_label_colored(ctx, "S: the Selection window", NK_TEXT_LEFT, P.dim); break;
-    case CV_TAB_MEASURE: nk_label_colored(ctx, "the Measurements window: View", NK_TEXT_LEFT, P.dim); break;
+    case CV_TAB_INSPECT:
+        if (G.probe_on) probe_rows(ctx, s, row); else model_summary(ctx, s, row);
+        break;
+    case CV_TAB_SELECT:
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, "S: the Selection window", NK_TEXT_LEFT, P.dim);
+        break;
+    case CV_TAB_MEASURE:
+        nk_layout_row_dynamic(ctx, row, 1);
+        nk_label_colored(ctx, "the Measurements window: View", NK_TEXT_LEFT, P.dim);
+        break;
     }
 }

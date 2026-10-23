@@ -1,4 +1,4 @@
-/* ui_windows.c -- the floating windows: messages, the formula builder, probe, find, the text overlay
+/* ui_windows.c -- the floating windows: messages, the formula builder, find, the text overlay
    and navigation mark in the view, the built-in file browser and the drop hint.
    The plot windows are in ui_plots.c. */
 #include "app.h"
@@ -63,113 +63,6 @@ void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh)
 }
 
 const char* path_dirs[] = { "to a node", "along normal", "along X", "along Y", "along Z" };
-
-/* the probe's lines, the value as shown in num; their count */
-enum { NPL = 7 };
-static int probe_lines(char ln[NPL][160], const char* tips[NPL], char* num, size_t nn) {
-    const cv_pick* p = &G.probe;
-    int n = 0;
-    for (int i = 0; i < NPL; i++) tips[i] = NULL;
-    snprintf(ln[n++], 160, "element %u  (%s)", G.frd.elem_id[p->elem], cv_frd_type_name(G.frd.etype[p->elem]));
-    snprintf(ln[n++], 160, "material %u   group %u", G.frd.emat[p->elem], G.frd.egrp[p->elem]);
-    const float* x = G.frd.xyz + 3 * p->node;
-    snprintf(ln[n++], 160, "node %u  (%.4g, %.4g, %.4g)", G.frd.node_id[p->node], x[0], x[1], x[2]);
-    fmt_num(num, nn, G.probe_value);
-    if (app_field_category(G.probe_value)) snprintf(num, nn, "%s", app_field_category(G.probe_value));
-    if (!G.has_field) snprintf(ln[n++], 160, "no field");
-    else if (G.probe_ip) snprintf(ln[n++], 160, "point %d: %s = %s", G.probe_ip, G.field_label, num);
-    else snprintf(ln[n++], 160, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
-    if (G.has_field && fail_probe_text(p->node, p->elem, ln[n], 160))
-        tips[n++] = "The governing failure mode (and fracture plane) at this node, or element per element";
-    if (G.has_field && mesh_probe_text(p->elem, ln[n], 160))
-        tips[n++] = "This element's aspect ratio, scaled Jacobian, Jacobian ratio, skewness and\nwarpage; ! past the usual limit";
-    if (G.boxq.on && G.boxq.gen == G.field_gen) {                /* the box this probe came from */
-        char a[32], b[32];
-        fmt_num(a, sizeof a, G.boxq.vmax); fmt_num(b, sizeof b, G.boxq.vmin);
-        snprintf(ln[n], 160, "selection: max %s  min %s  (%u %s)", a, b, G.boxq.n, G.boxq.elem ? "elements" : "nodes");
-        tips[n++] = "The field's max (probed) and min over the selection\n"
-                    "(its nodes; per element, the elements). Selection window: where they are";
-    }
-    return n;
-}
-
-/* the probe's rows: its lines, then what can be done from the node */
-void uii_probe_body(struct nk_context* ctx, float s, float row) {
-    const cv_pick* p = &G.probe;
-    char ln[NPL][160], num[32];
-    const char* tips[NPL];
-    int n = probe_lines(ln, tips, num, sizeof num);
-    nk_layout_row_dynamic(ctx, row, 1);
-    for (int i = 0; i < n; i++) {
-        if (tips[i]) tip(ctx, tips[i]);
-        nk_label(ctx, ln[i], NK_TEXT_LEFT);
-    }
-    if (G.sel_n || G.seln_n) {
-        nk_layout_row_dynamic(ctx, row, 3);
-        nk_spacing(ctx, 1);
-        tip(ctx, "The Selection window (S): what a box or a click takes, add / remove / intersect, invert, by name or id");
-        if (nk_button_label(ctx, "selection...")) G.show_select = !G.show_select;
-        tip(ctx, "The field integrated over the selected elements at every step (volume integral and average),\n"
-                 "or summed over the selected nodes (reaction forces)");
-        if (nk_button_label(ctx, "integrate...")) app_integ_open(G.sel_n ? CV_IK_VOLUME : CV_IK_NODES, "selection");
-    }
-    nk_layout_row_dynamic(ctx, row, 3);
-    nk_bool lb = G.label_probe_only && G.label_kinds;
-    tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");
-    if (nk_checkbox_label(ctx, "labels", &lb)) {           /* on: this element only; off: no labels at all */
-        G.label_probe_only = lb;
-        if (lb) G.label_sel_only = false;            /* one place at a time (Fields > Labels) */
-        if (lb && !G.label_kinds) G.label_kinds = 1 << CV_LABEL_NODE;
-        if (!lb) G.label_kinds = 0;
-        app_label_changed();
-    }
-    tip(ctx, "Everything about this node and element in a window of its own:\n"
-             "displacement, every component of the field, sets, nodes, the box selection");
-    if (nk_button_label(ctx, "details...")) G.show_details = !G.show_details;
-    if (nk_button_label(ctx, "close")) { G.probe_on = false; G.path_arm = false; app_measure_cancel(); app_sel_clear(); }
-    static int pick_dir;
-    nk_layout_row_dynamic(ctx, row, 2);
-    tip(ctx, "Where the path from this node goes: to a node you click next, or straight into the\n"
-             "solid along the surface normal or an axis, up to the face where it comes out");
-    pick_dir = nk_combo(ctx, path_dirs, 5, pick_dir, (int)row, nk_vec2(130 * s, 5 * row + 20 * s));
-    tip(ctx, pick_dir ? "The field on the line and the stress linearized on it (ASME), through the wall"
-                      : G.path_arm ? "Now click the end node (Esc cancels)"
-                      : "The field along the line from this node to the next one you click, and the\n"
-                        "stress linearized on it (ASME): for that, pick the ends facing each other across the wall");
-    if (nk_button_label(ctx, pick_dir ? "path" : G.path_arm ? "path: to?" : "path from")) {
-        if (pick_dir) app_path_ray(p->node, pick_dir); else app_path_start(p->node);
-    }
-    int mk = ui_measure_row(ctx, s, row, "#probe measure");
-    if (mk >= 0) app_measure_arm(mk, p->node);
-    nk_layout_row_dynamic(ctx, row, 2);
-    tip(ctx, "The field at this node (element in per-element mode) against time, over every step");
-    if (nk_button_label(ctx, "history")) app_hist_open(p->node, p->elem);
-    tip(ctx, "Element, node and value to the clipboard");
-    if (nk_button_label(ctx, "copy")) {
-        char txt[400];
-        snprintf(txt, sizeof txt, "element %u node %u %s = %s", G.frd.elem_id[p->elem], G.frd.node_id[p->node], G.field_label, num);
-        sapp_set_clipboard_string(txt);
-    }
-}
-
-void window_probe(struct nk_context* ctx, float s, float row) {
-    if (!G.probe_on || !G.loaded) return;
-    /* the lines first: the window is as wide as the longest */
-    char ln[NPL][160], num[32];
-    const char* tips[NPL];
-    int n = probe_lines(ln, tips, num, sizeof num);
-    const struct nk_user_font* fnt = ctx->style.font;
-    float tw = 0;
-    for (int i = 0; i < n; i++) tw = CV_MAX(tw, fnt->width(fnt->userdata, fnt->height, ln[i], (int)strlen(ln[i])));
-    float w = CV_MIN(CV_MAX(260 * s, tw + 2 * ctx->style.window.padding.x + 12 * s), CV_MAX(260 * s, G.vp_w * 0.6f));
-    float h = row * (n + 6.9f + (G.sel_n || G.seln_n ? 1.1f : 0.f));
-    struct nk_rect r = nk_rect(G.vp_x + 10 * s, G.vp_y + G.vp_h - h - 10 * s, w, h);
-    if (nk_begin(ctx, "Probe", r, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)) {
-        nk_window_set_bounds(ctx, "Probe", r);
-        uii_probe_body(ctx, s, row);
-    }
-    nk_end(ctx);
-}
 
 /* ---- the navigation mark in the 3D view ---- */
 /* The navigation mark: while the mouse turns, pans or zooms the view, what it

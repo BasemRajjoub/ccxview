@@ -67,7 +67,7 @@ static void build(void) {
     if (p->hit) {
         uint32_t e = p->elem;
         add(M_PROBE, 0, "Probe here");
-        add(M_DETAILS, 0, "Details...");
+        add(M_DETAILS, 0, "Inspect...");
         add(M_CENTRE, 0, "Centre the view here");
         add(M_NORMAL, 0, "Look straight at this face");
         add(M_ZOOM, 0, "Zoom to element %u", f->elem_id[e]);
@@ -138,7 +138,7 @@ static void act(const item* m) {
     char t[400], num[32];
     switch (m->what) {
     case M_PROBE:   app_probe_pixel(x, y); break;
-    case M_DETAILS: app_probe_pixel(x, y); G.show_details = true; break;
+    case M_DETAILS: app_probe_pixel(x, y); G.insp_on = true; G.insp_tab = CV_TAB_INSPECT; break;
     case M_CENTRE:  app_view_push(); app_center_at(x, y); break;
     case M_NORMAL:  app_view_push(); app_normal_to(x, y); break;
     case M_ZOOM:    app_view_push(); app_fit_element(e); break;

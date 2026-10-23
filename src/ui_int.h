@@ -49,8 +49,6 @@
 #define section_label           uii_section_label
 #define section_stl             uii_section_stl
 #define units_summary           uii_units_summary
-#define window_probe            uii_window_probe
-#define window_details          uii_window_details
 #define window_about            uii_window_about
 #define window_deck             uii_window_deck
 #define window_menu             uii_window_menu
@@ -184,11 +182,9 @@ void window_measure(struct nk_context* ctx, float s, float row, int fw, int fh);
 int  ui_measure_row(struct nk_context* ctx, float s, float row, const char* mark);
 void rows_rebar(struct nk_context* ctx, float s, float row);    /* ui_rebar.c: REBAR's design values */
 void units_summary(char* out, size_t n);     /* "mm, MPa" or "not set", for buttons */
-void window_probe(struct nk_context* ctx, float s, float row);
-void window_details(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_info.c */
 /* the rows of a tool window, without its window: to sit in a floating window or a pane tab */
-void uii_probe_body(struct nk_context* ctx, float s, float row);        /* the probed node and element */
-void uii_details_body(struct nk_context* ctx, float s, float row);      /* ui_info.c: everything about them */
+void uii_details_body(struct nk_context* ctx, float s, float row);      /* ui_info.c: all about the probe */
+void uii_details_copy(void);                                            /* ... its lines to the clipboard */
 void uii_measure_body(struct nk_context* ctx, float s, float row);      /* ui_measure.c: the measurements */
 void window_about(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_info.c */
 void window_deck(struct nk_context* ctx, float s, float row, int fw, int fh);      /* ui_deck.c */
@@ -204,6 +200,7 @@ void uii_pane_edges(struct nk_context* ctx, float s, float W, float scene_x, flo
 bool uii_pane_edge_captured(float x, float y);       /* on an inner edge, or one is being dragged */
 void uii_pane_button(struct nk_context* ctx, int which);   /* hide / show: 0 the Scene pane, 1 the Inspector */
 void uii_panel_inspector(struct nk_context* ctx, float s, float row);
+void uii_probe_readout(char* out, size_t n);           /* "node 123  element 4  S Mises = 4.5e2" */
 
 /* ---- ui_test.c: --ui-test. tip() reports its widget; widgets without a tooltip are
    marked by a name starting with '#'. Nothing unless a test runs. */

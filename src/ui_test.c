@@ -173,7 +173,7 @@ static void close_all(struct nk_context* ctx) {
     struct nk_window* sc = nk_window_find(ctx, "Scene");     /* every case starts with the sidebar at its top */
     if (sc) sc->scrollbar.y = 0;
     G.show_units = G.show_msgs = G.show_calc_help = G.show_conv = G.legend_edit = G.find_open = G.browser_open = false;
-    G.show_details = G.show_deck = false;
+    G.show_deck = false;
     G.label_probe_only = false; G.label_kinds = 0;
     G.hist_open = G.path_open = false;
     G.title_edit = false;
@@ -339,7 +339,14 @@ static bool pick_folded(struct nk_context* ctx) { return !G.sel_open[CV_SELG_PIC
 static bool pick_open(struct nk_context* ctx) { return G.sel_open[CV_SELG_PICK]; }
 static bool named_unfolded(struct nk_context* ctx) { return G.sel_open[CV_SELG_NAMED]; }
 static bool sel_some(struct nk_context* ctx) { return G.sel_n > sel_was && G.sel_n < G.frd.n_elems; }
-static bool details_shown(struct nk_context* ctx) { return G.show_details && win_of(ctx, "Details"); }
+/* the Inspect tab: the probe's rows (its element's nodes as buttons), or the model's summary */
+static bool inspect_filled(struct nk_context* ctx) { return G.probe_on && G.insp_tab == CV_TAB_INSPECT && find_mark("Inspector", "#elem node 1"); }
+static bool inspect_summary(struct nk_context* ctx) { return !G.probe_on && find_mark("Inspector", "#model summary"); }
+static uint32_t elem_was;
+static void remember_elem(struct nk_context* ctx) { elem_was = G.probe.elem; }
+static bool node_moved(struct nk_context* ctx) {
+    return G.probe_on && G.probe.elem == elem_was && G.probe.node == G.frd.conn[G.frd.eoff[elem_was] + 1];
+}
 static void ids_on(struct nk_context* ctx) { G.label_kinds = 1 << CV_LABEL_NODE; G.label_probe_only = true; app_label_changed(); }
 static void ids_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_probe_only = false; app_label_changed(); }
 /* only Fields open, the panel scrolled to its end: the Labels tree is Fields' last item */
@@ -392,15 +399,8 @@ static void label_move_one(struct nk_context* ctx) { app_label_move("node", "1",
 static bool labels_moved_one(struct nk_context* ctx) { return app_label_moved_count() == 1; }
 static void labels_back(struct nk_context* ctx) { G.label_spacing = 10.f; labels_off(ctx); }
 
-/* the Details window leaves the view's upper right free: a drag there turns the model */
-static bool details_clear_of_view(struct nk_context* ctx) {
-    struct nk_window* w = win_of(ctx, "Details");
-    return w && w->bounds.x + w->bounds.w < G.vp_x + G.vp_w * 0.6f;
-}
 static bool box_crossing(struct nk_context* ctx) { return G.sel_n > 0 && G.sel_crossing && G.probe_on; }
 static bool box_window(struct nk_context* ctx) { return G.sel_n > 0 && !G.sel_crossing; }
-static void open_details(struct nk_context* ctx) { app_probe_at(0, false); G.show_details = true; }
-static bool details_gone(struct nk_context* ctx) { return !G.show_details; }
 static void open_about(struct nk_context* ctx) { G.show_about = true; }
 static void open_deck(struct nk_context* ctx) { G.show_deck = true; }
 /* the Contact subgroup of Fields with the contact sample's .cel read into the model on
@@ -1175,9 +1175,10 @@ static const step script[] = {
     AT_TIP("Scene", "Every label dragged on the model"), CLICK, WAIT(2), EXPECT(label_reset, "the panel resets them"),
     DO(labels_back), WAIT(2),
 
-    CASE("details: open beside the probe, the model still turns"),
-    DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2), AT_TIP("Probe", "Everything about this node"), CLICK, WAIT(3),
-    EXPECT(details_shown, "the Details window opens"), EXPECT(details_clear_of_view, "it sits at the left, off the model's middle"),
+    CASE("inspect: a click on the model fills the Inspect tab, a node of its element probed, cleared; the model still turns"),
+    DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(3), EXPECT(inspect_filled, "the node and element in the Inspect tab"),
+    DO(remember_elem), AT_TIP("Inspector", "#elem node 2"), CLICK, WAIT(2), EXPECT(node_moved, "the element's second node probed"),
+    AT_TIP("Inspector", "Clear the probe"), CLICK, WAIT(2), EXPECT(inspect_summary, "cleared: the model's summary"),
     DO(snapshot), AT_VIEW(0.45f, 0.04f), PRESS, AT_VIEW(0.5f, 0.07f), AT_VIEW(0.55f, 0.1f), RELEASE, EXPECT(turned, "a drag beside it turns the model"),
     DO(close_all), DO(fit_view), WAIT(2),
     AT_VIEW(0.02f, 0.5f), CLICK, PANELS_ANSWER,
@@ -1296,14 +1297,13 @@ static const step script[] = {
     CASE("mesh quality: measured on each step's deformed shape, or undeformed the same on every step"),
     DO(close_all), DO(mq_step1), WAIT(3), DO(mq_step2), WAIT(3), EXPECT(mq_moved, "the element's size changed with the step"),
     DO(mq_undeformed), WAIT(3), EXPECT(mq_same, "undeformed: the same on another step"), DO(mq_reset), WAIT(3), PANELS_ANSWER,
-    CLOSED_THEN_PANELS("Details", open_details, details_gone),
     CLOSED_THEN_PANELS("About", open_about, about_gone),
     CLOSED_THEN_PANELS("Title block", open_title_settings, title_settings_gone),
     CLOSED_THEN_PANELS("Measurements", open_measure, measure_gone),
 
     CASE("measurements: armed from the probe, a second click on the model makes a distance"),
     DO(close_all), DO(meas_clear), DO(fit_view), WAIT(2), AT_MODEL, CLICK, WAIT(2),
-    AT_TIP("Probe", "#probe measure distance"), CLICK, WAIT(2), EXPECT(meas_dist_armed, "a distance waits for its second node"),
+    AT_TIP("Inspector", "#probe measure distance"), CLICK, WAIT(2), EXPECT(meas_dist_armed, "a distance waits for its second node"),
     DO(meas_turn), WAIT(2), AT_MODEL, CLICK, WAIT(3), EXPECT(meas_dist_made, "a distance between two nodes"),
     EXPECT(meas_labelled, "it is there with no label kind on"),
     DO(fit_view), WAIT(2),
@@ -1343,7 +1343,7 @@ static const step script[] = {
 
     CASE("integrals: from the probe over a box selection, and from the menu over a set"),
     DO(close_all), DO(fit_view), WAIT(2), DO(arm_box), AT_VIEW(0.3f, 0.3f), PRESS, AT_VIEW(0.5f, 0.5f), AT_VIEW(0.7f, 0.7f), RELEASE, WAIT(2),
-    AT_TIP("Probe", "The field integrated over the selected elements"), CLICK, WAIT(3), EXPECT(integrals_sel, "over the selection"),
+    AT_TIP("Inspector", "The field integrated over the selected elements"), CLICK, WAIT(3), EXPECT(integrals_sel, "over the selection"),
     DO(integrals_close), DO(app_sel_clear_ctx), DO(fit_view), WAIT(2), AT_MODEL, RCLICK, WAIT(2), AT_TIP("Menu", "#menu Integrate over set"), CLICK, WAIT(3),
     EXPECT(integrals_set, "the volume of the element's set"),
     DO(integrals_end), WAIT(2), PANELS_ANSWER,

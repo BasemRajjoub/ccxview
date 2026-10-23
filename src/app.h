@@ -394,7 +394,6 @@ typedef struct {
     bool      show_fail;             /* the strength materials window */
     bool      show_mesh;             /* the mesh quality window */
     bool      mesh_limits_open;      /* ... with the user's limits shown */
-    bool      show_details;          /* the Details window of the probed node and element */
     bool      show_deck;             /* the Deck window: steps, amplitudes, model changes, submodel */
     bool      show_removed;          /* elements removed by *MODEL CHANGE in the step on screen stay drawn */
     /* labels on the model */

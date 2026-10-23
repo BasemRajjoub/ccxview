@@ -543,12 +543,14 @@ it was left, and at first the filters and the kept ones are folded:
 - Animation: mode shapes, steady-state phases, deformation cycles, step
   playback. Undeformed ghost, min / max markers.
 - Probe a node or element, find by id, history of a node over all steps, path
-  plots between nodes or through the wall. Details of the probe: position,
-  displacement, every component of the field, the element's material, sets
-  and nodes.
+  plots between nodes or through the wall. The Inspector pane (right, `]`) shows
+  the probe on its Inspect tab: the value, position, displacement, every
+  component of the field, the element's material, sets and nodes (a click on
+  one probes it); with nothing probed, the model's counts, step, field range
+  and units. The status bar keeps the probe in a line.
 - Selection of elements and nodes (the Selection window, below), highlighted,
   with the field's max over it marked (the min too when asked: compression, the
-  cold spot) and both in the window, the probe and the details.
+  cold spot) and both in the window and the Inspect tab.
 - Integrals of the field over a set, at every step (Integrals window: Fields >
   integrate..., right click a set in Groups, the view's context menu, or the
   probe's "integrate..." under a box selection). Over a volume (an element set,

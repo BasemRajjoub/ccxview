@@ -38,7 +38,7 @@ typedef struct {
     const char* find;           /* --find ID or eID: probe it after load */
     float       box[4];         /* --box x0,y0,x1,y1: max in that box of the view (fractions), after load */
     bool        box_set;
-    bool        details;        /* --details: the Details window of the probe (with --find or --box) */
+    bool        details;        /* --details: the Inspector shown on its Inspect tab (with --find or --box) */
     bool        about;          /* --about: the About window open */
     bool        deck_window;    /* --deck-window: the Deck window open (steps, amplitudes, submodel) */
     bool        contact_window; /* --contact-window: the Contact subgroup of Fields and its settings window open */
