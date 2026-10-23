@@ -4,8 +4,8 @@ Pre-processing stays out of scope. Work top to bottom: each step builds on the o
 before it, so no step rewrites code an earlier one wrote. One commit per step.
 
 ## 1. GUI: after the Inspector pane (0.1.17)
-1. **#28:** reply once the user has tested the tag, the folded Inspect tab and the
-   ball fix.
+1. **#28:** answered with 0.1.18 (tag, folded Inspect tab, pick kinds as checkboxes,
+   face / edge selection and totals); close it once the reporter confirms.
 2. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
    through recent picks.
 3. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
