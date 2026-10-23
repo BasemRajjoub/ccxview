@@ -121,7 +121,7 @@ static void init(void) {
     G.sym_auto = true; G.sym_thick = 1.f;
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
-    G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 300.f;
+    G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 340.f;
     G.probe_face = G.probe_edge[0] = UINT32_MAX;
     G.model_alpha = 1.f;
     G.cel_show = G.cel_master = G.cel_front = G.contact_key = true;

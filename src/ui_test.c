@@ -184,7 +184,7 @@ static void close_all(struct nk_context* ctx) {
     G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true; G.sel_open[CV_SELG_NAMED] = false;
 }
 /* the panes: both shown at their usual widths */
-static void panes_reset(struct nk_context* ctx) { G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 300.f; G.insp_tab = CV_TAB_INSPECT; }
+static void panes_reset(struct nk_context* ctx) { G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 340.f; G.insp_tab = CV_TAB_INSPECT; }
 static bool insp_hidden(struct nk_context* ctx) { return !G.insp_on && !win_of(ctx, "Inspector"); }
 static bool insp_shown(struct nk_context* ctx) { return G.insp_on && win_of(ctx, "Inspector"); }
 static bool scene_hidden(struct nk_context* ctx) { return !G.scene_on && !win_of(ctx, "Scene") && G.vp_x == 0; }
