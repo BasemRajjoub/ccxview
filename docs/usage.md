@@ -87,6 +87,7 @@ ccxview model.frd --no-panels --shot v.png  # the view alone, as H does
 ccxview model.frd --inspector 0             # the Inspector pane hidden (1 shown); --opt scene_on=0, scene_w=, insp_w=
 ccxview model.frd --pick-kind face --probe-at 0.4,0.3   # what a click picks: node, element, face, edge;
                                             #   a click at that point of the view (fractions)
+ccxview model.frd --probe-tag 0             # no tag in the view beside what is probed (1 shown, the default)
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
@@ -208,6 +209,7 @@ It prints what it selected and the field's max and min over it.
 | space, ← → | play, step |
 | G | free flight (WASD, Esc to leave); View > Camera: the "eye" list cuts what lies just ahead, or hides whole elements there, to fly through walls |
 | H | view only, for screenshots |
+| T | the probe's tag in the view on / off |
 | [ / ] | hide or show the Scene pane (left) / the Inspector (right); the chevron buttons at their top corners do the same, and their inner edge drags them wider or narrower (both kept in the settings) |
 | click the legend's unit / right-click the legend | units / legend settings |
 | right-click the title block | its lines, date format, free text and the text they make, editable by hand (drag it to move it, like the legend) |

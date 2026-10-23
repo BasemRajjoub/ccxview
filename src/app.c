@@ -122,6 +122,7 @@ static void init(void) {
     G.bg[0] = 0.33f; G.bg[1] = 0.32f; G.bg[2] = 0.31f;   /* neutral warm grey */
     G.hl_size = 8.f;
     G.scene_on = G.insp_on = true; G.scene_w = 310.f; G.insp_w = 340.f;
+    G.probe_tag = true;
     G.probe_face = G.probe_edge[0] = UINT32_MAX;
     G.model_alpha = 1.f;
     G.cel_show = G.cel_master = G.cel_front = G.contact_key = true;
@@ -1019,6 +1020,7 @@ static void event(const sapp_event* ev) {
                     break;
                 case SAPP_KEYCODE_R: if (!ctrl) app_view(CV_VIEW_ISO); break;
                 case SAPP_KEYCODE_H: if (!ctrl) G.hide_panels = !G.hide_panels; break;
+                case SAPP_KEYCODE_T: if (!ctrl) G.probe_tag = !G.probe_tag; break;
                 case SAPP_KEYCODE_S: if (!ctrl && !G.flight) G.show_select = !G.show_select; break;
                 case SAPP_KEYCODE_1: case SAPP_KEYCODE_2: case SAPP_KEYCODE_3:
                 case SAPP_KEYCODE_4: case SAPP_KEYCODE_5: case SAPP_KEYCODE_6:
@@ -1132,6 +1134,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--contact-window")) O.contact_window = true;
         else if (!strcmp(argv[i], "--no-panels")) O.no_panels = true;
         else if (!strcmp(argv[i], "--inspector") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = atoi(argv[++i]) ? "insp_on=1" : "insp_on=0";
+        else if (!strcmp(argv[i], "--probe-tag") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = atoi(argv[++i]) ? "probe_tag=1" : "probe_tag=0";
         else if (!strcmp(argv[i], "--pick-kind") && i + 1 < argc && O.nopts < 32) {
             static const char* kinds[CV_PK_N] = { "node", "element", "face", "edge" };
             static const char* opt[CV_PK_N] = { "pick_kind=0", "pick_kind=1", "pick_kind=2", "pick_kind=3" };

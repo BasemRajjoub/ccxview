@@ -9,7 +9,8 @@
 
 enum { MOVED_MAX = 4000 };              /* the anchors hold the entry's number in 16 bits */
 static struct { CV_VEC(cv_label_off) a; unsigned gen; } MV;
-static struct { bool on; cv_label_off key; } DR;           /* the label being dragged */
+static struct { bool on, tag; cv_label_off key; } DR;      /* the label being dragged; the probe's tag */
+static struct { bool on; float r[4]; } TG;                 /* the probe's tag, as drawn last frame */
 static struct { bool on; cv_label_off key; } MK;           /* the moved label the context menu was opened on */
 
 unsigned label_moved_gen(void) { return MV.gen; }
@@ -64,20 +65,34 @@ void app_label_moved_clear(void) {
 
 bool app_label_at(float x, float y, cv_label_off* key) { return label_hit(x, y, key); }
 
+void app_probe_tag_box(const float r[4]) {
+    TG.on = r != NULL;
+    if (r) memcpy(TG.r, r, sizeof TG.r);
+}
+
+bool app_probe_tag_shown(float r[4]) { if (TG.on && r) memcpy(r, TG.r, sizeof TG.r); return TG.on; }
+
+/* the probe's tag first: it lies over the labels */
 bool app_label_grab(float x, float y) {
-    DR.on = label_hit(x, y, &DR.key);
+    DR.tag = TG.on && x >= TG.r[0] && y >= TG.r[1] && x < TG.r[0] + TG.r[2] && y < TG.r[1] + TG.r[3];
+    DR.on = DR.tag || label_hit(x, y, &DR.key);
     return DR.on;
 }
 
 void app_label_drag(float dx, float dy) {
     if (!DR.on) return;
     float s = CV_MAX(ui_scale(), 0.1f);          /* kept before the interface scale, as the label size */
+    if (DR.tag) {
+        G.probe_tag_off[0] = CV_MAX(-10000.f, CV_MIN(G.probe_tag_off[0] + dx / s, 10000.f));
+        G.probe_tag_off[1] = CV_MAX(-10000.f, CV_MIN(G.probe_tag_off[1] + dy / s, 10000.f));
+        return;
+    }
     DR.key.dx = CV_MAX(-10000.f, CV_MIN(DR.key.dx + dx / s, 10000.f));     /* as app_label_move keeps it */
     DR.key.dy = CV_MAX(-10000.f, CV_MIN(DR.key.dy + dy / s, 10000.f));
     app_label_move(DR.key.kind, DR.key.id, DR.key.dx, DR.key.dy);
 }
 
-void app_label_release(void) { DR.on = false; }
+void app_label_release(void) { DR.on = DR.tag = false; }
 bool app_label_dragging(void) { return DR.on; }
 
 /* ---- the context menu's "Reset label" ------------------------------------------------- */

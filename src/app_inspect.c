@@ -77,6 +77,22 @@ float app_pick_average(void) {
     return (float)(s / n);
 }
 
+bool app_pick_anchor(float p[3]) {
+    if (!G.loaded || !G.probe_on || G.probe.elem >= G.frd.n_elems || G.probe.node >= G.frd.n_nodes) return false;
+    uint32_t r[32];
+    int n = app_pick_nodes(r);
+    if (!n && (G.pick_kind == CV_PK_FACE || G.pick_kind == CV_PK_EDGE)) return false;
+    if (!n && G.pick_kind == CV_PK_ELEM) {           /* the element: the centre of its nodes */
+        uint32_t a = G.frd.eoff[G.probe.elem];
+        n = (int)CV_MIN(G.frd.eoff[G.probe.elem + 1] - a, 32u);
+        for (int i = 0; i < n; i++) r[i] = G.frd.conn[a + i];
+    }
+    if (!n) { r[0] = G.probe.node; n = 1; }
+    p[0] = p[1] = p[2] = 0;
+    for (int i = 0; i < n; i++) { float q[3]; shown_at(r[i], q); for (int k = 0; k < 3; k++) p[k] += q[k] / n; }
+    return true;
+}
+
 static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
     float d6[6];
     app_node_disp6(i, d6);

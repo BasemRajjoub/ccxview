@@ -199,6 +199,8 @@ bool uii_pane_edge_captured(float x, float y);       /* on an inner edge, or one
 void uii_pane_button(struct nk_context* ctx, int which);   /* hide / show: 0 the Scene pane, 1 the Inspector */
 void uii_panel_inspector(struct nk_context* ctx, float s, float row);
 void uii_tabs_sync(void);    /* G.show_select / show_measure set: the pane on that tab; and back */
+void uii_probe_value_text(char* out, size_t n);        /* "S Mises = 4.5e2", over a face or edge the average */
+void uii_window_probe_tag(struct nk_context* ctx, float s);   /* the probe's tag in the view */
 void uii_probe_readout(char* out, size_t n);           /* "node 123  element 4  S Mises = 4.5e2" */
 
 /* ---- ui_test.c: --ui-test. tip() reports its widget; widgets without a tooltip are

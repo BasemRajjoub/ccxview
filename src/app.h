@@ -361,6 +361,8 @@ typedef struct {
     int       pick_kind;             /* CV_PK_*: what a click probes (the Inspect tab's row) */
     uint32_t  probe_face;            /* the face probed: element << 3 | its face, UINT32_MAX none */
     uint32_t  probe_edge[3];         /* the edge probed: its corners, the mid-side node; [0] UINT32_MAX none */
+    bool      probe_tag;             /* the probe's tag in the view: what and its value, a leader to it (T) */
+    float     probe_tag_off[2];      /* the tag dragged from its place beside the item, px at scale 1 */
     /* max in a box: the field's extremes among the shown nodes (elements) inside a dragged box */
     bool      box_arm;               /* the next left drag in the view draws that box */
     bool      box_pick;              /* the box being drawn is one (not a box zoom) */
@@ -668,6 +670,7 @@ void app_pick_clear(void);                        /* no face, no edge */
 void app_pick_sync(void);                         /* the outline again when what it rests on changed */
 int  app_pick_nodes(uint32_t out[8]);             /* the face's ring, or the edge a, (mid,) b; 0 none */
 float app_pick_average(void);                     /* the field over those nodes (the element's value per element) */
+bool app_pick_anchor(float p[3]);                 /* where the probed item is drawn: the node, the centre of the element, face or edge */
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* app_label.c: labels on the model */
 const char* app_label_name(int kind);          /* "node id", ... for the panel */
@@ -690,6 +693,8 @@ bool app_label_grab(float x, float y);         /* a press: true when on a label,
 void app_label_drag(float dx, float dy);       /* px the mouse moved */
 void app_label_release(void);
 bool app_label_dragging(void);
+bool app_probe_tag_shown(float r[4]);           /* the tag drawn last frame: its box */
+void app_probe_tag_box(const float r[4]);      /* the probe's tag drawn this frame (x, y, w, h px), NULL none: a press on it drags it */
 void app_label_menu_at(float x, float y);      /* the context menu opens here: a moved label under it? */
 bool app_label_menu_moved(void);
 void app_label_menu_reset(void);

@@ -7,6 +7,7 @@
      ui_windows.c  messages, formula builder, probe, find, overlay, navigation mark, file browser, drop hint
      ui_plots.c    linearization, path, history and convergence plots
      ui_inspector.c  the panes' widths and buttons, the Inspector (right) and its tabs
+     ui_probetag.c   the probe's tag in the view
    This file also answers the input focus queries and holds the small widget helpers. */
 #include "app.h"
 #include "ui.h"
@@ -128,7 +129,7 @@ bool ui_mouse_captured(struct nk_context* ctx, bool wheel) {
             return true;
         struct nk_rect b = w->bounds;
         if (!(mx >= b.x && my >= b.y && mx < b.x + b.w && my < b.y + b.h)) continue;
-        if ((w->flags & NK_WINDOW_NO_INPUT) && (!strcmp(w->name_string, "hint") || !strcmp(w->name_string, "overlay") || !strcmp(w->name_string, "navmark"))) continue;
+        if ((w->flags & NK_WINDOW_NO_INPUT) && (!strcmp(w->name_string, "hint") || !strcmp(w->name_string, "overlay") || !strcmp(w->name_string, "navmark") || !strcmp(w->name_string, "probetag"))) continue;
         if (wheel && (!strcmp(w->name_string, "axes") || !strcmp(w->name_string, "Legend"))) continue;
         return true;
     }
@@ -366,6 +367,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_convergence(ctx, s, row, fw, fh);
     window_legend_settings(ctx, s, row);
     window_title_settings(ctx, s, row);
+    uii_window_probe_tag(ctx, s);
     window_nav(ctx, s);
     window_find(ctx, s, row);
     window_path(ctx, s, row, fw, fh);

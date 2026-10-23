@@ -556,6 +556,13 @@ it was left, and at first the filters and the kept ones are folded:
   or the element's edge nearest the click (its nodes, length, the field at its
   ends and on average); kept in the settings, `--pick-kind`. A node picked has
   a ball on it; an element, face or edge only its gold outline.
+- The probe's tag in the view (#28): a small box beside what is probed, what it
+  is (`node 123`, `face S2 of element 76`, `edge 484 - 531`) and the field's
+  value there (over a face or edge the average), a leader line to it. Read live
+  as the step or field changes, kept inside the view, in pictures; dragged
+  where it reads best. With the Inspector shown or hidden: for report pictures
+  the view alone (`H`) or `--inspector 0` and the tag. Inspect tab "tag in
+  view", `T`, kept in the settings, `--probe-tag 0|1`.
 - Selection of elements and nodes (the Inspector's Selection tab, below), highlighted,
   with the field's max over it marked (the min too when asked: compression, the
   cold spot) and both in the window and the Inspect tab.

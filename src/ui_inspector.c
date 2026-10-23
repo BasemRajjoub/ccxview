@@ -87,7 +87,7 @@ static float probe_value_now(void) {
 
 /* "S Mises = 4.5e2", "point 3: S Mises = 4.5e2"; over a face or edge picked, the
    average; "no field" */
-static void probe_value_text(char* out, size_t n) {
+void uii_probe_value_text(char* out, size_t n) {
     char num[32];
     uint32_t nd[8];
     if (G.has_field && app_pick_nodes(nd)) {
@@ -108,7 +108,7 @@ void uii_probe_readout(char* out, size_t n) {
     char v[160];
     uint32_t nd[8];
     int k = app_pick_nodes(nd);
-    probe_value_text(v, sizeof v);
+    uii_probe_value_text(v, sizeof v);
     const uint32_t* id = G.frd.node_id;
     if (k && G.pick_kind == CV_PK_FACE)
         snprintf(out, n, "face S%u of element %u  %s", (G.probe_face & 7) + 1, G.frd.elem_id[G.probe_face >> 3], v);
@@ -175,7 +175,7 @@ static void model_summary(struct nk_context* ctx, float s, float row) {
 static void probe_rows(struct nk_context* ctx, float s, float row) {
     const cv_pick* p = &G.probe;
     char t[200];
-    probe_value_text(t, sizeof t);
+    uii_probe_value_text(t, sizeof t);
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "The field at the probe (Node and Element below: all about them)");
     nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
@@ -211,7 +211,10 @@ static void probe_rows(struct nk_context* ctx, float s, float row) {
     }
     int mk = ui_measure_row(ctx, s, row, "#probe measure");
     if (mk >= 0) app_measure_arm(mk, p->node);
-    nk_layout_row_dynamic(ctx, row, 2);
+    nk_layout_row_dynamic(ctx, row, 3);
+    tip(ctx, "A tag in the view beside what is probed: what it is and the value there, in pictures too;\n"
+             "drag it where it reads best (T)");
+    nk_checkbox_label(ctx, "tag in view", &G.probe_tag);
     tip(ctx, "Element, node and value to the clipboard");
     if (nk_button_label(ctx, "copy")) {
         uii_probe_readout(t, sizeof t);

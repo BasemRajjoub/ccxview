@@ -749,6 +749,15 @@ static bool face_picked(struct nk_context* ctx) { uint32_t nd[8]; return G.pick_
 static bool edge_picked(struct nk_context* ctx) { uint32_t nd[8]; return G.pick_kind == CV_PK_EDGE && app_pick_nodes(nd) >= 2 && readout_is("edge "); }
 static bool elem_picked(struct nk_context* ctx) { return G.pick_kind == CV_PK_ELEM && G.probe_on && readout_is("element "); }
 static bool node_kind(struct nk_context* ctx) { uint32_t nd[8]; return G.pick_kind == CV_PK_NODE && !app_pick_nodes(nd) && readout_is("node "); }
+/* the probe's tag: shown, off and on by its box, dragged without turning the view */
+static bool tag_shown(struct nk_context* ctx) { return G.probe_tag && app_probe_tag_shown(NULL); }
+static bool tag_hidden(struct nk_context* ctx) { return !G.probe_tag && !app_probe_tag_shown(NULL); }
+static void tag_reset(struct nk_context* ctx) { G.probe_tag_off[0] = G.probe_tag_off[1] = 0; }
+static void at_tag(struct nk_context* ctx) { float r[4]; if (app_probe_tag_shown(r)) move_to(r[0] + r[2] / 2, r[1] + r[3] / 2); }
+static bool tag_dragged(struct nk_context* ctx) {
+    float s = ui_scale();
+    return tag_shown(ctx) && fabsf(G.probe_tag_off[0] * s - 60) < 2 && fabsf(G.probe_tag_off[1] * s + 40) < 2 && !turned(ctx) && !app_label_dragging();
+}
 static bool measure_left(struct nk_context* ctx) { return !app_measure_armed() && !G.show_measure && G.insp_tab == CV_TAB_INSPECT; }
 /* the Inspect tab's selection rows: the probe on its min, the box kept; isolate */
 static bool at_sel_min(struct nk_context* ctx) {
@@ -1335,6 +1344,14 @@ static const step script[] = {
     AT_TIP("Inspector", "A click picks an element"), CLICK, WAIT(3), EXPECT(elem_picked, "the element"),
     AT_TIP("Inspector", "A click picks a node"), CLICK, WAIT(3), EXPECT(node_kind, "back to the node"),
     DO(probe_close), WAIT(2), PANELS_ANSWER,
+
+    CASE("inspect: the probe's tag in the view, off and on by its box, dragged without turning the view"),
+    DO(close_all), DO(fit_view), DO(tag_reset), WAIT(2), AT_MODEL, CLICK, WAIT(3), EXPECT(tag_shown, "the tag beside the node"),
+    AT_TIP("Inspector", "A tag in the view beside"), CLICK, WAIT(2), EXPECT(tag_hidden, "tag in view off: gone"),
+    AT_TIP("Inspector", "A tag in the view beside"), CLICK, WAIT(2), EXPECT(tag_shown, "on again"),
+    DO(at_tag), WAIT(1), DO(snapshot), PRESS, WAIT(1), DO(nudge), WAIT(1), DO(nudge), WAIT(1), RELEASE, WAIT(2),
+    EXPECT(tag_dragged, "the tag moved by the drag, the view kept"),
+    DO(tag_reset), DO(probe_close), WAIT(2), PANELS_ANSWER,
 
     CASE("measure tab: its tab shows it, an angle armed there, another tab cancels it"),
     DO(close_all), DO(meas_clear), WAIT(2), AT_TIP("Inspector", "Measure: distances"), CLICK, WAIT(2), EXPECT(measure_shown, "the Measure tab"),
