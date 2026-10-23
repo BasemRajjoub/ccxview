@@ -85,7 +85,8 @@ ccxview tie.frd --set GLUE --opt tie_nodes=2 --opt model_alpha=0.4  # a tie's sl
 ccxview model.frd --step 3 --look +z        # a step, a view direction
 ccxview model.frd --no-panels --shot v.png  # the view alone, as H does
 ccxview model.frd --inspector 0             # the Inspector pane hidden (1 shown); --opt scene_on=0, scene_w=, insp_w=
-ccxview model.frd --pick-kind face --probe-at 0.4,0.3   # what a click picks: node, element, face, edge;
+ccxview model.frd --pick-kind node,face --probe-at 0.4,0.3   # what a click picks and a pick selects:
+                                            #   node, element, face, edge, comma separated;
                                             #   a click at that point of the view (fractions)
 ccxview model.frd --probe-tag 0             # no tag in the view beside what is probed (1 shown, the default)
 ccxview model.frd --tag-groups node,selection   # the Inspect groups whose lines the tag shows: face, edge,

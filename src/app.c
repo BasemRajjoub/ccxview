@@ -94,7 +94,7 @@ static void init(void) {
     G.anim_factor = 1.f;
     G.fly_speed = 0.25f;
     G.fly_clip_depth = 0.005f;
-    G.sel_elems = true; G.sel_visible = true;   /* no balls on the extremes: the values are in the Inspect tab */
+    G.pick_kinds = CV_PK_DEFAULT; G.sel_elems = true; G.sel_visible = true;   /* no balls on the extremes: the values are in the Inspect tab */
     G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true;   /* the kept ones folded */
     G.label_px = 13.f; G.minmax_n = 1; G.oor_mode[0] = G.oor_mode[1] = 1;
     G.oor_rgb[0][0] = 0.9f; G.oor_rgb[0][1] = 0.1f; G.oor_rgb[0][2] = 0.1f; G.oor_rgb[1][0] = 0.1f; G.oor_rgb[1][1] = 0.2f; G.oor_rgb[1][2] = 0.9f; G.label_spacing = 10.f; G.label_front = true;
@@ -1105,6 +1105,7 @@ static void app_log(const char* tag, uint32_t level, uint32_t item, const char* 
     slog_func(tag, level, item, msg, line, file, user);
 }
 
+const char* const cv_pk_names[CV_PK_N] = { "node", "element", "face", "edge" };
 const char* const cv_tag_names[CV_TAG_N] = { "face", "edge", "components", "node", "element", "checks", "nodes", "selection" };
 
 /* --tag-groups: a number (the bits) or names with commas, "none" */
@@ -1163,14 +1164,17 @@ sapp_desc sokol_main(int argc, char* argv[]) {
             int m = tag_groups_arg(argv[++i]);
             if (m >= 0) { snprintf(opt, sizeof opt, "tag_groups=%d", m); O.opts[O.nopts++] = opt; }
         }
-        else if (!strcmp(argv[i], "--pick-kind") && i + 1 < argc && O.nopts < 32) {
-            static const char* kinds[CV_PK_N] = { "node", "element", "face", "edge" };
-            static const char* opt[CV_PK_N] = { "pick_kind=0", "pick_kind=1", "pick_kind=2", "pick_kind=3" };
-            const char* v = argv[++i];
-            int k = -1;
-            for (int q = 0; q < CV_PK_N; q++) if (!strcmp(v, kinds[q])) k = q;
-            if (k >= 0) O.opts[O.nopts++] = opt[k];
-            else fprintf(stderr, "ccxview: --pick-kind %s: node, element, face or edge\n", v);
+        else if (!strcmp(argv[i], "--pick-kind") && i + 1 < argc && O.nopts < 32) {   /* "node,edge": the kinds ticked */
+            static char opt[32], t[200];
+            snprintf(t, sizeof t, "%s", argv[++i]);
+            int m = 0;
+            for (char* w = strtok(t, ", "); w && m >= 0; w = strtok(NULL, ", ")) {
+                int k = -1;
+                for (int q = 0; q < CV_PK_N; q++) if (!strcmp(w, cv_pk_names[q])) k = q;
+                m = k < 0 ? -1 : m | 1 << k;
+            }
+            if (m > 0) { snprintf(opt, sizeof opt, "pick_kinds=%d", m); O.opts[O.nopts++] = opt; }
+            else fprintf(stderr, "ccxview: --pick-kind %s: node, element, face, edge, comma separated\n", argv[i]);
         }
         else if (!strcmp(argv[i], "--cel") && i + 1 < argc && O.ncel < 4) O.cel[O.ncel++] = argv[++i];
         else if (!strcmp(argv[i], "--set-alpha") && i + 1 < argc && O.nset_alpha < 8) O.set_alpha[O.nset_alpha++] = argv[++i];

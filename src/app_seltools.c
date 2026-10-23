@@ -152,21 +152,23 @@ bool app_sel_click(float px, float py) {
     }
 }
 
-/* Ctrl+click in the view, as in CAD: the node (pick kind Node) or the element
-   (Element) under the pixel into the selection, or out if it is in. A face or
-   edge: nothing yet */
+/* Ctrl+click in the view, as in CAD: the node (pick kind Node) and / or the element
+   (Element) under the pixel into the selection, each out if it is in */
 bool app_sel_ctrl_click(float px, float py) {
-    if (!G.loaded) return false;
-    int k = G.pick_kind;
-    if (k != CV_PK_NODE && k != CV_PK_ELEM) return false;
+    if (!G.loaded || !(app_pk(CV_PK_NODE) || app_pk(CV_PK_ELEM))) return false;
     cv_pick p;
     float o[3], d[3];
     if (!app_pick(px, py, &p, o, d) || !p.hit) { say("nothing under the cursor%s", ""); return false; }
-    bool node = k == CV_PK_NODE;
-    bool in = node ? in_list(G.seln, G.seln_n, p.node) : in_list(G.sel, G.sel_n, p.elem);
-    int mode = in ? CV_SEL_REMOVE : CV_SEL_ADD;
-    G.sel_note[0] = 0;
-    return app_sel_apply(&p.elem, 1, &p.node, 1, mode, node ? 2 : 1) || mode == CV_SEL_REMOVE;
+    bool any = false;
+    for (int k = CV_PK_NODE; k <= CV_PK_ELEM; k++) {
+        if (!app_pk(k)) continue;
+        bool node = k == CV_PK_NODE;
+        bool in = node ? in_list(G.seln, G.seln_n, p.node) : in_list(G.sel, G.sel_n, p.elem);
+        int mode = in ? CV_SEL_REMOVE : CV_SEL_ADD;
+        G.sel_note[0] = 0;
+        any |= app_sel_apply(&p.elem, 1, &p.node, 1, mode, node ? 2 : 1) || mode == CV_SEL_REMOVE;
+    }
+    return any;
 }
 
 bool app_sel_invert(void) {

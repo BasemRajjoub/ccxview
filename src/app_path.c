@@ -120,7 +120,7 @@ void refresh_path(void) {
         uint32_t m[3];
         int k = 0;
         if (G.hist_open) m[k++] = G.hist_node;       /* stays while its history plot is open, whatever the step */
-        if (G.probe_on && G.probe.hit && G.pick_kind == CV_PK_NODE) m[k++] = G.probe.node;   /* else the outline marks it */
+        if (G.probe_on && G.probe.hit && app_pk(CV_PK_NODE)) m[k++] = G.probe.node;   /* else the outline marks it */
         if (G.path_arm && G.path_a != UINT32_MAX) m[k++] = G.path_a;
         for (int i = 0; i < k; i++) if (m[i] < G.frd.n_nodes) path_vertex(&pos, &disp, m[i]);
         for (int e = 0; line && e < 2; e++) {
@@ -136,7 +136,7 @@ void refresh_path(void) {
    step under them) changes */
 void app_marks_sync(void) {
     uint64_t k[] = { G.loaded, (uintptr_t)G.frd.xyz, (uintptr_t)G.disp, (uint64_t)G.step,
-                     G.probe_on && G.probe.hit && G.pick_kind == CV_PK_NODE ? G.probe.node : UINT32_MAX,
+                     G.probe_on && G.probe.hit && app_pk(CV_PK_NODE) ? G.probe.node : UINT32_MAX,
                      G.path_arm ? G.path_a : UINT32_MAX,
                      G.hist_open ? G.hist_node : UINT32_MAX,
                      G.path_n ? G.path_gen : UINT64_MAX };

@@ -107,38 +107,42 @@ void uii_probe_value_text(char* out, size_t n) {
 void uii_probe_readout(char* out, size_t n) {
     char v[160];
     uint32_t nd[8];
-    int k = app_pick_nodes(nd);
+    int k = app_pick_nodes(nd), h = app_pick_head();
     uii_probe_value_text(v, sizeof v);
     const uint32_t* id = G.frd.node_id;
-    if (k && G.pick_kind == CV_PK_FACE)
+    if (k && h == CV_PK_FACE)
         snprintf(out, n, "face S%u of element %u  %s", (G.probe_face & 7) + 1, G.frd.elem_id[G.probe_face >> 3], v);
     else if (k) snprintf(out, n, "edge %u - %u  %s", id[nd[0]], id[nd[k - 1]], v);
-    else if (G.pick_kind == CV_PK_ELEM) snprintf(out, n, "element %u  node %u  %s", G.frd.elem_id[G.probe.elem], id[G.probe.node], v);
+    else if (h == CV_PK_ELEM) snprintf(out, n, "element %u  node %u  %s", G.frd.elem_id[G.probe.elem], id[G.probe.node], v);
     else snprintf(out, n, "node %u  element %u  %s", id[G.probe.node], G.frd.elem_id[G.probe.elem], v);
 }
 
-/* what a click picks: node, element, face, edge */
+/* what a click picks, a box for each kind (never none): node, element, face, edge;
+   the Selection tab's "takes" row too (rows: its own tips) */
+void uii_kind_boxes(struct nk_context* ctx, const char* const tips[CV_PK_N]) {
+    static const char* name[CV_PK_N] = { "node", "element", "face", "edge" };
+    int was = G.pick_kinds;
+    for (int k = 0; k < CV_PK_N; k++) {
+        nk_bool on = app_pk(k);
+        tip(ctx, tips[k]);
+        if (nk_checkbox_label(ctx, name[k], &on)) G.pick_kinds = on ? G.pick_kinds | 1 << k : G.pick_kinds & ~(1 << k);
+    }
+    if (!G.pick_kinds) G.pick_kinds = was;            /* one stays ticked */
+}
+
 static void kind_row(struct nk_context* ctx, float s, float row) {
-    static const char* name[CV_PK_N] = { "Node", "Element", "Face", "Edge" };
-    static const char* tips[CV_PK_N] = {
-        "A click picks a node (and the element it is on); Ctrl+click puts it in the selection or takes it out",
-        "A click picks an element: outlined in the view, its details first; Ctrl+click: in or out of the selection",
-        "A click picks a face of an element: its surfaces, area, normal, the field over it",
-        "A click picks the element's edge nearest it: its nodes, length, the field along it",
+    static const char* const tips[CV_PK_N] = {
+        "A click picks a node: the ball, its group; Ctrl+click puts it in the selection or takes it out",
+        "A click picks an element: outlined in the view, its group; Ctrl+click: in or out of the selection",
+        "A click picks a face of an element: its surfaces, area, normal, the field over it; Ctrl+click: in or out",
+        "A click picks the element's edge nearest it: its nodes, length, the field along it; Ctrl+click: in or out",
     };
     nk_layout_row_template_begin(ctx, row);
     nk_layout_row_template_push_static(ctx, 34 * s);
     for (int k = 0; k < CV_PK_N; k++) nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_end(ctx);
     nk_label_colored(ctx, "pick", NK_TEXT_LEFT, P.dim);
-    for (int k = 0; k < CV_PK_N; k++) {
-        nk_bool on = G.pick_kind == k;
-        tip(ctx, tips[k]);
-        nk_style_push_color(ctx, &ctx->style.selectable.text_normal_active, P.accent);
-        nk_style_push_color(ctx, &ctx->style.selectable.text_hover_active, P.accent);
-        if (nk_selectable_label(ctx, name[k], NK_TEXT_CENTERED, &on)) G.pick_kind = k;
-        nk_style_pop_color(ctx); nk_style_pop_color(ctx);
-    }
+    uii_kind_boxes(ctx, tips);
 }
 
 /* nothing picked: the model in a few lines */
@@ -180,9 +184,10 @@ static void probe_rows(struct nk_context* ctx, float s, float row) {
     tip(ctx, "What is probed and the field there (below: all about it, in groups that fold)");
     nk_label_colored(ctx, t, NK_TEXT_LEFT, P.accent);
     uint32_t nd[8];
-    if ((G.pick_kind == CV_PK_FACE || G.pick_kind == CV_PK_EDGE) && !app_pick_nodes(nd))
-        nk_label_colored(ctx, G.pick_kind == CV_PK_FACE ? "no face picked: click one on the model" : "no edge picked: click near one",
-                         NK_TEXT_LEFT, P.dim);
+    if (app_pk(CV_PK_FACE) && !app_pick_nodes_of(CV_PK_FACE, nd))
+        nk_label_colored(ctx, "no face picked: click one on the model", NK_TEXT_LEFT, P.dim);
+    if (app_pk(CV_PK_EDGE) && !app_pick_nodes_of(CV_PK_EDGE, nd))
+        nk_label_colored(ctx, "no edge picked: click near one", NK_TEXT_LEFT, P.dim);
     nk_layout_row_dynamic(ctx, row, 3);
     nk_bool lb = G.label_probe_only && G.label_kinds;
     tip(ctx, "The ids of this element and its nodes in the view (Fields > Labels: the kind, size and colours)");

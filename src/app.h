@@ -73,6 +73,8 @@ enum { CV_SELG_PICK, CV_SELG_NAMES, CV_SELG_USE, CV_SELG_NAMED, CV_SELG_N };
 /* the Inspector pane's tabs; what a click in the view probes */
 enum { CV_TAB_INSPECT, CV_TAB_SELECT, CV_TAB_MEASURE, CV_TAB_N };
 enum { CV_PK_NODE, CV_PK_ELEM, CV_PK_FACE, CV_PK_EDGE, CV_PK_N };
+#define CV_PK_DEFAULT ((1 << CV_PK_NODE) | (1 << CV_PK_ELEM))   /* G.pick_kinds: a node and its element */
+extern const char* const cv_pk_names[CV_PK_N];                    /* "node" ... "edge", as --pick-kind takes them */
 /* the Inspect tab's groups, a bit each in G.tag_groups: their lines on the probe's tag too */
 enum { CV_TAG_FACE, CV_TAG_EDGE, CV_TAG_COMP, CV_TAG_NODE, CV_TAG_ELEM, CV_TAG_CHECKS, CV_TAG_ENODES, CV_TAG_SEL, CV_TAG_N };
 #define CV_TAG_DEFAULT ((1 << CV_TAG_CHECKS) | (1 << CV_TAG_SEL))   /* failure, mesh quality, the selection's extremes */
@@ -362,7 +364,7 @@ typedef struct {
     bool      probe_on;
     cv_pick   probe;
     float     probe_value;
-    int       pick_kind;             /* CV_PK_*: what a click probes (the Inspect tab's row) */
+    int       pick_kinds;            /* 1 << CV_PK_*: what a click probes and a pick selects (never none) */
     uint32_t  probe_face;            /* the face probed: element << 3 | its face, UINT32_MAX none */
     uint32_t  probe_edge[3];         /* the edge probed: its corners, the mid-side node; [0] UINT32_MAX none */
     bool      probe_tag;             /* the probe's tag in the view: what and its value, a leader to it (T) */
@@ -669,13 +671,17 @@ bool app_sel_csv(void);                          /* the selection to <model>_sel
 size_t app_sel_ids(char* out, size_t n);         /* its element ids, 16 a line, comma separated (an *ELSET body) */
 void app_menu_open(float x, float y);            /* the context menu at this pixel, what lies there picked */
 void app_probe_pixel(float x, float y);          /* probe what lies under the pixel, as a click does */
-/* app_inspect.c: the face or edge a click probes (G.pick_kind), from the ray o + t d;
-   what is probed outlined in the view; a face's ring or an edge's nodes, the field over them */
+/* app_inspect.c: the face and edge a click probes (G.pick_kinds), from the ray o + t d;
+   every kind ticked outlined in the view; a face's ring or an edge's nodes, the field over them */
+static inline bool app_pk(int kind) { return (G.pick_kinds >> kind) & 1; }
+int  app_pick_head(void);                         /* the kind the probe's line names: a face, edge, node, element ticked */
 void app_pick_kind_apply(const float o[3], const float d[3]);
 void app_pick_clear(void);                        /* no face, no edge */
 void app_pick_sync(void);                         /* the outline again when what it rests on changed */
-int  app_pick_nodes(uint32_t out[8]);             /* the face's ring, or the edge a, (mid,) b; 0 none */
-float app_pick_average(void);                     /* the field over those nodes (the element's value per element) */
+int  app_pick_nodes_of(int kind, uint32_t out[8]);   /* CV_PK_FACE: the face's ring, CV_PK_EDGE: a, (mid,) b; 0 none */
+int  app_pick_nodes(uint32_t out[8]);             /* those of the head kind (a face or edge); 0 none */
+float app_pick_average_of(int kind);              /* the field over them (the element's value per element) */
+float app_pick_average(void);                     /* ... of the head kind */
 bool app_pick_anchor(float p[3]);                 /* where the probed item is drawn: the node, the centre of the element, face or edge */
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* app_label.c: labels on the model */

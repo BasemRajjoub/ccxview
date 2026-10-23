@@ -109,10 +109,10 @@ static const setting S[] = {
     I(exp_kind, 0, 1), B(exp_video), I(exp_cycles, 1, 20), I(exp_fps, 1, 60), B(exp_lock_range), B(png_alpha),
     SEC("Panes: the Scene (left) and the Inspector (right) shown, their widths in pixels at scale 1"),
     B(scene_on), F(scene_w, 120, 2000), B(insp_on), F(insp_w, 120, 2000),
-    SEC("What a click in the view probes: 0 a node, 1 an element, 2 a face, 3 an edge; its tag in the view (what, the value); "
+    SEC("What a click in the view probes and a pick selects, a bit each: 1 a node, 2 an element, 4 a face, 8 an edge; its tag in the view (what, the value); "
         "the Inspect groups on the tag, a bit each: 1 face, 2 edge, 4 components, 8 node, 16 element, 32 failure and mesh, "
         "64 element nodes, 128 selection"),
-    I(pick_kind, 0, CV_PK_N - 1), B(probe_tag), I(tag_groups, 0, (1 << CV_TAG_N) - 1),
+    I(pick_kinds, 1, (1 << CV_PK_N) - 1), B(probe_tag), I(tag_groups, 0, (1 << CV_TAG_N) - 1),
     SEC("Panel sections: open (1) or closed (0)"),
     TREE("layers", CV_TREE_LAYERS), TREE("groups", CV_TREE_GROUPS), TREE("fields", CV_TREE_FIELDS),
     TREE("view", CV_TREE_VIEW), TREE("camera", CV_TREE_CAMERA), TREE("colours", CV_TREE_COLOURS),
@@ -242,6 +242,11 @@ void settings_load(void) {
     if (cv_cfg_get(&C, "export_open", NULL))             /* before the panel sections were all kept */
         G.tree[CV_TREE_EXPORT] = cv_cfg_get_bool(&C, "export_open", false);
     cv_cfg_unset(&C, "export_open");
+    if (cv_cfg_get(&C, "pick_kind", NULL)) {            /* before several kinds could be ticked: one */
+        int k = cv_cfg_get_int(&C, "pick_kind", 0);
+        if (k >= 0 && k < CV_PK_N) G.pick_kinds = 1 << k;
+    }
+    cv_cfg_unset(&C, "pick_kind");
     for (int i = 0; i < NS; i++) if (S[i].kind != '#') get_one(&S[i]);
     ui_set_zoom(cv_cfg_get_float(&C, "ui_zoom", 1.f));
     ui_set_font_size(cv_cfg_get_float(&C, "ui_font", ui_get_font_size()));
@@ -291,6 +296,7 @@ bool settings_apply(const char* kv) {
         G.tree[CV_TREE_FIELDS] = 1;
         return true;
     }
+    if (!strcmp(key, "pick_kind")) { int k = atoi(val); if (k >= 0 && k < CV_PK_N) G.pick_kinds = 1 << k; return true; }   /* the old key: one kind */
     if (!strcmp(key, "contact_show")) { G.cel_show = parse_bool(val); return true; }
     const setting* e = find(key);
     if (e) { set_from_text(e, val); return true; }

@@ -203,6 +203,7 @@ void uii_tabs_sync(void);    /* G.show_select / show_measure set: the pane on th
 void uii_probe_value_text(char* out, size_t n);        /* "S Mises = 4.5e2", over a face or edge the average */
 void uii_window_probe_tag(struct nk_context* ctx, float s);   /* the probe's tag in the view */
 void uii_probe_readout(char* out, size_t n);           /* "node 123  element 4  S Mises = 4.5e2" */
+void uii_kind_boxes(struct nk_context* ctx, const char* const tips[CV_PK_N]);   /* the pick kinds, a box each (G.pick_kinds) */
 
 /* ---- ui_test.c: --ui-test. tip() reports its widget; widgets without a tooltip are
    marked by a name starting with '#'. Nothing unless a test runs. */

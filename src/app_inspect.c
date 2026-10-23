@@ -1,7 +1,8 @@
-/* app_inspect.c -- what a click probes besides the node (G.pick_kind): the element,
-   the face of it under the cursor, the element's edge nearest the cursor; outlined
-   in the view as the selection is (its faces toned, its lines), the nodes of the
-   face or edge and the field over them for the Inspector. */
+/* app_inspect.c -- what a click probes besides the node (G.pick_kinds, several at
+   once): the element, the face of it under the cursor, the element's edge nearest
+   the cursor; each kind ticked outlined in the view as the selection is (its faces
+   toned, its lines), the nodes of the face or edge and the field over them for the
+   Inspector. */
 #include "app_int.h"
 #include "pickinfo.h"
 #include "seltopo.h"
@@ -52,11 +53,19 @@ void app_pick_kind_apply(const float o[3], const float d[3]) {
     }
 }
 
-int app_pick_nodes(uint32_t out[8]) {
+int app_pick_head(void) {
+    if (app_pk(CV_PK_FACE) && G.probe_face != UINT32_MAX) return CV_PK_FACE;
+    if (app_pk(CV_PK_EDGE) && G.probe_edge[0] != UINT32_MAX) return CV_PK_EDGE;
+    if (app_pk(CV_PK_NODE)) return CV_PK_NODE;
+    if (app_pk(CV_PK_ELEM)) return CV_PK_ELEM;
+    return app_pk(CV_PK_FACE) ? CV_PK_FACE : CV_PK_EDGE;   /* the face or edge ticked, none picked */
+}
+
+int app_pick_nodes_of(int kind, uint32_t out[8]) {
     if (!G.probe_on) return 0;
-    if (G.pick_kind == CV_PK_FACE && G.probe_face != UINT32_MAX && (G.probe_face >> 3) < G.frd.n_elems)
+    if (kind == CV_PK_FACE && G.probe_face != UINT32_MAX && (G.probe_face >> 3) < G.frd.n_elems)
         return cv_face_ring(&G.frd, G.probe_face >> 3, (int)(G.probe_face & 7), out);
-    if (G.pick_kind == CV_PK_EDGE && G.probe_edge[0] < G.frd.n_nodes) {
+    if (kind == CV_PK_EDGE && G.probe_edge[0] < G.frd.n_nodes) {
         int n = 0;
         out[n++] = G.probe_edge[0];
         if (G.probe_edge[2] != UINT32_MAX) out[n++] = G.probe_edge[2];
@@ -66,9 +75,11 @@ int app_pick_nodes(uint32_t out[8]) {
     return 0;
 }
 
-float app_pick_average(void) {
+int app_pick_nodes(uint32_t out[8]) { return app_pick_nodes_of(app_pick_head(), out); }
+
+float app_pick_average_of(int kind) {
     uint32_t nd[8];
-    int n = app_pick_nodes(nd);
+    int n = app_pick_nodes_of(kind, nd);
     if (!n || !G.has_field) return NAN;
     if (G.elem_mode || G.field_src == 1) return G.elem_val ? G.elem_val[G.probe.elem] : NAN;
     if (!G.scalar) return NAN;
@@ -77,12 +88,14 @@ float app_pick_average(void) {
     return (float)(s / n);
 }
 
+float app_pick_average(void) { return app_pick_average_of(app_pick_head()); }
+
 bool app_pick_anchor(float p[3]) {
     if (!G.loaded || !G.probe_on || G.probe.elem >= G.frd.n_elems || G.probe.node >= G.frd.n_nodes) return false;
     uint32_t r[32];
-    int n = app_pick_nodes(r);
-    if (!n && (G.pick_kind == CV_PK_FACE || G.pick_kind == CV_PK_EDGE)) return false;
-    if (!n && G.pick_kind == CV_PK_ELEM) {           /* the element: the centre of its nodes */
+    int h = app_pick_head(), n = app_pick_nodes(r);
+    if (!n && (h == CV_PK_FACE || h == CV_PK_EDGE)) return false;
+    if (!n && h == CV_PK_ELEM) {                     /* the element: the centre of its nodes */
         uint32_t a = G.frd.eoff[G.probe.elem];
         n = (int)CV_MIN(G.frd.eoff[G.probe.elem + 1] - a, 32u);
         for (int i = 0; i < n; i++) r[i] = G.frd.conn[a + i];
@@ -110,18 +123,18 @@ static void push_ring(cv_fvec* pos, cv_fvec* disp, const uint32_t* r, int n, boo
     for (int i = 0; i + 1 < n + closed; i++) { push_node(pos, disp, r[i]); push_node(pos, disp, r[(i + 1) % n]); }
 }
 
-/* the outline and toned faces of what is probed: the element (its edges, its skin
-   triangles), the face (its ring, its skin triangles), the edge (its line); a node has
-   its ball already (app_path.c) */
+/* the outline and toned faces of what is probed, each kind ticked: the element (its
+   edges, its skin triangles), the face (its ring, its skin triangles), the edge (its
+   line); a node has its ball already (app_path.c) */
 static void refresh(void) {
     cv_render_aux(CV_AUX_PICKLN, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_PICKTRI, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_PICKDOT, NULL, NULL, NULL, 0);
     if (!G.loaded || !G.probe_on || G.probe.elem >= G.frd.n_elems) return;
     cv_fvec pos = {0}, disp = {0}, tp = {0}, td = {0}, val = {0};
-    bool vals = G.has_field;
+    bool vals = G.has_field, el = app_pk(CV_PK_ELEM);
     uint32_t e = G.probe.elem, r[8];
-    if (G.pick_kind == CV_PK_ELEM) {
+    if (el) {
         uint32_t ed[32][3];
         int n = cv_elem_edges(&G.frd, e, ed, 32);
         for (int i = 0; i < n; i++) {
@@ -132,18 +145,19 @@ static void refresh(void) {
         for (size_t t = 0; t < G.skin.n_tri; t++)
             if (G.skin.tri_elem[t] == e)
                 for (int j = 0; j < 3; j++) { push_node(&tp, &td, G.skin.tri[3 * t + j]); push_val(&val, G.skin.tri[3 * t + j]); }
-    } else if (G.pick_kind == CV_PK_FACE) {
-        int n = G.mid_faces ? app_pick_nodes(r) : G.probe_face != UINT32_MAX
-              ? cv_elem_face_corners(&G.frd, G.probe_face >> 3, (int)(G.probe_face & 7), r) : 0;
+    }
+    if (app_pk(CV_PK_FACE) && G.probe_face != UINT32_MAX) {
+        int n = G.mid_faces ? app_pick_nodes_of(CV_PK_FACE, r) : cv_elem_face_corners(&G.frd, G.probe_face >> 3, (int)(G.probe_face & 7), r);
         push_ring(&pos, &disp, r, n, true);
-        for (size_t t = 0; t < G.skin.n_tri; t++) {  /* the face's own skin triangles: toned, not redrawn */
+        for (size_t t = 0; t < G.skin.n_tri && !el; t++) {   /* the face's own skin triangles: toned, not redrawn (the element's hold them) */
             if (G.skin.tri_elem[t] != e) continue;
             uint32_t k = cv_skin_face_of_tri(&G.frd, &G.skin, (uint32_t)t);
             if (k == UINT32_MAX || G.skin.face[k] != G.probe_face) continue;
             for (int j = 0; j < 3; j++) { push_node(&tp, &td, G.skin.tri[3 * t + j]); push_val(&val, G.skin.tri[3 * t + j]); }
         }
-    } else if (G.pick_kind == CV_PK_EDGE) {
-        int n = app_pick_nodes(r);
+    }
+    if (app_pk(CV_PK_EDGE)) {
+        int n = app_pick_nodes_of(CV_PK_EDGE, r);
         if (n == 3 && !G.mid_faces) { r[1] = r[2]; n = 2; }   /* drawn straight between the corners, as the mesh is */
         push_ring(&pos, &disp, r, n, false);
     }
@@ -156,7 +170,7 @@ static void refresh(void) {
 /* redrawn when the probe, the kind, or the model, step or field under them change */
 void app_pick_sync(void) {
     uint64_t k[] = { G.loaded, (uintptr_t)G.frd.xyz, (uintptr_t)G.disp, (uintptr_t)G.skin.tri, (uint64_t)G.step,
-                     (uint64_t)G.field_gen, G.mid_faces, G.probe_on, G.probe.elem, (uint64_t)G.pick_kind, G.probe_face,
+                     (uint64_t)G.field_gen, G.mid_faces, G.probe_on, G.probe.elem, (uint64_t)G.pick_kinds, G.probe_face,
                      G.probe_edge[0], G.probe_edge[1], G.elem_mode };
     static uint64_t last[sizeof k / sizeof k[0]];
     if (!memcmp(k, last, sizeof k)) return;

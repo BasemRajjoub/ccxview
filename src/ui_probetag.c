@@ -17,10 +17,10 @@
 static void what_text(char* out, size_t n) {
     const cv_frd* f = &G.frd;
     uint32_t nd[8];
-    int k = app_pick_nodes(nd);
-    if (k && G.pick_kind == CV_PK_FACE) snprintf(out, n, "face S%u of element %u", (G.probe_face & 7) + 1, f->elem_id[G.probe_face >> 3]);
+    int k = app_pick_nodes(nd), h = app_pick_head();
+    if (k && h == CV_PK_FACE) snprintf(out, n, "face S%u of element %u", (G.probe_face & 7) + 1, f->elem_id[G.probe_face >> 3]);
     else if (k) snprintf(out, n, "edge %u - %u", f->node_id[nd[0]], f->node_id[nd[k - 1]]);
-    else if (G.pick_kind == CV_PK_ELEM) snprintf(out, n, "element %u, node %u", f->elem_id[G.probe.elem], f->node_id[G.probe.node]);
+    else if (h == CV_PK_ELEM) snprintf(out, n, "element %u, node %u", f->elem_id[G.probe.elem], f->node_id[G.probe.node]);
     else snprintf(out, n, "node %u, element %u", f->node_id[G.probe.node], f->elem_id[G.probe.elem]);
 }
 

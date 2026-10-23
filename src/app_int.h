@@ -51,7 +51,7 @@ typedef struct {
     float       range[2];       /* --range MIN,MAX: the legend's range, locked */
     bool        range_set;
     float       menu[2];        /* --menu x,y: the context menu at that point of the view (fractions) */
-    float       probe_at[2];    /* --probe-at x,y: a click there (fractions of the view), as G.pick_kind picks */
+    float       probe_at[2];    /* --probe-at x,y: a click there (fractions of the view), as G.pick_kinds pick */
     bool        probe_set;
     bool        menu_set;
     bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */

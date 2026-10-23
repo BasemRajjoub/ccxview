@@ -552,13 +552,17 @@ it was left, and at first the filters and the kept ones are folded:
   field's every component, the node (position, displacement, elements on it),
   the element (material, sets, failure, mesh quality), its nodes (a click on
   one probes it), the face or edge, the selection; with nothing probed, the model's counts, step, field range
-  and units. The status bar keeps the probe in a line. The row at its top
-  chooses what a click picks (#28): a node, an element (outlined and toned in
-  the view, its details first), a face of it (its ring outlined; S-number, the
-  deck surfaces it is on, area, outward normal, the field's average over it),
-  or the element's edge nearest the click (its nodes, length, the field at its
-  ends and on average); kept in the settings, `--pick-kind`. A node picked has
-  a ball on it; an element, face or edge only its gold outline.
+  and units. The status bar keeps the probe in a line. The boxes at its top
+  choose what a click picks (#28), one or several at once (a node and its
+  element at first): a node, an element (outlined and toned in the view), a
+  face of it (its ring outlined; S-number, the deck surfaces it is on, area,
+  outward normal, the field's average over it), the element's edge nearest the
+  click (its nodes, length, the field at its ends and on average). Each kind
+  ticked is outlined and has its group; the line at the top names a face, else
+  an edge, a node, an element. The same boxes say what a selection takes (the
+  Selection tab). Kept in the settings, `--pick-kind node,edge`. A node picked
+  has a ball on it (only when node is ticked); an element, face or edge only
+  its gold outline.
 - The probe's tag in the view (#28): a small box beside what is probed, what it
   is (`node 123, element 65`, `face S2 of element 76`, `edge 484 - 531`) and the
   field's value there (over a face or edge the average), a leader line to it.

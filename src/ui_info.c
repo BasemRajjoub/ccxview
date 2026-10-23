@@ -145,7 +145,7 @@ static void face_lines(uint32_t e, int face) {
     const cv_frd* f = &G.frd;
     char a[32];
     uint32_t r[8];
-    int n = app_pick_nodes(r);
+    int n = app_pick_nodes_of(CV_PK_FACE, r);
     cur = GR_FACE;
     line(true, "face S%d of element %u", face + 1, f->elem_id[e]);
     const cv_inp* dk = deck_get();
@@ -173,7 +173,7 @@ static void face_lines(uint32_t e, int face) {
     for (int k = 0; k < 3; k++) if (fabsf(nrm[k]) < 5e-4f) nrm[k] = 0.f;     /* no "-0.000" */
     line(false, "%s  %.3f, %.3f, %.3f", solid ? "outward normal" : "normal", nrm[0], nrm[1], nrm[2]);
     if (G.has_field) {
-        fmt_num(a, sizeof a, app_pick_average());
+        fmt_num(a, sizeof a, app_pick_average_of(CV_PK_FACE));
         line(false, "%s average %s", G.field_label, a);
         line(false, "   %s", G.elem_mode ? "the element's value" : "over the face's nodes");
     }
@@ -187,7 +187,7 @@ static void edge_lines(void) {
     const cv_frd* f = &G.frd;
     char a[32], b[32];
     uint32_t r[8];
-    int n = app_pick_nodes(r);
+    int n = app_pick_nodes_of(CV_PK_EDGE, r);
     cur = GR_EDGE;
     if (n == 3) line(true, "edge %u - %u - %u", f->node_id[r[0]], f->node_id[r[1]], f->node_id[r[2]]);
     else line(true, "edge %u - %u", f->node_id[r[0]], f->node_id[r[1]]);
@@ -203,7 +203,7 @@ static void edge_lines(void) {
         fmt_num(a, sizeof a, G.scalar[r[0]]); fmt_num(b, sizeof b, G.scalar[r[n - 1]]);
         line(false, "%s at the ends %s, %s", G.field_label, a, b);
     }
-    if (G.has_field) { fmt_num(a, sizeof a, app_pick_average()); line(false, "average %s%s", a, G.elem_mode ? " (the element's value)" : ""); }
+    if (G.has_field) { fmt_num(a, sizeof a, app_pick_average_of(CV_PK_EDGE)); line(false, "average %s%s", a, G.elem_mode ? " (the element's value)" : ""); }
 }
 
 /* the selection the probe came from */
@@ -228,15 +228,14 @@ static void sel_lines(void) {
     }
 }
 
-/* the lines, by what a click picks: a face or edge first, the element before the node
-   when elements are picked */
+/* the lines, by the kinds a click picks: a face, an edge, the node before the element
+   when nodes are picked */
 static void build(void) {
     const cv_pick* p = &G.probe;
     nl = 0;
-    int k = G.pick_kind;
-    if (k == CV_PK_FACE && G.probe_face != UINT32_MAX) face_lines(G.probe_face >> 3, (int)(G.probe_face & 7));
-    if (k == CV_PK_EDGE && G.probe_edge[0] != UINT32_MAX) edge_lines();
-    if (k == CV_PK_NODE) { node_lines(p->node); elem_lines(p->node, p->elem); }
+    if (app_pk(CV_PK_FACE) && G.probe_face != UINT32_MAX) face_lines(G.probe_face >> 3, (int)(G.probe_face & 7));
+    if (app_pk(CV_PK_EDGE) && G.probe_edge[0] != UINT32_MAX) edge_lines();
+    if (app_pk(CV_PK_NODE)) { node_lines(p->node); elem_lines(p->node, p->elem); }
     else { elem_lines(p->node, p->elem); node_lines(p->node); }
     sel_lines();
 }
@@ -249,13 +248,13 @@ static void probe_node(uint32_t n) {
 
 /* the groups in their order: what is picked first */
 static int order(int out[GR_N]) {
-    int n = 0, k = G.pick_kind;
-    if (k == CV_PK_FACE) out[n++] = GR_FACE;
-    if (k == CV_PK_EDGE) out[n++] = GR_EDGE;
+    int n = 0;
+    bool nd = app_pk(CV_PK_NODE);
+    out[n++] = GR_FACE; out[n++] = GR_EDGE;           /* when ticked and picked: build() has their lines */
     out[n++] = GR_COMP;
-    if (k == CV_PK_NODE) out[n++] = GR_NODE;
+    if (nd) out[n++] = GR_NODE;
     out[n++] = GR_ELEM; out[n++] = GR_CHECKS; out[n++] = GR_ENODES;
-    if (k != CV_PK_NODE) out[n++] = GR_NODE;
+    if (!nd) out[n++] = GR_NODE;
     out[n++] = GR_SEL;
     return n;
 }

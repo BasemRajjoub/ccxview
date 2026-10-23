@@ -181,7 +181,7 @@ static void close_all(struct nk_context* ctx) {
     G.show_measure = false; app_measure_cancel();
     G.show_contact = false;
     G.show_select = false; G.sel_tool = CV_ST_NONE; G.sel_mode = CV_SEL_NEW;
-    G.scene_on = G.insp_on = true; G.pick_kind = CV_PK_NODE;
+    G.scene_on = G.insp_on = true; G.pick_kinds = CV_PK_DEFAULT;
     G.sel_open[CV_SELG_PICK] = G.sel_open[CV_SELG_NAMES] = G.sel_open[CV_SELG_USE] = true; G.sel_open[CV_SELG_NAMED] = false;
 }
 /* the panes: both shown at their usual widths */
@@ -296,8 +296,8 @@ static void app_nsel_clear_ctx(struct nk_context* ctx) { app_nsel_clear(); }
 static bool sel_any(struct nk_context* ctx) { return (G.sel_n || G.seln_n) && !G.sel_note[0]; }
 static bool sel_one(struct nk_context* ctx) { return G.sel_n == 1 && G.sel_tool == CV_ST_CLICK; }
 /* Ctrl held, elements picked, no tool armed */
-static void ctrl_on(struct nk_context* ctx) { sel_none(ctx); G.sel_tool = CV_ST_NONE; G.pick_kind = CV_PK_ELEM; T.mods = SAPP_MODIFIER_CTRL; }
-static void ctrl_off(struct nk_context* ctx) { T.mods = 0; G.pick_kind = CV_PK_NODE; app_sel_clear(); }
+static void ctrl_on(struct nk_context* ctx) { sel_none(ctx); G.sel_tool = CV_ST_NONE; G.pick_kinds = 1 << CV_PK_ELEM; T.mods = SAPP_MODIFIER_CTRL; }
+static void ctrl_off(struct nk_context* ctx) { T.mods = 0; G.pick_kinds = CV_PK_DEFAULT; app_sel_clear(); }
 static bool turned(struct nk_context* ctx);
 static bool ctrl_added(struct nk_context* ctx) { return G.sel_n == 1 && !G.seln_n && !turned(ctx); }
 static bool ctrl_removed(struct nk_context* ctx) { return !G.sel_n && !G.seln_n && !turned(ctx); }
@@ -752,12 +752,15 @@ static bool meas_circle_armed(struct nk_context* ctx) { return app_measure_armed
 static bool meas_angle_armed(struct nk_context* ctx) { return app_measure_armed() == CV_MEAS_ANGLE + 1 && strstr(app_measure_prompt(), "(1 of 3"); }
 static void meas_cancel(struct nk_context* ctx) { app_pick_cancel(); }      /* as Esc */
 static bool meas_not_armed(struct nk_context* ctx) { return !app_measure_armed(); }
-/* the pick row: a face, then the same click's edge and element; the status bar says which */
+/* the pick row: a face, then the same click's edge with the node (two kinds), the element alone; the status bar says which */
 static bool readout_is(const char* start) { char t[200]; uii_probe_readout(t, sizeof t); return !strncmp(t, start, strlen(start)); }
-static bool face_picked(struct nk_context* ctx) { uint32_t nd[8]; return G.pick_kind == CV_PK_FACE && app_pick_nodes(nd) >= 3 && readout_is("face S"); }
-static bool edge_picked(struct nk_context* ctx) { uint32_t nd[8]; return G.pick_kind == CV_PK_EDGE && app_pick_nodes(nd) >= 2 && readout_is("edge "); }
-static bool elem_picked(struct nk_context* ctx) { return G.pick_kind == CV_PK_ELEM && G.probe_on && readout_is("element "); }
-static bool node_kind(struct nk_context* ctx) { uint32_t nd[8]; return G.pick_kind == CV_PK_NODE && !app_pick_nodes(nd) && readout_is("node "); }
+static bool face_picked(struct nk_context* ctx) { uint32_t nd[8]; return app_pk(CV_PK_FACE) && app_pick_nodes_of(CV_PK_FACE, nd) >= 3 && readout_is("face S"); }
+static bool edge_picked(struct nk_context* ctx) {
+    uint32_t nd[8];
+    return G.pick_kinds == (CV_PK_DEFAULT | 1 << CV_PK_EDGE) && app_pick_nodes_of(CV_PK_EDGE, nd) >= 2 && readout_is("edge ");
+}
+static bool elem_picked(struct nk_context* ctx) { return G.pick_kinds == 1 << CV_PK_ELEM && G.probe_on && readout_is("element "); }
+static bool node_kind(struct nk_context* ctx) { uint32_t nd[8]; return G.pick_kinds == CV_PK_DEFAULT && !app_pick_nodes(nd) && readout_is("node "); }
 /* the probe's tag: shown, off and on by its box, dragged without turning the view */
 static bool tag_shown(struct nk_context* ctx) { return G.probe_tag && app_probe_tag_shown(NULL); }
 static bool tag_hidden(struct nk_context* ctx) { return !G.probe_tag && !app_probe_tag_shown(NULL); }
@@ -1366,11 +1369,13 @@ static const step script[] = {
     DO(mq_undeformed), WAIT(3), EXPECT(mq_same, "undeformed: the same on another step"), DO(mq_reset), WAIT(3), PANELS_ANSWER,
     CLOSED_THEN_PANELS("About", open_about, about_gone),
     CLOSED_THEN_PANELS("Title block", open_title_settings, title_settings_gone),
-    CASE("inspect: the pick row: a face clicked, then the same click's edge and element, back to nodes"),
+    CASE("inspect: the pick boxes: a face ticked and clicked, then the same click's edge with the node, the element alone, back"),
     DO(close_all), DO(fit_view), WAIT(2), AT_TIP("Inspector", "A click picks a face"), CLICK, WAIT(2), AT_MODEL, CLICK, WAIT(3),
     EXPECT(face_picked, "a face: its nodes, the status bar"),
-    AT_TIP("Inspector", "A click picks the element's edge"), CLICK, WAIT(3), EXPECT(edge_picked, "the edge of the same click"),
-    AT_TIP("Inspector", "A click picks an element"), CLICK, WAIT(3), EXPECT(elem_picked, "the element"),
+    AT_TIP("Inspector", "A click picks a face"), CLICK, WAIT(2),
+    AT_TIP("Inspector", "A click picks the element's edge"), CLICK, WAIT(3), EXPECT(edge_picked, "the edge of the same click, the node ticked too"),
+    AT_TIP("Inspector", "A click picks the element's edge"), CLICK, WAIT(2),
+    AT_TIP("Inspector", "A click picks a node"), CLICK, WAIT(3), EXPECT(elem_picked, "the element alone"),
     AT_TIP("Inspector", "A click picks a node"), CLICK, WAIT(3), EXPECT(node_kind, "back to the node"),
     DO(probe_close), WAIT(2), PANELS_ANSWER,
 
