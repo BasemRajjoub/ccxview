@@ -117,7 +117,7 @@ bool cv_video_frame(cv_video* v, const uint8_t* rgba, int width, int height, boo
     int e = H264E_encode(v->enc, v->scratch, &rp, &in, &data, &n);
     if (e != H264E_STATUS_SUCCESS) { VDBG("video: H264E_encode %d\n", e); return false; }
     e = mp4_h26x_write_nal(&v->wr, data, n, 90000u / (unsigned)v->fps);
-    if (e != MP4E_STATUS_OK) { VDBG("video: mp4 write %d (%d bytes)\n", e, n); return false; }
+    if (e != MP4E_STATUS_OK) { VDBG("video: mp4 write %d (%d bytes: %02x %02x %02x %02x %02x %02x, frame %d)\n", e, n, data[0], data[1], data[2], data[3], data[4], data[5], v->frames); return false; }
     v->frames++;
     return true;
 }
