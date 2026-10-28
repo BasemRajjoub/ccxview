@@ -198,7 +198,7 @@ It prints what it selected and the field's max and min over it.
 
 | Input | Action |
 |---|---|
-| left drag / right or middle drag / wheel | orbit / pan / zoom, about the point under the cursor (View panel: up axis Y or Z, turntable or free rotation, cursor pivot on/off, rotation centre mark) |
+| left drag / right or middle drag / wheel | orbit / pan / zoom, about the point under the cursor (View panel: up axis Y or Z, turntable (endless, over the poles too) or free rotation, cursor pivot on/off, rotation centre mark) |
 | X / Y / Z held + drag | orbit about that world axis only |
 | drag a label | move it (the camera stays); right-click it: Reset label |
 | Ctrl+drag / Ctrl+right drag | box zoom / zoom by dragging up and down |

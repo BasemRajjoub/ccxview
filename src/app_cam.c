@@ -22,7 +22,7 @@ void cam_basis(const cv_camera* c, v3* eye, v3* fwd, v3* right, v3* up) {
     v3 dir = to_world(v3_make(cp * sy, sp, cp * cy));  /* target -> eye */
     *eye = v3_add(c->target, v3_scale(dir, c->dist));
     *fwd = v3_scale(dir, -1.f);
-    *right = v3_norm(v3_cross(*fwd, cam_up_axis()));
+    *right = v3_norm(to_world(v3_make(cy, 0.f, -sy)));   /* from the yaw alone: over the pole the view goes on, not flips */
     *up = v3_cross(*right, *fwd);
 }
 
@@ -49,10 +49,10 @@ static v3 rot(v3 v, v3 k, float a) {
 void cam_orbit(float yaw, float pitch) {
     if (!G.orbit_free) {
         G.cam.yaw += yaw;
-        G.cam.pitch += pitch;
-        const float lim = 89.9f * 3.14159265f / 180.f;
-        if (G.cam.pitch > lim) G.cam.pitch = lim;
-        if (G.cam.pitch < -lim) G.cam.pitch = -lim;
+        G.cam.pitch += pitch;                        /* endless: up and down turns on over the poles */
+        const float pi = 3.14159265f;
+        if (G.cam.pitch > pi) G.cam.pitch -= 2 * pi;
+        if (G.cam.pitch < -pi) G.cam.pitch += 2 * pi;
         return;
     }
     if (!(v3_dot(G.cam.fdir, G.cam.fdir) > 0.5f)) free_from_turntable();
