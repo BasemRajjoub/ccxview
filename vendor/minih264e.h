@@ -337,19 +337,20 @@ void H264E_set_vbv_state(
 #define MAX_LONG_TERM_FRAMES 8 // Max long-term frames count
 #endif
 
-#if !defined(MINIH264_ONLY_SIMD) && !defined(MINIH264_NO_NEON) && (defined(_M_X64) || defined(_M_ARM64) || defined(__x86_64__) || defined(__aarch64__))
+#if !defined(MINIH264_ONLY_SIMD) && !defined(MINIH264_PLAIN_C) && (defined(_M_X64) || defined(_M_ARM64) || defined(__x86_64__) || defined(__aarch64__))
 /* x64 always have SSE2, arm64 always have neon, no need for generic code */
 #define MINIH264_ONLY_SIMD
 #endif /* SIMD checks... */
 
-#if (defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))) || ((defined(__i386__) || defined(__x86_64__)) && defined(__SSE2__))
+#if defined(MINIH264_PLAIN_C)   /* ccxview: no SIMD at all, see video_impl.h */
+#elif (defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))) || ((defined(__i386__) || defined(__x86_64__)) && defined(__SSE2__))
 #define H264E_ENABLE_SSE2 1
 #if defined(_MSC_VER)
 #include <intrin.h>
 #else
 #include <emmintrin.h>
 #endif
-#elif (defined(__ARM_NEON) || defined(__aarch64__)) && !defined(MINIH264_NO_NEON)   /* ccxview: an opt-out, see video_impl.h */
+#elif defined(__ARM_NEON) || defined(__aarch64__)
 #define H264E_ENABLE_NEON 1
 #include <arm_neon.h>
 #else
