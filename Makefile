@@ -95,7 +95,7 @@ build/ccxview build/bin/ccxview: $(NATIVE_OBJ) $(OBJ)/src/sokol_impl.o
 build/video_mp4_nosan.o: src/video_mp4.c src/video_impl.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(OPT) -std=c99 -w -c $< -o $@
-TEST_OBJ = $(patsubst %.c,build/obj/test/%.o,tests/test_main.c $(filter-out src/video_mp4.c,$(CORE)) src/gpu.c)
+TEST_OBJ = $(patsubst %.c,build/obj/test/%.o,tests/test_main.c $(filter-out src/video_mp4.c,$(CORE)) $(CORE_EXTRA) src/gpu.c)
 build/obj/test/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DCV_DEBUG -fsanitize=address,undefined $(DEPS) -c $< -o $@
