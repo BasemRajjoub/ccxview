@@ -337,7 +337,7 @@ void H264E_set_vbv_state(
 #define MAX_LONG_TERM_FRAMES 8 // Max long-term frames count
 #endif
 
-#if !defined(MINIH264_ONLY_SIMD) && (defined(_M_X64) || defined(_M_ARM64) || defined(__x86_64__) || defined(__aarch64__))
+#if !defined(MINIH264_ONLY_SIMD) && !defined(MINIH264_NO_NEON) && (defined(_M_X64) || defined(_M_ARM64) || defined(__x86_64__) || defined(__aarch64__))
 /* x64 always have SSE2, arm64 always have neon, no need for generic code */
 #define MINIH264_ONLY_SIMD
 #endif /* SIMD checks... */
@@ -349,7 +349,7 @@ void H264E_set_vbv_state(
 #else
 #include <emmintrin.h>
 #endif
-#elif defined(__ARM_NEON) || defined(__aarch64__)
+#elif (defined(__ARM_NEON) || defined(__aarch64__)) && !defined(MINIH264_NO_NEON)   /* ccxview: an opt-out, see video_impl.h */
 #define H264E_ENABLE_NEON 1
 #include <arm_neon.h>
 #else
@@ -5601,14 +5601,10 @@ static int quantize_neon(quant_t *q, int mode, const uint16_t *qdat, int zmask)
                 uint8x16x2_t vlut;
                 vlut.val[0] = vreinterpretq_u8_s16(vcombine_s16(d22, d23));
                 vlut.val[1] = vreinterpretq_u8_s16(vcombine_s16(d24, d25));
-                /* ccxview: vtbl2q_u8 does not exist; AArch64 has vqtbl2q_u8 (16 indices -> 16 bytes) */
-                {
-                    uint8x16_t t0 = vqtbl2q_u8(vlut, q8), t1 = vqtbl2q_u8(vlut, q9);
-                    vst1_s16(q->qv + 0, d4 = vreinterpret_s16_u8(vget_low_u8(t0)));
-                    vst1_s16(q->qv + 4, d5 = vreinterpret_s16_u8(vget_high_u8(t0)));
-                    vst1_s16(q->qv + 8, d6 = vreinterpret_s16_u8(vget_low_u8(t1)));
-                    vst1_s16(q->qv +12, d7 = vreinterpret_s16_u8(vget_high_u8(t1)));
-                }
+                vst1_s16(q->qv + 0, d4 = vreinterpret_s16_u8(vtbl2q_u8(vlut, vget_low_u8(q8))));
+                vst1_s16(q->qv + 4, d5 = vreinterpret_s16_u8(vtbl2q_u8(vlut, vget_high_u8(q8))));
+                vst1_s16(q->qv + 8, d6 = vreinterpret_s16_u8(vtbl2q_u8(vlut, vget_low_u8(q9))));
+                vst1_s16(q->qv +12, d7 = vreinterpret_s16_u8(vtbl2q_u8(vlut, vget_high_u8(q9))));
 #else
                 uint8x8x4_t vlut;
                 vlut.val[0] = vreinterpret_u8_s16(d22);
