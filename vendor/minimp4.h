@@ -32,7 +32,9 @@ extern "C" {
 #define MINIMP4_MAX_SPS 32
 #define MINIMP4_MAX_PPS 256
 
+#ifndef MINIMP4_TRANSCODE_SPS_ID   /* ccxview: settable, see video_impl.h */
 #define MINIMP4_TRANSCODE_SPS_ID  1
+#endif
 
 // Support indexing of MP4 files over 4 GB.
 // If disabled, files with 64-bit offset fields is still supported,

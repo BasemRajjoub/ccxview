@@ -7,6 +7,7 @@
 #if defined(__aarch64__) || defined(__arm__)
 #define MINIH264_PLAIN_C   /* its NEON path does not build or encode on Apple arm64: plain C, as fast as needed */
 #endif
+#define MINIMP4_TRANSCODE_SPS_ID 0   /* one stream, one SPS / PPS: nothing to renumber; the renumbering dropped every frame on macOS */
 #include "minih264e.h"
 #include "minimp4.h"
 #endif
