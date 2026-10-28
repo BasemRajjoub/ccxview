@@ -7,6 +7,8 @@ Linux:   ccxview -- 64-bit, glibc 2.34 or newer (Ubuntu 22.04, Debian 12,
          for minimal systems; keep it next to the binary. The GPU driver comes
          from your system; without one, ccxview restarts itself on Mesa's
          software renderer.
+macOS:   ccxview -- Apple Silicon, macOS 12 or newer. The binary is not signed:
+         run "xattr -d com.apple.quarantine ccxview" once after unpacking.
 Windows: ccxview.exe -- 64-bit Windows 10/11, no installation, no DLLs.
          Without a GPU driver, put Mesa's opengl32.dll in a "mesa" folder
          beside it.

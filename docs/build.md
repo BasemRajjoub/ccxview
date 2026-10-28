@@ -16,6 +16,13 @@ Add `-j8` to compile in parallel; every source is its own object, so a rebuild
 compiles only what changed. `ccxview --version` prints the version from
 [VERSION](../VERSION).
 
+macOS (Apple Silicon): install the Xcode Command Line Tools (`xcode-select --install`),
+then `make` builds `build/ccxview` against the Cocoa, QuartzCore and OpenGL frameworks
+(sokol is compiled as Objective-C). `make test` runs the unit tests. CI builds the
+`ccxview-macos-arm64.tar.gz` release archive on a macOS runner; it is unsigned, so
+clear the quarantine flag with `xattr -d com.apple.quarantine ccxview`. This build is
+less tested than Linux and Windows; please report problems.
+
 Dependencies: a C compiler and, on Linux, X11 and OpenGL development headers.
 Everything else is vendored (sokol, Nuklear, stb_image_write, stb_sprintf,
 TinyExpr, miniz, minih264e, minimp4, tinyfiledialogs), and the UI fonts are

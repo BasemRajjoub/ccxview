@@ -2,6 +2,7 @@
 # pack-binaries.sh -- the release archives, from whatever has been built:
 #   dist/ccxview-linux-x86_64.tar.gz   ccxview (RUNPATH $ORIGIN/lib) + lib/ (X11 and
 #                                      GLVND libraries for systems that lack them)
+#   dist/ccxview-macos-arm64.tar.gz    ccxview (only when run on macOS after make RELEASE=1)
 #   dist/ccxview-windows-x86_64.zip    ccxview.exe
 #   dist/ccxview-web.zip               ccxview.html, one file: opens from disk or any web host
 # Each holds README.txt and licenses/ (GPL for ccxview, the embedded fonts' and the
@@ -38,6 +39,14 @@ if [ -e build/bin/ccxview ]; then
     tar -C dist -czf "$d.tar.gz" ccxview-linux-x86_64
     floor="$(objdump -T "$d/ccxview" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)"
     echo "linux: needs glibc >= $floor"
+fi
+if [ -e build/ccxview ] && [ "$(uname -s)" = Darwin ]; then   # make RELEASE=1 on macOS
+    d=dist/ccxview-macos-arm64
+    stage ccxview-macos-arm64
+    cp build/ccxview "$d/ccxview"
+    chmod 755 "$d/ccxview"
+    strip -x "$d/ccxview" 2>/dev/null || true
+    tar -C dist -czf "$d.tar.gz" ccxview-macos-arm64
 fi
 if [ -e build/win/ccxview.exe ]; then
     stage ccxview-windows-x86_64

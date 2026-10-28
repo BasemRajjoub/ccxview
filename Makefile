@@ -44,8 +44,11 @@ UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
   GUI_LIBS = -framework Cocoa -framework QuartzCore -framework OpenGL
   IMPL_FLAGS = -x objective-c
+  CPPFLAGS += -D_DARWIN_C_SOURCE   # -D_POSIX_C_SOURCE hides madvise, _SC_NPROCESSORS_ONLN & co on macOS
+  STATIC_LIBGCC =                  # clang rejects -static-libgcc
   CORE_EXTRA = vendor/tinyfiledialogs.c
 else
+  STATIC_LIBGCC = -static-libgcc
   GUI_CFLAGS := $(shell pkg-config --cflags x11 xi xcursor gl 2>/dev/null)
   GUI_LIBS   := $(shell pkg-config --libs x11 xi xcursor gl 2>/dev/null || echo -lX11 -lXi -lXcursor -lGL) -ldl -lpthread -lm
 endif
@@ -85,7 +88,7 @@ $(OBJ)/%.o: %.c
 
 build/ccxview build/bin/ccxview: $(NATIVE_OBJ) $(OBJ)/src/sokol_impl.o
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $^ -o $@ -static-libgcc $(GUI_LIBS) -lm
+	$(CC) $(CFLAGS) $^ -o $@ $(STATIC_LIBGCC) $(GUI_LIBS) -lm
 
 # the vendored MP4 muxer reads unaligned words on purpose: it is compiled
 # without the sanitizers, everything of ours with them
