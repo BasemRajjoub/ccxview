@@ -116,6 +116,12 @@ to it. Contact is the first subgroup (see Contact and ties).
   through the solid, the load paths, coloured by the principal value.
 - Gauss points as balls at the integration points, coloured by the field, or by
   the exact values of a `.dat` file.
+- A `.dat`'s integration point values in a table (#32): the Inspect tab's
+  "integration points (.dat)" group for the probed element, a row per point,
+  every component of the `.dat` field shown (else the first), von Mises for a
+  stress, in the units shown; the point nearest the click marked. "show on
+  model" colours the Gauss points by it; on the tag (`--tag-groups ip`), in
+  "copy all". Loading a `.dat` says where its fields are.
 - Principal stresses, von Mises, magnitudes; cylindrical coordinate systems.
 - Results CalculiX wrote in local systems (`*TRANSFORM`, `*ORIENTATION`, shells)
   are turned back to global with the deck beside them.
@@ -564,7 +570,8 @@ it was left, and at first the filters and the kept ones are folded:
   buttons; below it groups that fold (open or closed kept across picks): the
   field's every component, the node (position, displacement, elements on it),
   the element (material, sets, failure, mesh quality), its nodes (a click on
-  one probes it), the face or edge, the selection; with nothing probed, the model's counts, step, field range
+  one probes it), the face or edge, the selection, a `.dat`'s integration
+  points; with nothing probed, the model's counts, step, field range
   and units. The status bar keeps the probe in a line. The boxes at its top
   choose what a click picks (#28), one or several at once (a node and its
   element at first): a node, an element (outlined and toned in the view), a

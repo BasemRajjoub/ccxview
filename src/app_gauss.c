@@ -7,6 +7,7 @@
 #include "app.h"
 #include "app_int.h"     /* units_apply */
 #include "dat.h"
+#include "datip.h"
 #include "gauss.h"
 #include <math.h>
 
@@ -22,6 +23,7 @@ static struct {
     float*    gdisp;          /* 3 per point */
     uint32_t  n;              /* points */
 } P = { .block = -1 };
+static uint32_t gen;           /* bumped as the .dat changes: the table cache (gp_table) */
 
 /* the points as last uploaded, kept for the labels (app_label.c) */
 static struct { cv_fvec pos, disp, val; CV_VEC(uint32_t) elem; CV_VEC(uint8_t) ip; } K;
@@ -67,10 +69,22 @@ void gp_set(cv_dat* d, const char* path) {
     memset(d, 0, sizeof *d);
     P.on = P.dat.n > 0;
     snprintf(P.path, sizeof P.path, "%s", path ? path : "");
+    gen++;
     for (size_t i = 0; i < P.dat.msgs.n; i++) cv_msg_add(&G.msgs, P.dat.msgs.a[i].where, false, P.dat.msgs.a[i].text);
+    for (int i = 0; i < P.dat.n; i++) {          /* where its fields are, once a name */
+        const cv_dat_block* b = &P.dat.b[i];
+        bool seen = b->is_coord;
+        for (int k = 0; k < i && !seen; k++) seen = !P.dat.b[k].is_coord && !strcmp(P.dat.b[k].name, b->name);
+        if (seen) continue;
+        char t[200];                             /* a message holds 119 characters */
+        if (snprintf(t, sizeof t, "%s (.dat): integration point values - Fields > %s (.dat), or the Inspector's "
+                                  "integration points group", b->name, b->name) > 119)
+            snprintf(t, sizeof t, "%s (.dat): point values in Fields and the Inspector", b->name);
+        cv_msg_add(&G.msgs, 0, false, t);
+    }
 }
 
-void gp_localize(void) { if (P.on) deck_localize_dat(&P.dat, &G.frd); }
+void gp_localize(void) { if (P.on) { deck_localize_dat(&P.dat, &G.frd); gen++; } }
 
 bool gp_loaded(void) { return P.on; }
 const char* gp_path(void) { return P.path; }
@@ -354,4 +368,47 @@ bool gp_probe(uint32_t e, const float hit[3], float scale, int* ip, float* value
 /* sibling .dat of a .frd path, if it exists: "model.frd" -> "model.dat" */
 bool gp_sibling(const char* frd_path, char* out, size_t n) {
     return deck_sibling(frd_path, ".dat", out, n);
+}
+
+/* ---- the Inspector's table ------------------------------------------------------ */
+
+/* the field the table shows: the one on the model when it is a .dat one, else the first */
+static int table_block(void) {
+    int b = G.field_src == 1 ? find_block(G.field_name, false) : -1;
+    const char* nm[1];
+    return b >= 0 ? b : gp_fields(nm, 1) ? find_block(nm[0], false) : -1;
+}
+
+/* element e's rows at this increment, in the units shown; its block, NULL none.
+   The scan through the block is kept per element. */
+const cv_dat_block* gp_table(uint32_t e, cv_datip* t) {
+    static struct { uint32_t gen, elem; int block; cv_datip t; } C = { .block = -1 };
+    t->n = 0;
+    int bi = P.on && e < G.frd.n_elems ? table_block() : -1;
+    if (bi < 0) return NULL;
+    const cv_dat_block* b = &P.dat.b[bi];
+    if (C.gen != gen || C.block != bi || C.elem != G.frd.elem_id[e]) {
+        cv_datip_rows(b, G.frd.elem_id[e], &C.t);
+        C.gen = gen; C.block = bi; C.elem = G.frd.elem_id[e];
+    }
+    *t = C.t;
+    for (int r = 0; r < t->n; r++) units_apply(b->name, t->ncomp, t->v[r], 1);
+    cv_datip_mises(t);
+    return t->n ? b : NULL;
+}
+
+/* the point of element e printed in the .dat nearest a (deformed-space) hit, whatever
+   field is shown: 1-based, 0 none */
+int gp_nearest(uint32_t e, const float hit[3], float scale) {
+    cv_datip t;
+    if (!gp_table(e, &t)) return 0;
+    float p[3 * CV_DATIP_MAX];
+    for (int r = 0; r < t.n; r++) {
+        double xi[3];
+        float x[3] = { NAN, NAN, NAN }, d[3] = { 0, 0, 0 };
+        if (cv_ip_param(G.frd.etype[e], t.ip[t.n - 1], t.ip[r] - 1, xi)) elem_point(e, xi, x, d);
+        for (int k = 0; k < 3; k++) p[3 * r + k] = x[k] + d[k] * scale;
+    }
+    int r = cv_datip_nearest(p, t.n, hit);
+    return r < 0 ? 0 : t.ip[r];
 }

@@ -490,7 +490,7 @@ void app_probe_at(uint32_t i, bool element) {
                 for (uint32_t j = G.frd.eoff[k]; j < G.frd.eoff[k + 1]; j++) if (G.frd.conn[j] == n) { e = k; break; }
     G.probe.hit = true; G.probe.elem = e == UINT32_MAX ? 0 : e; G.probe.node = n; G.probe.t = 0; G.probe.tri = UINT32_MAX;
     G.probe_on = e != UINT32_MAX;
-    G.probe_ip = 0;
+    G.probe_ip = G.probe_dip = 0;
     G.boxq.on = false;
     G.probe_value = !G.has_field ? NAN : G.elem_mode ? (e != UINT32_MAX ? G.elem_val[e] : NAN) : G.scalar[n];
     app_pick_clear();
@@ -757,7 +757,7 @@ static void probe_px(float px, float py, bool keep) {
     app_pick(px, py, &G.probe, o, d);
     G.probe_on = G.probe.hit;
     if (!keep) app_sel_clear();
-    G.probe_ip = 0;
+    G.probe_ip = G.probe_dip = 0;
     if (!keep && G.probe.hit && G.path_arm) app_path_end(G.probe.node);
     if (!keep && G.probe.hit) app_measure_pick(G.probe.node);   /* when one waits for its nodes */
     if (G.probe.hit) {
@@ -767,6 +767,10 @@ static void probe_px(float px, float py, bool keep) {
             float h[3] = { o[0] + d[0] * G.probe.t, o[1] + d[1] * G.probe.t, o[2] + d[2] * G.probe.t };
             int ip; float v;
             if (gp_probe(G.probe.elem, h, sc, &ip, &v)) { G.probe_ip = ip; G.probe_value = v; }
+        }
+        if (gp_loaded()) {                        /* for the Inspector's table, whatever field shows */
+            float h[3] = { o[0] + d[0] * G.probe.t, o[1] + d[1] * G.probe.t, o[2] + d[2] * G.probe.t };
+            G.probe_dip = gp_nearest(G.probe.elem, h, sc);
         }
         app_pick_kind_apply(o, d);
     } else app_pick_clear();

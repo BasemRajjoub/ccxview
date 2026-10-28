@@ -11,6 +11,7 @@
 #include "render.h"
 #include "vmath.h"
 #include "dat.h"
+#include "datip.h"
 #include "inp.h"
 #include "fbd.h"
 #include "sta.h"
@@ -77,7 +78,7 @@ enum { CV_PK_NODE, CV_PK_ELEM, CV_PK_FACE, CV_PK_EDGE, CV_PK_N };
 #define CV_PK_DEFAULT ((1 << CV_PK_NODE) | (1 << CV_PK_ELEM))   /* G.pick_kinds: a node and its element */
 extern const char* const cv_pk_names[CV_PK_N];                    /* "node" ... "edge", as --pick-kind takes them */
 /* the Inspect tab's groups, a bit each in G.tag_groups: their lines on the probe's tag too */
-enum { CV_TAG_FACE, CV_TAG_EDGE, CV_TAG_COMP, CV_TAG_NODE, CV_TAG_ELEM, CV_TAG_CHECKS, CV_TAG_ENODES, CV_TAG_SEL, CV_TAG_N };
+enum { CV_TAG_FACE, CV_TAG_EDGE, CV_TAG_COMP, CV_TAG_NODE, CV_TAG_ELEM, CV_TAG_CHECKS, CV_TAG_ENODES, CV_TAG_SEL, CV_TAG_IP, CV_TAG_N };
 #define CV_TAG_DEFAULT ((1 << CV_TAG_CHECKS) | (1 << CV_TAG_SEL))   /* failure, mesh quality, the selection's extremes */
 extern const char* const cv_tag_names[CV_TAG_N];                  /* "face" ... "selection", as --tag-groups takes them */
 enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
@@ -185,6 +186,7 @@ typedef struct {
     float     gp_size;
     bool      gp_on_top;      /* Gauss points drawn through the faces */
     int       probe_ip;       /* point hit by the probe (1-based), 0 none */
+    int       probe_dip;      /* the .dat point nearest the click, whatever field shows (1-based), 0 none */
     char      field_label[96];   /* with the unit in [] when a unit set is chosen */
     char      legend_lines[3][96];   /* the legend's title: the field, its component, its unit; any may be empty */
 
@@ -865,6 +867,8 @@ void app_gauss_changed(void);          /* layer toggled: rebuild the points */
 void gp_values(const float** v, size_t* n);
 bool gp_probe(uint32_t e, const float hit[3], float scale, int* ip, float* value);
 bool gp_sibling(const char* frd_path, char* out, size_t n);
+const cv_dat_block* gp_table(uint32_t e, cv_datip* t);   /* the Inspector's table: e's points */
+int  gp_nearest(uint32_t e, const float hit[3], float scale);
 
 /* app_deck.c: the input deck -- sets, surfaces, materials */
 void deck_set(cv_inp* d, const char* path);

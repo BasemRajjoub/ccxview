@@ -1108,7 +1108,7 @@ static void app_log(const char* tag, uint32_t level, uint32_t item, const char* 
 }
 
 const char* const cv_pk_names[CV_PK_N] = { "node", "element", "face", "edge" };
-const char* const cv_tag_names[CV_TAG_N] = { "face", "edge", "components", "node", "element", "checks", "nodes", "selection" };
+const char* const cv_tag_names[CV_TAG_N] = { "face", "edge", "components", "node", "element", "checks", "nodes", "selection", "ip" };
 
 /* --tag-groups: a number (the bits) or names with commas, "none" */
 static int tag_groups_arg(const char* v) {
@@ -1122,7 +1122,7 @@ static int tag_groups_arg(const char* v) {
         if (k >= 0) m |= 1 << k;
         else if (strcmp(w, "none")) {
             fprintf(stderr, "ccxview: --tag-groups %s: face, edge, components, node, element, checks (failure, mesh), "
-                            "nodes (the element's), selection, none, or a number\n", w);
+                            "nodes (the element's), selection, ip (.dat points), none, or a number\n", w);
             return -1;
         }
     }

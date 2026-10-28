@@ -20,12 +20,13 @@
 /* the groups, each a tree node with its "on tag" box (G.tag_groups); the field's
    components, a face or edge, failure and mesh quality open at first */
 enum { GR_FACE = CV_TAG_FACE, GR_EDGE = CV_TAG_EDGE, GR_COMP = CV_TAG_COMP, GR_NODE = CV_TAG_NODE, GR_ELEM = CV_TAG_ELEM,
-       GR_CHECKS = CV_TAG_CHECKS, GR_ENODES = CV_TAG_ENODES, GR_SEL = CV_TAG_SEL, GR_N = CV_TAG_N };
+       GR_CHECKS = CV_TAG_CHECKS, GR_ENODES = CV_TAG_ENODES, GR_SEL = CV_TAG_SEL, GR_IP = CV_TAG_IP, GR_N = CV_TAG_N };
 static const char* gr_mark[GR_N] = { "#grp face", "#grp edge", "#grp components", "#grp node", "#grp element", "#grp checks",
-                                     "#grp element nodes", "#grp selection" };
-static int gr_open[GR_N] = { NK_MAXIMIZED, NK_MAXIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED };
+                                     "#grp element nodes", "#grp selection", "#grp ip" };
+static int gr_open[GR_N] = { NK_MAXIMIZED, NK_MAXIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED, NK_MAXIMIZED, NK_MINIMIZED, NK_MINIMIZED,
+                             NK_MAXIMIZED };
 
-enum { NL = 96, LW = 200 };
+enum { NL = 128, LW = 200 };
 static char L[NL][LW];
 static bool head[NL];                    /* a group's title */
 static bool notag[NL];                   /* a line the tag leaves out */
@@ -249,6 +250,37 @@ static void sel_lines(void) {
     }
 }
 
+/* the probed element's integration points from the .dat (a table in the tab, lines for
+   the tag and the clipboard): every component of the .dat field shown, else of the
+   first, von Mises for a stress; the point nearest the click marked */
+static cv_datip TB;
+static const cv_dat_block* TBb;
+
+static int ip_mark(void) { return G.probe_dip ? G.probe_dip : G.probe_ip; }
+
+static void ip_lines(uint32_t e) {
+    TBb = gp_table(e, &TB);
+    if (!TBb) return;
+    char t[LW], a[32];
+    cur = GR_IP;
+    line(true, "integration points (.dat): %s", TBb->name);
+    const char* u = app_unit(TBb->name, 0);
+    size_t o = (size_t)snprintf(t, sizeof t, "  ip");
+    for (int c = 0; c < TB.ncomp; c++) o += (size_t)snprintf(t + o, sizeof t - o, " %10s", TBb->comp[c]);
+    if (TB.mises) o += (size_t)snprintf(t + o, sizeof t - o, " %10s", "mises");
+    if (*u) snprintf(t + o, sizeof t - o, "  [%s]", u);
+    line(false, "%s", t);
+    for (int r = 0; r < TB.n; r++) {
+        o = (size_t)snprintf(t, sizeof t, "%s%3d", TB.ip[r] == ip_mark() ? "*" : " ", TB.ip[r]);
+        for (int c = 0; c < TB.ncomp + TB.mises; c++) {
+            fmt_num(a, sizeof a, c < TB.ncomp ? TB.v[r][c] : TB.vm[r]);
+            o += (size_t)snprintf(t + o, sizeof t - o, " %10s", a);
+        }
+        line(false, "%s", t);
+    }
+    if (ip_mark()) { line(false, "* nearest the click"); notag[nl - 1] = true; }
+}
+
 /* the lines, by the kinds a click picks: a face, an edge, the node before the element
    when nodes are picked */
 static void build(void) {
@@ -258,6 +290,7 @@ static void build(void) {
     if (app_pk(CV_PK_EDGE) && G.probe_edge[0] != UINT32_MAX) edge_lines();
     if (app_pk(CV_PK_NODE)) { node_lines(p->node); elem_lines(p->node, p->elem); }
     else { elem_lines(p->node, p->elem); node_lines(p->node); }
+    ip_lines(p->elem);
     sel_lines();
 }
 
@@ -274,7 +307,7 @@ static int order(int out[GR_N]) {
     out[n++] = GR_FACE; out[n++] = GR_EDGE;           /* when ticked and picked: build() has their lines */
     out[n++] = GR_COMP;
     if (nd) out[n++] = GR_NODE;
-    out[n++] = GR_ELEM; out[n++] = GR_CHECKS; out[n++] = GR_ENODES;
+    out[n++] = GR_ELEM; out[n++] = GR_CHECKS; out[n++] = GR_ENODES; out[n++] = GR_IP;
     if (!nd) out[n++] = GR_NODE;
     out[n++] = GR_SEL;
     return n;
@@ -298,6 +331,77 @@ static void node_buttons(struct nk_context* ctx, float row) {
     }
 }
 
+/* a number short: "-1.866e9" for "-1.866e+09" */
+static void short_num(char* out, size_t n, double v) {
+    char t[32], *e;
+    fmt_num(t, sizeof t, v);
+    if ((e = strchr(t, 'e'))) {
+        char* q = e + 1;
+        bool neg = *q == '-';
+        if (*q == '+' || *q == '-') q++;
+        while (*q == '0' && q[1]) q++;
+        snprintf(e + 1, sizeof t - (size_t)(e + 1 - t), "%s%s", neg ? "-" : "", q);
+    }
+    snprintf(out, n, "%s", t);
+}
+
+/* the table: as many component columns as fit the tab, the rest below; then a button
+   that shows the field on the model */
+static void ip_table(struct nk_context* ctx, float s, float row) {
+    const struct nk_user_font* f = ctx->style.font;
+    int nc = TB.ncomp + TB.mises, mk = ip_mark();
+    char a[32];
+    float cw = 0;
+    for (int c = 0; c < nc; c++) {
+        const char* h = c < TB.ncomp ? TBb->comp[c] : "mises";
+        cw = CV_MAX(cw, f->width(f->userdata, f->height, h, (int)strlen(h)));
+        for (int r = 0; r < TB.n; r++) {
+            short_num(a, sizeof a, c < TB.ncomp ? TB.v[r][c] : TB.vm[r]);
+            cw = CV_MAX(cw, f->width(f->userdata, f->height, a, (int)strlen(a)));
+        }
+    }
+    cw += 10 * s;
+    float iw = f->width(f->userdata, f->height, "ip 88", 5) + 4 * s;
+    float avail = ctx->current->layout->bounds.w - 2 * s;
+    int per = CV_MAX(1, (int)((avail - iw) / cw));
+    for (int c0 = 0; c0 < nc; c0 += per) {
+        int k = CV_MIN(per, nc - c0);
+        nk_layout_row_begin(ctx, NK_STATIC, row, k + 1);
+        nk_layout_row_push(ctx, iw);
+        nk_label_colored(ctx, "ip", NK_TEXT_LEFT, P.dim);
+        for (int c = c0; c < c0 + k; c++) {
+            nk_layout_row_push(ctx, cw);
+            nk_label_colored(ctx, c < TB.ncomp ? TBb->comp[c] : "mises", NK_TEXT_RIGHT, P.dim);
+        }
+        nk_layout_row_end(ctx);
+        for (int r = 0; r < TB.n; r++) {
+            struct nk_color col = TB.ip[r] == mk ? P.accent : ctx->style.text.color;
+            nk_layout_row_begin(ctx, NK_STATIC, row, k + 1);
+            nk_layout_row_push(ctx, iw);
+            snprintf(a, sizeof a, "%s%d", TB.ip[r] == mk ? "* " : "", TB.ip[r]);
+            nk_label_colored(ctx, a, NK_TEXT_LEFT, col);
+            for (int c = c0; c < c0 + k; c++) {
+                nk_layout_row_push(ctx, cw);
+                short_num(a, sizeof a, c < TB.ncomp ? TB.v[r][c] : TB.vm[r]);
+                nk_label_colored(ctx, a, NK_TEXT_RIGHT, col);
+            }
+            nk_layout_row_end(ctx);
+        }
+    }
+    const char* u = app_unit(TBb->name, 0);
+    char t[96];
+    snprintf(t, sizeof t, "%s%s%s%s", *u ? "in " : "", u, *u && mk ? ";  " : "", mk ? "* nearest the click" : "");
+    nk_layout_row_dynamic(ctx, row, 2);
+    nk_label_colored(ctx, t, NK_TEXT_LEFT, P.dim);
+    tip(ctx, "Colour the Gauss points by this .dat field (Fields > .dat), its von Mises for a stress");
+    if (nk_button_label(ctx, "show on model")) {
+        bool on = G.field_src == 1 && !strcmp(G.field_name, TBb->name);
+        app_pick_field(TBb->name, on ? G.comp : TB.mises ? CV_COMP_MISES : 0, 1);
+        G.show_gp = true;
+        app_gauss_changed();
+    }
+}
+
 /* a tree node a group, its title the group's first line; the element's nodes as buttons */
 void uii_details_body(struct nk_context* ctx, float s, float row) {
     (void)s;
@@ -313,6 +417,7 @@ void uii_details_body(struct nk_context* ctx, float s, float row) {
         G.tag_groups = on ? G.tag_groups | 1 << g : G.tag_groups & ~(1 << g);
         if (!open) continue;
         if (g == GR_ENODES) node_buttons(ctx, row);
+        else if (g == GR_IP) ip_table(ctx, s, row);
         else {
             nk_layout_row_dynamic(ctx, row, 1);
             for (int i = 0; i < nl; i++) if (grp[i] == g && !head[i]) nk_label(ctx, L[i], NK_TEXT_LEFT);

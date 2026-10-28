@@ -385,6 +385,17 @@ static void labels_front(struct nk_context* ctx) { G.label_front = true; }
 static bool labels_shown(struct nk_context* ctx) { return strstr(G.label_note, "shown ") && !strstr(G.label_note, "shown 0 of"); }
 static bool labels_none(struct nk_context* ctx) { return strstr(G.label_note, "shown 0 of 0") != NULL; }
 static void probe_close(struct nk_context* ctx) { G.probe_on = false; }
+/* the .dat's integration points: an element printed probed, its table in Inspect, "show on model" */
+static void probe_dat_elem(struct nk_context* ctx) {
+    cv_datip t;
+    G.insp_tab = CV_TAB_INSPECT;
+    for (uint32_t e = 0; e < G.frd.n_elems; e++) if (gp_table(e, &t)) { app_probe_at(e, true); return; }
+}
+static bool ip_group_shown(struct nk_context* ctx) { return G.probe_on && find_mark("Inspector", "#grp ip"); }
+static void insp_scroll(struct nk_context* ctx, nk_uint y) { struct nk_window* w = win_of(ctx, "Inspector"); if (w) w->scrollbar.y = y; }
+static void insp_end(struct nk_context* ctx) { insp_scroll(ctx, 100000); }   /* Nuklear clamps it to the content */
+static bool ip_on_model(struct nk_context* ctx) { return G.field_src == 1 && G.show_gp && G.has_field; }
+static void ip_back(struct nk_context* ctx) { G.field_src = 0; select_stress(ctx); gauss_off(ctx); G.probe_on = false; insp_scroll(ctx, 0); }
 static void labels_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_px = 13.f; app_label_changed(); sections_open(ctx); }
 /* labels moved by hand: node ids in front, a label found by its box near the view's middle */
 static bool turned(struct nk_context* ctx);
@@ -1273,6 +1284,11 @@ static const step script[] = {
     DO(snapshot), AT_VIEW(0.45f, 0.04f), PRESS, AT_VIEW(0.5f, 0.07f), AT_VIEW(0.55f, 0.1f), RELEASE, EXPECT(turned, "a drag beside it turns the model"),
     DO(close_all), DO(fit_view), WAIT(2),
     AT_VIEW(0.02f, 0.5f), CLICK, PANELS_ANSWER,
+
+    CASE("inspect: a .dat element's integration points as a table, shown on the model"),
+    DO(probe_dat_elem), WAIT(3), EXPECT(ip_group_shown, "the integration points group shows"), DO(insp_end), WAIT(3),
+    AT_TIP("Inspector", "Colour the Gauss points by this .dat field"), CLICK, WAIT(3),
+    EXPECT(ip_on_model, "the .dat field on the Gauss points"), DO(ip_back), WAIT(2),
 
     CASE("toolbar: one list after the other, no pause"),
     DO(snapshot), AT_TIP("Toolbar", TIP_CMAP), CLICK, EXPECT(toolbar_popup, "the colour map list opens"),
