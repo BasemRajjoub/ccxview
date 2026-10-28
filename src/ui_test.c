@@ -955,6 +955,12 @@ static bool faces_field_disp(struct nk_context* ctx) { return faces_field(ctx) &
 static bool faces_field_mises(struct nk_context* ctx) { return faces_field(ctx) && G.field_src == 0 && G.comp == CV_COMP_MISES; }
 static bool faces_field_mesh(struct nk_context* ctx) { return faces_field(ctx) && G.field_src == 4 && G.mesh_q == CV_MQ_ASPECT; }
 static bool faces_still_material(struct nk_context* ctx) { return G.faces_mode == FM_MAT; }
+/* faces by element set (#30): the showcase's EHOLE and EALL, each its colour in the legend */
+static bool faces_by_set(struct nk_context* ctx) {
+    const uint16_t* of; const float* rgb; int n; char a[96], b[96];
+    return G.faces_mode == FM_ESET && app_face_classes(&of, &n, &rgb) && n >= 2 && app_face_class_label(0, a, sizeof a)
+           && app_face_class_label(1, b, sizeof b) && (rgb[0] != rgb[3] || rgb[1] != rgb[4]) && win_of(ctx, "Legend");
+}
 static void faces_end(struct nk_context* ctx) { G.show_mesh = false; app_select("STRESS", CV_COMP_MISES); app_set_faces_mode(FM_FIELD); sections_open(ctx); }
 static bool set_hidden(struct nk_context* ctx) { return deck_any_elset_hidden() && G.vis && !app_busy(); }
 static bool sets_shown(struct nk_context* ctx) { return !deck_any_elset_hidden(); }
@@ -1299,6 +1305,10 @@ static const step script[] = {
     CASE("sidebar: a list opens and picks"),
     DO(sections_open), DO(snapshot), AT_TIP("Scene", "#faces mode"), WAIT(30), CLICK, EXPECT(scene_popup, "the faces list opens"),
     AT_POPUP("Scene", 0.5f, 0.75f), CLICK, EXPECT(faces_changed, "the faces mode changes"),
+
+    CASE("sidebar: faces by element set, from the list; the legend names the sets"),
+    DO(faces_end), DO(sections_open), WAIT(3), AT_TIP("Scene", "#faces mode"), WAIT(30), CLICK, EXPECT(scene_popup, "the faces list opens"),
+    AT_POPUP("Scene", 0.5f, 0.74f), CLICK, WAIT(3), EXPECT(faces_by_set, "faces by set, the sets in the legend"), DO(faces_end), WAIT(2),
 
     CASE("sidebar: the tensor glyph list opens and picks"),
     DO(select_stress), DO(stress_options_open), WAIT(3), DO(snapshot), AT_TIP("Scene", "#tensor style"), WAIT(30), CLICK,

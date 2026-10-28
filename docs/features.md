@@ -73,7 +73,12 @@ and the shape follow every node; the full list is in
 ## Fields
 
 What colours the faces (#26): the field, the element type, the material, the
-group, or one plain colour, one at a time (Layers > Faces). Choosing a field
+group, one plain colour, the element set or the section (#30), one at a time
+(Layers > Faces). By set, each element takes the smallest deck set that holds
+it, so the parts show rather than EALL; by section, the deck's *SOLID / *SHELL /
+*BEAM SECTION ... that names it (`solid: EALL (STEEL)`); elements in none are
+grey. Types, materials, groups, sets and sections share one palette of 12
+clearly distinct colours, golden-angle hues beyond. Choosing a field
 takes precedence: picking any field -- a component in the Fields tree or the
 top bar, a calculated formula, a failure criterion, a mesh quality measure,
 SHELL / REBAR, CONTACT, a `.dat` field, `--field` / `--calc` / `--fail` /
@@ -83,7 +88,8 @@ other way round, picking a group's colour swatch (Groups) or an entry of the
 Faces list colours them by that. While the faces show something else, Fields
 says so ("faces: by material") with a "show field" button, and the legend
 lists the groups' colours by the names Groups shows. A saved view or a reload
-keeps the colouring it had; `--faces material` wins over `--field`.
+keeps the colouring it had; `--faces material` wins over `--field`
+(`--faces field|type|material|group|plain|set|section`).
 
 The Fields section is a tree: each field (DISP, STRESS, ... SHELL, REBAR,
 Calculated, Failure, Mesh quality, a `.dat` field) is a subgroup listing its

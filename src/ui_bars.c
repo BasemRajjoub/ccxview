@@ -442,13 +442,20 @@ static int head_rows(const struct nk_user_font* f, float w) {
 }
 
 static void panel_group_legend(struct nk_context* ctx, float s, float row) {
-    int a = G.faces_mode - FM_TYPE;
-    const cv_axis* ax = &G.groups.axis[a];
+    const uint16_t* of;
+    const float* rgb;
+    int n;
+    if (!app_face_classes(&of, &n, &rgb)) return;
     nk_layout_row_dynamic(ctx, row, 1);
-    ink_label(ctx, cv_axis_name(a));
-    for (int i = 0; i < ax->n && i < 60; i++) {
-        if (!ax->on[i]) continue;
-        const float* c = G.axis_rgb[a] + 3 * i;
+    char t[64];
+    snprintf(t, sizeof t, "%s", app_face_classes_title());
+    if (t[0] >= 'a' && t[0] <= 'z') t[0] = (char)(t[0] - 'a' + 'A');
+    ink_label(ctx, t);
+    for (int i = 0, shown = 0; i < n && shown < 60; i++) {
+        char lab[96];
+        if (!app_face_class_label(i, lab, sizeof lab)) continue;
+        shown++;
+        const float* c = rgb + 3 * i;
         struct nk_rect r;
         nk_layout_row_template_begin(ctx, row);
         nk_layout_row_template_push_static(ctx, row);
@@ -459,13 +466,22 @@ static void panel_group_legend(struct nk_context* ctx, float s, float row) {
             nk_fill_rect(nk_window_get_canvas(ctx), sw, 0, nk_rgb_f(c[0], c[1], c[2]));
             nk_stroke_rect(nk_window_get_canvas(ctx), sw, 0, 1, legend_ink());   /* a swatch of the background's colour */
         }
-        char lab[64];
-        const char* mat = a == CV_AXIS_MAT ? deck_material_name(ax->value[i]) : NULL;   /* the names Groups shows */
-        if (a == CV_AXIS_TYPE) snprintf(lab, sizeof lab, "%s", cv_frd_type_name((int)ax->value[i]));
-        else if (mat) snprintf(lab, sizeof lab, "%s", mat);
-        else snprintf(lab, sizeof lab, "%s %u", a == CV_AXIS_MAT ? "Material" : "Group", ax->value[i]);
         ink_label(ctx, lab);
     }
+}
+
+/* the group legend's width: its widest name beside a swatch */
+static float group_legend_w(const struct nk_user_font* f, float s, float row) {
+    const uint16_t* of;
+    const float* rgb;
+    int n;
+    float w = 0;
+    if (app_face_classes(&of, &n, &rgb))
+        for (int i = 0; i < n && i < 200; i++) {
+            char lab[96];
+            if (app_face_class_label(i, lab, sizeof lab)) w = CV_MAX(w, f->width(f->userdata, f->height, lab, (int)strlen(lab)));
+        }
+    return CV_MIN(CV_MAX(150 * s, w + row + 40 * s), 340 * s);
 }
 
 static struct nk_rect legend_title;     /* the field's name and unit: a click opens Units */
@@ -841,10 +857,13 @@ static cv_box gizmo_box(float s) {
 void window_legend(struct nk_context* ctx, float s, float row) {
     struct nk_rect r;
     if (G.loaded) {
-        bool by_group = G.faces_mode >= FM_TYPE && G.faces_mode <= FM_GRP && G.show_faces;
+        const uint16_t* gof;
+        const float* grgb;
+        int gn;
+        bool by_group = G.faces_mode != FM_FIELD && G.show_faces && app_face_classes(&gof, &gn, &grgb);
         bool by_field = G.has_field && !by_group;
         if ((by_field || by_group) && !G.hide_legend) {
-            float lw = 150 * s, lh = CV_MIN(440 * s, G.vp_h - 20 * s);
+            float lw = by_group ? group_legend_w(ctx->style.font, s, row) : 150 * s, lh = CV_MIN(440 * s, G.vp_h - 20 * s);
             if (by_field) {                       /* as wide as the title's widest line; taller by its extra lines */
                 const struct nk_user_font* f = ctx->style.font;
                 lw = head_width(f, s);

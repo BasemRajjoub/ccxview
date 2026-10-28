@@ -92,6 +92,8 @@ ccxview model.frd --probe-tag 0             # no tag in the view beside what is 
 ccxview model.frd --tag-groups node,selection   # the Inspect groups whose lines the tag shows: face, edge,
                                             #   components, node, element, checks (failure, mesh), nodes (the
                                             #   element's), selection, ip (.dat points); none; or the bits as a number (default checks,selection)
+ccxview model.frd --faces set               # faces by: field, type, material, group, plain, set (the smallest
+                                            #   element set holding each), section (the deck's *... SECTION)
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)

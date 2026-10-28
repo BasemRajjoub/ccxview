@@ -4,6 +4,7 @@
    clip caps), app_path.c (path plot, history), app_linearize.c (stress
    linearization). */
 #include "app_int.h"
+#include "eclass.h"
 #include "label.h"
 #include "calc.h"
 #include "gauss.h"
@@ -160,40 +161,28 @@ int find_field(int step, const char* name) {
 
 /* ---- group colours --------------------------------------------------------------- */
 
-static void palette(int i, float rgb[3]) {
-    static const float base[10][3] = {             /* Tableau 10 */
-        {0.31f,0.47f,0.65f}, {0.95f,0.56f,0.16f}, {0.88f,0.34f,0.35f}, {0.46f,0.72f,0.70f},
-        {0.35f,0.63f,0.31f}, {0.93f,0.79f,0.28f}, {0.69f,0.48f,0.63f}, {1.00f,0.62f,0.66f},
-        {0.61f,0.46f,0.38f}, {0.73f,0.69f,0.67f},
-    };
-    const float* b = base[i % 10];
-    int shade = (i / 10) % 3;                      /* beyond 10: lighter, then darker */
-    for (int k = 0; k < 3; k++)
-        rgb[k] = shade == 0 ? b[k] : shade == 1 ? b[k] + (1 - b[k]) * 0.45f : b[k] * 0.6f;
-}
-
 /* Group colours: the skin triangles sorted by group (counting sort), drawn as
    one solid-colour run per group -- no per-triangle lookup in the shader. */
 static void group_runs(void) {
-    int axis = G.faces_mode - FM_TYPE;
-    if (axis < 0 || axis >= CV_AXIS_N || !G.skin.n_tri || !G.axis_rgb[axis]) {
+    const uint16_t* of;
+    const float* rgb;
+    int ng;
+    if (!G.skin.n_tri || !app_face_classes(&of, &ng, &rgb)) {
         cv_render_groups(NULL, 0, NULL, NULL, 0);
         return;
     }
-    const cv_axis* ax = &G.groups.axis[axis];
-    int ng = ax->n;
     uint32_t* first = calloc((size_t)ng + 1, sizeof(uint32_t));
     uint32_t* fill = malloc(((size_t)ng + 1) * sizeof(uint32_t));
     uint32_t* tri = malloc(G.skin.n_tri * 3 * sizeof(uint32_t));
     if (!first || !fill || !tri) { free(first); free(fill); free(tri); cv_render_groups(NULL, 0, NULL, NULL, 0); return; }
-    for (size_t t = 0; t < G.skin.n_tri; t++) first[ax->of_elem[G.skin.tri_elem[t]] + 1]++;
+    for (size_t t = 0; t < G.skin.n_tri; t++) first[of[G.skin.tri_elem[t]] + 1]++;
     for (int g = 0; g < ng; g++) first[g + 1] += first[g];
     memcpy(fill, first, ((size_t)ng + 1) * sizeof(uint32_t));
     for (size_t t = 0; t < G.skin.n_tri; t++) {
-        uint32_t k = fill[ax->of_elem[G.skin.tri_elem[t]]]++;
+        uint32_t k = fill[of[G.skin.tri_elem[t]]]++;
         memcpy(tri + 3 * k, G.skin.tri + 3 * t, 3 * sizeof(uint32_t));
     }
-    cv_render_groups(tri, G.skin.n_tri, first, G.axis_rgb[axis], ng);
+    cv_render_groups(tri, G.skin.n_tri, first, rgb, ng);
     free(first); free(fill); free(tri);
 }
 
@@ -218,7 +207,7 @@ void init_group_colors(void) {
         int n = G.groups.axis[a].n;
         G.axis_rgb[a] = malloc((size_t)CV_MAX(n, 1) * 3 * sizeof(float));
         if (!G.axis_rgb[a]) continue;
-        for (int i = 0; i < n; i++) palette(i, G.axis_rgb[a] + 3 * i);
+        for (int i = 0; i < n; i++) cv_palette(i, G.axis_rgb[a] + 3 * i);
     }
 }
 

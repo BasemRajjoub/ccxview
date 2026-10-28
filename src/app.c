@@ -1278,7 +1278,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
             O.crop_set = sscanf(argv[++i], "%f,%f,%f,%f,%f,%f", &O.crop[0], &O.crop[1], &O.crop[2],
                                 &O.crop[3], &O.crop[4], &O.crop[5]) == 6;
         else if (!strcmp(argv[i], "--faces") && i + 1 < argc) {
-            static const char* n[FM_N] = { "field", "type", "material", "group", "plain" };
+            static const char* n[FM_N] = { "field", "type", "material", "group", "plain", "set", "section" };
             i++;
             for (int k = 0; k < FM_N; k++) if (!strcmp(argv[i], n[k])) O.faces = k;
         }

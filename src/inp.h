@@ -22,6 +22,9 @@ typedef struct {
     uint32_t  n;
 } cv_set;
 
+/* *SOLID SECTION, *SHELL SECTION, *BEAM SECTION ...: kind "solid", "shell", "beam" ... */
+typedef struct { char kind[16], elset[64], mat[64]; } cv_section;
+
 typedef struct {
     char      name[64];
     uint32_t* elem;         /* element id per face (TYPE=ELEMENT) */
@@ -159,6 +162,7 @@ const char* cv_inp_proc_name(int proc);     /* "Static", "Frequency" ...; "" for
 typedef struct {
     cv_frd      mesh;       /* nodes + elements; emat = material index + 1, 0 = none */
     cv_set*     sets;       int nsets;
+    cv_section* sects;      int nsects;     /* with ELSET= and MATERIAL=, in deck order */
     cv_surface* surfs;      int nsurfs;
     cv_bc*      bcs;        uint32_t nbcs;      /* every *BOUNDARY line, all steps */
     cv_cload*   cloads;     uint32_t ncloads;

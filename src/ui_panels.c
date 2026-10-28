@@ -269,9 +269,9 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
         uii_hsep(ctx, s); nk_layout_row_dynamic(ctx, row, 2);
         nk_checkbox_label(ctx, "Faces", &G.show_faces);
         {
-            static const char* fm_names[FM_N] = { "field", "by type", "by material", "by group", "plain" };
+            static const char* fm_names[FM_N] = { "field", "by type", "by material", "by group", "plain", "by set", "by section" };
             uii_test_mark(ctx, "#faces mode");
-            int fm = nk_combo(ctx, fm_names, FM_N, G.faces_mode, (int)row, nk_vec2(150 * s, 5 * row + 20 * s));
+            int fm = nk_combo(ctx, fm_names, FM_N, G.faces_mode, (int)row, nk_vec2(150 * s, FM_N * (row + 4 * s) + 16 * s));
             if (fm != G.faces_mode) app_set_faces_mode(fm);
         }
         tip(ctx, "Edges of the exterior faces");
@@ -541,9 +541,8 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
    swatch): say so above the fields, with one click back. Picking any field does it too. */
 static void faces_note(struct nk_context* ctx, float s, float row) {
     if (G.faces_mode == FM_FIELD || !G.show_faces) return;
-    static const char* const by[FM_N] = { "", "element type", "material", "group", "one plain colour" };
     char lab[64];
-    snprintf(lab, sizeof lab, "faces: by %s", by[G.faces_mode]);
+    snprintf(lab, sizeof lab, "faces: by %s", G.faces_mode == FM_PLAIN ? "one plain colour" : app_face_classes_title());
     nk_layout_row_template_begin(ctx, row);
     nk_layout_row_template_push_dynamic(ctx);
     nk_layout_row_template_push_static(ctx, 90 * s);

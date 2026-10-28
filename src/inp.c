@@ -140,7 +140,7 @@ int32_t find_idix(const cv_idix* v, uint32_t n, uint32_t id) {
 
 typedef struct { char name[64]; bool is_elem; CV_VEC(uint32_t) ids; } vset;
 typedef struct { char name[64]; CV_VEC(uint32_t) elem; CV_VEC(uint8_t) face; CV_VEC(uint32_t) nodes; } vsurf;
-typedef struct { char elset[64]; char mat[64]; } section;
+typedef cv_section section;                                   /* kind unused in sdofs */
 typedef struct { char elset[64]; float off; } shoff;     /* *SHELL SECTION, OFFSET= */
 typedef struct { cv_link l; CV_VEC(uint32_t) nodes; CV_VEC(uint32_t) elems; } vlink;   /* elems: a rigid ELSET, expanded at the end */
 typedef struct { char name[64]; cv_csys cs; bool bad; } vorient;
@@ -523,6 +523,9 @@ static void do_keyword(P* p, const char* s, const char* e) {
         const char* oi = pget(prm, np, "ORIENTATION");
         if (es && ma) {
             section sc;
+            size_t kl = (size_t)(strstr(kw, "SECTION") - kw);   /* "SOLIDSECTION": "solid" */
+            snprintf(sc.kind, sizeof sc.kind, "%.*s", (int)CV_MIN(kl, sizeof sc.kind - 1), kw);
+            for (char* c = sc.kind; *c; c++) *c = (char)tolower((unsigned char)*c);
             snprintf(sc.elset, sizeof sc.elset, "%s", es); upcase(sc.elset);
             snprintf(sc.mat, sizeof sc.mat, "%s", ma); upcase(sc.mat);
             if (!cv_push(p->sects, sc)) p->oom = true;
@@ -1017,6 +1020,7 @@ static void do_data(P* p, const char* s, const char* e) {
             p->st = S_SKIP;
             if (n >= 1 && to_u32(f[0], &dof) && dof >= 1 && dof <= 6) {
                 section sc;
+                sc.kind[0] = 0;
                 snprintf(sc.elset, sizeof sc.elset, "%s", p->cur_elset);
                 snprintf(sc.mat, sizeof sc.mat, "%u", dof);
                 if (!cv_push(p->sdofs, sc)) p->oom = true;
@@ -1352,6 +1356,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
             if (e != UINT32_MAX) f->emat[e] = (uint32_t)mi;
         }
     }
+    d->sects = p.sects.a; d->nsects = (int)p.sects.n; p.sects.a = NULL; p.sects.n = 0;
     /* shell offsets: per element, the last section that names it */
     for (size_t i = 0; i < p.shoffs.n; i++) {
         const cv_set* es = cv_inp_set(d, p.shoffs.a[i].elset, true);
@@ -1521,6 +1526,7 @@ void cv_inp_free(cv_inp* d) {
     free(d->mesh.msgs.a);
     for (int i = 0; i < d->nsets; i++) free(d->sets[i].ids);
     free(d->sets);
+    free(d->sects);
     for (int i = 0; i < d->nsurfs; i++) { free(d->surfs[i].elem); free(d->surfs[i].face); free(d->surfs[i].nodes); }
     free(d->surfs);
     free(d->bcs); free(d->cloads); free(d->dloads); free(d->disc); free(d->body); free(d->temps); free(d->pret);

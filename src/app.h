@@ -23,7 +23,8 @@
 #include "cel.h"
 
 /* what the faces are coloured by */
-enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_N };   /* FM_TYPE + axis = FM for that axis */
+enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_ESET, FM_SECT, FM_N };   /* FM_TYPE + axis = FM for that axis;
+                                                                    new ones last: saved numbers keep their meaning */
 
 /* symmetry plane position along its axis */
 enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
@@ -810,6 +811,11 @@ void app_set_flight(bool on);
    on = false shows them again. Rebuilds the skin in the background when the plane moved. */
 void app_eye_hide(bool on, const float n[3], float d, float f1, float f2);
 void app_group_colors_changed(void);
+/* app_eclass.c: the faces' categorical colouring in the faces mode shown (type, material,
+   group, element set, section): per element its class, the classes, their colours */
+bool app_face_classes(const uint16_t** of, int* n, const float** rgb);
+const char* app_face_classes_title(void);            /* "element set" ... */
+bool app_face_class_label(int i, char* out, size_t n);
 void app_refresh_range(void);
 bool app_busy(void);
 size_t app_total_msgs(void);

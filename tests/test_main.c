@@ -1597,6 +1597,7 @@ static void test_localsys_requests(void) {
 #include "t_contact.h"
 #include "t_clayer.h"
 #include "t_datip.h"
+#include "t_eclass.h"
 #include "t_integ.h"
 #include "t_selset.h"
 #include "t_seltopo.h"
@@ -1657,6 +1658,7 @@ int main(void) {
     test_gauss();
     test_dat();
     test_datip();
+    test_eclass();
     test_portal_wire();
     test_list_dir();
     test_numbers();

@@ -71,9 +71,11 @@ void app_see_refresh(void) {
         }
     }
     /* runs: by group (faces coloured by group: each its colour), then by opacity */
-    int axis = G.faces_mode - FM_TYPE;
-    bool grp = axis >= 0 && axis < CV_AXIS_N && G.axis_rgb[axis] && G.groups.axis[axis].of_elem;
-    uint32_t ng = grp ? (uint32_t)CV_MAX(G.groups.axis[axis].n, 1) : 1, nk = ng * (LEVELS + 1);
+    const uint16_t* of = NULL;
+    const float* rgb = NULL;
+    int ncls = 0;
+    bool grp = app_face_classes(&of, &ncls, &rgb);
+    uint32_t ng = grp ? (uint32_t)CV_MAX(ncls, 1) : 1, nk = ng * (LEVELS + 1);
     key = malloc(G.skin.n_tri * sizeof(uint32_t));
     cnt = calloc((size_t)nk + 1, sizeof(uint32_t));
     ids = malloc(G.skin.n_tri * sizeof(uint32_t));
@@ -81,7 +83,7 @@ void app_see_refresh(void) {
     for (size_t t = 0; t < G.skin.n_tri; t++) {
         uint32_t e = G.skin.tri_elem[t];
         uint32_t q = (uint32_t)lroundf(ma * ea[e] * LEVELS);
-        uint32_t g = grp ? G.groups.axis[axis].of_elem[e] : 0;
+        uint32_t g = grp ? of[e] : 0;
         key[t] = g * (LEVELS + 1) + CV_MIN(q, (uint32_t)LEVELS);
         cnt[key[t] + 1]++;
     }
@@ -93,7 +95,7 @@ void app_see_refresh(void) {
     for (uint32_t k = 0; k < nk; k++) {
         if (cnt[k + 1] == cnt[k]) continue;
         cv_see_run r = { cnt[k], cnt[k + 1] - cnt[k], (float)(k % (LEVELS + 1)) / LEVELS, { 0, 0, 0 }, grp };
-        if (grp) memcpy(r.rgb, G.axis_rgb[axis] + 3 * (k / (LEVELS + 1)), sizeof r.rgb);
+        if (grp) memcpy(r.rgb, rgb + 3 * (k / (LEVELS + 1)), sizeof r.rgb);
         runs[nruns++] = r;
     }
     for (size_t t = 0; t < G.skin.n_tri; t++) ids[cnt[key[t]]++] = (uint32_t)t | (inward_cached(t) ? CV_SEE_FLIP : 0);
