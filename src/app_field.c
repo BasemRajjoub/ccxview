@@ -7,6 +7,8 @@
 #include "eclass.h"
 #include "label.h"
 #include "calc.h"
+#include "calclib.h"
+#include "web.h"
 #include "gauss.h"
 #include "path.h"
 #include "app_fail.h"
@@ -483,6 +485,90 @@ bool app_calc_set(const char* expr) {
     G.range_lock = false;
     refresh_field();
     return true;
+}
+
+/* ---- the formula library (calclib.h): a text file, loaded on first use ----------------- */
+
+static cv_calclib g_lib;
+static bool       g_lib_loaded;
+static char       g_lib_path[1024];
+
+static void lib_persist(void) {
+    if (g_lib_path[0] && !cv_calclib_save(&g_lib, g_lib_path)) cv_msg_add(&G.msgs, 0, false, "formulas: could not write the library file");
+}
+
+const cv_calclib* app_formulas(void) {
+    if (g_lib_loaded) return &g_lib;
+    g_lib_loaded = true;
+    if (O.formula_lib) snprintf(g_lib_path, sizeof g_lib_path, "%s", O.formula_lib);
+    else cv_calclib_default_path(g_lib_path, sizeof g_lib_path);
+    int bad = 0;
+    if (g_lib_path[0] && !cv_calclib_load(&g_lib, g_lib_path, &bad)) cv_msg_add(&G.msgs, 0, false, "formulas: the library file could not be read");
+    if (bad) {
+        char m[160];
+        snprintf(m, sizeof m, "formulas: %d invalid line%s in %s skipped", bad, bad == 1 ? "" : "s", g_lib_path);
+        cv_msg_add(&G.msgs, 0, false, m);
+    }
+    return &g_lib;
+}
+
+bool app_formula_save(const char* name, const char* expr) {
+    app_formulas();
+    if (!cv_calclib_set(&g_lib, name, expr)) return false;
+    lib_persist();
+    return true;
+}
+
+void app_formula_delete(int i) {
+    app_formulas();
+    cv_calclib_remove(&g_lib, i);
+    lib_persist();
+}
+
+void app_formulas_import(const char* path) {
+    app_formulas();
+    char m[1200];
+    int bad = 0, dup = 0, first = 0;
+    FILE* f = fopen(path, "rb");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        char* t = sz >= 0 && sz < (1 << 22) ? malloc((size_t)sz + 1) : NULL;
+        if (t) {
+            t[fread(t, 1, (size_t)sz, f)] = 0;
+            int add = cv_calclib_merge(&g_lib, t, &dup, &bad, &first);
+            snprintf(m, sizeof m, "formulas: %d imported from %s, %d already there", add, path, dup);
+            cv_msg_add(&G.msgs, 0, false, m);
+            if (bad) {
+                snprintf(m, sizeof m, "formulas: %d invalid line%s skipped (the first is line %d)", bad, bad == 1 ? "" : "s", first);
+                cv_msg_add(&G.msgs, 0, false, m);
+            }
+            if (add) lib_persist();
+            snprintf(G.note, sizeof G.note, "%d formulas imported", add);
+            G.note_t = cv_now();
+            free(t);
+        } else cv_msg_add(&G.msgs, 0, false, "formulas: the file is too large");
+        fclose(f);
+    } else {
+        snprintf(m, sizeof m, "formulas: cannot read %s", path);
+        cv_msg_add(&G.msgs, 0, false, m);
+    }
+}
+
+void app_formulas_export(void) {
+    app_formulas();
+    char base[1024], path[1100];
+    snprintf(base, sizeof base, "%s", G.loaded ? G.path : g_lib_path);
+    char* dot = strrchr(base, '.');
+    char* sep = strrchr(base, cv_path_sep());
+    if (dot && (!sep || dot > sep)) *dot = 0;
+    snprintf(path, sizeof path, "%s_formulas.txt", base);
+    bool ok = cv_calclib_save(&g_lib, path);
+    snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", path);
+    G.note_t = cv_now();
+    cv_msg_add(&G.msgs, 0, false, G.note);
+    if (ok) CV_EXPORTED(path);
 }
 
 /* ---- failure criteria over the stresses (app_fail.c) ---------------------------------- */

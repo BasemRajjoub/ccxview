@@ -210,6 +210,7 @@ static bool has_ext(const char* n, const char* ext) {
 static bool listed(const char* n) {
     if (G.dlg_kind == CV_DLG_STL) return has_ext(n, "stl");
     if (G.dlg_kind == CV_DLG_COMPARE) return has_ext(n, "frd");
+    if (G.dlg_kind == CV_DLG_FORMULAS) return has_ext(n, "txt");
     return has_ext(n, "frd") || has_ext(n, "inp") || has_ext(n, "dat") || has_ext(n, "fbd") || has_ext(n, "stl");
 }
 
@@ -229,7 +230,7 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
 
     float w = CV_MIN(720 * s, fw * 0.9f), h = CV_MIN(560 * s, fh * 0.85f);
     char open_path[2048] = "";
-    const char* title = G.dlg_kind == CV_DLG_STL ? "Import STL geometry (*.stl)" : G.dlg_kind == CV_DLG_COMPARE ? "Compare with results (*.frd)"
+    const char* title = G.dlg_kind == CV_DLG_STL ? "Import STL geometry (*.stl)" : G.dlg_kind == CV_DLG_COMPARE ? "Compare with results (*.frd)" : G.dlg_kind == CV_DLG_FORMULAS ? "Import formulas (*.txt)"
                       : "Open file (*.frd, *.inp, *.dat, *.fbd, *.stl, *.cel)";
     if (nk_begin_titled(ctx, "Open file", title, nk_rect((fw - w) / 2, (fh - h) / 2, w, h),
                  NK_WINDOW_TITLE | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_CLOSABLE |
@@ -300,7 +301,7 @@ void window_browser(struct nk_context* ctx, float s, float row, int fw, int fh) 
         nk_label_colored(ctx, hint, NK_TEXT_LEFT, P.dim);
         if (nk_button_label(ctx, "Cancel")) { G.browser_open = false; G.dlg_kind = CV_DLG_MODEL; }
         uii_test_mark(ctx, "#browser open");
-        if (nk_button_label(ctx, G.dlg_kind == CV_DLG_STL ? "Import" : "Open") && B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) {
+        if (nk_button_label(ctx, G.dlg_kind == CV_DLG_STL || G.dlg_kind == CV_DLG_FORMULAS ? "Import" : "Open") && B.sel >= 0 && B.sel < B.n && !B.e[B.sel].dir) {
             size_t l = strlen(B.dir);
             bool has_sep = l && B.dir[l - 1] == cv_path_sep();
             snprintf(open_path, sizeof open_path, "%s%s%s", B.dir,

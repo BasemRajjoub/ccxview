@@ -12,7 +12,7 @@
 
 enum { CV_DLG_IDLE, CV_DLG_RUNNING, CV_DLG_DONE, CV_DLG_CANCELLED, CV_DLG_UNAVAILABLE };
 /* what the dialog is for: its title and the file types it shows first */
-enum { CV_DLG_MODEL, CV_DLG_STL, CV_DLG_COMPARE };
+enum { CV_DLG_MODEL, CV_DLG_STL, CV_DLG_COMPARE, CV_DLG_FORMULAS };
 
 /* parent: "x11:<hex window id>" or "" ; start_dir may be NULL; kind CV_DLG_MODEL ...
    false when it cannot start: an abandoned dialog is still closing. */

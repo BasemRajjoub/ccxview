@@ -566,6 +566,13 @@ void app_select_src(const char* field, int comp, int src);
 /* Show the formula expr as the field (field_src 2). false: it does not compile,
    calc_err says why, and the field shown stays. */
 bool app_calc_set(const char* expr);
+/* The formula library (calclib.h), loaded on first use from --formula-lib or
+   ccxview_formulas.txt beside the ini; every change is written back. */
+const struct cv_calclib* app_formulas(void);
+bool app_formula_save(const char* name, const char* expr);   /* add / replace */
+void app_formula_delete(int i);
+void app_formulas_import(const char* path);    /* merge a text file; reports what was skipped */
+void app_formulas_export(void);                /* <model>_formulas.txt */
 void app_fail_set(int crit, int out);   /* show the failure field (field_src 3) */
 void app_mesh_set(int q);               /* show a mesh quality measure (field_src 4), per element */
 /* The same, as the user's choice (Fields tree, top bar, a window, the command line):

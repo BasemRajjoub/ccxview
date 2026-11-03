@@ -1224,6 +1224,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--version")) { printf("ccxview %s\n", CV_VERSION); exit(0); }
         else if (!strcmp(argv[i], "--field") && i + 1 < argc) O.field = argv[++i];
         else if (!strcmp(argv[i], "--calc") && i + 1 < argc) O.calc = argv[++i];
+        else if (!strcmp(argv[i], "--formula-lib") && i + 1 < argc) O.formula_lib = argv[++i];
         else if (!strcmp(argv[i], "--fail") && i + 1 < argc) O.fail = argv[++i];
         else if (!strcmp(argv[i], "--mesh") && i + 1 < argc) O.mesh = argv[++i];
         else if (!strcmp(argv[i], "--target") && i + 1 < argc)

@@ -15,6 +15,8 @@
 #include <stdarg.h>
 #include "ui_int.h"
 #include "app_mesh.h"
+#include "app_int.h"
+#include "calclib.h"
 #include "stl.h"
 #include "tbtext.h"
 
@@ -661,6 +663,23 @@ static bool units_over_sidebar(struct nk_context* ctx) { struct nk_window* w = w
 static bool units_gone(struct nk_context* ctx) { return !G.show_units && !win_of(ctx, "Units"); }
 static bool messages_gone(struct nk_context* ctx) { return !G.show_msgs; }
 static bool formula_gone(struct nk_context* ctx) { return !G.show_calc_help; }
+/* the formula library: Fields open and scrolled down to the Calculated section, its saved list unfolded */
+static void formulas_open(struct nk_context* ctx) {
+    O.formula_lib = "build/ui-test/formulas.txt";
+    remove(O.formula_lib);
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
+    calc_draft_set("S1 - S3"); app_pick_calc(calc_draft());
+    ui_lib_open = NK_MAXIMIZED;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 100000;
+}
+static bool formulas_one(struct nk_context* ctx) { return app_formulas()->n == 1 && !strcmp(app_formulas()->a[0].name, "t1") && !strcmp(app_formulas()->a[0].expr, "S1 - S3"); }
+static void formulas_other_formula(struct nk_context* ctx) { calc_draft_set("S1"); app_pick_calc(calc_draft()); }
+static bool formulas_picked(struct nk_context* ctx) { return !strcmp(G.calc_expr, "S1 - S3") && G.field_src == 2; }
+static bool formulas_none(struct nk_context* ctx) { return app_formulas()->n == 0; }
+static void formulas_end(struct nk_context* ctx) {
+    ui_lib_open = NK_MINIMIZED; remove("build/ui-test/formulas.txt");
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
 static bool convergence_gone(struct nk_context* ctx) { return !G.show_conv; }
 static bool legend_settings_shown(struct nk_context* ctx) { return G.legend_edit && win_of(ctx, "Legend settings"); }
 static bool legend_settings_gone(struct nk_context* ctx) { return !G.legend_edit; }
@@ -1681,6 +1700,13 @@ static const step script[] = {
     CASE("file: forget post-processing deletes the model's .ccxview and opens it afresh"),
     DO(file_open), WAIT(3), AT_TIP("Scene", "Forget what was set up"), CLICK, WAIT(20), EXPECT(sidecar_gone, "the file is gone, the model open"),
     DO(file_close), WAIT(2), DO(sections_open), WAIT(2), PANELS_ANSWER,
+
+    CASE("formulas: a formula is saved under a name, picked from the list and deleted"),
+    DO(formulas_open), WAIT(3), AT_TIP("Scene", "A name for the formula above"), CLICK, WAIT(2), TYPE("t1"),
+    AT_TIP("Scene", "Keep the formula in the box above"), CLICK, WAIT(3), EXPECT(formulas_one, "the library holds t1"),
+    DO(formulas_other_formula), WAIT(2), AT_TIP("Scene", "S1 - S3"), CLICK, WAIT(3), EXPECT(formulas_picked, "the list applies it"),
+    AT_TIP("Scene", "Remove the picked formula"), CLICK, WAIT(3), EXPECT(formulas_none, "Delete empties the library"),
+    DO(formulas_end), DO(sections_open), WAIT(2), PANELS_ANSWER,
 
     CASE("a window closed by the program (OK, Escape), the panels still answer"),
     DO(open_formula), WAIT(3), AT_TITLE("Formula"), CLICK, DO(close_all), WAIT(1), PANELS_ANSWER,

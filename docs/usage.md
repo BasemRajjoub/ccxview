@@ -38,6 +38,8 @@ ccxview slab.frd --field REBAR:As_x_bot --opt rebar_fcd=20 --opt rebar_fyd=435 -
                                             # concrete shell reinforcement per width: As_x_top As_x_bot As_y_top
                                             #   As_y_bot As_max As_total Conc_ratio Crushing (model units)
 ccxview model.frd --calc "S1 - S3"          # a calculated field (Tresca)
+ccxview model.frd --formula-lib my.txt      # the saved formulas (Calculated > Saved formulas): "name = expression" per line,
+                                            #   # comments; default ccxview_formulas.txt beside the ini; Import... merges a file
 ccxview model.frd --fail auto               # failure, per material; built-in presets where none assigned
 ccxview model.frd --fail larc05:rf          # a failure criterion (strength materials in ccxview.ini)
 ccxview model.frd --mesh quality            # mesh quality: scores quality hmqi ansys abaqus; measures size

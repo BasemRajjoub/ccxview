@@ -132,6 +132,7 @@ void calc_draft_set(const char* t);
 extern const char* const calc_examples[][3];   /* { formula, needs S/E/D, what it is } */
 extern const int calc_example_count;
 bool calc_example_ok(int i);                   /* this file has the fields it needs */
+extern int ui_lib_open;                        /* enum nk_collapse_states of the Saved formulas tree */
 
 /* ---- ui_stl.c: Groups > Imported geometry */
 void section_stl(struct nk_context* ctx, float s, float row);

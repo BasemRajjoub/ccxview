@@ -26,6 +26,7 @@ typedef struct {
     int         win_w, win_h;   /* --size WxH */
     const char* field;          /* --field NAME[:COMP]: start on that .frd field, that option (else the first) */
     const char* calc;           /* --calc FORMULA: start on that calculated field */
+    const char* formula_lib;    /* --formula-lib FILE: the formula library file (else ccxview_formulas.txt beside the ini) */
     const char* fail;           /* --fail CRIT[:OUT]: start on that failure field */
     const char* mesh;           /* --mesh MEASURE: start on that mesh quality field */
     float       target[3];      /* --target x,y,z: orbit centre */

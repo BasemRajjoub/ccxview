@@ -3,6 +3,7 @@
    section is in ui_view.c. */
 #include "app.h"
 #include "calc.h"
+#include "calclib.h"
 #include "ui.h"
 #include "cfg.h"
 #include "sokol_app.h"
@@ -487,6 +488,8 @@ bool calc_example_ok(int i) {
     return false;
 }
 
+int ui_lib_open = NK_MINIMIZED;                 /* the Saved formulas tree (the interface test opens it) */
+
 static void section_calc(struct nk_context* ctx, float s, float row) {
     if (strcmp(calc_seen, G.calc_expr)) {                 /* set elsewhere: --calc, a view file */
         snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
@@ -520,6 +523,49 @@ static void section_calc(struct nk_context* ctx, float s, float row) {
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "Build a formula from buttons: this file's fields, operators, functions and examples");
     if (nk_button_label(ctx, "Formula...")) G.show_calc_help = !G.show_calc_help;
+    /* saved formulas: a text file beside the ini (calclib.h); a list for the same reason as below */
+    if (nk_tree_state_push(ctx, NK_TREE_NODE, "Saved formulas", (enum nk_collapse_states*)&ui_lib_open)) {
+        static char lname[CV_FORMULA_NAME]; static int lname_len, lsel = -1;
+        const cv_calclib* lib = app_formulas();
+        nk_layout_row_template_begin(ctx, row);
+        nk_layout_row_template_push_dynamic(ctx);
+        nk_layout_row_template_push_static(ctx, 56 * s);
+        nk_layout_row_template_end(ctx);
+        tip(ctx, "A name for the formula above; Save keeps it in the library (the same name is replaced)");
+        nk_edit_string(ctx, NK_EDIT_FIELD, lname, &lname_len, (int)sizeof lname - 1, nk_filter_default);
+        lname[lname_len] = 0;
+        tip(ctx, "Keep the formula in the box above under this name");
+        if (nk_button_label(ctx, "Save") && lname[0] && calc_buf[0]) {
+            if (!app_formula_save(lname, calc_buf)) cv_msg_add(&G.msgs, 0, false, "formulas: the name or formula is empty or too long");
+            lsel = cv_calclib_find(app_formulas(), lname);
+        }
+        nk_layout_row_dynamic(ctx, row, 1);
+        if (!lib->n) nk_label_colored(ctx, "none saved yet", NK_TEXT_LEFT, P.dim);
+        for (int i = 0; i < lib->n; i++) {
+            tip(ctx, lib->a[i].expr);
+            if (nk_select_label(ctx, lib->a[i].name, NK_TEXT_LEFT, i == lsel)) {
+                lsel = i;
+                snprintf(lname, sizeof lname, "%s", lib->a[i].name); lname_len = (int)strlen(lname);
+                calc_draft_set(lib->a[i].expr);
+                app_pick_calc(calc_buf);
+                snprintf(calc_seen, sizeof calc_seen, "%s", G.calc_expr);
+            }
+        }
+#ifdef __EMSCRIPTEN__
+        nk_layout_row_dynamic(ctx, row, 1);
+#else
+        nk_layout_row_dynamic(ctx, row, 3);
+#endif
+        tip(ctx, "Remove the picked formula from the library");
+        if (nk_button_label(ctx, "Delete") && lsel >= 0 && lsel < lib->n) { app_formula_delete(lsel); lsel = -1; }
+#ifndef __EMSCRIPTEN__
+        tip(ctx, "Add the formulas of a text file (name = expression, one per line); names already here are kept");
+        if (nk_button_label(ctx, "Import...")) app_open_dialog(CV_DLG_FORMULAS);
+        tip(ctx, "Write the library as <model>_formulas.txt next to the result file");
+        if (nk_button_label(ctx, "Export...")) app_formulas_export();
+#endif
+        nk_tree_pop(ctx);
+    }
     /* a list, not a combo: a combo this low in the panel opens past its edge, clipped away */
     if (nk_tree_push_id(ctx, NK_TREE_NODE, "Examples", NK_MINIMIZED, 201)) {
         nk_layout_row_dynamic(ctx, row, 1);

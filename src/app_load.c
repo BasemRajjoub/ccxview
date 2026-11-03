@@ -951,6 +951,7 @@ void app_dialog_done(const char* path) {
     G.dlg_kind = CV_DLG_MODEL;
     if (kind == CV_DLG_STL) app_stl_import(path);
     else if (kind == CV_DLG_COMPARE) app_compare_open(path);
+    else if (kind == CV_DLG_FORMULAS) app_formulas_import(path);
     else app_open(path);
 }
 
