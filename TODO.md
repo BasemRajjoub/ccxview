@@ -46,3 +46,10 @@ before it, so no step rewrites code an earlier one wrote. One commit per step.
 - `--field NAME:COMP` with an unknown component falls back to the default field
   and says so only in the message window; print it to stderr too, with the
   valid labels.
+
+### 3D mouse (#41)
+- Only the stub is in: `ndof.c` reports no device, the camera motion (`app_ndof_apply`, rates scaled to the
+  distance, `ndof_on`, `ndof_speed` in the ini) is ready and tested. Left: the device backends (Windows Raw
+  Input, Linux spacenavd socket or libspnav by dlopen, macOS 3DconnexionClient at runtime, WebHID last), free
+  flight (`G`), invert per axis / lock rotation or translation / dominant axis, button mappings (Fit, Reset,
+  named views), a View panel group, and a hand test with a real device (axis signs, roll direction).

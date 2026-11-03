@@ -12,6 +12,7 @@
 #include "vmath.h"
 #include "dat.h"
 #include "datip.h"
+#include "ndof.h"
 #include "inp.h"
 #include "fbd.h"
 #include "sta.h"
@@ -530,6 +531,8 @@ typedef struct {
     char      title_date_fmt[48];    /* {date}, {date_file}: strftime, %-d no leading zero */
     cv_anchor title_pos;             /* dragged to (unset: bottom-right) */
     bool      idle_redraw;           /* draw only when something changes (app_idle.c); off: every frame */
+    bool      ndof_on;               /* a 3D mouse moves the camera (ndof.h); no device: nothing */
+    float     ndof_speed;            /* its sensitivity, 1 = the default */
     bool      sidecar;               /* keep each model's post-processing in <model>.ccxview (app_sidecar.c) */
 } cv_app;
 
@@ -808,6 +811,7 @@ void app_view(int preset);
 enum { CV_NAV_NONE, CV_NAV_ROTATE, CV_NAV_PAN, CV_NAV_ZOOM, CV_NAV_ROLL, CV_NAV_BOX, CV_NAV_LOOK, CV_NAV_LASSO };
 void cam_turn(v3 axis, float a, v3 pivot);       /* the camera turned about a world axis through pivot */
 bool cam_roll(float a);                          /* about the view axis; false: turntable, switched to free */
+bool app_ndof_apply(const cv_ndof_state* s, float dt);   /* a 3D mouse state moves the camera for dt s; false: nothing to do */
 bool app_center_at(float px, float py);         /* the point under the pixel to the view centre (and pivot) */
 bool app_normal_to(float px, float py);         /* look straight at the face under the pixel */
 void app_box_zoom(float x0, float y0, float x1, float y1);

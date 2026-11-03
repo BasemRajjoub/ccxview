@@ -103,6 +103,7 @@ static void init(void) {
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
     G.idle_redraw = true;
+    G.ndof_on = true; G.ndof_speed = 1.f;
     G.sidecar = true;                    /* each model's post-processing kept beside it */
     app_scl_clear();                     /* the first kept line's name */
     G.lin_asme = true;
@@ -380,6 +381,17 @@ static void frame(void) {
     update_title();
     tick_anim();
     tick_flight();
+    {   /* a 3D mouse, when there is one (no backend yet: cv_ndof_open says no) */
+        static bool tried, have;
+        static double last;
+        if (G.ndof_on && !tried) { tried = true; have = cv_ndof_open(); }
+        if (G.ndof_on && have) {
+            cv_ndof_state ns;
+            double now = cv_now();
+            if (cv_ndof_poll(&ns)) app_ndof_apply(&ns, (float)CV_MIN(CV_MAX(now - last, 0.0), 0.1));
+            last = now;
+        }
+    }
     static int probe_wait = 3;                       /* --probe-at: once the view has the Inspector beside it */
     if (O.probe_set && G.loaded && !app_busy() && G.vp_w > 0 && !probe_wait--) {
         O.probe_set = false;
@@ -775,6 +787,7 @@ static void cleanup(void) {
     if (app_busy()) cv_thread_join(&G.job.thread);
     if (!O.shot_path && !O.nopts && !O.ui_test) settings_save(sapp_width(), sapp_height());   /* scripted runs leave the file alone */
     settings_free();
+    cv_ndof_close();
     unload();
     cv_render_shutdown();
     cv_snk_before_shutdown();

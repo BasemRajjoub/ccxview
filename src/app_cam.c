@@ -566,6 +566,22 @@ bool cam_roll(float a) {
     return was;
 }
 
+/* A 3D mouse state (ndof.h) for dt seconds, in object mode: pan and zoom rates scale with
+   the distance to the pivot, the rotation is the mouse orbit's (turntable, or free with
+   roll, per G.orbit_free) about the same pivot. Wakes the idle redraw (app_idle.c). */
+bool app_ndof_apply(const cv_ndof_state* s, float dt) {
+    cv_ndof_move m;
+    if (!G.loaded || !cv_ndof_move_of(s, dt, G.cam.dist, G.ndof_speed, &m)) return false;
+    v3 eye, fwd, right, up;
+    cam_basis(&G.cam, &eye, &fwd, &right, &up);
+    G.cam.target = v3_add(G.cam.target, v3_add(v3_scale(right, m.pan[0]), v3_scale(up, m.pan[1])));
+    G.cam.dist = CV_MAX(G.cam.dist * m.zoom, 1e-5f * CV_MAX(G.diag, 1e-6f));
+    if (m.yaw != 0 || m.pitch != 0) cam_orbit(m.yaw, m.pitch);
+    if (G.orbit_free && m.roll != 0) cam_roll(m.roll);
+    app_wake();
+    return true;
+}
+
 /* world length of one pixel at the depth of p */
 float app_pixel_size(v3 p) {
     v3 eye, fwd, right, up;

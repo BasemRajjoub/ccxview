@@ -1641,6 +1641,7 @@ static void test_localsys_requests(void) {
 #include "t_clayer.h"
 #include "t_datip.h"
 #include "t_nodalrec.h"
+#include "t_ndof.h"
 #include "t_eclass.h"
 #include "t_integ.h"
 #include "t_selset.h"
@@ -1705,6 +1706,7 @@ int main(void) {
     test_dat();
     test_datip();
     test_nodalrec();
+    test_ndof();
     test_eclass();
     test_portal_wire();
     test_list_dir();

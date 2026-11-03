@@ -102,6 +102,8 @@ static const setting S[] = {
     B(sidecar),
     SEC("Draw only when something changes (0: every frame, if a driver misbehaves)"),
     B(idle_redraw),
+    SEC("3D mouse (SpaceMouse): on, sensitivity (no device is read yet)"),
+    B(ndof_on), F(ndof_speed, 0.05f, 20),
     SEC("Display"),
     B(shading), B(hide_axes), B(clip_cap),
     { "bgr", 'f', &G.bg[0], 0, 1 }, { "bgg", 'f', &G.bg[1], 0, 1 }, { "bgb", 'f', &G.bg[2], 0, 1 },
