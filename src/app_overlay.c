@@ -16,7 +16,7 @@ bool app_field_is_vector(void) {
     int fi = find_field(G.step, G.field_name);
     if (fi < 0) return false;
     const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
-    return d->ncomp == 3 || (G.comp <= CV_COMP_P1 && G.comp >= CV_COMP_P3_XZ && cv_tensor_order(d));
+    return cv_vec_comps(d) || (G.comp <= CV_COMP_P1 && G.comp >= CV_COMP_P3_XZ && cv_tensor_order(d));
 }
 
 /* an arrow len long arriving at tip along dir: a tube and a cone, coloured by sv */
@@ -69,7 +69,8 @@ void refresh_vectors(void) {
     const uint32_t* ids = G.skin.n_pt ? G.skin.pt : NULL;
     size_t n = ids ? G.skin.n_pt : G.frd.n_nodes;
     size_t stride = n / 200000 + 1;                     /* huge models: a sample */
-    if (G.frd.steps[G.step].fields[fi].ncomp == 6) {
+    const int nc = G.frd.steps[G.step].fields[fi].ncomp;
+    if (cv_tensor_order(&G.frd.steps[G.step].fields[fi])) {
         cv_fvec in = {0};
         if (G.scalar) principal_arrows(v, ids, n, stride, &in);
         cv_render_inst(CV_INST_VEC, in.a, (uint32_t)(in.n / CV_INST_FLOATS));
@@ -79,14 +80,14 @@ void refresh_vectors(void) {
     float peak = 0;
     for (size_t j = 0; j < n; j += stride) {
         uint32_t i = ids ? ids[j] : (uint32_t)j;
-        float m = sqrtf(v[3 * i] * v[3 * i] + v[3 * i + 1] * v[3 * i + 1] + v[3 * i + 2] * v[3 * i + 2]);
+        float m = sqrtf(v[nc * i] * v[nc * i] + v[nc * i + 1] * v[nc * i + 1] + v[nc * i + 2] * v[nc * i + 2]);
         if (m == m && m > peak) peak = m;
     }
     cv_fvec in = {0};
     float L = CV_MAX(G.vec_pct, 0.1f) * 0.01f * G.diag;
     for (size_t j = 0; peak > 0 && j < n; j += stride) {
         uint32_t i = ids ? ids[j] : (uint32_t)j;
-        const float* r = v + 3 * i;
+        const float* r = v + (size_t)nc * i;
         float m = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
         if (!(m > 0) || m != m) continue;
         float dir[3] = { r[0] / m, r[1] / m, r[2] / m }, len = L * m / peak;

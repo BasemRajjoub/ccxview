@@ -200,7 +200,7 @@ int app_title_lines(cv_title_line* out, int max, const char* units) {
     snprintf(v[K_PATH], sizeof v[0], "%s", G.path);
     const char* ver = G.frd.head.version;
     if (!strncmp(ver, "Version ", 8)) ver += 8;
-    snprintf(v[K_SOLVER], sizeof v[0], "%s%s%s", G.frd.head.pgm, G.frd.head.pgm[0] && ver[0] ? " " : "", ver);
+    snprintf(v[K_SOLVER], sizeof v[0], "%s%s%s", G.frd.head.pgm[0] ? G.frd.head.pgm : G.frd.head.code, G.frd.head.pgm[0] && ver[0] ? " " : "", ver);
     /* the numbers among them: each written as plain text, and its value and the
        file's width for it, which a format in the template replaces */
     cv_tb_kv kv[K_N];

@@ -240,8 +240,8 @@ void unload(void) {
 static void pick_default_field(void) {
     G.field_name[0] = 0;
     const cv_step* s = &G.frd.steps[G.step];
-    const char* pref[] = { "DISP", "STRESS", "NDTEMP" };
-    for (int p = 0; p < 3 && !G.field_name[0]; p++)
+    const char* pref[] = { "DISP", "DISPREAL", "STRESS", "NDTEMP" };
+    for (int p = 0; p < 4 && !G.field_name[0]; p++)
         for (int i = 0; i < s->nfields; i++)
             if (strcmp(s->fields[i].name, pref[p]) == 0) {
                 cv_scalar_opt o[CV_MAX_OPTS];
@@ -328,8 +328,9 @@ static void apply_load(cv_job* j) {
     bool new_model = app_measure_model(G.path);   /* another file: its measurements go (a sidecar may add them after) */
     G.load_seconds = j->seconds;
     settings_add_recent(j->path);
-    cv_logf("loaded %s: %u nodes, %u elements, %d steps, %zu skin triangles, %zu messages, %.3f s",
-            cv_basename(j->path), G.frd.n_nodes, G.frd.n_elems, G.frd.n_steps, G.skin.n_tri, app_total_msgs(), j->seconds);
+    cv_logf("loaded %s: %u nodes, %u elements, %d steps, %zu skin triangles, %zu messages, %.3f s%s%s",
+            cv_basename(j->path), G.frd.n_nodes, G.frd.n_elems, G.frd.n_steps, G.skin.n_tri, app_total_msgs(), j->seconds,
+            G.frd.head.code[0] ? ", solver " : "", G.frd.head.code);
     cv_log_set_context(NULL);
 
     uint32_t N = G.frd.n_nodes;

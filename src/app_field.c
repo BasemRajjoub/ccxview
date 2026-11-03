@@ -158,6 +158,14 @@ int find_field(int step, const char* name) {
     const cv_step* s = &G.frd.steps[step];
     for (int i = 0; i < s->nfields; i++)
         if (strcmp(s->fields[i].name, name) == 0) return i;
+    /* FEMaster's harmonic response names: DISPREAL / DISPIMAG stand in for DISP / DISPI
+       (its operator is K - w2 M + i w C, so u = real + i imag turns as e^(+iwt) like
+       CalculiX's, and the shape at phase wt is real cos wt - imag sin wt: the same
+       -DISPI convention. Inferred from linear_harmonic.cpp, not from the .frd itself). */
+    const char* alias = !strcmp(name, "DISP") ? "DISPREAL" : !strcmp(name, "DISPI") ? "DISPIMAG" : NULL;
+    if (alias)
+        for (int i = 0; i < s->nfields; i++)
+            if (strcmp(s->fields[i].name, alias) == 0) return i;
     return -1;
 }
 

@@ -205,6 +205,11 @@ static void test_units(void) {
     CHECK_EQ(cv_field_quantity("SHELL", 0), CV_Q_FORCE_LEN);
     CHECK_EQ(cv_field_quantity("SHELL", 3), CV_Q_MOMENT_LEN);
     CHECK_EQ(cv_field_quantity("SHELL", 7), CV_Q_FORCE_LEN);
+    CHECK_EQ(cv_field_quantity("SHR", 0), CV_Q_FORCE_LEN);       /* FEMaster: NXX .. QY */
+    CHECK_EQ(cv_field_quantity("SHR", 5), CV_Q_MOMENT_LEN);
+    CHECK_EQ(cv_field_quantity("DISPREAL", 2), CV_Q_LEN);
+    CHECK_EQ(cv_field_quantity("DISPREAL", 3), -1);              /* D4..D6 are rotations */
+    CHECK_EQ(cv_field_quantity("FORC", 4), -1);
     CHECK_EQ(cv_field_quantity("REBAR", 0), CV_Q_AREA_LEN);
     CHECK_EQ(cv_field_quantity("REBAR", 5), CV_Q_AREA_LEN);
     CHECK_EQ(cv_field_quantity("REBAR", 7), -1);
