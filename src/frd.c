@@ -713,7 +713,9 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
         }
         if (tok_is(k, ke, "9999")) { saw_end = true; break; }
         if (ke - k >= 2 && k[0] == '1' && k[1] == 'U') { head_record(&f->head, k + 2, le); continue; }
-        if (ke - k >= 2 && k[0] == '1' && k[1] == 'C') { copy_trim(f->head.code, sizeof f->head.code, k + 2, le); continue; }
+        if (ke - k >= 2 && k[0] == '1' && k[1] == 'C') { copy_trim(f->head.code, sizeof f->head.code, k + 2, le);
+            if (!strcmp(f->head.code, "FEMAST")) snprintf(f->head.code, sizeof f->head.code, "FEMaster");   /* six letters in the file */
+            continue; }
         /* anything unknown: ignored. */
     }
     if (in_hdr) {                               /* file ended inside a field header */

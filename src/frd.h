@@ -46,7 +46,7 @@ typedef struct {
 /* The 1U records CalculiX writes at the top of the file: the deck's *HEADING
    line, then USER, DATE, TIME, HOST, PGM, VERSION ... Each "" when not there. */
 typedef struct {
-    char code[24];                 /* the 1C record: the solver code ("FEMAST") */
+    char code[24];                 /* the 1C record: the solver code ("FEMaster" for FEMAST) */
     char heading[80], user[40], date[32], time[16], host[40], pgm[24], version[40];
 } cv_frd_head;
 

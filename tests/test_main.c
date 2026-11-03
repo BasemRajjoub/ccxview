@@ -502,7 +502,7 @@ static void test_femaster_vec(void) {
     buf_t b = slurp(o);
     cv_frd f;
     CHECK(cv_frd_parse(&f, b.p, b.n));
-    CHECK(!strcmp(f.head.code, "FEMAST"));
+    CHECK(!strcmp(f.head.code, "FEMaster"));
     if (f.n_steps == 1 && f.steps[0].nfields == 1) {
         const cv_field_desc* d = &f.steps[0].fields[0];
         CHECK(cv_vec_comps(d) == 3);
