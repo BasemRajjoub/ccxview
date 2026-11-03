@@ -106,7 +106,7 @@ static const setting S[] = {
     SEC("Deformation and animation"),
     B(deform_auto), I(anim_mode, 0, 1), F(anim_period, 0.2f, 20), F(fps, 0.1f, 60),
     SEC("Export"),
-    I(exp_kind, 0, 1), B(exp_video), I(exp_cycles, 1, 20), I(exp_fps, 1, 60), B(exp_lock_range), B(png_alpha),
+    I(exp_kind, 0, 1), B(exp_video), B(exp_gif), I(exp_cycles, 1, 20), I(exp_fps, 1, 60), B(exp_lock_range), B(png_alpha),
     SEC("Panes: the Scene (left) and the Inspector (right) shown, their widths in pixels at scale 1"),
     B(scene_on), F(scene_w, 120, 2000), B(insp_on), F(insp_w, 120, 2000),
     SEC("What a click in the view probes and a pick selects, a bit each: 1 a node, 2 an element, 4 a face, 8 an edge; its tag in the view (what, the value); "

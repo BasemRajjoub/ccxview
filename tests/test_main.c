@@ -28,6 +28,7 @@ static int g_fail = 0, g_checks = 0;
 #include "t_export.h"
 #include "t_path.h"
 #include "t_video.h"
+#include "t_gif.h"
 #include "t_calclib.h"
 #include "t_match.h"
 #include "t_anchor.h"
@@ -1628,6 +1629,7 @@ int main(void) {
     test_selstats();
     test_selfilter();
     test_video();
+    test_gif();
     test_calclib();
     test_cfg();
     test_idlist();

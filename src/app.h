@@ -219,7 +219,8 @@ typedef struct {
     bool      seq_lock0;             /* range lock before the export, restored after */
     /* the Export section's choices */
     int       exp_kind;              /* 0 deformation cycle, 1 every step */
-    bool      exp_video;             /* MP4 instead of a PNG sequence */
+    bool      exp_video;             /* one video file (MP4, or GIF with exp_gif) instead of a PNG sequence */
+    bool      exp_gif;               /* the video file is an animated GIF */
     int       exp_cycles;            /* deformation cycles recorded */
     int       exp_fps;               /* frames per second of a video / cycle */
     bool      exp_lock_range;        /* keep the colour range fixed while recording */

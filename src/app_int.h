@@ -32,7 +32,7 @@ typedef struct {
     float       target[3];      /* --target x,y,z: orbit centre */
     bool        target_set;
     float       zoom;           /* --zoom F: closer by F */
-    int         export_kind;    /* --export [png|seq|csv|vtk]: 0 none, 1 png, 2 sequence, 3 csv, 4 vtk */
+    int         export_kind;    /* --export KIND: 1 png, 3 csv, 4 vtk, 5 seq, 6 mp4, 7 seqsteps, 8 mp4steps, 9 gif, 10 gifsteps */
     bool        export_anim;    /* --export seq/mp4...: started by frame() once the loaded model's view is laid out */
     const char* opts[32];       /* --opt key=value, applied after the settings file */
     int         nopts;

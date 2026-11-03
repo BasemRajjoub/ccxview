@@ -729,16 +729,21 @@ static void section_export(struct nk_context* ctx, float s, float row) {
     if (nk_option_label(ctx, "deformation cycle", G.exp_kind == 0)) G.exp_kind = 0;
     tip(ctx, "Every increment once, each held as long as the play speed (fps in the time bar) shows it");
     if (nk_option_label(ctx, "every step", G.exp_kind == 1)) G.exp_kind = 1;
-    if (nk_option_label(ctx, "MP4 video", G.exp_video)) G.exp_video = true;
+    nk_layout_row_dynamic(ctx, row, 3);
+    tip(ctx, "H.264 video: small files, plays everywhere");
+    if (nk_option_label(ctx, "MP4", G.exp_video && !G.exp_gif)) { G.exp_video = true; G.exp_gif = false; }
+    tip(ctx, "Animated GIF, 256 fixed colours: bigger than MP4 for most models, but pastes into slides and chats as a picture");
+    if (nk_option_label(ctx, "GIF", G.exp_video && G.exp_gif)) { G.exp_video = true; G.exp_gif = true; }
     tip(ctx, "One PNG per frame; for 'every step' one per increment");
     if (nk_option_label(ctx, "PNG sequence", !G.exp_video)) G.exp_video = false;
+    nk_layout_row_dynamic(ctx, row, 2);
     if (G.exp_kind == 0) {
         tip(ctx, "How often the swing repeats in the clip");
         nk_property_int(ctx, "#cycles", 1, &G.exp_cycles, 20, 1, 0.1f);
     } else {
         nk_spacing(ctx, 1);
     }
-    tip(ctx, "Frames per second of the video (and per cycle of a PNG sequence)");
+    tip(ctx, "Frames per second of the video or GIF (and per cycle of a PNG sequence)");
     nk_property_int(ctx, "#fps", 1, &G.exp_fps, 60, 1, 0.2f);
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "Keep the legend's range fixed while recording, so colours mean the same in every frame");

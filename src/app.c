@@ -10,6 +10,7 @@
 #include "log.h"
 #include "export.h"
 #include "video.h"
+#include "gif.h"
 #include "ui.h"
 #include "filedlg.h"
 #include "sokol_app.h"
@@ -603,10 +604,13 @@ void app_export_png(void) { if (G.loaded) G.export_req = true; }
    the run and restored afterwards */
 /* MP4: the frames the sequence export would save as PNGs go to the encoder */
 static char g_video_path[1100];
+static bool g_video_gif;                     /* G.video is a cv_gif*, not a cv_video* */
 
 static void video_frame(void) {
     unsigned char* px = cv_read_pixels_region(G.vp_x + 2, G.vp_y + 2, G.vp_w - 4, G.vp_h - 4, sapp_height());
-    if (!px || !cv_video_frame(G.video, px, G.vp_w - 4, G.vp_h - 4, true)) {
+    bool ok = px && (g_video_gif ? cv_gif_frame(G.video, px, G.vp_w - 4, G.vp_h - 4, true)
+                                  : cv_video_frame(G.video, px, G.vp_w - 4, G.vp_h - 4, true));
+    if (!ok) {
         cv_msg_add(&G.msgs, 0, false, "video: a frame could not be encoded");
         G.seq_left = 1;                        /* stop after this one */
     }
@@ -614,7 +618,7 @@ static void video_frame(void) {
 }
 
 static void video_finish(void) {
-    bool ok = cv_video_close(G.video);
+    bool ok = g_video_gif ? cv_gif_close(G.video) : cv_video_close(G.video);
     G.video = NULL;
     snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", g_video_path);
     G.note_t = cv_now();
@@ -654,6 +658,8 @@ static void seq_prepare(void) {
 }
 
 static bool video_begin(const char* suffix) {
+    g_video_gif = G.exp_gif;
+    const char* ext = g_video_gif ? "gif" : "mp4";
     char base[1024];
     snprintf(base, sizeof base, "%s", G.path);
     char* dot = strrchr(base, '.');
@@ -661,17 +667,18 @@ static bool video_begin(const char* suffix) {
     if (dot && (!sep || dot > sep)) *dot = 0;
     int k = 0;
     do {
-        if (k == 0) snprintf(g_video_path, sizeof g_video_path, "%s_%s.mp4", base, suffix);
-        else snprintf(g_video_path, sizeof g_video_path, "%s_%s_%d.mp4", base, suffix, k);
+        if (k == 0) snprintf(g_video_path, sizeof g_video_path, "%s_%s.%s", base, suffix, ext);
+        else snprintf(g_video_path, sizeof g_video_path, "%s_%s_%d.%s", base, suffix, k, ext);
         k++;
     } while (cv_file_size(g_video_path) > 0 && k < 1000);
-    G.video = cv_video_open(g_video_path, G.vp_w - 4, G.vp_h - 4, CV_MAX(G.exp_fps, 1), 4);
-    if (!G.video) cv_msg_add(&G.msgs, 0, false, "video: cannot start the encoder (view too small?)");
+    G.video = g_video_gif ? (void*)cv_gif_open(g_video_path, G.vp_w - 4, G.vp_h - 4, CV_MAX(G.exp_fps, 1))
+                          : (void*)cv_video_open(g_video_path, G.vp_w - 4, G.vp_h - 4, CV_MAX(G.exp_fps, 1), 4);
+    if (!G.video) cv_msg_add(&G.msgs, 0, false, g_video_gif ? "gif: cannot write the file" : "video: cannot start the encoder (view too small?)");
     return G.video != NULL;
 }
 
 /* the Export section's animation export: what to loop through, and whether
-   the frames become PNGs or an MP4 */
+   the frames become PNGs, an MP4 or a GIF */
 void app_export_animation(void) {
     if (!G.loaded || G.video || G.seq_left > 0) return;
     int fps = CV_MAX(G.exp_fps, 1);
@@ -1233,7 +1240,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--export")) {
             const char* k = i + 1 < argc ? argv[i + 1] : "";
             O.export_kind = !strcmp(k, "csv") ? 3 : !strcmp(k, "vtk") ? 4 : !strcmp(k, "seq") ? 5 : !strcmp(k, "mp4") ? 6
-                          : !strcmp(k, "seqsteps") ? 7 : !strcmp(k, "mp4steps") ? 8 : 1;
+                          : !strcmp(k, "seqsteps") ? 7 : !strcmp(k, "mp4steps") ? 8 : !strcmp(k, "gif") ? 9 : !strcmp(k, "gifsteps") ? 10 : 1;
             if (O.export_kind != 1 || !strcmp(k, "png")) i++;
         }
         else if (!strcmp(argv[i], "--opt") && i + 1 < argc && O.nopts < 32) O.opts[O.nopts++] = argv[++i];

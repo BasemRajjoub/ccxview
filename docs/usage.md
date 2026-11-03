@@ -26,6 +26,8 @@ click on Open or Import STL... closes it and opens ccxview's own.
 ccxview model.frd
 ccxview model.frd --shot out.png            # render, save, quit
 ccxview model.frd --export mp4              # animation video
+ccxview model.frd --export gif              # the same as an animated GIF (also gifsteps): bigger than MP4 for most
+                                            #   models, useful for slides and chats; 256 fixed colours
 ccxview model.frd --field DISP --vectors    # displacement arrows
 ccxview model.frd --gp                      # Gauss points
 ccxview model.frd --field STRESS --tensor ellipsoid   # stress glyphs: ellipsoid, superquadric, cross,

@@ -647,9 +647,10 @@ static void apply_load(cv_job* j) {
     if (O.export_kind == 1) app_export_png();
     else if (O.export_kind == 3) app_export_data(false);
     else if (O.export_kind == 4) app_export_data(true);
-    else if (O.export_kind >= 5) {                 /* seq / mp4 / seqsteps / mp4steps */
-        G.exp_video = O.export_kind == 6 || O.export_kind == 8;
-        G.exp_kind = O.export_kind >= 7;
+    else if (O.export_kind >= 5) {                 /* seq / mp4 / seqsteps / mp4steps / gif / gifsteps */
+        G.exp_video = O.export_kind == 6 || O.export_kind >= 8;
+        G.exp_gif = O.export_kind >= 9;
+        G.exp_kind = O.export_kind == 7 || O.export_kind == 8 || O.export_kind == 10;
         O.export_anim = true;                      /* frame(): the view's size without the panels known (H) */
     }
 }
