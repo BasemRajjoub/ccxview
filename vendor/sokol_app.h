@@ -2180,6 +2180,9 @@ SOKOL_APP_API_DECL sapp_swapchain sapp_acquire_swapchain(void);
 
 /* returns true after sokol-app has been initialized */
 SOKOL_APP_API_DECL bool sapp_isvalid(void);
+// ccxview patch: call inside the frame callback to skip this frame's swap / present (the last picture stays);
+// false where unsupported (macOS, Android...): the frame must then be drawn
+SOKOL_APP_API_DECL bool sapp_skip_present(void);
 /* returns the current framebuffer width in pixels */
 SOKOL_APP_API_DECL int sapp_width(void);
 /* same as sapp_width(), but returns float */
@@ -3302,6 +3305,7 @@ typedef struct {
     bool init_called;
     bool cleanup_called;
     bool quit_requested;
+    bool skip_present;
     bool quit_ordered;
     bool event_consumed;
     bool html5_ask_leave_site;
@@ -9914,12 +9918,16 @@ _SOKOL_PRIVATE void _sapp_win32_frame(bool from_winproc) {
     #else
         _sapp_frame();
     #endif
+    if (_sapp.skip_present) {
+        _sapp.skip_present = false;
+    } else {
     #if defined(SOKOL_D3D11)
         _sapp_d3d11_present(from_winproc);
     #endif
     #if defined(SOKOL_GLCORE)
         _sapp_wgl_swap_buffers();
     #endif
+    }
     if (!from_winproc) {
         if (IsIconic(_sapp.win32.hwnd)) {
             Sleep((DWORD)(16 * _sapp.desc.swap_interval));
@@ -14267,11 +14275,15 @@ _SOKOL_PRIVATE void _sapp_linux_frame(void) {
         _sapp_vk_frame();
     #else
         _sapp_frame();
+        if (_sapp.skip_present) {
+            _sapp.skip_present = false;
+        } else {
         #if defined(_SAPP_GLX)
             _sapp_glx_swap_buffers();
         #elif defined(_SAPP_EGL)
             eglSwapBuffers(_sapp.egl.display, _sapp.egl.surface);
         #endif
+        }
     #endif
 }
 
@@ -14415,6 +14427,15 @@ SOKOL_API_IMPL void sapp_run(const sapp_desc* desc) {
     _SOKOL_UNUSED(desc);
 }
 #endif
+
+SOKOL_API_IMPL bool sapp_skip_present(void) {
+    #if (defined(_SAPP_WIN32) || defined(_SAPP_LINUX) || defined(_SAPP_EMSCRIPTEN)) && !defined(SOKOL_WGPU) && !defined(SOKOL_VULKAN)
+        _sapp.skip_present = true;
+        return true;
+    #else
+        return false;
+    #endif
+}
 
 SOKOL_API_IMPL bool sapp_isvalid(void) {
     return _sapp.valid;

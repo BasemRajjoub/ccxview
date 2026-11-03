@@ -18,15 +18,7 @@ before it, so no step rewrites code an earlier one wrote. One commit per step.
    the faces and edges selected; on shells the normal is not oriented and the surface match uses
    the deck's face number. `--find` with a restored `.ccxview` ends with nothing probed.
 
-## 2. Idle load
-With a model loaded and nothing happening, GPU use stays high and the CPU busy,
-because `frame_cb` (sokol_app) redraws the scene and the UI at every vsync. Redraw
-only when something changes (input, animation, video, loading, a window or pane edge
-being dragged, a timer such as the message fade) and otherwise drop to a low rate or
-reuse the last frame, without adding latency to the first frame after input. Check
-native (D3D11/GL) and the browser. Cover the panes' edge drag and tab switches.
-
-## 3. Open points (no order)
+## 2. Open points (no order)
 
 ### Shell forces (#19)
 - Reinforcement: transverse shear (the sandwich's core) and compression steel

@@ -123,6 +123,7 @@ ccxview model.inp --opt sym_thin=1          # crowded supports and loads thinned
 ccxview model.frd --mesh-window --opt mq_lim_aspect=5 --opt mesh_warn_pct=2   # mesh report, own limits
 ccxview model.frd --deck-window --step 2    # the Deck window: steps, model changes, submodel, amplitudes
 ccxview model.frd --opt show_removed=1      # elements removed by *MODEL CHANGE drawn all the same
+ccxview model.frd --no-idle-skip             # draw every frame (default: only when something changes; ini idle_redraw = 0)
 ccxview model.frd --no-sidecar              # neither read nor write model.ccxview this run
 ccxview model.frd --opt key=value           # any setting of ccxview.ini for this run
 ccxview model.frd --software                # CPU rendering

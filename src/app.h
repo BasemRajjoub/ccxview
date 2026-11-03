@@ -525,6 +525,7 @@ typedef struct {
     bool      title_hand;            /* the template was edited by hand: the boxes leave it alone */
     char      title_date_fmt[48];    /* {date}, {date_file}: strftime, %-d no leading zero */
     cv_anchor title_pos;             /* dragged to (unset: bottom-right) */
+    bool      idle_redraw;           /* draw only when something changes (app_idle.c); off: every frame */
     bool      sidecar;               /* keep each model's post-processing in <model>.ccxview (app_sidecar.c) */
 } cv_app;
 
@@ -818,6 +819,10 @@ const char* app_face_classes_title(void);            /* "element set" ... */
 bool app_face_class_label(int i, char* out, size_t n);
 void app_refresh_range(void);
 bool app_busy(void);
+/* app_idle.c -- no redraw while nothing changes */
+void app_wake(void);                         /* draw the next few frames (an event, a change made outside a frame) */
+bool app_redraw_needed(void);
+bool app_idle_skip(void);                    /* true: this frame is skipped (slept, no swap); call before any sg_ call */
 size_t app_total_msgs(void);
 
 /* app_integ.c: integrals of the field shown, step by step, over a region: a volume
