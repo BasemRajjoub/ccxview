@@ -415,6 +415,15 @@ static bool nrec_shown(struct nk_context* ctx) { return G.nodal_recovery && app_
 static bool nrec_half(struct nk_context* ctx) { return app_nrec_active() && fabsf(G.avg_pct - 50.f) < 2.f && strstr(G.legend_lines[1], "Avg: 50%"); }
 static void nrec_off(struct nk_context* ctx) {
     G.nodal_recovery = false; G.avg_pct = 75.f; G.field_src = 0; select_stress(ctx); sections_open(ctx);
+    const char* nm[1];
+    if (gp_fields(nm, 1)) {                        /* its tree folded again */
+        char t[96];
+        snprintf(t, sizeof t, "%s (.dat)", nm[0]);
+        *uii_fnode_state(t, true) = 0;
+        snprintf(t, sizeof t, "%s.dat/options", nm[0]);
+        *uii_fnode_state(t, false) = 0;
+    }
+    *uii_fnode_state("STRESS", true) = 1;
     struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
 }
 static void labels_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_px = 13.f; app_label_changed(); sections_open(ctx); }
