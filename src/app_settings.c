@@ -100,6 +100,8 @@ static const setting S[] = {
     { "sel_open_use", 'b', &G.sel_open[CV_SELG_USE], 0, 0 }, { "sel_open_named", 'b', &G.sel_open[CV_SELG_NAMED], 0, 0 },
     SEC("Each model's post-processing (views, sets, paths, lines) kept in <model>.ccxview beside it: 1 on, 0 off"),
     B(sidecar),
+    SEC("Draw only when something changes (0: every frame, if a driver misbehaves)"),
+    B(idle_redraw),
     SEC("Display"),
     B(shading), B(hide_axes), B(clip_cap),
     { "bgr", 'f', &G.bg[0], 0, 1 }, { "bgg", 'f', &G.bg[1], 0, 1 }, { "bgb", 'f', &G.bg[2], 0, 1 },

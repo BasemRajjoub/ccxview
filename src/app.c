@@ -102,6 +102,7 @@ static void init(void) {
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
+    G.idle_redraw = true;
     G.sidecar = true;                    /* each model's post-processing kept beside it */
     app_scl_clear();                     /* the first kept line's name */
     G.lin_asme = true;
@@ -226,7 +227,6 @@ static void cut_utf8(char* s, size_t max) {
 #define CV_TITLE_MAX 120
 static void update_title(void) {
     double now = cv_now();
-    G.title_frames++;
     if (G.title_t == 0) { G.title_t = now; cv_cpu_percent(); return; }
     if (now - G.title_t < 0.5) return;
     float fps = (float)(G.title_frames / (now - G.title_t));
@@ -369,8 +369,10 @@ static void poll_watch(void) {
 }
 
 static void frame(void) {
+    bool was_busy = app_busy(), was_dlg = G.dlg_running;
     poll_job();
     poll_dialog();
+    if ((was_busy && !app_busy()) || (was_dlg && !G.dlg_running)) app_wake();     /* a load or dialog finished */
     poll_watch();
     seq_prepare();
     update_title();
@@ -418,6 +420,8 @@ static void frame(void) {
 
     app_traj_tick();
     app_sidecar_tick();
+    if (app_idle_skip()) { sg_commit(); return; }
+    G.title_frames++;                    /* the title's FPS counts drawn frames */
     ui_test_frame(g_nk);                 /* --ui-test: the script's next step, as events */
     g_nk = snk_new_frame();
     ui_frame(g_nk, sapp_width(), sapp_height());
@@ -877,6 +881,7 @@ static void drag_move(float dx, float dy, bool shift) {
 }
 
 static void event(const sapp_event* ev) {
+    app_wake();                          /* any input: a few frames to draw it and let Nuklear settle */
     if (ev->type == SAPP_EVENTTYPE_MOUSE_SCROLL && g_nk) ui_wheel_focus(g_nk);
     bool wheel = ev->type == SAPP_EVENTTYPE_MOUSE_SCROLL;
     bool over_ui = g_nk && ui_mouse_captured(g_nk, wheel);
@@ -1247,6 +1252,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--find") && i + 1 < argc) O.find = argv[++i];
         else if (!strcmp(argv[i], "--view") && i + 1 < argc) O.view_file = argv[++i];
         else if (!strcmp(argv[i], "--no-sidecar")) O.no_sidecar = true;
+        else if (!strcmp(argv[i], "--no-idle-skip")) O.no_idle_skip = true;
         else if (!strcmp(argv[i], "--watch")) O.watch = true;
         else if (!strcmp(argv[i], "--compare") && i + 1 < argc) O.compare = argv[++i];
         else if (!strcmp(argv[i], "--stl") && i + 1 < argc) { if (O.nstl < CV_MESH_N) O.stl[O.nstl++] = argv[i + 1]; i++; }
