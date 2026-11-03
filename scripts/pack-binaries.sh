@@ -59,4 +59,4 @@ if [ -e build/web/ccxview.html ]; then
     cp build/web/ccxview.html dist/ccxview-web/
     (cd dist && zip -qr ccxview-web.zip ccxview-web)
 fi
-ls -l dist/*.tar.gz dist/*.zip 2>/dev/null
+ls -l dist/*.tar.gz dist/*.zip 2>/dev/null || true   # macOS has no zip
