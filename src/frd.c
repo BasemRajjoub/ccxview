@@ -430,6 +430,8 @@ static void shear_order(cv_field_desc* d) {
 }
 
 #define PUSH(v, x) do { if (!cv_push((v), (x))) goto oom; } while (0)
+/* a field record; IRTYPE 3 (element-nodal values, FEMaster's per-element results) is not read */
+#define PUSH_FR do { if (elnod) msgf(f, c.line, false, "element-nodal result block skipped (IRTYPE 3)", 0); else PUSH(frecs, fr); } while (0)
 
 bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
     memset(f, 0, sizeof *f);
@@ -458,6 +460,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
 
     bool in_hdr = false;                        /* between -4 and the field's data */
     field_rec fr;
+    bool elnod = false;                         /* the field being read is IRTYPE 3 */
     int hdr_ncomp = 0, hdr_seen = 0;
     bool saw_end = false;
 
@@ -474,7 +477,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
             fr.d.line = c.line;
             if (fr.d.ncomp == 0) fr.d.ncomp = CV_MIN(CV_MAX(hdr_ncomp, 1), CV_MAX_COMP);
             shear_order(&fr.d);
-        PUSH(frecs, fr);
+        PUSH_FR;
             in_hdr = false;
             if (tok_is(k, ke, "-1")) {
                 const char *s2, *e2;
@@ -534,9 +537,10 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
                 if (fr.d.ncomp == 0) fr.d.ncomp = 1;
                 fr.d.n_rec = 0;
                 shear_order(&fr.d);
-                PUSH(frecs, fr);
+                PUSH_FR;
             }
             memset(&fr, 0, sizeof fr);
+            { long long irt = 0; elnod = nt > 3 && tok_int(tb[3], te[3], &irt) && irt == 3; }
             fr.step = (int)steps.n - 1;
             if (fr.step < 0) {                          /* field before any 100CL */
                 cv_step s0 = { .ictype = -1 };
@@ -577,7 +581,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
                     c.p += bytes;
                 }
                 shear_order(&fr.d);
-                PUSH(frecs, fr);
+                PUSH_FR;
                 in_hdr = false;
                 block = B_NONE;
             }
@@ -716,7 +720,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
         fr.d.data_off = size;
         if (fr.d.ncomp == 0) fr.d.ncomp = 1;
         shear_order(&fr.d);
-        PUSH(frecs, fr);
+        PUSH_FR;
     }
     if (!saw_end && size > 0)
         msgf(f, c.line, false, "file ends without the 9999 terminator (truncated?)", 0);
