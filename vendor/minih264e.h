@@ -372,8 +372,8 @@ void H264E_set_vbv_state(
 #include <endian.h>
 #elif defined(__APPLE__)
 #include <libkern/OSByteOrder.h>
-#define __BYTE_ORDER BYTE_ORDER
-#define __BIG_ENDIAN BIG_ENDIAN
+#define __BYTE_ORDER __BYTE_ORDER__
+#define __BIG_ENDIAN __ORDER_BIG_ENDIAN__
 #elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
 #include <sys/endian.h>
 #else
@@ -6291,18 +6291,20 @@ static void h264e_intra_predict_chroma(pix_t *predict, const pix_t *left, const 
         do
         {
             d[0] = d[1] = d[16] = intra_predict_dc(left, top, 2);
-            d[17] = intra_predict_dc(left + 4, top + 4, 2);
-            if (!IS_NULL(top))
+            const pix_t *l4 = IS_NULL(left) ? NULL : left + 4;   // no offsets from NULL: UB
+            const pix_t *t4 = IS_NULL(top) ? NULL : top + 4;
+            d[17] = intra_predict_dc(l4, t4, 2);
+            if (t4)
             {
-                d[1] = intra_predict_dc(NULL, top + 4, 2);
+                d[1] = intra_predict_dc(NULL, t4, 2);
             }
-            if (!IS_NULL(left))
+            if (l4)
             {
-                d[16] = intra_predict_dc(NULL, left + 4, 2);
+                d[16] = intra_predict_dc(NULL, l4, 2);
             }
             d += 2;
-            left += 8;
-            top += 8;
+            if (l4) left += 8;
+            if (t4) top += 8;
         } while(--cloop);
 
         do
@@ -10579,7 +10581,7 @@ static void mb_encode(h264e_enc_t *enc, int enc_type)
     if (enc->mb.type >= 5)
     {
         pix_t *pred = enc->ptest;
-        h264e_intra_predict_chroma(pred, left + 16, top + 16, enc->mb.i16.pred_mode_luma);
+        h264e_intra_predict_chroma(pred, left ? left + 16 : NULL, top ? top + 16 : NULL, enc->mb.i16.pred_mode_luma);
     } else
     {
         interpolate_chroma(enc, mb_abs_mv(enc, enc->mb.mv[0]));
