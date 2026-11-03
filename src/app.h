@@ -531,6 +531,7 @@ typedef struct {
     char      title_date_fmt[48];    /* {date}, {date_file}: strftime, %-d no leading zero */
     cv_anchor title_pos;             /* dragged to (unset: bottom-right) */
     bool      idle_redraw;           /* draw only when something changes (app_idle.c); off: every frame */
+    int       max_fps;               /* the most frames a second; 0: as the display goes (vsync) */
     bool      ndof_on;               /* a 3D mouse moves the camera (ndof.h); no device: nothing */
     float     ndof_speed;            /* its sensitivity, 1 = the default */
     bool      sidecar;               /* keep each model's post-processing in <model>.ccxview (app_sidecar.c) */
@@ -836,6 +837,7 @@ void app_refresh_range(void);
 bool app_busy(void);
 /* app_idle.c -- no redraw while nothing changes */
 void app_wake(void);                         /* draw the next few frames (an event, a change made outside a frame) */
+void app_wake_hover(void);    /* the mouse moved, no button down: fewer frames (HOVER_FPS) */
 bool app_redraw_needed(void);
 bool app_idle_skip(void);                    /* true: this frame is skipped (slept, no swap); call before any sg_ call */
 size_t app_total_msgs(void);

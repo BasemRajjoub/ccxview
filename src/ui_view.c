@@ -211,6 +211,9 @@ void section_view(struct nk_context* ctx, float s, float row) {
     }
 
     if (sub_push(ctx, "Display", CV_TREE_DISPLAY)) {
+        nk_layout_row_dynamic(ctx, row, 1);
+        tip(ctx, "The most frames a second, to save energy. 0: as the display goes (its refresh rate)");
+        nk_property_int(ctx, "#fps limit", 0, &G.max_fps, 1000, 10, 2.f);
         nk_layout_row_dynamic(ctx, row, 2);
         {
             nk_bool ax = !G.hide_axes;

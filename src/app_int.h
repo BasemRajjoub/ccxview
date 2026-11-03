@@ -58,6 +58,7 @@ typedef struct {
     bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */
     const char* view_file;      /* --view FILE: a saved view state, applied after load */
     bool        no_idle_skip;   /* --no-idle-skip: draw every frame, as before (app_idle.c) */
+    int max_fps; bool max_fps_set;   /* --max-fps: over the saved setting */
     bool        no_sidecar;     /* --no-sidecar: neither read nor write <model>.ccxview this run */
     bool        watch;          /* --watch: reload when the file changes */
     const char* compare;        /* --compare FILE */

@@ -102,7 +102,7 @@ static void init(void) {
     G.label_rgb[0] = 1.f; G.label_rgb[1] = 0.93f; G.label_rgb[2] = 0.6f;
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
-    G.idle_redraw = true;
+    G.idle_redraw = true;   /* G.max_fps 0: as the display goes */
     G.ndof_on = true; G.ndof_speed = 1.f;
     G.sidecar = true;                    /* each model's post-processing kept beside it */
     app_scl_clear();                     /* the first kept line's name */
@@ -166,6 +166,7 @@ static void init(void) {
     G.exp_video = true; G.exp_cycles = 1; G.exp_fps = 30; G.exp_lock_range = true;
     G.watch = O.watch;
     if (!O.ui_test) settings_load();     /* the user's last choices override the defaults above */
+    if (O.max_fps_set) G.max_fps = CV_MAX(O.max_fps, 0);
     for (int i = 0; i < O.nopts; i++)
         if (!settings_apply(O.opts[i])) fprintf(stderr, "ccxview: --opt %s: unknown key\n", O.opts[i]);
     app_colormap(G.cmap);
@@ -897,7 +898,9 @@ static void drag_move(float dx, float dy, bool shift) {
 }
 
 static void event(const sapp_event* ev) {
-    app_wake();                          /* any input: a few frames to draw it and let Nuklear settle */
+    /* any input: a few frames to draw it and let Nuklear settle; a mouse only passing by, fewer of them */
+    if (ev->type == SAPP_EVENTTYPE_MOUSE_MOVE && !drag.down && !(ev->modifiers & (SAPP_MODIFIER_LMB | SAPP_MODIFIER_RMB | SAPP_MODIFIER_MMB))) app_wake_hover();
+    else app_wake();
     if (ev->type == SAPP_EVENTTYPE_MOUSE_SCROLL && g_nk) ui_wheel_focus(g_nk);
     bool wheel = ev->type == SAPP_EVENTTYPE_MOUSE_SCROLL;
     bool over_ui = g_nk && ui_mouse_captured(g_nk, wheel);
@@ -1269,6 +1272,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--view") && i + 1 < argc) O.view_file = argv[++i];
         else if (!strcmp(argv[i], "--no-sidecar")) O.no_sidecar = true;
         else if (!strcmp(argv[i], "--no-idle-skip")) O.no_idle_skip = true;
+        else if (!strcmp(argv[i], "--max-fps") && i + 1 < argc) { O.max_fps = atoi(argv[++i]); O.max_fps_set = true; }
         else if (!strcmp(argv[i], "--watch")) O.watch = true;
         else if (!strcmp(argv[i], "--compare") && i + 1 < argc) O.compare = argv[++i];
         else if (!strcmp(argv[i], "--stl") && i + 1 < argc) { if (O.nstl < CV_MESH_N) O.stl[O.nstl++] = argv[i + 1]; i++; }

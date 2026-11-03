@@ -101,7 +101,7 @@ static const setting S[] = {
     SEC("Each model's post-processing (views, sets, paths, lines) kept in <model>.ccxview beside it: 1 on, 0 off"),
     B(sidecar),
     SEC("Draw only when something changes (0: every frame, if a driver misbehaves)"),
-    B(idle_redraw),
+    B(idle_redraw), I(max_fps, 0, 1000),
     SEC("3D mouse (SpaceMouse): on, sensitivity (no device is read yet)"),
     B(ndof_on), F(ndof_speed, 0.05f, 20),
     SEC("Display"),

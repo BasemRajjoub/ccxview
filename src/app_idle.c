@@ -23,33 +23,62 @@
 
 #define WAKE_FRAMES 4
 #define HEARTBEAT   2.0      /* s between forced frames when idle */
-#define IDLE_SLEEP  10       /* ms per skipped frame */
+#define IDLE_SLEEP  0.010    /* s per skipped frame */
+#define HOVER_FPS   30.0     /* the mouse moving with no button down: a highlight or a tooltip at most */
+#define GAP_SLACK   0.002    /* s: a vsync at the limit's own rate must not lose every other frame */
 
-static int g_left = WAKE_FRAMES;
+static int g_left = WAKE_FRAMES, g_hover;
 static double g_last_draw;
 
 void app_wake(void) { g_left = WAKE_FRAMES; }
+void app_wake_hover(void) { g_hover = WAKE_FRAMES; }
 
-bool app_redraw_needed(void) {
-    if (!G.idle_redraw || O.no_idle_skip) return true;
-    if (O.shot_path || ui_test_on() || O.export_anim || O.probe_set || O.menu_set || O.box_set || O.nselect || O.integ) return true;
-    if (app_busy() || G.video || G.seq_left > 0 || G.export_req || G.dlg_running) return true;
-    if (G.flight || G.anim_on || (G.playing && G.loaded && G.frd.n_steps > 1)) return true;
-    if (G.note[0] && cv_now() - G.note_t < 5.5) app_wake();          /* the status note fades out at 5 s */
-    if (g_left > 0) { g_left--; return true; }
-    double now = cv_now();
-    if (now - g_last_draw >= HEARTBEAT) return true;    /* one frame is enough: nothing changed */
-    return false;
+/* Sleep alone is about 15 ms on Windows, which would halve a limit of 60 fps */
+static void nap(double s) {
+#ifdef _WIN32
+    static HANDLE timer;
+    static bool tried;
+    if (!tried) { tried = true; timer = CreateWaitableTimerExW(NULL, NULL, 0x2 /* high resolution, Windows 10 */, TIMER_ALL_ACCESS); }
+    LARGE_INTEGER due;
+    due.QuadPart = -(LONGLONG)(s * 1e7);
+    if (timer && SetWaitableTimer(timer, &due, 0, NULL, NULL, FALSE)) { WaitForSingleObject(timer, INFINITE); return; }
+    Sleep((DWORD)(s * 1000 + 0.5));
+#elif !defined(__EMSCRIPTEN__)
+    nanosleep(&(struct timespec){ 0, (long)(s * 1e9) }, NULL);
+#else
+    (void)s;
+#endif
+}
+
+enum { DRAW_NONE, DRAW_PACED, DRAW_ALWAYS };
+
+/* why a frame is wanted; gap: the least time between such frames (G.max_fps; 0: as the display goes) */
+static int wanted(double now, double* gap) {
+    *gap = G.max_fps > 0 ? 1.0 / G.max_fps : 0;
+    if (!G.idle_redraw || O.no_idle_skip) return DRAW_ALWAYS;
+    if (O.shot_path || ui_test_on() || O.export_anim || O.probe_set || O.menu_set || O.box_set || O.nselect || O.integ) return DRAW_ALWAYS;
+    if (G.video || G.seq_left > 0 || G.export_req) return DRAW_ALWAYS;        /* frames written, not shown: never paced */
+    if (app_busy() || G.dlg_running || G.flight || G.anim_on || (G.playing && G.loaded && G.frd.n_steps > 1)) return DRAW_PACED;
+    if (G.note[0] && now - G.note_t < 5.5) app_wake();          /* the status note fades out at 5 s */
+    if (g_left > 0) return DRAW_PACED;
+    if (g_hover > 0) { if (*gap < 1.0 / HOVER_FPS) *gap = 1.0 / HOVER_FPS; return DRAW_PACED; }
+    if (now - g_last_draw >= HEARTBEAT) { *gap = 0; return DRAW_PACED; }    /* one frame is enough: nothing changed */
+    return DRAW_NONE;
 }
 
 /* the frame is drawn: stamp it; false: skipped (sleep, nothing swapped) */
 bool app_idle_skip(void) {
-    if (app_redraw_needed()) { g_last_draw = cv_now(); return false; }
-    if (!sapp_skip_present()) { g_last_draw = cv_now(); return false; }   /* cannot skip the swap here: draw */
-#ifdef _WIN32
-    Sleep(IDLE_SLEEP);
-#elif !defined(__EMSCRIPTEN__)
-    nanosleep(&(struct timespec){ 0, IDLE_SLEEP * 1000000L }, NULL);
+    double now = cv_now(), gap;
+    int w = wanted(now, &gap);
+    double wait = w == DRAW_NONE ? IDLE_SLEEP : w == DRAW_PACED ? gap - GAP_SLACK - (now - g_last_draw) : 0;
+    if (wait > 0 && sapp_skip_present()) {                      /* where it cannot skip the swap (macOS): draw */
+#ifndef __EMSCRIPTEN__
+        nap(wait < IDLE_SLEEP ? wait : IDLE_SLEEP);
 #endif
-    return true;
+        return true;
+    }
+    if (g_left > 0) g_left--;
+    else if (g_hover > 0) g_hover--;
+    g_last_draw = now;
+    return false;
 }
