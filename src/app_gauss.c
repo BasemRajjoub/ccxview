@@ -53,6 +53,7 @@ static void free_arrays(void) {
 }
 
 void gp_clear(void) {
+    nrec_clear();
     free_arrays();
     cv_dat_free(&P.dat);
     free(P.dat.msgs.a);
@@ -412,3 +413,5 @@ int gp_nearest(uint32_t e, const float hit[3], float scale) {
     int r = cv_datip_nearest(p, t.n, hit);
     return r < 0 ? 0 : t.ip[r];
 }
+
+const cv_dat_block* gp_block(void) { return P.on && P.block >= 0 ? &P.dat.b[P.block] : NULL; }

@@ -90,6 +90,7 @@ typedef struct {
     bool        xray;           /* --xray: Gauss points through the faces */
     bool        no_faces;       /* --no-faces */
     float       gp_size;        /* --gp-size N */
+    float       avg_pct;        /* --avg-pct N: nodal recovery on, averaging below N % */
     bool        no_edges;       /* --no-edges */
     float       outline;        /* --outline off|on|DEG: 0 off, > 0 the crease angle, < 0 unset */
     const char* argv_path;      /* the file to open */

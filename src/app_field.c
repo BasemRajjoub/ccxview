@@ -232,7 +232,9 @@ enum { ELEMTRI_MAX = 4000000 };
 #endif
 
 void refresh_tri_values(void) {
-    bool want = G.elem_mode && G.field_src != 1;
+    bool nrec = app_nrec_active();
+    if (nrec) nrec_apply();                    /* the averaging again: the shown elements or the threshold changed */
+    bool want = (G.elem_mode && G.field_src != 1) || nrec;
     if (!want || !G.has_field || !G.skin.n_tri) { cv_render_tri_values(NULL, 0); cv_render_aux(CV_AUX_ELEMTRI, NULL, NULL, NULL, 0); return; }
     if (G.skin.n_tri <= ELEMTRI_MAX) {
         size_t nv = G.skin.n_tri * 3;
@@ -248,7 +250,7 @@ void refresh_tri_values(void) {
                     CV_ASSERT(n < G.frd.n_nodes);
                     memcpy(pos + (3 * t + k) * 3, G.frd.xyz + 3 * n, 3 * sizeof(float));
                     if (disp) memcpy(disp + (3 * t + k) * 3, G.disp + 3 * n, 3 * sizeof(float));
-                    val[3 * t + k] = G.elem_val[e];
+                    val[3 * t + k] = nrec ? nrec_value(e, n) : G.elem_val[e];
                 }
             }
             cv_render_aux(CV_AUX_ELEMTRI, pos, disp, val, (uint32_t)nv);
@@ -262,7 +264,11 @@ void refresh_tri_values(void) {
     float* t = realloc(G.tri_val, G.skin.n_tri * sizeof(float));
     if (!t) { cv_render_tri_values(NULL, 0); return; }
     G.tri_val = t;
-    for (size_t i = 0; i < G.skin.n_tri; i++) { CV_ASSERT(G.skin.tri_elem[i] < G.frd.n_elems); t[i] = G.elem_val[G.skin.tri_elem[i]]; }
+    for (size_t i = 0; i < G.skin.n_tri; i++) {
+        uint32_t e = G.skin.tri_elem[i];
+        CV_ASSERT(e < G.frd.n_elems);
+        t[i] = nrec ? nrec_value(e, G.skin.tri[3 * i]) : G.elem_val[e];     /* one value per triangle here: its first corner's */
+    }
     cv_render_tri_values(t, G.skin.n_tri);
 }
 
@@ -347,7 +353,7 @@ void app_refresh_range(void) {
     size_t n = G.elem_mode ? G.frd.n_elems : G.frd.n_nodes;
     const uint32_t* ids = NULL;             /* the subset actually shown, when not everything */
     if (G.field_src == 1) {
-        gp_values(&v, &n);
+        if (app_nrec_active()) nrec_values(&v, &n); else gp_values(&v, &n);
     } else if (!G.elem_mode && G.skin.n_pt) {
         ids = G.skin.pt; n = G.skin.n_pt;
     }
@@ -375,17 +381,35 @@ void app_refresh_range(void) {
     }
 }
 
+/* the .dat field's legend: "Mises (Gauss)", or recovered at the nodes "Mises (Avg: 75%)" / "(not averaged)" as Abaqus */
+static void dat_label(void) {
+    cv_field_desc d;
+    char kind[96], head[64];
+    const char* o = gp_desc(G.field_name, &d) ? opt_label(&d, G.comp) : "?";
+    if (!app_nrec_active()) snprintf(kind, sizeof kind, "%s (Gauss)", o);
+    else if (G.avg_pct <= 0) snprintf(kind, sizeof kind, "%s (not averaged)", o);
+    else snprintf(kind, sizeof kind, "%s (Avg: %d%%)", o, (int)(G.avg_pct + 0.5f));
+    snprintf(head, sizeof head, "%s", G.field_name);
+    char* cut = strstr(head, " (");             /* "stresses (elem, integ.pnt.,sxx,...)": stresses */
+    if (cut) *cut = 0;
+    set_label(G.field_name, head, kind, G.field_name, G.comp);
+}
+
+/* the threshold or the averaging across materials changed: the faces, the legend and its range */
+void app_nrec_changed(void) {
+    if (!app_nrec_active()) return;
+    dat_label();
+    refresh_tri_values();
+    app_refresh_range();
+}
+
 static void refresh_field_dat(void) {
     G.has_field = gp_refresh();
     cv_render_scalar(NULL, 0);                  /* no nodal values: nodes/edges go plain */
+    nrec_compute();                             /* frees its values when the mode is off */
     if (G.has_field) {
-        cv_field_desc d;
-        char kind[64], head[64];
-        snprintf(kind, sizeof kind, "%s (Gauss)", gp_desc(G.field_name, &d) ? opt_label(&d, G.comp) : "?");
-        snprintf(head, sizeof head, "%s", G.field_name);
-        char* cut = strstr(head, " (");             /* "stresses (elem, integ.pnt.,sxx,...)": stresses */
-        if (cut) *cut = 0;
-        set_label(G.field_name, head, kind, G.field_name, G.comp);
+        dat_label();
+        if (app_nrec_active()) refresh_tri_values();    /* before the range: it applies the averaging */
         app_refresh_range();
     } else {
         char t[96];

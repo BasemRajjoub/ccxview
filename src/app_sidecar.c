@@ -690,7 +690,7 @@ typedef struct { const char* key; char kind; void* p; float lo, hi; } plain;
 static const plain PLAIN[] = {
     PB(show_bc), PB(show_loads), PB(show_disc), PB(show_links), PB(show_hl), PF(hl_size, 0.5f, 64),
     PF(bc_scale, 0.01f, 100), PF(load_scale, 0.01f, 100), PB(sym_auto), PF(sym_size, 0, 1e30f), PF(sym_thick, 0.1f, 10), PB(sym_thin),
-    PB(show_outline), PB(edges_field), PB(nodes_field), PF(point_size, 0.5f, 64), PB(gp_colored), PF(gp_size, 0.5f, 256),
+    PB(show_outline), PB(edges_field), PB(nodes_field), PF(point_size, 0.5f, 64), PB(gp_colored), PF(gp_size, 0.5f, 256), PB(nodal_recovery), PF(avg_pct, 0, 100), PB(avg_across_materials),
     PB(vec_colored), PF(vec_pct, 0.01f, 100), PB(tensor_colored), PF(tensor_scale, 0.01f, 100), PF(traj_spacing, 0.2f, 50),
     PB(center_zero), PB(legend_reverse), PB(legend_grey), PI(legend_fmt, 0, 2), PI(legend_decimals, 0, 9),
     { "oor_above", 'i', &G.oor_mode[0], 0, 3 }, { "oor_below", 'i', &G.oor_mode[1], 0, 3 },

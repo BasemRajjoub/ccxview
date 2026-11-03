@@ -49,7 +49,7 @@ cv_app G;
 static struct nk_context* g_nk;
 static void app_log(const char* tag, uint32_t level, uint32_t item, const char* msg, uint32_t line,
                     const char* file, void* user);
-cv_opts O = { .stl_alpha = -1, .faces = -1, .tensor = -1, .traj = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30 };
+cv_opts O = { .stl_alpha = -1, .faces = -1, .tensor = -1, .traj = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30, .avg_pct = -1 };
 static struct nk_context* g_nk;
 
 /* ---- sokol callbacks --------------------------------------------------------------- */
@@ -112,6 +112,7 @@ static void init(void) {
     G.gp_colored = true;
     G.gp_size = 6.f;
     G.gp_on_top = false;                 /* a point inside a shown solid stays hidden */
+    G.nodal_recovery = false; G.avg_pct = 75.f; G.avg_across_materials = true;
     G.show_hl = true;
     G.show_bc = G.show_loads = G.show_disc = G.show_links = true;
     G.vec_colored = true;
@@ -178,6 +179,7 @@ static void init(void) {
     if (O.bg_set) memcpy(G.bg, O.bg, sizeof G.bg);
     if (O.ui_test) { ui_test_start(O.ui_test, event); G.native_dlg_missing = true; }   /* never the system's dialog on the desktop of whoever runs it */
     if (O.gp_size > 0) G.gp_size = O.gp_size;
+    if (O.avg_pct >= 0) { G.nodal_recovery = true; G.avg_pct = fminf(O.avg_pct, 100.f); }
     if (O.gp_under) G.gp_on_top = false;
     if (O.xray) G.gp_on_top = true;
     if (O.no_faces) G.show_faces = G.show_edges = false;   /* points only */
@@ -446,8 +448,9 @@ static void frame(void) {
             d.oor[k][3] = m == 3 ? 3.f : m ? 1.f : 0.f;
         }
         /* a .dat field lives on the Gauss points only: the faces stay plain */
-        int fm = (!G.has_field || G.field_src == 1) ? CV_COLOR_SOLID
-               : G.elem_mode ? CV_COLOR_ELEM : CV_COLOR_NODAL;
+        bool nrec = app_nrec_active();
+        int fm = (!G.has_field || (G.field_src == 1 && !nrec)) ? CV_COLOR_SOLID
+               : (G.elem_mode || nrec) ? CV_COLOR_ELEM : CV_COLOR_NODAL;
         d.faces = G.show_faces;
         d.faces_color = G.faces_mode == FM_FIELD ? fm
                       : G.faces_mode == FM_PLAIN ? CV_COLOR_SOLID : CV_COLOR_GROUP;
@@ -1288,6 +1291,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
             O.outline = !strcmp(v, "off") ? 0.f : !strcmp(v, "on") ? CV_CREASE_DEG : fminf(fmaxf((float)atof(v), 0.1f), 180.f);
         }
         else if (!strcmp(argv[i], "--gp-size") && i + 1 < argc) O.gp_size = (float)atof(argv[++i]);
+        else if (!strcmp(argv[i], "--avg-pct") && i + 1 < argc) O.avg_pct = fmaxf((float)atof(argv[++i]), 0.f);
         else if (!strcmp(argv[i], "--crop") && i + 1 < argc)
             O.crop_set = sscanf(argv[++i], "%f,%f,%f,%f,%f,%f", &O.crop[0], &O.crop[1], &O.crop[2],
                                 &O.crop[3], &O.crop[4], &O.crop[5]) == 6;

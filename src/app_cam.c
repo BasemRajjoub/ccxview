@@ -492,7 +492,8 @@ void app_probe_at(uint32_t i, bool element) {
     G.probe_on = e != UINT32_MAX;
     G.probe_ip = G.probe_dip = 0;
     G.boxq.on = false;
-    G.probe_value = !G.has_field ? NAN : G.elem_mode ? (e != UINT32_MAX ? G.elem_val[e] : NAN) : G.scalar[n];
+    G.probe_value = !G.has_field ? NAN : app_nrec_active() ? (e != UINT32_MAX ? nrec_value(e, n) : NAN)
+                  : G.elem_mode ? (e != UINT32_MAX ? G.elem_val[e] : NAN) : G.scalar[n];
     app_pick_clear();
 }
 
@@ -766,7 +767,10 @@ static void probe_px(float px, float py, bool keep) {
         if (G.field_src == 1 && G.has_field) {    /* the integration point nearest the click */
             float h[3] = { o[0] + d[0] * G.probe.t, o[1] + d[1] * G.probe.t, o[2] + d[2] * G.probe.t };
             int ip; float v;
-            if (gp_probe(G.probe.elem, h, sc, &ip, &v)) { G.probe_ip = ip; G.probe_value = v; }
+            if (gp_probe(G.probe.elem, h, sc, &ip, &v)) {
+                G.probe_ip = app_nrec_active() ? 0 : ip;     /* recovered: the value at this element's node, not a point */
+                G.probe_value = app_nrec_active() ? nrec_value(G.probe.elem, G.probe.node) : v;
+            }
         }
         if (gp_loaded()) {                        /* for the Inspector's table, whatever field shows */
             float h[3] = { o[0] + d[0] * G.probe.t, o[1] + d[1] * G.probe.t, o[2] + d[2] * G.probe.t };

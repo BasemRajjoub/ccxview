@@ -125,11 +125,45 @@ void uii_field_options(struct nk_context* ctx, float s, float row, const cv_fiel
     nk_tree_state_pop(ctx);
 }
 
+/* nodal values extrapolated from the points, averaged at the nodes by Abaqus' threshold rule (app_nrec.c) */
+static void gauss_recovery_rows(struct nk_context* ctx, float row, const char* name) {
+    static bool pending;                           /* a change of the threshold; on a huge model it applies on release */
+    bool active = G.field_src == 1 && strcmp(name, G.field_name) == 0;
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "Nodal values extrapolated from the integration points of each element (the .frd's are the solver's, already averaged).\n"
+             "Needs the points in the .dat (*EL PRINT)");
+    bool on = G.nodal_recovery;
+    if (nk_checkbox_label(ctx, "from integration points", &on)) {
+        G.nodal_recovery = on;
+        if (active) app_select(G.field_name, G.comp);
+        else if (on) {
+            cv_field_desc d;
+            cv_scalar_opt o[CV_MAX_OPTS];
+            int n = gp_desc(name, &d) ? cv_field_options(&d, o, CV_MAX_OPTS) : 0, c = n ? o[0].comp : 0;
+            for (int i = 0; i < n; i++) if (o[i].comp == CV_COMP_MISES) c = o[i].comp;
+            app_pick_field(name, c, 1);
+        }
+    }
+    if (!G.nodal_recovery) return;
+    char lab[48];
+    snprintf(lab, sizeof lab, G.avg_pct < 0.5f ? "average below 0 %% (not averaged)" : "average below %d %%", (int)(G.avg_pct + 0.5f));
+    nk_layout_row_dynamic(ctx, row, 1);
+    nk_label(ctx, lab, NK_TEXT_LEFT);
+    tip(ctx, "A node shared by elements is averaged where their values differ by at most this share of the range shown;\n"
+             "above it each element keeps its own value (the jump stays). 0 = nothing averaged, 100 = everything");
+    if (ui_slider_float(ctx, 0.f, &G.avg_pct, 100.f, 1.f)) pending = true;
+    tip(ctx, "Do not average where elements of different materials meet");
+    bool apart = !G.avg_across_materials;
+    if (nk_checkbox_label(ctx, "keep materials apart", &apart)) { G.avg_across_materials = !apart; pending = true; }
+    if (pending && (!nrec_big() || !nk_input_is_mouse_down(&ctx->input, NK_BUTTON_LEFT))) { pending = false; app_nrec_changed(); }
+}
+
 void uii_gauss_options(struct nk_context* ctx, float s, float row, const char* name) {
     (void)s;
     char key[48];
     snprintf(key, sizeof key, "%s.dat/options", name);
     if (!nk_tree_state_push(ctx, NK_TREE_NODE, "options", (enum nk_collapse_states*)uii_fnode_state(key, false))) return;
+    gauss_recovery_rows(ctx, row, name);
     nk_layout_row_dynamic(ctx, row, 2);
     tip(ctx, "The integration points, where the .dat has its values (also under Layers)");
     if (nk_checkbox_label(ctx, "Gauss points", &G.show_gp)) app_gauss_changed();

@@ -398,6 +398,25 @@ static void insp_scroll(struct nk_context* ctx, nk_uint y) { struct nk_window* w
 static void insp_end(struct nk_context* ctx) { insp_scroll(ctx, 100000); }   /* Nuklear clamps it to the content */
 static bool ip_on_model(struct nk_context* ctx) { return G.field_src == 1 && G.show_gp && G.has_field; }
 static void ip_back(struct nk_context* ctx) { G.field_src = 0; select_stress(ctx); gauss_off(ctx); G.probe_on = false; insp_scroll(ctx, 0); }
+/* the .dat field's options in Fields: "from integration points" and the averaging threshold */
+static void nrec_open(struct nk_context* ctx) {
+    const char* nm[1];
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_FIELDS;
+    G.nodal_recovery = false; G.avg_pct = 75.f;
+    if (!gp_fields(nm, 1)) return;
+    char t[96];
+    snprintf(t, sizeof t, "%s (.dat)", nm[0]);
+    *uii_fnode_state("STRESS", true) = 0; *uii_fnode_state("DISP", true) = 0; *uii_fnode_state(t, true) = 1;
+    snprintf(t, sizeof t, "%s.dat/options", nm[0]);
+    *uii_fnode_state(t, false) = 1;
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 100000;   /* clamped to the end: the .dat fields are the last */
+}
+static bool nrec_shown(struct nk_context* ctx) { return G.nodal_recovery && app_nrec_active() && strstr(G.legend_lines[1], "Avg: 75%"); }
+static bool nrec_half(struct nk_context* ctx) { return app_nrec_active() && fabsf(G.avg_pct - 50.f) < 2.f && strstr(G.legend_lines[1], "Avg: 50%"); }
+static void nrec_off(struct nk_context* ctx) {
+    G.nodal_recovery = false; G.avg_pct = 75.f; G.field_src = 0; select_stress(ctx); sections_open(ctx);
+    struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
+}
 static void labels_off(struct nk_context* ctx) { G.label_kinds = 0; G.label_px = 13.f; app_label_changed(); sections_open(ctx); }
 /* labels moved by hand: node ids in front, a label found by its box near the view's middle */
 static bool turned(struct nk_context* ctx);
@@ -1327,6 +1346,12 @@ static const step script[] = {
     DO(probe_dat_elem), WAIT(3), EXPECT(ip_group_shown, "the integration points group shows"), DO(insp_end), WAIT(3),
     AT_TIP("Inspector", "Colour the Gauss points by this .dat field"), CLICK, WAIT(3),
     EXPECT(ip_on_model, "the .dat field on the Gauss points"), DO(ip_back), WAIT(2),
+
+    CASE("fields: a .dat field recovered at the nodes, the threshold slider answers"),
+    DO(close_all), DO(nrec_open), WAIT(3),
+    AT_TIP("Scene", "Nodal values extrapolated from the integration points"), CLICK, WAIT(4), EXPECT(nrec_shown, "recovered, (Avg: 75%) in the legend"),
+    AT_TIP("Scene", "A node shared by elements is averaged"), CLICK, WAIT(4), EXPECT(nrec_half, "the slider sets 50 %"),
+    DO(nrec_off), WAIT(2), PANELS_ANSWER,
 
     CASE("toolbar: one list after the other, no pause"),
     DO(snapshot), AT_TIP("Toolbar", TIP_CMAP), CLICK, EXPECT(toolbar_popup, "the colour map list opens"),

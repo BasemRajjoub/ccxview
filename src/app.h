@@ -186,6 +186,9 @@ typedef struct {
     bool      gp_colored;
     float     gp_size;
     bool      gp_on_top;      /* Gauss points drawn through the faces */
+    bool      nodal_recovery; /* a .dat field as nodal values extrapolated from its points (app_nrec.c) */
+    float     avg_pct;        /* averaged at a node where the variation is at most this many % of the range; 0 never, 100 always */
+    bool      avg_across_materials;
     int       probe_ip;       /* point hit by the probe (1-based), 0 none */
     int       probe_dip;      /* the .dat point nearest the click, whatever field shows (1-based), 0 none */
     char      field_label[96];   /* with the unit in [] when a unit set is chosen */
@@ -888,6 +891,17 @@ bool gp_probe(uint32_t e, const float hit[3], float scale, int* ip, float* value
 bool gp_sibling(const char* frd_path, char* out, size_t n);
 const cv_dat_block* gp_table(uint32_t e, cv_datip* t);   /* the Inspector's table: e's points */
 int  gp_nearest(uint32_t e, const float hit[3], float scale);
+const cv_dat_block* gp_block(void);     /* the .dat block on the model, NULL none */
+
+/* app_nrec.c: a .dat field recovered at the nodes (G.nodal_recovery) */
+bool  app_nrec_active(void);            /* the model shows it */
+void  nrec_clear(void);
+bool  nrec_compute(void);               /* the per element-node values from gp_block, after gp_refresh */
+void  nrec_apply(void);                 /* the averaging, G.avg_pct; hidden elements out */
+float nrec_value(uint32_t e, uint32_t node);   /* NaN none */
+void  nrec_values(const float** v, size_t* n); /* per connectivity slot, as averaged */
+bool  nrec_big(void);                   /* so many slots that the slider applies on release */
+void  app_nrec_changed(void);           /* the setting changed: legend, faces, range */
 
 /* app_deck.c: the input deck -- sets, surfaces, materials */
 void deck_set(cv_inp* d, const char* path);

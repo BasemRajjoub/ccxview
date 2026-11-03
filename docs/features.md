@@ -128,6 +128,25 @@ to it. Contact is the first subgroup (see Contact and ties).
   stress, in the units shown; the point nearest the click marked. "show on
   model" colours the Gauss points by it; on the tag (`--tag-groups ip`), in
   "copy all". Loading a `.dat` says where its fields are.
+- Nodal values from the integration points (#36, #37): a `.dat` field's "from
+  integration points" (its options in Fields) draws the faces with values
+  extrapolated to each element's nodes (hex, tet, wedge, shell-as-hex: the
+  least-squares fit of the lower order field through the points, one point: the
+  constant; mid-side nodes the mean of their corners, as CalculiX) and then
+  averaged at a node by Abaqus' rule: the elements' values there differing by
+  at most "average below %" of the range shown are replaced by their mean, else
+  each keeps its own and the jump shows (0 = not averaged, 100 = all averaged,
+  default 75; "keep materials apart" never averages across a material
+  boundary). The scalar (Mises, a principal value, a component) is taken per
+  element and node first, then averaged, so at 100 % von Mises differs a little
+  from the `.frd`'s, which averages the components (the showcase: median 0.004 %,
+  at most 6 % at the hole). The legend reads `(Avg: 75%)` or `(not averaged)`;
+  probe, tag and Inspector give the value at that element's node. `--avg-pct N`,
+  keys `nodal_recovery`, `avg_pct`, `avg_across_materials`. Needs the points
+  printed (`*EL PRINT, ELSET=...` with `S`); elements without records stay grey.
+  A million elements recompute in a fraction of a second on a field, step or
+  component change and the slider then applies on release. FEMaster's element
+  nodal blocks (IRTYPE=3) are not read yet.
 - Principal stresses, von Mises, magnitudes; cylindrical coordinate systems.
 - Results CalculiX wrote in local systems (`*TRANSFORM`, `*ORIENTATION`, shells)
   are turned back to global with the deck beside them.

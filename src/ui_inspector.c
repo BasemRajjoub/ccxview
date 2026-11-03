@@ -80,6 +80,7 @@ void uii_pane_button(struct nk_context* ctx, int which) {
    (an integration point keeps the value found then) */
 static float probe_value_now(void) {
     if (!G.has_field) return NAN;
+    if (app_nrec_active()) return nrec_value(G.probe.elem, G.probe.node);
     if (G.probe_ip) return G.probe_value;
     if ((G.elem_mode || G.field_src == 1) && G.elem_val) return G.elem_val[G.probe.elem];
     return G.scalar ? G.scalar[G.probe.node] : NAN;

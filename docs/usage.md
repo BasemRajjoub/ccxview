@@ -39,6 +39,9 @@ ccxview plate.frd --field SHELL:Mxx         # shell section forces (with the dec
 ccxview slab.frd --field REBAR:As_x_bot --opt rebar_fcd=20 --opt rebar_fyd=435 --opt rebar_cover=40 --rebar-window
                                             # concrete shell reinforcement per width: As_x_top As_x_bot As_y_top
                                             #   As_y_bot As_max As_total Conc_ratio Crushing (model units)
+ccxview model.frd --gauss --avg-pct 75      # the .dat field as nodal values from the integration points, averaged below 75 %
+                                            #   of the range (0: not averaged, 100: averaged); needs *EL PRINT, S (or another
+                                            #   field) at the points in the deck; elements it did not print stay grey
 ccxview model.frd --calc "S1 - S3"          # a calculated field (Tresca)
 ccxview model.frd --formula-lib my.txt      # the saved formulas (Calculated > Saved formulas): "name = expression" per line,
                                             #   # comments; default ccxview_formulas.txt beside the ini; Import... merges a file
