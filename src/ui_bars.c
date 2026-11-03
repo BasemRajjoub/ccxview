@@ -625,8 +625,9 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
         snprintf(mid, sizeof mid, "STL geometry (%s)   %u vertices   %u triangles   no results   loaded in %.2f s",
                  G.stl_binary ? "binary" : "ASCII", G.frd.n_nodes, G.frd.n_elems, G.load_seconds);
     else if (G.loaded)
-        snprintf(mid, sizeof mid, "%u nodes   %u elements   %d steps   %zu triangles   loaded in %.2f s%s",
+        snprintf(mid, sizeof mid, "%u nodes   %u elements   %d steps   %zu triangles   loaded in %.2f s%s%s%s",
                  G.frd.n_nodes, G.frd.n_elems, G.frd.n_steps, G.skin.n_tri, G.load_seconds,
+                 G.frd.head.pgm[0] || !G.frd.head.code[0] ? "" : "   solver ", G.frd.head.pgm[0] ? "" : G.frd.head.code,
                  gp_loaded() ? (deck_loaded() ? "   + .inp + .dat" : "   + .dat") : (deck_loaded() ? "   + .inp" : ""));
     else if (app_busy())
         snprintf(mid, sizeof mid, "loading... %.1f s", cv_now() - G.job.started);

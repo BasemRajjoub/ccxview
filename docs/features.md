@@ -814,6 +814,18 @@ sequence of a deformation cycle or of every step, CSV, VTK for ParaView, and a
 view file to reproduce a picture later. All
 available from the command line for scripting ([usage.md](usage.md)).
 
+## FEMaster results
+
+`.frd` files from FEMaster (`1CFEMAST`) read like CalculiX's, with these differences
+handled at load. Tensors (STRESS, TOSTRAIN, STRPOS, STRMID, STRNEG, STRREAL ...) are
+written XX YY ZZ YZ ZX XY; ccxview reorders names and values to XX YY ZZ XY YZ ZX,
+so von Mises and principal values work as usual. Six-component DISP / FORC
+(D1..D6, F1..F6) offer `|DISP|` / `|FORC|` over the first three components; D4..D6 and
+F4..F6 (rotations, moments) show without a unit. SHR (NXX NYY NXY MXX MYY MXY QX QY)
+is an ordinary field in force/length and moment/length. DISPREAL / DISPIMAG drive the
+deformation and the harmonic animation like DISP / DISPI. The solver code shows in the
+Inspector and the status bar. Element-nodal records are not read.
+
 ## Settings and crashes
 
 Settings (in sections in `ccxview.ini`, beside the executable), open panel

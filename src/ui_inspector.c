@@ -153,6 +153,11 @@ static void model_summary(struct nk_context* ctx, float s, float row) {
     nk_label_colored(ctx, cv_basename(G.path), NK_TEXT_LEFT, P.accent);
     snprintf(t, sizeof t, "%u nodes, %u elements", G.frd.n_nodes, G.frd.n_elems);
     nk_label(ctx, t, NK_TEXT_LEFT);
+    const cv_frd_head* hd = &G.frd.head;
+    if (hd->pgm[0] || hd->code[0]) {                 /* the solver: PGM (CalculiX) else the 1C code (FEMAST) */
+        snprintf(t, sizeof t, "solver: %s", hd->pgm[0] ? hd->pgm : hd->code);
+        nk_label(ctx, t, NK_TEXT_LEFT);
+    }
     if (G.frd.n_steps > 0) {
         const cv_step* st = &G.frd.steps[G.step];
         snprintf(t, sizeof t, "step %d  increment %d  (%d of %d)", st->step, st->inc, G.step + 1, G.frd.n_steps);

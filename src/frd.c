@@ -709,7 +709,8 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
         }
         if (tok_is(k, ke, "9999")) { saw_end = true; break; }
         if (ke - k >= 2 && k[0] == '1' && k[1] == 'U') { head_record(&f->head, k + 2, le); continue; }
-        /* 1C and anything unknown: ignored. */
+        if (ke - k >= 2 && k[0] == '1' && k[1] == 'C') { copy_trim(f->head.code, sizeof f->head.code, k + 2, le); continue; }
+        /* anything unknown: ignored. */
     }
     if (in_hdr) {                               /* file ended inside a field header */
         fr.d.data_off = size;

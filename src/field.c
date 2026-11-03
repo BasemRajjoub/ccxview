@@ -143,9 +143,19 @@ void cv_cyl_comp_name(const cv_field_desc* d, int c, char out[12]) {
     }
 }
 
+int cv_vec_comps(const cv_field_desc* d) {
+    if (d->ncomp == 3) return 3;
+    if (d->ncomp != 6 || tensor_order(d) || is_stress(d->name)) return 0;
+    for (int c = 0; c < 3; c++) {
+        size_t k = strlen(d->comp[c]);
+        if (k < 1 || d->comp[c][k - 1] != '1' + c) return 0;
+    }
+    return 3;
+}
+
 int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
     int n = 0;
-    if (d->ncomp == 3 && n < max) {
+    if (cv_vec_comps(d) && n < max) {
         snprintf(out[n].label, sizeof out[n].label, "|%s|", d->name);
         out[n++].comp = CV_COMP_MAG;
     }
@@ -297,7 +307,7 @@ void cv_field_scalar(const float* v, int nc, uint32_t n, int comp, float* out) {
         if (comp >= 0) out[i] = comp < nc ? r[comp] : NAN;
         else if (comp == CV_COMP_MAG) {
             double s = 0;
-            for (int c = 0; c < nc; c++) s += (double)r[c] * r[c];
+            for (int c = 0; c < (nc > 3 ? 3 : nc); c++) s += (double)r[c] * r[c];   /* 6 comps: the first 3 (D1..D3) */
             out[i] = (float)sqrt(s);                 /* NaN propagates */
         } else if (comp == CV_COMP_MISES && nc >= 6) {
             out[i] = cv_von_mises(r);

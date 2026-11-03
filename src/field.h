@@ -32,6 +32,9 @@ void  cv_principal(const float s[6], bool xz_order, float out[3]);
 
 /* 0: not a tensor; 1: shears XY YZ ZX (.frd); 2: shears xy xz yz (.dat). */
 int   cv_tensor_order(const cv_field_desc* d);
+/* 3 for a vector (3 comps, or FEMaster's D1..D6 / F1..F6: the first 3 are the vector,
+   the rest rotations / moments), else 0 */
+int   cv_vec_comps(const cv_field_desc* d);
 
 /* Cylindrical coordinates about an axis (0 X, 1 Y, 2 Z) through o: r, t (hoop), a (axial).
    Q holds the unit vectors e_r, e_t, e_a as rows; on the axis e_r is any normal. */

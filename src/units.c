@@ -206,11 +206,12 @@ bool cv_unit_conv(int sys, int temp, int in, int q, int show, double* k, double*
 
 int cv_field_quantity(const char* f, int comp) {
     static const struct { const char* name; int q; } T[] = {
-        { "DISP", CV_Q_LEN }, { "DISPI", CV_Q_LEN }, { "MDISP", CV_Q_LEN }, { "MAXU", CV_Q_LEN },
-        { "STRESS", CV_Q_STRESS }, { "STRESSI", CV_Q_STRESS }, { "ZZSTR", CV_Q_STRESS },
+        { "DISP", CV_Q_LEN }, { "DISPI", CV_Q_LEN }, { "DISPREAL", CV_Q_LEN }, { "DISPIMAG", CV_Q_LEN }, { "MDISP", CV_Q_LEN }, { "MAXU", CV_Q_LEN },
+        { "STRESS", CV_Q_STRESS }, { "STRESSI", CV_Q_STRESS }, { "STRPOS", CV_Q_STRESS }, { "STRMID", CV_Q_STRESS },
+        { "STRNEG", CV_Q_STRESS }, { "STRREAL", CV_Q_STRESS }, { "STRIMAG", CV_Q_STRESS }, { "STRNREAL", CV_Q_STRESS }, { "STRNIMAG", CV_Q_STRESS }, { "ZZSTR", CV_Q_STRESS },
         { "ZZSTRI", CV_Q_STRESS }, { "MAXS", CV_Q_STRESS }, { "PRESS", CV_Q_STRESS },
         { "PS3DF", CV_Q_STRESS }, { "PT3DF", CV_Q_STRESS },
-        { "FORC", CV_Q_FORCE }, { "FORCI", CV_Q_FORCE }, { "RF", CV_Q_FORCE },
+        { "FORC", CV_Q_FORCE }, { "FORCI", CV_Q_FORCE }, { "EXTFORC", CV_Q_FORCE }, { "INTFORC", CV_Q_FORCE }, { "RF", CV_Q_FORCE },
         { "NDTEMP", CV_Q_TEMP }, { "NT", CV_Q_TEMP }, { "TS3DF", CV_Q_TEMP }, { "TT3DF", CV_Q_TEMP },
         { "TOSTRAIN", CV_Q_STRAIN }, { "MESTRAIN", CV_Q_STRAIN }, { "TOSTRAII", CV_Q_STRAIN },
         { "MESTRAII", CV_Q_STRAIN }, { "PE", CV_Q_STRAIN }, { "PEEQ", CV_Q_STRAIN },
@@ -227,12 +228,17 @@ int cv_field_quantity(const char* f, int comp) {
     };
     if (!f) return -1;
     if (!strcmp(f, "REBAR")) return comp >= 0 && comp < 6 ? CV_Q_AREA_LEN : -1;    /* As_x_top .. As_total | ratio, flag */
-    if (!strcmp(f, "SHELL")) return comp >= 3 && comp <= 5 ? CV_Q_MOMENT_LEN : comp >= 0 && comp < 8 ? CV_Q_FORCE_LEN : -1;
+    if (!strcmp(f, "SHELL") || !strcmp(f, "SHR")) return comp >= 3 && comp <= 5 ? CV_Q_MOMENT_LEN : comp >= 0 && comp < 8 ? CV_Q_FORCE_LEN : -1;
     /* complex results: amplitudes then phases (MAG1 .. MAG3 PHA1 .. PHA3; MAGXX .. MAGZX
        PHAXX .. PHAZX); a phase is an angle in degrees, no unit of the system */
     if (!strncmp(f, "PDISP", 5) && (f[5] == 0 || f[5] == ' ')) return comp >= 3 ? -1 : CV_Q_LEN;
     if (!strncmp(f, "PSTRESS", 7) && (f[7] == 0 || f[7] == ' ')) return comp >= 6 ? -1 : CV_Q_STRESS;
     if (!strcmp(f, "CONTACT")) return comp >= 0 && comp < 3 ? CV_Q_LEN : CV_Q_STRESS;   /* COPEN CSLIP1 CSLIP2 | CPRESS CSHEAR1 CSHEAR2 */
+    /* D4..D6 are rotations, F4..F6 moments (FEMaster writes 6 comps): no unit of the system */
+    static const char* const six[] = { "DISP", "DISPI", "DISPREAL", "DISPIMAG", "FORC", "EXTFORC", "INTFORC" };
+    if (comp >= 3)
+        for (size_t i = 0; i < sizeof six / sizeof six[0]; i++)
+            if (!strcmp(f, six[i])) return -1;
     for (size_t i = 0; i < sizeof T / sizeof T[0]; i++) {
         size_t n = strlen(T[i].name);
         if (!strncmp(f, T[i].name, n) && (f[n] == 0 || f[n] == ' ' || f[n] == '(')) return T[i].q;

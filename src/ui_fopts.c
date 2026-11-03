@@ -109,7 +109,7 @@ static void tensor_rows(struct nk_context* ctx, float s, float row, const cv_fie
 }
 
 void uii_field_options(struct nk_context* ctx, float s, float row, const cv_field_desc* d, bool active) {
-    bool ten = cv_tensor_order(d) != 0, vec = d->ncomp == 3 && !ten, rb = !strcmp(d->name, "REBAR");
+    bool ten = cv_tensor_order(d) != 0, vec = cv_vec_comps(d) && !ten, rb = !strcmp(d->name, "REBAR");
     if (!ten && !vec && !rb) return;
     char key[48];
     snprintf(key, sizeof key, "%s/options", d->name);
