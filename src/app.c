@@ -382,14 +382,21 @@ static void frame(void) {
     update_title();
     tick_anim();
     tick_flight();
-    {   /* a 3D mouse, when there is one (no backend yet: cv_ndof_open says no) */
+    {   /* a 3D mouse, when there is one (macOS backend only so far; elsewhere cv_ndof_open says no) */
         static bool tried, have;
         static double last;
         if (G.ndof_on && !tried) { tried = true; have = cv_ndof_open(); }
         if (G.ndof_on && have) {
             cv_ndof_state ns;
             double now = cv_now();
-            if (cv_ndof_poll(&ns)) app_ndof_apply(&ns, (float)CV_MIN(CV_MAX(now - last, 0.0), 0.1));
+            if (cv_ndof_poll(&ns)) {
+                static unsigned old;
+                unsigned down = ns.buttons & ~old;   /* button 1 fits the model, button 2 resets the view */
+                old = ns.buttons;
+                if (down & 1u) app_fit();
+                if (down & 2u) app_view(CV_VIEW_ISO);
+                app_ndof_apply(&ns, (float)CV_MIN(CV_MAX(now - last, 0.0), 0.1));
+            }
             last = now;
         }
     }

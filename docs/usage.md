@@ -205,6 +205,8 @@ It prints what it selected and the field's max and min over it.
 
 ## Mouse and keys
 
+3D mouse (SpaceMouse): macOS only so far, and only with 3Dconnexion's driver (3DxWare) installed; it moves the model like a hand holding it (ini `ndof_on`, `ndof_speed`); button 1 fits the model, button 2 resets to the iso view.
+
 | Input | Action |
 |---|---|
 | left drag / right or middle drag / wheel | orbit / pan / zoom, about the point under the cursor (View panel: up axis Y or Z, turntable (endless, over the poles too) or free rotation, cursor pivot on/off, rotation centre mark) |

@@ -26,4 +26,9 @@ static void test_ndof(void) {
     CHECK_NEAR(c.pitch, 1.5, 1e-6);
     CHECK_NEAR(c.yaw, -1.5, 1e-6);
     CHECK_NEAR(c.roll, 1.5, 1e-6);
+    int16_t raw[6] = { 350, 175, -700, 350, 0, -350 };   /* TX TY TZ RX RY RZ; beyond full travel clamps */
+    cv_ndof_state r;
+    cv_ndof_from_raw(raw, &r);
+    CHECK_NEAR(r.t[0], 1.0, 1e-6); CHECK_NEAR(r.t[1], 1.0, 1e-6); CHECK_NEAR(r.t[2], 0.5, 1e-6);
+    CHECK_NEAR(r.r[0], -1.0, 1e-6); CHECK_NEAR(r.r[1], -1.0, 1e-6); CHECK_NEAR(r.r[2], 0.0, 1e-6);
 }

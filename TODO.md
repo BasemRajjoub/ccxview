@@ -48,8 +48,9 @@ before it, so no step rewrites code an earlier one wrote. One commit per step.
   valid labels.
 
 ### 3D mouse (#41)
-- Only the stub is in: `ndof.c` reports no device, the camera motion (`app_ndof_apply`, rates scaled to the
-  distance, `ndof_on`, `ndof_speed` in the ini) is ready and tested. Left: the device backends (Windows Raw
-  Input, Linux spacenavd socket or libspnav by dlopen, macOS 3DconnexionClient at runtime, WebHID last), free
+- macOS backend is in (`ndof.c`, 3DconnexionClient by dlopen; buttons 1 / 2 = Fit / iso view; axis signs and the
+  driver's take-over behaviour untested without a Mac and device); other platforms report no device. The camera motion (`app_ndof_apply`, rates scaled to the
+  distance, `ndof_on`, `ndof_speed` in the ini) is ready and tested. Left: the other backends (Windows Raw
+  Input, Linux spacenavd socket or libspnav by dlopen, WebHID last), free
   flight (`G`), invert per axis / lock rotation or translation / dominant axis, button mappings (Fit, Reset,
   named views), a View panel group, and a hand test with a real device (axis signs, roll direction).
