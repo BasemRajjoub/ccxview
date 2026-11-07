@@ -632,6 +632,31 @@ static void test_field_math(void) {
     int n = cv_field_options(&d, opts, 16);
     CHECK_EQ(n, 7);
     CHECK_EQ(opts[0].comp, CV_COMP_MISES);
+    {
+        cv_field_desc ds = d;
+        const char* sn[6] = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" };
+        for (int c = 0; c < 6; c++) strcpy(ds.comp[c], sn[c]);
+        cv_scalar_opt os[16];
+        cv_field_options(&ds, os, 16);
+        CHECK(!strcmp(os[1].label, "S1 (max principal)") && !strcmp(os[3].label, "S3 (min principal)"));
+    }
+    CHECK(cv_comp_match("S1 (max principal)", "S1 max") && cv_comp_match("S1 (max principal)", "s1")
+          && cv_comp_match("S1 (max principal)", "S1 (max principal)") && !cv_comp_match("S1 (max principal)", "S2 max")
+          && !cv_comp_match("SXX", "SX") && cv_comp_match("D4 (rot x)", "D4") && cv_comp_match("D4 (rot x)", "D4 rot"));
+    CHECK(!strcmp(cv_field_title("STRPOS"), "STRPOS (shell top)") && !strcmp(cv_field_title("STRNEG"), "STRNEG (shell bottom)")
+          && !strcmp(cv_field_title("STRMID"), "STRMID (shell mid-surface)") && !strcmp(cv_field_title("STRESS"), "STRESS"));
+    {
+        cv_field_desc dd = {0};
+        strcpy(dd.name, "DISP"); dd.ncomp = 6;
+        const char* cn[6] = { "D1", "D2", "D3", "D4", "D5", "D6" };
+        for (int c = 0; c < 6; c++) strcpy(dd.comp[c], cn[c]);
+        cv_scalar_opt o2[16];
+        int n2 = cv_field_options(&dd, o2, 16);
+        CHECK(n2 == 7 && !strcmp(o2[1].label, "D1") && !strcmp(o2[4].label, "D4 (rot x)") && !strcmp(o2[6].label, "D6 (rot z)"));
+        strcpy(dd.name, "FORC");
+        n2 = cv_field_options(&dd, o2, 16);
+        CHECK(!strcmp(o2[4].label, "D4 (moment x)"));
+    }
     snprintf(d.name, sizeof d.name, "stresses (elem, integ.pnt.,sxx,...)");    /* a .dat block: von Mises too */
     n = cv_field_options(&d, opts, 16);
     CHECK_EQ(opts[0].comp, CV_COMP_MISES);

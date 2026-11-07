@@ -2,6 +2,7 @@
 #include "field.h"
 #include <math.h>
 #include <ctype.h>
+#include <strings.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -170,12 +171,17 @@ int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
         if (p != 'S' && p != 'E') p = 'P';
         static const char* what[3] = { "max", "mid", "min" };
         for (int k = 0; k < 3 && n < max; k++) {
-            snprintf(out[n].label, sizeof out[n].label, "%c%d %s", p, k + 1, what[k]);
+            snprintf(out[n].label, sizeof out[n].label, "%c%d (%s principal)", p, k + 1, what[k]);
             out[n++].comp = (order == 1 ? CV_COMP_P1 : CV_COMP_P1_XZ) - k;
         }
     }
+    int six = cv_vec_comps(d) && d->ncomp == 6;           /* the 6-component vector layout: three + three rotations / moments */
+    const char* rot = !strncmp(d->name, "DISP", 4) ? "rot" : !strncmp(d->name, "FORC", 4) || !strncmp(d->name, "EXTFORC", 7) ? "moment" : NULL;
     for (int c = 0; c < d->ncomp && n < max; c++) {
-        snprintf(out[n].label, sizeof out[n].label, "%s", d->comp[c][0] ? d->comp[c] : "C?");
+        if (six && rot && c >= 3 && d->comp[c][0])
+            snprintf(out[n].label, sizeof out[n].label, "%s (%s %c)", d->comp[c], rot, "xyz"[c - 3]);
+        else
+            snprintf(out[n].label, sizeof out[n].label, "%s", d->comp[c][0] ? d->comp[c] : "C?");
         out[n++].comp = c;
     }
     if (!strcmp(d->name, "CONTACT") && n < max) {     /* far / near open, sliding, sticking ... per slave node */
@@ -183,6 +189,24 @@ int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
         out[n++].comp = CV_COMP_STATUS;
     }
     return n;
+}
+
+const char* cv_field_title(const char* name) {
+    return !strcmp(name, "STRPOS") ? "STRPOS (shell top)" : !strcmp(name, "STRNEG") ? "STRNEG (shell bottom)"
+         : !strcmp(name, "STRMID") ? "STRMID (shell mid-surface)" : name;
+}
+
+/* a typed component (CLI, old files) against a shown label: the label, its part before " (",
+   or that part and the first word inside ("S1 max" for "S1 (max principal)") */
+bool cv_comp_match(const char* label, const char* given) {
+    if (!strcasecmp(label, given)) return true;
+    const char* par = strstr(label, " (");
+    if (!par) return false;
+    size_t k = (size_t)(par - label);
+    if (strlen(given) == k && !strncasecmp(label, given, k)) return true;
+    const char* w = par + 2;
+    size_t wl = strcspn(w, " )");
+    return strlen(given) == k + 1 + wl && !strncasecmp(label, given, k) && given[k] == ' ' && !strncasecmp(w, given + k + 1, wl);
 }
 
 float cv_von_mises(const float s[6]) {

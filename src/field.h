@@ -20,6 +20,8 @@ typedef struct {
 } cv_scalar_opt;
 
 /* Options for one field, derived ones first (magnitude / von Mises / principal). */
+const char* cv_field_title(const char* name);     /* the name as shown: STRPOS -> "STRPOS (shell top)" */
+bool  cv_comp_match(const char* label, const char* given);   /* also the old labels: "S1 max" */
 int   cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
 
 /* One scalar per node from decoded values (vals[node*ncomp + c]). NaN stays NaN. */

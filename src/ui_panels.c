@@ -1,6 +1,7 @@
 /* ui_panels.c -- the scene sidebar on the left: the file box and recent files,
    Layers, Groups (with the deck's and cgx's sets), Fields and Export. Its View
    section is in ui_view.c. */
+#include <ctype.h>
 #include "app.h"
 #include "calc.h"
 #include "calclib.h"
@@ -650,7 +651,7 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                                  "in x and y (sandwich model, Wood-Armer), and where the concrete is crushed");
                 int* fs = uii_fnode_state(d->name, active);
                 if (!strcmp(G.fields_open, d->name)) { *fs = NK_MAXIMIZED; uii_scroll_here(ctx); }
-                if (!nk_tree_state_push(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : rb ? "REBAR (reinforcement)" : d->name,
+                if (!nk_tree_state_push(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : rb ? "REBAR (reinforcement)" : cv_field_title(d->name),
                                         (enum nk_collapse_states*)fs))
                     continue;
                 cv_scalar_opt opts[CV_MAX_OPTS];
@@ -661,6 +662,17 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                     char mk[96];
                     snprintf(mk, sizeof mk, "#comp %s %s", d->name, opts[i].label);
                     uii_test_mark(ctx, mk);
+                    if (sf || !strcmp(d->name, "SHR")) {                  /* what Nxx, Mxx, Qx mean */
+                        const char* l = opts[i].label;
+                        static const char* const full[3] = { "Membrane force per width, ", "Bending moment per width, ", "Transverse shear force per width, " };
+                        char ax[4] = { (char)tolower((unsigned char)l[1]), l[1] ? (char)tolower((unsigned char)l[2]) : 0, 0, 0 };
+                        char t[96];
+                        int kind = tolower((unsigned char)l[0]) == 'n' ? 0 : tolower((unsigned char)l[0]) == 'm' ? 1 : tolower((unsigned char)l[0]) == 'q' ? 2 : -1;
+                        if (kind >= 0) {
+                            snprintf(t, sizeof t, "%s%s (%s)", full[kind], ax, kind == 0 ? "in-plane" : kind == 1 ? "about the surface" : "through the thickness");
+                            tip(ctx, t);
+                        }
+                    }
                     if (nk_option_label(ctx, opts[i].label, sel) != sel) app_pick_field(d->name, opts[i].comp, 0);   /* the shown one again: back on the faces */
                 }
                 uii_field_options(ctx, s, row, d, active);

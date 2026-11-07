@@ -694,6 +694,10 @@ void refresh_field(void) {
             char t[64];
             snprintf(t, sizeof t, "%s%s", diff ? "A-B " : "", d->name);
             set_label(t, NULL, opt_label(d, G.comp), d->name, G.comp);
+            if (strcmp(cv_field_title(d->name), d->name)) {       /* STRPOS: the legend says top / bottom */
+                snprintf(G.field_label, sizeof G.field_label, "%s%s%s", cv_field_title(d->name), strlen(opt_label(d, G.comp)) ? " " : "", opt_label(d, G.comp));
+                snprintf(G.legend_lines[0], sizeof G.legend_lines[0], "%s", cv_field_title(d->name));
+            }
         }
     }
     if (!G.has_field) {

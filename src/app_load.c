@@ -581,7 +581,7 @@ static void apply_load(cv_job* j) {
             int n = app_field_options(&G.frd.steps[G.step].fields[fi], o, CV_MAX_OPTS), k = n ? 0 : -1;
             if (colon) {
                 k = -1;
-                for (int i = 0; i < n; i++) if (!strcasecmp(o[i].label, colon + 1)) k = i;
+                for (int i = 0; i < n; i++) if (cv_comp_match(o[i].label, colon + 1)) k = i;
             }
             if (k >= 0) app_select_src(name, o[k].comp, 0);
             else {
