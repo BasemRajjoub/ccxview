@@ -1,14 +1,11 @@
 /* ndof.h -- 3D mouse (SpaceMouse, 6DOF) input (#41). Headless: the device layer
    gives a state, cv_ndof_move turns it into one frame's camera motion.
 
-   Backends planned, each behind the same three calls, none written yet (today the
-   only one reports no device, so nothing changes for anybody):
-     Windows  Raw Input (WM_INPUT, HID usage page 0x01, usage 0x08) on sapp_win32_get_hwnd()
-     Linux    spacenavd (FreeSpacenav): its socket protocol, or libspnav loaded with
-              dlopen, so ccxview still starts where it is not installed
-     macOS    (done in ndof.c, signs untested on a device) 3Dconnexion's 3DconnexionClient.framework, loaded at runtime when installed
-     Web      WebHID in Chromium-based browsers (a click picks the device); last, it gets
-              no input while 3DxWare runs */
+   Backends, each behind the same three calls (untested on a device so far):
+     Windows  Raw Input (WM_INPUT, HID usage page 0x01, usage 0x08) on sapp_win32_get_hwnd(): not yet
+     Linux    (done) spacenavd (FreeSpacenav): its socket protocol spoken directly
+     macOS    (done) 3Dconnexion's 3DconnexionClient.framework, loaded at runtime when installed
+     Web      none: WebHID gets no input while 3DxWare runs */
 #ifndef CV_NDOF_H
 #define CV_NDOF_H
 
@@ -22,6 +19,9 @@ typedef struct { float t[3], r[3]; unsigned buttons; } cv_ndof_state;
 bool cv_ndof_open(void);                  /* false: no device (or no backend) */
 bool cv_ndof_poll(cv_ndof_state* s);      /* false: nothing new / no device; true: s is the cap now */
 void cv_ndof_close(void);
+#ifdef __linux__
+void cv_ndof_set_socket(const char* path);   /* test hook: try only this AF_UNIX path (NULL: the usual ones) */
+#endif
 
 /* raw driver axes TX TY TZ RX RY RZ (+-350 = full travel) to a state; buttons left alone */
 void cv_ndof_from_raw(const int16_t axis[6], cv_ndof_state* s);

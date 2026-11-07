@@ -1,5 +1,10 @@
-/* ndof.c -- see ndof.h. Backends: macOS (below, 3DconnexionClient loaded at runtime);
-   everywhere else a stub: no device. */
+/* ndof.c -- see ndof.h. Backends: macOS (3DconnexionClient loaded at runtime), Linux
+   (spacenavd's socket), Windows (Raw Input); the web and anything else: a stub, no device
+   (WebHID would need the 3Dconnexion driver stopped, as it holds the device). */
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+#include <stdio.h>
 #include "ndof.h"
 #include <math.h>
 
@@ -111,6 +116,124 @@ void cv_ndof_close(void) {
     lib = NULL; is_open = false; p_SetHandlers = NULL; p_Cleanup = NULL; p_Register = NULL;
     p_ButtonMask = NULL; p_Unregister = NULL;
 }
+#elif defined(__linux__)
+/* spacenavd's (FreeSpacenav) client socket, spoken directly: no libspnav, no link-time
+   dependency, nothing to install for ccxview to start. Learnt from libspnav (BSD-3)
+   https://github.com/FreeSpacenav/libspnav/blob/master/src/spnav.c : spnav_open (socket
+   path: $SPNAV_SOCKET, $XDG_RUNTIME_DIR/spnav.sock, /var/run/spnav.sock) and
+   spnav_poll_event / proc_event (an event is 8 int32 in host order: type 0 motion, 1
+   press, 2 release; motion: x y z rx ry rz period; buttons: number). libspnav asks for
+   protocol 1 right after connecting, to get more event kinds and to set the sensitivity;
+   we stay in protocol 0 (the daemon's default for a client that says nothing), which
+   sends exactly these events. Axis signs as Blender's GHOST_NDOFManagerUnix.cc
+   https://projects.blender.org/blender/blender/src/branch/main/intern/ghost/intern/GHOST_NDOFManagerUnix.cc
+   t = (x, y, -z), r = (-rx, -ry, rz) in the frame cv_ndof_from_raw uses; untested on a
+   device. spacenavd's axes go to about +-350 at full travel, like 3DxWare's. */
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include "os.h"
+
+enum { RETRY_S = 5 };    /* a missing daemon is looked for every 5 s; a cap silent for 0.2 s is let go */
+
+static int sock = -1;
+static char test_path[sizeof(((struct sockaddr_un*)0)->sun_path)];
+static double next_try, last_motion;
+static float axis[6];                      /* x y z rx ry rz as sent */
+static unsigned btn;
+static bool dirty;
+static unsigned char carry[32 * 8];
+static size_t ncarry;
+
+void cv_ndof_set_socket(const char* path) {   /* test hook: only this path is tried; NULL: the usual ones */
+    if (path) snprintf(test_path, sizeof test_path, "%s", path); else test_path[0] = 0;
+    next_try = 0;
+}
+
+static int connect_to(const char* path) {
+    struct sockaddr_un a;
+    if (!path || !*path || strlen(path) >= sizeof a.sun_path) return -1;
+    int s = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (s < 0) return -1;
+    memset(&a, 0, sizeof a);
+    a.sun_family = AF_UNIX; strcpy(a.sun_path, path);
+    if (connect(s, (struct sockaddr*)&a, sizeof a) != 0) { close(s); return -1; }
+    int fl = fcntl(s, F_GETFL, 0);
+    if (fl < 0 || fcntl(s, F_SETFL, fl | O_NONBLOCK) != 0) { close(s); return -1; }
+    return s;
+}
+
+static void try_connect(double now) {
+    next_try = now + RETRY_S;
+    char buf[512];
+    const char* env = getenv("SPNAV_SOCKET");
+    const char* xdg = getenv("XDG_RUNTIME_DIR");
+    int s = -1;
+    if (test_path[0]) s = connect_to(test_path);
+    else {
+        if (env) s = connect_to(env);
+        if (s < 0 && xdg && *xdg && snprintf(buf, sizeof buf, "%s/spnav.sock", xdg) < (int)sizeof buf) s = connect_to(buf);
+        if (s < 0) s = connect_to("/var/run/spnav.sock");
+    }
+    if (s < 0) return;
+    sock = s; ncarry = 0;
+    memset(axis, 0, sizeof axis); btn = 0; dirty = false;
+}
+
+static void drop(void) { if (sock >= 0) close(sock); sock = -1; memset(axis, 0, sizeof axis); btn = 0; dirty = true; }
+
+/* The backend is always "open": the daemon may start later, so the socket is looked for
+   at most every RETRY_S seconds (one failed connect(): nothing to measure). */
+bool cv_ndof_open(void) { try_connect(cv_now()); return true; }
+
+bool cv_ndof_poll(cv_ndof_state* s) {
+    double now = cv_now();
+    if (sock < 0) {
+        if (now < next_try) return false;
+        try_connect(now);
+        if (sock < 0) return false;
+    }
+    for (;;) {                             /* everything pending, newest motion wins */
+        ssize_t n = read(sock, carry + ncarry, sizeof carry - ncarry);
+        if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) { drop(); next_try = now + RETRY_S; break; }
+        if (n < 0) { if (errno == EINTR) continue; break; }
+        ncarry += (size_t)n;
+        size_t used = 0;
+        for (; ncarry - used >= 32; used += 32) {
+            int32_t e[8];
+            memcpy(e, carry + used, 32);
+            if (e[0] == 0) {
+                for (int i = 0; i < 6; i++) axis[i] = (float)e[i + 1];
+                last_motion = now; dirty = true;
+            } else if ((e[0] == 1 || e[0] == 2) && e[1] >= 0 && e[1] < 32) {
+                if (e[0] == 1) btn |= 1u << e[1]; else btn &= ~(1u << e[1]);
+                dirty = true;
+            }
+        }
+        memmove(carry, carry + used, ncarry - used); ncarry -= used;
+        if (ncarry == 0 && n < (ssize_t)sizeof carry) break;   /* drained */
+    }
+    bool held = false;
+    for (int i = 0; i < 6; i++) held |= axis[i] != 0.f;
+    if (held && now - last_motion > 0.2) {   /* some daemons send no zero event on release */
+        memset(axis, 0, sizeof axis); held = false; dirty = true;
+    }
+    if (!held && !dirty) return false;
+    dirty = false;
+    const float sgn[6] = { 1, 1, -1, -1, -1, 1 };   /* t = (x, y, -z), r = (-rx, -ry, rz) */
+    s->buttons = btn;
+    for (int i = 0; i < 3; i++) {
+        s->t[i] = fmaxf(-1.f, fminf(1.f, sgn[i] * axis[i] / 350.f));
+        s->r[i] = fmaxf(-1.f, fminf(1.f, sgn[i + 3] * axis[i + 3] / 350.f));
+    }
+    return true;
+}
+
+void cv_ndof_close(void) { drop(); dirty = false; next_try = 0; }
 #else
 bool cv_ndof_open(void) { return false; }
 bool cv_ndof_poll(cv_ndof_state* s) { (void)s; return false; }
