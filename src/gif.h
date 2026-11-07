@@ -1,6 +1,6 @@
 /* gif.h -- animated GIF89a writer for the animation export, a sibling of the
-   MP4 writer (video.h). Our own small encoder: a fixed 256-colour palette
-   (6 x 7 x 6 levels of R, G, B), LZW, a Netscape loop block, every frame whole.
+   MP4 writer (video.h). Our own small encoder: a palette per frame (local
+   colour table: exact up to 256 colours, else median cut), LZW, a Netscape loop block, every frame whole.
    Frames come in as RGBA rows. Headless. */
 #ifndef CV_GIF_H
 #define CV_GIF_H
