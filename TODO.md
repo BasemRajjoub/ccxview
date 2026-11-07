@@ -48,9 +48,10 @@ before it, so no step rewrites code an earlier one wrote. One commit per step.
   valid labels.
 
 ### 3D mouse (#41)
-- macOS backend is in (`ndof.c`, 3DconnexionClient by dlopen; buttons 1 / 2 = Fit / iso view; axis signs and the
-  driver's take-over behaviour untested without a Mac and device); other platforms report no device. The camera motion (`app_ndof_apply`, rates scaled to the
-  distance, `ndof_on`, `ndof_speed` in the ini) is ready and tested. Left: the other backends (Windows Raw
-  Input, Linux spacenavd socket or libspnav by dlopen, WebHID last), free
-  flight (`G`), invert per axis / lock rotation or translation / dominant axis, button mappings (Fit, Reset,
-  named views), a View panel group, and a hand test with a real device (axis signs, roll direction).
+- Backends are in, none tested on a device: macOS (3DconnexionClient by dlopen), Linux (spacenavd's socket, `ndof.c`),
+  Windows (Raw Input); web has none (WebHID is blocked while 3DxWare runs). Buttons 1 / 2 = Fit / iso view. The camera motion
+  (`app_ndof_apply`, rates scaled to the distance, `ndof_on`, `ndof_speed`) is ready and tested; Linux protocol tested
+  against a fake daemon. Left: a hand test per platform with a real device (axis signs, roll direction, the 0.2 s
+  release rule on Linux, whether Windows needs the same), newer devices' button-number reports on Windows, free
+  flight (`G`), invert per axis / lock rotation or translation / dominant axis, button mapping options (Fit, Reset,
+  named views), a View panel group.

@@ -382,7 +382,7 @@ static void frame(void) {
     update_title();
     tick_anim();
     tick_flight();
-    {   /* a 3D mouse, when there is one (macOS backend only so far; elsewhere cv_ndof_open says no) */
+    {   /* a 3D mouse, when there is one (macOS, Linux, Windows backends; elsewhere cv_ndof_open says no) */
         static bool tried, have;
         static double last;
         if (G.ndof_on && !tried) { tried = true; have = cv_ndof_open(); }

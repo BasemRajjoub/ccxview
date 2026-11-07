@@ -234,6 +234,90 @@ bool cv_ndof_poll(cv_ndof_state* s) {
 }
 
 void cv_ndof_close(void) { drop(); dirty = false; next_try = 0; }
+#elif defined(_WIN32)
+/* Raw Input (user32, already linked): the 3Dconnexion HID devices are usage page 0x01 usage
+   0x08 (multi-axis controller), so WM_INPUT arrives on the window while it has focus,
+   with or without 3DxWare running. sokol_app owns the window procedure, so ours sits in
+   front of it (SetWindowLongPtr) and hands every message on, WM_INPUT included.
+   Report layout and axis frame from Blender, the same driver frame as the macOS client's
+   (so cv_ndof_from_raw serves both):
+   https://projects.blender.org/blender/blender/src/branch/main/intern/ghost/intern/GHOST_SystemWin32.cc
+   (processNDOF): id 1 = TX TY TZ as int16 LE (12 bytes after the id when rotation comes
+   with it, which Blender has never seen but is cheap to take), id 2 = RX RY RZ, id 3 = a
+   32-bit button mask. Newer devices' button-number reports (ids 0x1c, 0x1d) are ignored.
+   Untested on a device. */
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <string.h>
+
+extern const void* sapp_win32_get_hwnd(void);   /* sokol_app.h */
+
+static HWND hw;
+static WNDPROC old_proc;
+static int16_t raw[6];
+static unsigned btn;
+static bool dirty;
+
+static void on_report(const BYTE* d, size_t n) {
+    if (n < 7) { if (n == 5 && d[0] == 3) { memcpy(&btn, d + 1, 4); dirty = true; } return; }
+    if (d[0] == 1 || d[0] == 2) {
+        int16_t a[6];
+        size_t k = (n >= 13 && d[0] == 1) ? 6 : 3;
+        memcpy(a, d + 1, k * 2);
+        if (d[0] == 1) { memcpy(raw, a, k * 2); } else memcpy(raw + 3, a, 6);
+        dirty = true;
+    } else if (d[0] == 3) { unsigned b = 0; memcpy(&b, d + 1, n - 1 < 4 ? n - 1 : 4); btn = b; dirty = true; }
+}
+
+static void on_input(HRAWINPUT h) {
+    union { RAWINPUT r; BYTE b[512]; } u;
+    UINT sz = sizeof u;
+    if (GetRawInputData(h, RID_INPUT, &u, &sz, sizeof(RAWINPUTHEADER)) == (UINT)-1) return;
+    if (u.r.header.dwType != RIM_TYPEHID || u.r.data.hid.dwSizeHid == 0) return;
+    for (DWORD i = 0; i < u.r.data.hid.dwCount; i++)
+        on_report(u.r.data.hid.bRawData + i * u.r.data.hid.dwSizeHid, u.r.data.hid.dwSizeHid);
+}
+
+static LRESULT CALLBACK ndof_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_INPUT) on_input((HRAWINPUT)lp);
+    return CallWindowProcW(old_proc, h, msg, wp, lp);
+}
+
+bool cv_ndof_open(void) {
+    if (hw) return true;
+    HWND w = (HWND)sapp_win32_get_hwnd();
+    if (!w) return false;
+    RAWINPUTDEVICE d = { 0x01, 0x08, 0, w };      /* focused window only: no RIDEV_INPUTSINK */
+    if (!RegisterRawInputDevices(&d, 1, sizeof d)) return false;
+    old_proc = (WNDPROC)SetWindowLongPtrW(w, GWLP_WNDPROC, (LONG_PTR)ndof_proc);
+    if (!old_proc) {
+        d.dwFlags = RIDEV_REMOVE; d.hwndTarget = NULL;
+        RegisterRawInputDevices(&d, 1, sizeof d);
+        return false;
+    }
+    hw = w; memset(raw, 0, sizeof raw); btn = 0; dirty = false;
+    return true;
+}
+
+/* like the macOS backend: true while the cap is off centre or something changed */
+bool cv_ndof_poll(cv_ndof_state* s) {
+    if (!hw) return false;
+    bool held = false;
+    for (int i = 0; i < 6; i++) held |= raw[i] != 0;
+    if (!held && !dirty) return false;
+    dirty = false;
+    cv_ndof_from_raw(raw, s);
+    s->buttons = btn;
+    return true;
+}
+
+void cv_ndof_close(void) {
+    if (!hw) return;
+    RAWINPUTDEVICE d = { 0x01, 0x08, RIDEV_REMOVE, NULL };
+    RegisterRawInputDevices(&d, 1, sizeof d);
+    if (GetWindowLongPtrW(hw, GWLP_WNDPROC) == (LONG_PTR)ndof_proc) SetWindowLongPtrW(hw, GWLP_WNDPROC, (LONG_PTR)old_proc);
+    hw = NULL; old_proc = NULL;
+}
 #else
 bool cv_ndof_open(void) { return false; }
 bool cv_ndof_poll(cv_ndof_state* s) { (void)s; return false; }

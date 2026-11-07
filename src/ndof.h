@@ -2,7 +2,7 @@
    gives a state, cv_ndof_move turns it into one frame's camera motion.
 
    Backends, each behind the same three calls (untested on a device so far):
-     Windows  Raw Input (WM_INPUT, HID usage page 0x01, usage 0x08) on sapp_win32_get_hwnd(): not yet
+     Windows  (done) Raw Input (WM_INPUT, HID usage page 0x01, usage 0x08) on sapp_win32_get_hwnd()
      Linux    (done) spacenavd (FreeSpacenav): its socket protocol spoken directly
      macOS    (done) 3Dconnexion's 3DconnexionClient.framework, loaded at runtime when installed
      Web      none: WebHID gets no input while 3DxWare runs */
