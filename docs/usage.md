@@ -205,6 +205,12 @@ It prints what it selected and the field's max and min over it.
 
 ## Mouse and keys
 
+3D mouse (SpaceMouse): it moves the model like a hand holding it (ini `ndof_on`, `ndof_speed`); button 1 fits the model, button 2 resets to the iso view. All three backends are untested on a device so far.
+- Linux: spacenavd running (its socket is looked for every 5 s, so it may start later; `SPNAV_SOCKET` overrides the path).
+- Windows: works with or without 3DxWare (Raw Input), while the window has focus.
+- macOS: 3Dconnexion's driver (3DxWare) installed.
+- Web: not supported.
+
 | Input | Action |
 |---|---|
 | left drag / right or middle drag / wheel | orbit / pan / zoom, about the point under the cursor (View panel: up axis Y or Z, turntable (endless, over the poles too) or free rotation, cursor pivot on/off, rotation centre mark) |
