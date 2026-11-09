@@ -736,6 +736,9 @@ static bool legend_settings_gone(struct nk_context* ctx) { return !G.legend_edit
 static void range_locked(struct nk_context* ctx) { G.range_lock = true; }
 static bool oor_list_open(struct nk_context* ctx) { return popup_open(ctx, "Legend settings"); }
 static bool oor_list_gone(struct nk_context* ctx) { return !popup_open(ctx, "Legend settings"); }
+static void range_huge(struct nk_context* ctx) { G.range_lock = true; G.rmin = 0; G.rmax = 2e11f; }
+static void range_inf(struct nk_context* ctx) { G.range_lock = true; G.rmin = -INFINITY; G.rmax = INFINITY; }
+static bool range_huge_drawn(struct nk_context* ctx) { return legend_settings_shown(ctx); }
 static void range_free(struct nk_context* ctx) { G.range_lock = false; app_refresh_range(); }
 static bool find_gone(struct nk_context* ctx) { return !G.find_open; }
 static bool browser_gone(struct nk_context* ctx) { return !G.browser_open; }
@@ -1457,6 +1460,13 @@ static const step script[] = {
     AT_WIN("Legend", 0.5f, 0.6f), RCLICK, WAIT(2), EXPECT(legend_settings_shown, "the legend settings open"),
     DO(range_locked), WAIT(2), AT_TIP("Legend settings", "Values above the locked range"), CLICK, WAIT(2),
     EXPECT(oor_list_open, "the out-of-range list opens"), AT_VIEW(0.5f, 0.6f), CLICK, WAIT(2), EXPECT(oor_list_gone, "a click outside closes it"), DO(range_free),
+    AT_CLOSE("Legend settings"), CLICK, WAIT(2), EXPECT(legend_settings_gone, "the legend settings close"),
+    PANELS_ANSWER,
+
+    CASE("legend: a locked range of 2e11 (Pa) or inf draws its boxes (Nuklear's nk_dtoa looped forever, issue 43)"),
+    AT_WIN("Legend", 0.5f, 0.6f), RCLICK, WAIT(2), EXPECT(legend_settings_shown, "the legend settings open"),
+    DO(range_huge), WAIT(3), EXPECT(range_huge_drawn, "the boxes of a 2e11 range are drawn"),
+    DO(range_inf), WAIT(3), EXPECT(range_huge_drawn, "the boxes of an inf range are drawn"), DO(range_free),
     AT_CLOSE("Legend settings"), CLICK, WAIT(2), EXPECT(legend_settings_gone, "the legend settings close"),
     PANELS_ANSWER,
 
