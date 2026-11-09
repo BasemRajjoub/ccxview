@@ -1649,6 +1649,7 @@ static void test_localsys_requests(void) {
 #include "t_calc.h"
 #include "t_units.h"
 #include "t_numfmt.h"
+#include "t_nkfmt.h"
 #include "t_loads.h"
 #include "../src/cap.h"
 #include "../src/label.h"
@@ -1681,6 +1682,7 @@ int main(void) {
     test_calc();
     test_units();
     test_numfmt();
+    test_nkfmt();
     test_loads();
     test_steps();
     test_load_cards();

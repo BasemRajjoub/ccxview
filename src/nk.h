@@ -10,6 +10,8 @@
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
+#include "nkfmt.h"
+#define NK_DTOA cv_dtoa   /* Nuklear's nk_dtoa hangs on values >= 2^31 and on inf: see nkfmt.h */
 #include "nuklear.h"
 
 #endif
