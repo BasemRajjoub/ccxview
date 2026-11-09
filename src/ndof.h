@@ -10,6 +10,7 @@
 #define CV_NDOF_H
 
 #include "base.h"
+#include "vmath.h"
 
 /* What the cap does, each axis -1..1 of its full travel: t right, up, toward the
    user; r tilt about x (nose down +), twist about y (right turn +), about z (roll,
@@ -34,5 +35,20 @@ void cv_ndof_from_raw(const int16_t axis[6], cv_ndof_state* s);
    ~1.5 rad/s). A dead zone leaves the model still. false: all within it. */
 typedef struct { float pan[2], zoom, yaw, pitch, roll; } cv_ndof_move;
 bool cv_ndof_move_of(const cv_ndof_state* s, float dt, float dist, float speed, cv_ndof_move* m);
+
+/* The same with the user's options (the driver's own settings do not reach us). Applied in
+   order: dead zone, which axis zooms (zoom_lift: the cap lifted / pushed down zooms and
+   forward / back pans vertically, instead of the reverse), flips, locks, dominant axis.
+   flip: pan x, pan y, zoom, tilt, spin, roll. dead: fraction of travel (0.03 default). */
+typedef struct {
+    float speed, dead;
+    bool zoom_lift, flip[6], lock_rot, lock_pan, dominant;
+} cv_ndof_opt;
+void cv_ndof_opt_default(cv_ndof_opt* o);
+bool cv_ndof_move_opt(const cv_ndof_state* s, float dt, float dist, const cv_ndof_opt* o, cv_ndof_move* m);
+
+/* Turning about a pivot: the target that keeps pivot where it was in the view. The view
+   before the turn is eye0 with right r0, up u0, forward f0; after it r1 u1 f1 and dist. */
+v3 cv_pivot_target(v3 pivot, v3 eye0, v3 r0, v3 u0, v3 f0, v3 r1, v3 u1, v3 f1, float dist);
 
 #endif

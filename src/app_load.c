@@ -354,7 +354,7 @@ static void apply_load(cv_job* j) {
     cv_render_positions(G.frd.xyz, N);
     cv_render_indices(G.skin.tri, G.skin.n_tri, G.skin.edge, G.skin.n_edge, G.skin.pt, G.skin.n_pt);
     cv_render_outline(G.skin.fedge, G.skin.n_fedge);
-    G.loaded = true;
+    G.loaded = true; G.orbit_pivot_on = false;
     G.stl_model = j->stl_model;
     G.stl_binary = j->stl_binary;
     G.file_bytes = G.map.size ? G.map.size : cv_file_size(G.path);
@@ -875,7 +875,7 @@ bool app_load_headless(const char* path) {
     G.groups = j->groups;   memset(&j->groups, 0, sizeof j->groups);
     G.skin = j->skin;       memset(&j->skin, 0, sizeof j->skin);
     snprintf(G.path, sizeof G.path, "%s", path);
-    G.loaded = true;
+    G.loaded = true; G.orbit_pivot_on = false;
     return true;
 }
 

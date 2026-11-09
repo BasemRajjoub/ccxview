@@ -206,6 +206,8 @@ It prints what it selected and the field's max and min over it.
 ## Mouse and keys
 
 3D mouse (SpaceMouse): it moves the model like a hand holding it (ini `ndof_on`, `ndof_speed`); button 1 fits the model, button 2 resets to the iso view. All three backends are untested on a device so far.
+- Rotation turns about the point last grabbed by a mouse rotation (so the two agree); before any, or after Fit, a view preset, centre or a new model, about the view centre.
+- View panel > 3D mouse: on / off, speed, dead zone, which axis zooms (forward / back, or push down / pull up with forward / back then panning vertically), a reverse tick per axis (pan x, pan y, zoom, tilt, spin, roll), lock rotation, lock pan and zoom, dominant axis only (ini `ndof_*`). We read the device directly, so the zoom and direction settings of its own driver (3DxWare, spacenavd) have no effect: set them here. The group also says whether a device was found.
 - Linux: spacenavd running (its socket is looked for every 5 s, so it may start later; `SPNAV_SOCKET` overrides the path).
 - Windows: works with or without 3DxWare (Raw Input), while the window has focus.
 - macOS: 3Dconnexion's driver (3DxWare) installed.

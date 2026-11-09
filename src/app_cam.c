@@ -439,6 +439,7 @@ void app_fit(void) {
     sym_extend(&lo, &hi);
     stl_extend(&lo, &hi);
     G.cam.target = v3_scale(v3_add(lo, hi), 0.5f);
+    G.orbit_pivot_on = false;                    /* the view is recentred: a turn is about its centre again */
     v3 e = v3_sub(hi, lo);
     float r = 0.5f * sqrtf(v3_dot(e, e));
     if (!(r > 0) || isinf(r)) r = 0.5f * CV_MAX(G.diag, 1e-6f);
@@ -478,6 +479,7 @@ void app_goto_node(uint32_t n) {
     float sc = G.deform ? G.deform_scale * G.anim_factor : 0.f;
     const float* p = G.frd.xyz + 3 * n;
     const float* d = G.disp ? G.disp + 3 * n : NULL;
+    G.orbit_pivot_on = false;
     G.cam.target = v3_make(p[0] + (d ? d[0] * sc : 0), p[1] + (d ? d[1] * sc : 0), p[2] + (d ? d[2] * sc : 0));
 }
 
@@ -526,6 +528,7 @@ void app_fit_element(uint32_t e) {
 void app_view(int p) {
     const float d2r = 3.14159265f / 180.f, lim = 89.9f * d2r;
     app_view_push();
+    G.orbit_pivot_on = false;                    /* a preset view: turn about its centre again */
     /* eye direction of each axis view, in world coordinates */
     static const float D[6][3] = { {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1} };
     if (p >= CV_VIEW_PX && p <= CV_VIEW_NZ) {
@@ -566,18 +569,39 @@ bool cam_roll(float a) {
     return was;
 }
 
+/* cam_orbit about a model point: it keeps its place in the view (the target moves);
+   not on: about the target */
+void cam_orbit_about(float yaw, float pitch, bool on, v3 pivot) {
+    v3 eye0, f0, r0, u0;
+    cam_basis(&G.cam, &eye0, &f0, &r0, &u0);
+    cam_orbit(yaw, pitch);
+    if (!on) return;
+    v3 eye1, f1, r1, u1;
+    cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
+    G.cam.target = cv_pivot_target(pivot, eye0, r0, u0, f0, r1, u1, f1, G.cam.dist);
+}
+
 /* A 3D mouse state (ndof.h) for dt seconds, in object mode: pan and zoom rates scale with
-   the distance to the pivot, the rotation is the mouse orbit's (turntable, or free with
-   roll, per G.orbit_free) about the same pivot. Wakes the idle redraw (app_idle.c). */
+   the distance to the camera target, the rotation is the mouse orbit's (turntable, or free
+   with roll, per G.orbit_free) about the last mouse rotation's pivot, else the target.
+   Wakes the idle redraw (app_idle.c). */
 bool app_ndof_apply(const cv_ndof_state* s, float dt) {
     cv_ndof_move m;
-    if (!G.loaded || !cv_ndof_move_of(s, dt, G.cam.dist, G.ndof_speed, &m)) return false;
+    cv_ndof_opt o;
+    o.speed = G.ndof_speed; o.dead = G.ndof_dead * 0.01f;
+    o.zoom_lift = G.ndof_zoom_lift; memcpy(o.flip, G.ndof_flip, sizeof o.flip);
+    o.lock_rot = G.ndof_lock_rot; o.lock_pan = G.ndof_lock_pan; o.dominant = G.ndof_dominant;
+    if (!G.loaded || !cv_ndof_move_opt(s, dt, G.cam.dist, &o, &m)) return false;
     v3 eye, fwd, right, up;
     cam_basis(&G.cam, &eye, &fwd, &right, &up);
     G.cam.target = v3_add(G.cam.target, v3_add(v3_scale(right, m.pan[0]), v3_scale(up, m.pan[1])));
     G.cam.dist = CV_MAX(G.cam.dist * m.zoom, 1e-5f * CV_MAX(G.diag, 1e-6f));
-    if (m.yaw != 0 || m.pitch != 0) cam_orbit(m.yaw, m.pitch);
-    if (G.orbit_free && m.roll != 0) cam_roll(m.roll);
+    if (m.yaw != 0 || m.pitch != 0) cam_orbit_about(m.yaw, m.pitch, G.orbit_pivot_on, G.orbit_pivot);
+    if (G.orbit_free && m.roll != 0) {
+        v3 eye, f, r, u;
+        cam_basis(&G.cam, &eye, &f, &r, &u);
+        cam_turn(f, m.roll, G.orbit_pivot_on ? G.orbit_pivot : G.cam.target);   /* a rigid turn about it: it stays put in the view */
+    }
     app_wake();
     return true;
 }
@@ -597,6 +621,7 @@ static void center_on(v3 p) {
     cam_basis(&G.cam, &eye, &fwd, &right, &up);
     float z = v3_dot(v3_sub(p, eye), fwd);
     G.cam.target = p;
+    G.orbit_pivot_on = false;
     if (!G.cam.ortho && z > 1e-6f * CV_MAX(G.diag, 1e-6f)) G.cam.dist = z;
 }
 
@@ -630,6 +655,7 @@ bool app_normal_to(float px, float py) {
     G.cam.fdir = n; G.cam.fup = v3_norm(u);
     if (tt) turntable_from_free();                            /* square to the face, up axis kept upright */
     G.cam.target = p0;
+    G.orbit_pivot_on = false;
     return true;
 }
 

@@ -326,22 +326,52 @@ void cv_ndof_close(void) {}
 
 enum { DEAD_PCT = 3 };                    /* % of travel */
 
-static float dead(float v) {
-    const float z = DEAD_PCT * 0.01f;
+static float dead_z(float v, float z) {
     float a = fabsf(v);
     if (!(a > z)) return 0.f;             /* also NaN */
     a = fminf((a - z) / (1.f - z), 1.f);  /* continuous at the edge of the zone */
     return v < 0 ? -a : a;
 }
 
-bool cv_ndof_move_of(const cv_ndof_state* s, float dt, float dist, float speed, cv_ndof_move* m) {
+void cv_ndof_opt_default(cv_ndof_opt* o) {
+    memset(o, 0, sizeof *o);
+    o->speed = 1.f; o->dead = DEAD_PCT * 0.01f;
+}
+
+bool cv_ndof_move_opt(const cv_ndof_state* s, float dt, float dist, const cv_ndof_opt* o, cv_ndof_move* m) {
+    const float z = fminf(fmaxf(o->dead, 0.f), 0.9f);
     float t[3], r[3];
-    for (int i = 0; i < 3; i++) { t[i] = dead(s->t[i]); r[i] = dead(s->r[i]); }
-    const float k = dt * speed;
-    m->pan[0] = -t[0] * dist * k;         /* the model follows the cap: the camera goes the other way */
-    m->pan[1] = -t[1] * dist * k;
-    m->zoom = expf(-t[2] * k);            /* toward the user: the model nearer, the distance shorter */
+    for (int i = 0; i < 3; i++) { t[i] = dead_z(s->t[i], z); r[i] = dead_z(s->r[i], z); }
+    /* effective axes: pan x, pan y, zoom, tilt, spin, roll */
+    float v[6] = { t[0], o->zoom_lift ? -t[2] : t[1], o->zoom_lift ? t[1] : t[2], r[0], r[1], r[2] };
+    for (int i = 0; i < 6; i++) if (o->flip[i]) v[i] = -v[i];
+    if (o->lock_pan) v[0] = v[1] = v[2] = 0.f;
+    if (o->lock_rot) v[3] = v[4] = v[5] = 0.f;
+    if (o->dominant) {
+        int k = 0;
+        for (int i = 1; i < 6; i++) if (fabsf(v[i]) > fabsf(v[k])) k = i;
+        for (int i = 0; i < 6; i++) if (i != k) v[i] = 0.f;
+    }
+    const float k = dt * o->speed;
+    m->pan[0] = -v[0] * dist * k;         /* the model follows the cap: the camera goes the other way */
+    m->pan[1] = -v[1] * dist * k;
+    m->zoom = expf(-v[2] * k);            /* toward the user: the model nearer, the distance shorter */
     const float w = 1.5f * k;
-    m->pitch = r[0] * w; m->yaw = -r[1] * w; m->roll = r[2] * w;
-    return t[0] != 0 || t[1] != 0 || t[2] != 0 || r[0] != 0 || r[1] != 0 || r[2] != 0;
+    m->pitch = v[3] * w; m->yaw = -v[4] * w; m->roll = v[5] * w;
+    for (int i = 0; i < 6; i++) if (v[i] != 0) return true;
+    return false;
+}
+
+bool cv_ndof_move_of(const cv_ndof_state* s, float dt, float dist, float speed, cv_ndof_move* m) {
+    cv_ndof_opt o;
+    cv_ndof_opt_default(&o);
+    o.speed = speed;
+    return cv_ndof_move_opt(s, dt, dist, &o, m);
+}
+
+v3 cv_pivot_target(v3 pivot, v3 eye0, v3 r0, v3 u0, v3 f0, v3 r1, v3 u1, v3 f1, float dist) {
+    v3 q = v3_sub(pivot, eye0);
+    float a = v3_dot(q, r0), b = v3_dot(q, u0), c = v3_dot(q, f0);
+    v3 e = v3_sub(pivot, v3_add(v3_scale(r1, a), v3_add(v3_scale(u1, b), v3_scale(f1, c))));
+    return v3_add(e, v3_scale(f1, dist));
 }

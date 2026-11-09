@@ -103,7 +103,7 @@ static void init(void) {
     G.label_box_rgba[0] = G.label_box_rgba[1] = G.label_box_rgba[2] = 0.f; G.label_box_rgba[3] = 0.65f;
     G.path_lin = true;                   /* the Path window opens on the linearization */
     G.idle_redraw = true;   /* G.max_fps 0: as the display goes */
-    G.ndof_on = true; G.ndof_speed = 1.f;
+    G.ndof_on = true; G.ndof_speed = 1.f; G.ndof_dead = 3.f;
     G.sidecar = true;                    /* each model's post-processing kept beside it */
     app_scl_clear();                     /* the first kept line's name */
     G.lin_asme = true;
@@ -385,7 +385,7 @@ static void frame(void) {
     {   /* a 3D mouse, when there is one (macOS, Linux, Windows backends; elsewhere cv_ndof_open says no) */
         static bool tried, have;
         static double last;
-        if (G.ndof_on && !tried) { tried = true; have = cv_ndof_open(); }
+        if (G.ndof_on && !tried) { tried = true; have = cv_ndof_open(); G.ndof_found = have; }
         if (G.ndof_on && have) {
             cv_ndof_state ns;
             double now = cv_now();
@@ -888,16 +888,10 @@ static void drag_move(float dx, float dy, bool shift) {
                 float s = v3_dot(w, u0) < 0 ? -1.f : 1.f;      /* follow the mouse when the axis points down */
                 cam_turn(w, -s * (fabsf(dx) >= fabsf(dy) ? dx : dy) * k, pv);
             } else {
-                cam_orbit(-dx * k, dy * k);
-                if (drag.pivot_on) {                  /* turn about the pivot: it keeps its place in the view */
-                    v3 q = v3_sub(drag.pivot, eye0);
-                    float a = v3_dot(q, r0), b = v3_dot(q, u0), c = v3_dot(q, f0);
-                    v3 eye1, f1, r1, u1;
-                    cam_basis(&G.cam, &eye1, &f1, &r1, &u1);
-                    v3 e = v3_sub(drag.pivot, v3_add(v3_scale(r1, a), v3_add(v3_scale(u1, b), v3_scale(f1, c))));
-                    G.cam.target = v3_add(e, v3_scale(f1, G.cam.dist));
-                }
+                cam_orbit_about(-dx * k, dy * k, drag.pivot_on, drag.pivot);
             }
+            G.orbit_pivot_on = drag.pivot_on;         /* the 3D mouse turns about it too */
+            G.orbit_pivot = drag.pivot;
             nav_mark(CV_NAV_ROTATE, drag.pivot_on ? drag.pivot : G.cam.target);
             break;
         }

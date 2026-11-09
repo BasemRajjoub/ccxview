@@ -597,6 +597,15 @@ static void display_open(struct nk_context* ctx) {
     struct nk_window* w = nk_window_find(ctx, "Scene");
     if (w) w->scrollbar.y = 0;
 }
+static void ndof_open(struct nk_context* ctx) {
+    for (int k = 0; k < CV_TREE_N; k++) G.tree[k] = k == CV_TREE_VIEW || k == CV_TREE_NDOF;
+    struct nk_window* w = nk_window_find(ctx, "Scene");
+    if (w) w->scrollbar.y = 0;
+    G.ndof_flip[2] = false;
+}
+static void ndof_end(struct nk_context* ctx) { G.tree[CV_TREE_NDOF] = 0; sections_open(ctx); }
+static bool ndof_flip_set(struct nk_context* ctx) { return G.ndof_flip[2]; }
+static bool ndof_flip_clear(struct nk_context* ctx) { return !G.ndof_flip[2]; }
 static bool title_shown(struct nk_context* ctx) { return G.title_on && win_of(ctx, "title"); }
 static bool title_settings_shown(struct nk_context* ctx) { return G.title_edit && win_of(ctx, "Title block") && !G.menu_on; }
 static bool title_settings_gone(struct nk_context* ctx) { return !G.title_edit; }
@@ -1588,6 +1597,11 @@ static const step script[] = {
     AT_TIP("Scene", "#Contact header"), CLICK, WAIT(2), EXPECT(contact_folded, "Contact folded, still shown"),
     AT_TIP("Scene", "#Contact header"), CLICK, WAIT(2), EXPECT(contact_unfolded, "Contact open again"),
     DO(contact_end), WAIT(2), PANELS_ANSWER,
+    CASE("3D mouse: the subgroup opens, a reverse tick toggles, the panels still answer"),
+    DO(close_all), DO(ndof_open), WAIT(3),
+    AT_TIP("Scene", "Reverse the zoom direction"), CLICK, WAIT(2), EXPECT(ndof_flip_set, "reverse zoom ticked"),
+    AT_TIP("Scene", "Reverse the zoom direction"), CLICK, WAIT(2), EXPECT(ndof_flip_clear, "reverse zoom clear again"),
+    DO(ndof_end), WAIT(2), PANELS_ANSWER,
     CASE("field options: STRESS's options fold open, the glyph list picks, the subgroup folds"),
     DO(close_all), DO(select_stress), DO(stress_options_open), WAIT(3), EXPECT(options_open, "STRESS > options open"),
     DO(snapshot), AT_TIP("Scene", "#tensor style"), CLICK, EXPECT(scene_popup, "the glyph list opens"),

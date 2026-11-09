@@ -68,6 +68,50 @@ static void symbol_sizes(struct nk_context* ctx, float s, float row) {
     nk_tree_pop(ctx);
 }
 
+/* the 3D mouse: we read the device ourselves, so its driver's settings do not apply */
+static void view_ndof(struct nk_context* ctx, float row) {
+    static const char* names[6] = { "pan x", "pan y", "zoom", "tilt", "spin", "roll" };
+    static const char* flips[6] = {
+        "Reverse left / right panning", "Reverse up / down panning", "Reverse the zoom direction",
+        "Reverse the tilt (twist about the cap's left-right axis)", "Reverse the spin (twist about the vertical axis)",
+        "Reverse the roll (twist about the line of sight)" };
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "ccxview reads the 3D mouse directly: the zoom, direction and sensitivity settings of\n"
+             "its own driver (3DxWare, spacenavd...) do not apply, set them here");
+    nk_label_colored(ctx, "driver settings do not apply here", NK_TEXT_LEFT, P.dim);
+    const char* st = !G.ndof_on ? "off"
+#ifdef __linux__
+        : G.ndof_found ? "device found" : "waiting for spacenavd";
+#else
+        : G.ndof_found ? "device found" : "no device found";
+#endif
+    nk_label_colored(ctx, st, NK_TEXT_LEFT, P.dim);
+    tip(ctx, "Read a 3D mouse (SpaceMouse); the cap moves the model like a hand holding it.\nButton 1 fits the model, button 2 the iso view");
+    nk_checkbox_label(ctx, "3D mouse", &G.ndof_on);
+    tip(ctx, "Sensitivity, 1 = default");
+    nk_property_float(ctx, "#speed", 0.05f, &G.ndof_speed, 20.f, 0.05f, 0.01f);
+    tip(ctx, "Cap travel ignored around rest, in %");
+    nk_property_float(ctx, "#dead zone %", 0.f, &G.ndof_dead, 30.f, 0.5f, 0.1f);
+    nk_layout_row_dynamic(ctx, row, 2);
+    tip(ctx, "Zoom with the cap pushed forward / back across the table; the lift axis pans up / down");
+    if (nk_option_label(ctx, "zoom: forward / back", !G.ndof_zoom_lift)) G.ndof_zoom_lift = false;
+    tip(ctx, "Zoom with the cap pushed down / pulled up; forward / back then pans up / down");
+    if (nk_option_label(ctx, "zoom: push / pull", G.ndof_zoom_lift)) G.ndof_zoom_lift = true;
+    for (int k = 0; k < 6; k++) {
+        char b[32]; snprintf(b, sizeof b, "reverse %s", names[k]);
+        tip(ctx, flips[k]);
+        nk_checkbox_label(ctx, b, &G.ndof_flip[k]);
+    }
+    tip(ctx, "Twisting the cap does not turn the model");
+    nk_checkbox_label(ctx, "lock rotation", &G.ndof_lock_rot);
+    tip(ctx, "Pushing the cap does not pan or zoom");
+    nk_checkbox_label(ctx, "lock pan and zoom", &G.ndof_lock_pan);
+    nk_layout_row_dynamic(ctx, row, 1);
+    tip(ctx, "Only the axis moved furthest acts at a time");
+    nk_checkbox_label(ctx, "dominant axis only", &G.ndof_dominant);
+    nk_tree_state_pop(ctx);
+}
+
 /* replicate: rows of copies of a periodic model along X / Y / Z */
 static void view_replicate(struct nk_context* ctx, float s, float row) {
     static const char* ax[3] = { "Along X", "Along Y", "Along Z" };
@@ -361,6 +405,7 @@ void section_view(struct nk_context* ctx, float s, float row) {
         nk_tree_state_pop(ctx);
     }
 
+    if (sub_push(ctx, "3D mouse", CV_TREE_NDOF)) view_ndof(ctx, row);
     if (sub_push(ctx, "Clip & crop", CV_TREE_CLIP)) {
         /* clip plane: cut at draw time along an axis; the cut through solids filled */
         nk_layout_row_dynamic(ctx, row, 2);

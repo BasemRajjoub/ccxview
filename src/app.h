@@ -34,7 +34,7 @@ enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
 enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
        CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
        CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_IMPORT,
-       CV_TREE_CONTACT, CV_TREE_N };
+       CV_TREE_CONTACT, CV_TREE_NDOF, CV_TREE_N };
 
 /* the title block's automatic lines (app_title.c), in the order shown */
 enum { CV_TB_TITLE, CV_TB_FILE, CV_TB_SOLVER, CV_TB_ANALYSIS, CV_TB_STEP, CV_TB_SCALE, CV_TB_UNITS,
@@ -534,6 +534,13 @@ typedef struct {
     int       max_fps;               /* the most frames a second; 0: as the display goes (vsync) */
     bool      ndof_on;               /* a 3D mouse moves the camera (ndof.h); no device: nothing */
     float     ndof_speed;            /* its sensitivity, 1 = the default */
+    bool      ndof_zoom_lift;        /* lift / push down the cap zooms, forward / back pans vertically */
+    bool      ndof_flip[6];          /* reverse pan x, pan y, zoom, tilt, spin, roll */
+    bool      ndof_lock_rot, ndof_lock_pan, ndof_dominant;
+    float     ndof_dead;             /* dead zone, % of travel */
+    bool      ndof_found;            /* a device answered cv_ndof_open */
+    bool      orbit_pivot_on;        /* the last mouse rotation's pivot is remembered */
+    v3        orbit_pivot;           /* ... the model point it turned about (the 3D mouse turns about it too) */
     bool      sidecar;               /* keep each model's post-processing in <model>.ccxview (app_sidecar.c) */
 } cv_app;
 
@@ -810,6 +817,7 @@ void app_sidecar_flush(void);                /* written now if it changed (befor
 void app_sidecar_forget(void);               /* delete the file, open the model afresh */
 void app_view(int preset);
 enum { CV_NAV_NONE, CV_NAV_ROTATE, CV_NAV_PAN, CV_NAV_ZOOM, CV_NAV_ROLL, CV_NAV_BOX, CV_NAV_LOOK, CV_NAV_LASSO };
+void cam_orbit_about(float yaw, float pitch, bool on, v3 pivot);   /* cam_orbit, the pivot (if on) keeping its place in the view */
 void cam_turn(v3 axis, float a, v3 pivot);       /* the camera turned about a world axis through pivot */
 bool cam_roll(float a);                          /* about the view axis; false: turntable, switched to free */
 bool app_ndof_apply(const cv_ndof_state* s, float dt);   /* a 3D mouse state moves the camera for dt s; false: nothing to do */
