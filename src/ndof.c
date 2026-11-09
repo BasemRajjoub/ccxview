@@ -129,10 +129,18 @@ static void on_msg(uint32_t product, uint32_t type, void* arg) {
     const cx_state* st = (const cx_state*)arg;
     pthread_mutex_lock(&mu);
     if (st->client == client && client) {      /* the state goes to every client */
-        got_input = true;
-        if (st->command == CX_CMD_AXIS) { memcpy(raw, st->axis, sizeof raw); dirty = true; dbg_axes(raw); }
-        else if (st->command == CX_CMD_BUTTONS) { btn = st->buttons; dirty = true; }
+        if (st->command == CX_CMD_AXIS) {
+            memcpy(raw, st->axis, sizeof raw); dirty = true; dbg_axes(raw);
+            for (int i = 0; i < 6; i++) if (raw[i]) got_input = true;   /* the driver's first message is all zero */
+        }
+        else if (st->command == CX_CMD_BUTTONS) {
+            btn = st->buttons; dirty = true;
+            if (btn) got_input = true;
+            dbg("buttons mask 0x%08x", btn);
+        }
         else if (st->command == CX_CMD_APPEVENT && st->value >= 0 && st->value < 32) {
+            got_input = true;
+            dbg("button event %d %s", (int)st->value, st->appEventPressed ? "pressed" : "released");   /* its numbering is unverified */
             if (st->appEventPressed) btn |= 1u << st->value; else btn &= ~(1u << st->value);
             dirty = true;
         }
