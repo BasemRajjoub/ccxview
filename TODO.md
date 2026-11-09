@@ -20,6 +20,9 @@ before it, so no step rewrites code an earlier one wrote. One commit per step.
 
 ## 2. Open points (no order)
 
+### Export
+- All time steps to VTU for ParaView, on all cores (#43): a big feature, for later.
+
 ### Shell forces (#19)
 - Reinforcement: transverse shear (the sandwich's core) and compression steel
   are not designed; the facet method (Capra-Maury) of Code_Aster is not offered.
