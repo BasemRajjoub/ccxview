@@ -13,6 +13,23 @@ static void test_ndof(void) {
     cv_ndof_open();                                   /* no device here (or none of the backend): nothing to report */
     CHECK(!cv_ndof_poll(&z));
     cv_ndof_close();
+    CHECK(cv_ndof_version_cmp("1.4.5.653", "1.3.4.473") > 0);     /* the newer driver, numerically */
+    CHECK(cv_ndof_version_cmp("1.3.4.473", "1.3.4.473") == 0);
+    CHECK(cv_ndof_version_cmp("1.3.4.99", "1.3.4.473") < 0);
+    CHECK(cv_ndof_version_cmp("1.10", "1.9") > 0);
+    CHECK(cv_ndof_version_cmp("1.3", "1.3.0.1") < 0);
+    {
+        cv_ndof_state rs = { { 0, 0, 0 }, { 0, 0, 0.5f }, 0 };
+        float held = 0;
+        CHECK(!cv_ndof_roll_hint(&held, &rs, 0.03f, 0.2f));          /* 0.2 s: not yet */
+        CHECK(cv_ndof_roll_hint(&held, &rs, 0.03f, 0.25f));          /* sustained */
+        rs.r[2] = 0.05f;
+        CHECK(!cv_ndof_roll_hint(&held, &rs, 0.03f, 1.f) && held == 0.f);   /* a tremor resets it */
+        rs.r[2] = 0.5f;
+        CHECK(!cv_ndof_roll_hint(&held, &rs, 0.6f, 1.f));            /* inside the dead zone */
+    }
+    cv_ndof_clear();
+    CHECK(cv_ndof_get_status() == CV_NDOF_NO_DRIVER || cv_ndof_get_status() == CV_NDOF_DRIVER);
     CHECK(cv_ndof_move_of(&s, 0.1f, 10.f, 1.f, &a));
     CHECK(cv_ndof_move_of(&s, 0.1f, 5000.f, 1.f, &b));
     CHECK_NEAR(b.pan[0] / a.pan[0], 500.0, 1e-3);     /* rates proportional to the distance: any size of model feels alike */

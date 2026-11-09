@@ -591,6 +591,14 @@ bool app_ndof_apply(const cv_ndof_state* s, float dt) {
     o.speed = G.ndof_speed; o.dead = G.ndof_dead * 0.01f;
     o.zoom_lift = G.ndof_zoom_lift; memcpy(o.flip, G.ndof_flip, sizeof o.flip);
     o.lock_rot = G.ndof_lock_rot; o.lock_pan = G.ndof_lock_pan; o.dominant = G.ndof_dominant;
+    static float held;      /* roll does nothing in turntable mode: say so once per run, when it is meant */
+    static bool told;
+    if (G.orbit_free || G.ndof_lock_rot) held = 0.f;
+    else if (!told && cv_ndof_roll_hint(&held, s, o.dead, dt)) {
+        told = true;
+        snprintf(G.note, sizeof G.note, "Rolling needs free rotation: View > Camera");
+        G.note_t = cv_now();
+    }
     if (!G.loaded || !cv_ndof_move_opt(s, dt, G.cam.dist, &o, &m)) return false;
     v3 eye, fwd, right, up;
     cam_basis(&G.cam, &eye, &fwd, &right, &up);

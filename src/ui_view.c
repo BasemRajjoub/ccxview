@@ -80,12 +80,18 @@ static void view_ndof(struct nk_context* ctx, float row) {
              "its own driver (3DxWare, spacenavd...) do not apply, set them here");
     nk_label_colored(ctx, "driver settings do not apply here", NK_TEXT_LEFT, P.dim);
     const char* st = !G.ndof_on ? "off"
-#ifdef __linux__
+#ifdef __APPLE__
+        : cv_ndof_get_status() == CV_NDOF_INPUT ? "input received"
+        : cv_ndof_get_status() == CV_NDOF_DEVICE ? "device reported"
+        : cv_ndof_get_status() == CV_NDOF_DRIVER ? "driver ready, no device reported" : "driver not found";
+#elif defined(__linux__)
         : G.ndof_found ? "device found" : "waiting for spacenavd";
 #else
         : G.ndof_found ? "device found" : "no device found";
 #endif
     nk_label_colored(ctx, st, NK_TEXT_LEFT, P.dim);
+    tip(ctx, "Rolling (twisting the cap about the line of sight) needs free rotation: View > Camera.\nThe turntable cannot roll");
+    nk_label_colored(ctx, "roll needs View > Camera free rotation", NK_TEXT_LEFT, P.dim);
     tip(ctx, "Read a 3D mouse (SpaceMouse); the cap moves the model like a hand holding it.\nButton 1 fits the model, button 2 the iso view");
     nk_checkbox_label(ctx, "3D mouse", &G.ndof_on);
     tip(ctx, "Sensitivity, 1 = default");

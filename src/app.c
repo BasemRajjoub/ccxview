@@ -383,9 +383,9 @@ static void frame(void) {
     tick_anim();
     tick_flight();
     {   /* a 3D mouse, when there is one (macOS, Linux, Windows backends; elsewhere cv_ndof_open says no) */
-        static bool tried, have;
-        static double last;
-        if (G.ndof_on && !tried) { tried = true; have = cv_ndof_open(); G.ndof_found = have; }
+        static bool have;
+        static double last, next_try;
+        if (G.ndof_on && !have && cv_now() >= next_try) { have = cv_ndof_open(); G.ndof_found = have; next_try = cv_now() + 5.0; }   /* a driver started later is found within 5 s */
         if (G.ndof_on && have) {
             cv_ndof_state ns;
             double now = cv_now();
@@ -1032,6 +1032,7 @@ static void event(const sapp_event* ev) {
             break;
         case SAPP_EVENTTYPE_UNFOCUSED:
             memset(g_keys, 0, sizeof g_keys);
+            cv_ndof_clear();                     /* a held cap or button must not outlive the focus */
             break;
         case SAPP_EVENTTYPE_KEY_DOWN: {
             /* typing in a text box. Not nk_busy: that is true whenever the cursor is over

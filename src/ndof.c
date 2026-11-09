@@ -5,8 +5,59 @@
 #define _GNU_SOURCE
 #endif
 #include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
 #include "ndof.h"
+#include "os.h"
 #include <math.h>
+
+/* CCXVIEW_NDOF_DEBUG=1: stderr lines for open / registration / device changes, and the raw
+   axes of a non-zero report when they moved by a step (at most ~20 lines a second) */
+static bool dbg_on(void) {
+    static int on = -1;
+    if (on < 0) { const char* e = getenv("CCXVIEW_NDOF_DEBUG"); on = e && *e && *e != '0'; }
+    return on;
+}
+static void dbg(const char* fmt, ...) {
+    if (!dbg_on()) return;
+    va_list ap;
+    va_start(ap, fmt);
+    fputs("ndof: ", stderr); vfprintf(stderr, fmt, ap); fputc('\n', stderr);
+    va_end(ap);
+}
+static void dbg_axes(const int16_t a[6]) {   /* callers on another thread hold their lock */
+    static int16_t last[6];
+    static double t;
+    if (!dbg_on()) return;
+    int big = 0; bool any = false;
+    for (int i = 0; i < 6; i++) { any |= a[i] != 0; big = abs(a[i] - last[i]) > big ? abs(a[i] - last[i]) : big; }
+    double now = cv_now();
+    if (!any || big < 20 || now - t < 0.05) return;
+    t = now; memcpy(last, a, sizeof last);
+    dbg("axes %d %d %d %d %d %d", a[0], a[1], a[2], a[3], a[4], a[5]);
+}
+
+/* dotted version numbers compared part by part: <0, 0, >0 for a <, =, > b */
+int cv_ndof_version_cmp(const char* a, const char* b) {
+    for (;;) {
+        long x = 0, y = 0;
+        while (*a >= '0' && *a <= '9') x = x * 10 + (*a++ - '0');
+        while (*b >= '0' && *b <= '9') y = y * 10 + (*b++ - '0');
+        if (x != y) return x < y ? -1 : 1;
+        if (!*a && !*b) return 0;
+        if (*a == '.') a++; else if (*a) return 0;   /* junk: stop, call it equal */
+        if (*b == '.') b++; else if (*b) return 0;
+    }
+}
+
+/* In turntable mode a twist about the line of sight does nothing: true once the roll has been
+   asked for (past the dead zone and 10 % of travel) for 0.4 s on end, not by a tremor.
+   *held is the caller's running time. */
+bool cv_ndof_roll_hint(float* held, const cv_ndof_state* s, float dead, float dt) {
+    if (fabsf(s->r[2]) > fmaxf(dead, 0.10f)) *held += dt; else *held = 0.f;
+    return *held >= 0.4f;
+}
 
 /* Raw driver axes (TX TY TZ RX RY RZ, about +-350 at full travel on the 3Dconnexion
    drivers) to a state. Same permutation and signs as Blender's GHOST_NDOFManagerCocoa:
@@ -22,17 +73,24 @@ void cv_ndof_from_raw(const int16_t axis[6], cv_ndof_state* s) {
 /* 3Dconnexion's client API (3DxWare), declared here by hand and found with dlopen, so
    nothing is linked and ccxview starts without the driver. Learnt from Blender's
    https://projects.blender.org/blender/blender/src/branch/main/intern/ghost/intern/GHOST_NDOFManagerCocoa.mm
-   (the handler runs on the main run loop thread, which is sokol's NSApp loop: the
-   statics need no lock). */
+   SetConnexionHandlers is told to call back on a separate thread, so the state the callbacks
+   write (client id, axes, buttons, flags) sits behind a mutex; the camera and UI work stay
+   on the main thread. */
 #include <dlfcn.h>
-#include <string.h>
+#include <pthread.h>
 
 #define CX_MODE_TAKEOVER 1
 #define CX_MASK_ALL 0x3fff
+#define CX_MASK_AXIS 0x3f00
 #define CX_MASK_ALL_BUTTONS 0xffffffffu
 #define CX_CMD_BUTTONS 2
 #define CX_CMD_AXIS 3
+#define CX_CMD_APPEVENT 11                     /* newer drivers: a button number and pressed / released */
 #define CX_MSG_DEVICE_STATE 0x33645352u        /* '3dSR' */
+/* 3DxMacCore from this version (3DxWare 10.8.4) sends buttons as app events, with the
+   buttons left unmasked, and only the axes forwarded */
+#define CX_NEW_DRIVER "1.3.4.473"
+#define CX_FRAMEWORK "/Library/Frameworks/3DconnexionClient.framework"
 
 #pragma pack(push, 2)
 typedef struct {
@@ -57,9 +115,11 @@ static uint16_t (*p_Register)(uint32_t, const char*, uint16_t, uint32_t);
 static void (*p_ButtonMask)(uint16_t, uint32_t);
 static void (*p_Unregister)(uint16_t);
 
+static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
 static void* lib;
-static uint16_t client;
-static bool is_open, dirty;
+static bool is_open, handlers, registered;     /* main thread only */
+static uint16_t client;                        /* below: under mu */
+static bool dirty, have_dev, got_input;
 static int16_t raw[6];
 static unsigned btn;
 
@@ -67,32 +127,94 @@ static void on_msg(uint32_t product, uint32_t type, void* arg) {
     (void)product;
     if (type != CX_MSG_DEVICE_STATE || !arg) return;
     const cx_state* st = (const cx_state*)arg;
-    if (st->client != client) return;           /* the state goes to every client */
-    if (st->command == CX_CMD_AXIS) { memcpy(raw, st->axis, sizeof raw); dirty = true; }
-    else if (st->command == CX_CMD_BUTTONS) { btn = st->buttons; dirty = true; }
+    pthread_mutex_lock(&mu);
+    if (st->client == client && client) {      /* the state goes to every client */
+        got_input = true;
+        if (st->command == CX_CMD_AXIS) { memcpy(raw, st->axis, sizeof raw); dirty = true; dbg_axes(raw); }
+        else if (st->command == CX_CMD_BUTTONS) { btn = st->buttons; dirty = true; }
+        else if (st->command == CX_CMD_APPEVENT && st->value >= 0 && st->value < 32) {
+            if (st->appEventPressed) btn |= 1u << st->value; else btn &= ~(1u << st->value);
+            dirty = true;
+        }
+    }
+    pthread_mutex_unlock(&mu);
 }
-static void on_dev(uint32_t product) { (void)product; }
+static void on_added(uint32_t product) {
+    pthread_mutex_lock(&mu); have_dev = true; pthread_mutex_unlock(&mu);
+    dbg("device added product=%u", product);
+}
+static void on_removed(uint32_t product) {
+    pthread_mutex_lock(&mu);
+    have_dev = false; got_input = false; memset(raw, 0, sizeof raw); btn = 0; dirty = true;
+    pthread_mutex_unlock(&mu);
+    dbg("device removed product=%u", product);
+}
+
+/* the driver framework's CFBundleVersion, through CoreFoundation found at run time; "" if unknown */
+static void driver_version(char* out, size_t n) {
+    out[0] = 0;
+    void* cf = dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_LAZY);
+    if (!cf) return;
+    typedef const void* (*mk_str)(const void*, const char*, uint32_t);
+    typedef const void* (*mk_url)(const void*, const void*, long, bool);
+    typedef const void* (*mk_bundle)(const void*, const void*);
+    typedef const void* (*get_val)(const void*, const void*);
+    typedef bool (*to_c)(const void*, char*, long, uint32_t);
+    typedef void (*rel)(const void*);
+    mk_str str = (mk_str)dlsym(cf, "CFStringCreateWithCString");
+    mk_url url = (mk_url)dlsym(cf, "CFURLCreateWithFileSystemPath");
+    mk_bundle bun = (mk_bundle)dlsym(cf, "CFBundleCreate");
+    get_val gv = (get_val)dlsym(cf, "CFBundleGetValueForInfoDictionaryKey");
+    to_c tc = (to_c)dlsym(cf, "CFStringGetCString");
+    rel rl = (rel)dlsym(cf, "CFRelease");
+    if (!str || !url || !bun || !gv || !tc || !rl) return;
+    const uint32_t utf8 = 0x08000100;
+    const void* path = str(NULL, CX_FRAMEWORK, utf8);
+    const void* key = str(NULL, "CFBundleVersion", utf8);
+    const void* u = path ? url(NULL, path, 0 /* POSIX style */, true) : NULL;
+    const void* b = u ? bun(NULL, u) : NULL;
+    const void* v = (b && key) ? gv(b, key) : NULL;
+    if (v && !tc(v, out, (long)n, utf8)) out[0] = 0;
+    if (b) rl(b);
+    if (u) rl(u);
+    if (key) rl(key);
+    if (path) rl(path);
+}
 
 bool cv_ndof_open(void) {
     if (is_open) return true;
-    lib = dlopen("/Library/Frameworks/3DconnexionClient.framework/3DconnexionClient", RTLD_LAZY);
-    if (!lib) return false;
+    lib = dlopen(CX_FRAMEWORK "/3DconnexionClient", RTLD_LAZY);
+    if (!lib) { dbg("driver framework not found"); return false; }
     *(void**)&p_SetHandlers = dlsym(lib, "SetConnexionHandlers");
     *(void**)&p_Cleanup = dlsym(lib, "CleanupConnexionHandlers");
     *(void**)&p_Register = dlsym(lib, "RegisterConnexionClient");
     *(void**)&p_ButtonMask = dlsym(lib, "SetConnexionClientButtonMask");
     *(void**)&p_Unregister = dlsym(lib, "UnregisterConnexionClient");
-    if (!p_SetHandlers || !p_Cleanup || !p_Register || !p_Unregister ||
-        p_SetHandlers(on_msg, on_dev, on_dev, true) != 0) {
-        cv_ndof_close();
-        return false;
-    }
-    /* as Blender does for a plain executable: our own four-letter signature, a Pascal
-       string name, take-over mode (the driver's own cursor/keystroke mapping stays off) */
-    client = p_Register(0x63637876u /* 'ccxv' */, "\007ccxview", CX_MODE_TAKEOVER, CX_MASK_ALL);
-    if (p_ButtonMask) p_ButtonMask(client, CX_MASK_ALL_BUTTONS);
+    if (!p_SetHandlers || !p_Cleanup || !p_Register || !p_Unregister) { dbg("driver symbols missing"); cv_ndof_close(); return false; }
+    int16_t err = p_SetHandlers(on_msg, on_added, on_removed, true);   /* callbacks on a separate thread */
+    if (err != 0) { dbg("SetConnexionHandlers failed: %d", (int)err); cv_ndof_close(); return false; }
+    handlers = true;
+    char ver[64];
+    driver_version(ver, sizeof ver);
+    bool newd = ver[0] && cv_ndof_version_cmp(ver, CX_NEW_DRIVER) >= 0;
+    /* signature 0 and a Pascal string of the real executable's name: the driver tells the
+       foreground application by them (ccxview has no CFBundleSignature of its own) */
+    const char* nm = getprogname();
+    size_t len = nm ? strlen(nm) : 0;
+    char pas[256];
+    if (len == 0 || len > 255) { dbg("executable name unusable"); cv_ndof_close(); return false; }
+    pas[0] = (char)len; memcpy(pas + 1, nm, len);
+    pthread_mutex_lock(&mu);
+    have_dev = got_input = false; memset(raw, 0, sizeof raw); btn = 0; dirty = false;
+    pthread_mutex_unlock(&mu);
+    uint16_t id = p_Register(0, pas, CX_MODE_TAKEOVER, newd ? CX_MASK_AXIS : CX_MASK_ALL);
+    if (id == 0) { dbg("RegisterConnexionClient failed (executable %s)", nm); cv_ndof_close(); return false; }
+    pthread_mutex_lock(&mu); client = id; pthread_mutex_unlock(&mu);
+    registered = true;
+    if (p_ButtonMask) p_ButtonMask(id, newd ? 0u : CX_MASK_ALL_BUTTONS);
     is_open = true;
-    memset(raw, 0, sizeof raw); btn = 0; dirty = false;
+    dbg("registered executable=%s signature=0 client=%u driver=%s (%s buttons)", nm, id,
+        ver[0] ? ver : "unknown", newd ? "app-event" : "mask");
     return true;
 }
 
@@ -100,21 +222,37 @@ bool cv_ndof_open(void) {
    when something changed (the return to centre, a button) */
 bool cv_ndof_poll(cv_ndof_state* s) {
     if (!is_open) return false;
+    int16_t r[6]; unsigned b; bool d;
+    pthread_mutex_lock(&mu);
+    memcpy(r, raw, sizeof r); b = btn; d = dirty; dirty = false;
+    pthread_mutex_unlock(&mu);
     bool held = false;
-    for (int i = 0; i < 6; i++) held |= raw[i] != 0;
-    if (!held && !dirty) return false;
-    dirty = false;
-    cv_ndof_from_raw(raw, s);
-    s->buttons = btn;
+    for (int i = 0; i < 6; i++) held |= r[i] != 0;
+    if (!held && !d) return false;
+    cv_ndof_from_raw(r, s);
+    s->buttons = b;
     return true;
 }
 
+void cv_ndof_clear(void) {
+    pthread_mutex_lock(&mu); memset(raw, 0, sizeof raw); btn = 0; dirty = true; pthread_mutex_unlock(&mu);
+}
+
+cv_ndof_status cv_ndof_get_status(void) {
+    if (!is_open) return CV_NDOF_NO_DRIVER;
+    pthread_mutex_lock(&mu);
+    cv_ndof_status r = got_input ? CV_NDOF_INPUT : have_dev ? CV_NDOF_DEVICE : CV_NDOF_DRIVER;
+    pthread_mutex_unlock(&mu);
+    return r;
+}
+
 void cv_ndof_close(void) {
-    if (is_open && p_Unregister) p_Unregister(client);
-    if (p_Cleanup && lib) p_Cleanup();
+    if (registered && p_Unregister) { pthread_mutex_lock(&mu); uint16_t c = client; pthread_mutex_unlock(&mu); p_Unregister(c); }
+    if (handlers && p_Cleanup) p_Cleanup();    /* stops the callback thread: no lock is held here */
     if (lib) dlclose(lib);
-    lib = NULL; is_open = false; p_SetHandlers = NULL; p_Cleanup = NULL; p_Register = NULL;
+    lib = NULL; is_open = handlers = registered = false; p_SetHandlers = NULL; p_Cleanup = NULL; p_Register = NULL;
     p_ButtonMask = NULL; p_Unregister = NULL;
+    pthread_mutex_lock(&mu); client = 0; have_dev = got_input = false; memset(raw, 0, sizeof raw); btn = 0; dirty = false; pthread_mutex_unlock(&mu);
 }
 #elif defined(__linux__)
 /* spacenavd's (FreeSpacenav) client socket, spoken directly: no libspnav, no link-time
@@ -181,10 +319,11 @@ static void try_connect(double now) {
     }
     if (s < 0) return;
     sock = s; ncarry = 0;
+    dbg("spacenavd connected");
     memset(axis, 0, sizeof axis); btn = 0; dirty = false;
 }
 
-static void drop(void) { if (sock >= 0) close(sock); sock = -1; memset(axis, 0, sizeof axis); btn = 0; dirty = true; }
+static void drop(void) { if (sock >= 0) { close(sock); dbg("spacenavd gone"); } sock = -1; memset(axis, 0, sizeof axis); btn = 0; dirty = true; }
 
 /* The backend is always "open": the daemon may start later, so the socket is looked for
    at most every RETRY_S seconds (one failed connect(): nothing to measure). */
@@ -209,6 +348,9 @@ bool cv_ndof_poll(cv_ndof_state* s) {
             if (e[0] == 0) {
                 for (int i = 0; i < 6; i++) axis[i] = (float)e[i + 1];
                 last_motion = now; dirty = true;
+                int16_t a16[6];
+                for (int i = 0; i < 6; i++) a16[i] = (int16_t)e[i + 1];
+                dbg_axes(a16);
             } else if ((e[0] == 1 || e[0] == 2) && e[1] >= 0 && e[1] < 32) {
                 if (e[0] == 1) btn |= 1u << e[1]; else btn &= ~(1u << e[1]);
                 dirty = true;
@@ -234,6 +376,8 @@ bool cv_ndof_poll(cv_ndof_state* s) {
 }
 
 void cv_ndof_close(void) { drop(); dirty = false; next_try = 0; }
+void cv_ndof_clear(void) { memset(axis, 0, sizeof axis); btn = 0; dirty = true; }
+cv_ndof_status cv_ndof_get_status(void) { return sock >= 0 ? CV_NDOF_DEVICE : CV_NDOF_NO_DRIVER; }
 #elif defined(_WIN32)
 /* Raw Input (user32, already linked): the 3Dconnexion HID devices are usage page 0x01 usage
    0x08 (multi-axis controller), so WM_INPUT arrives on the window while it has focus,
@@ -266,6 +410,7 @@ static void on_report(const BYTE* d, size_t n) {
         memcpy(a, d + 1, k * 2);
         if (d[0] == 1) { memcpy(raw, a, k * 2); } else memcpy(raw + 3, a, 6);
         dirty = true;
+        dbg_axes(raw);
     } else if (d[0] == 3) { unsigned b = 0; memcpy(&b, d + 1, n - 1 < 4 ? n - 1 : 4); btn = b; dirty = true; }
 }
 
@@ -286,7 +431,7 @@ static LRESULT CALLBACK ndof_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 bool cv_ndof_open(void) {
     if (hw) return true;
     HWND w = (HWND)sapp_win32_get_hwnd();
-    if (!w) return false;
+    if (!w) { dbg("no window yet"); return false; }
     RAWINPUTDEVICE d = { 0x01, 0x08, 0, w };      /* focused window only: no RIDEV_INPUTSINK */
     if (!RegisterRawInputDevices(&d, 1, sizeof d)) return false;
     old_proc = (WNDPROC)SetWindowLongPtrW(w, GWLP_WNDPROC, (LONG_PTR)ndof_proc);
@@ -296,8 +441,12 @@ bool cv_ndof_open(void) {
         return false;
     }
     hw = w; memset(raw, 0, sizeof raw); btn = 0; dirty = false;
+    dbg("raw input registered on the window");
     return true;
 }
+
+void cv_ndof_clear(void) { memset(raw, 0, sizeof raw); btn = 0; dirty = true; }
+cv_ndof_status cv_ndof_get_status(void) { return hw ? CV_NDOF_DRIVER : CV_NDOF_NO_DRIVER; }
 
 /* like the macOS backend: true while the cap is off centre or something changed */
 bool cv_ndof_poll(cv_ndof_state* s) {
@@ -322,6 +471,8 @@ void cv_ndof_close(void) {
 bool cv_ndof_open(void) { return false; }
 bool cv_ndof_poll(cv_ndof_state* s) { (void)s; return false; }
 void cv_ndof_close(void) {}
+void cv_ndof_clear(void) {}
+cv_ndof_status cv_ndof_get_status(void) { return CV_NDOF_NO_DRIVER; }
 #endif
 
 enum { DEAD_PCT = 3 };                    /* % of travel */

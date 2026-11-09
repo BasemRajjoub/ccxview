@@ -20,6 +20,16 @@ typedef struct { float t[3], r[3]; unsigned buttons; } cv_ndof_state;
 bool cv_ndof_open(void);                  /* false: no device (or no backend) */
 bool cv_ndof_poll(cv_ndof_state* s);      /* false: nothing new / no device; true: s is the cap now */
 void cv_ndof_close(void);
+void cv_ndof_clear(void);                 /* drop held axes and buttons (the window lost focus); the next poll reports the rest */
+/* What is known of the device; honest on macOS (driver framework loaded and client registered;
+   a device reported; input received), elsewhere only NO_DRIVER / DRIVER / DEVICE for "nothing /
+   backend up / daemon connected". Debug: CCXVIEW_NDOF_DEBUG=1 prints to stderr. */
+typedef enum { CV_NDOF_NO_DRIVER, CV_NDOF_DRIVER, CV_NDOF_DEVICE, CV_NDOF_INPUT } cv_ndof_status;
+cv_ndof_status cv_ndof_get_status(void);
+int cv_ndof_version_cmp(const char* a, const char* b);   /* dotted versions: <0, 0, >0 */
+/* roll asked for in turntable mode: *held accumulates seconds of |roll| above the dead zone
+   (fraction of travel); true once sustained (0.4 s) */
+bool cv_ndof_roll_hint(float* held, const cv_ndof_state* s, float dead, float dt);
 #ifdef __linux__
 void cv_ndof_set_socket(const char* path);   /* test hook: try only this AF_UNIX path (NULL: the usual ones) */
 #endif
