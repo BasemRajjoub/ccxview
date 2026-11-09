@@ -1648,6 +1648,7 @@ static void test_localsys_requests(void) {
 
 #include "t_calc.h"
 #include "t_units.h"
+#include "t_numfmt.h"
 #include "t_loads.h"
 #include "../src/cap.h"
 #include "../src/label.h"
@@ -1679,6 +1680,7 @@ int main(void) {
     test_gpu_env();
     test_calc();
     test_units();
+    test_numfmt();
     test_loads();
     test_steps();
     test_load_cards();
