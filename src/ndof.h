@@ -27,9 +27,6 @@ void cv_ndof_clear(void);                 /* drop held axes and buttons (the win
 typedef enum { CV_NDOF_NO_DRIVER, CV_NDOF_DRIVER, CV_NDOF_DEVICE, CV_NDOF_INPUT } cv_ndof_status;
 cv_ndof_status cv_ndof_get_status(void);
 int cv_ndof_version_cmp(const char* a, const char* b);   /* dotted versions: <0, 0, >0 */
-/* roll asked for in turntable mode: *held accumulates seconds of |roll| above the dead zone
-   (fraction of travel); true once sustained (0.4 s) */
-bool cv_ndof_roll_hint(float* held, const cv_ndof_state* s, float dead, float dt);
 #ifdef __linux__
 void cv_ndof_set_socket(const char* path);   /* test hook: try only this AF_UNIX path (NULL: the usual ones) */
 #endif
@@ -43,6 +40,9 @@ void cv_ndof_from_raw(const int16_t axis[6], cv_ndof_state* s);
    zoom as the factor for the distance, angles in radians. speed scales everything
    (1: a full push crosses about its own distance in a second, a full twist turns
    ~1.5 rad/s). A dead zone leaves the model still. false: all within it. */
+/* Rotation vector of the camera in its current screen frame: pitch about right,
+   yaw about up, roll about back (toward the user), using the right-hand rule.
+   Apply all three together, not as turntable Euler-angle increments. */
 typedef struct { float pan[2], zoom, yaw, pitch, roll; } cv_ndof_move;
 bool cv_ndof_move_of(const cv_ndof_state* s, float dt, float dist, float speed, cv_ndof_move* m);
 

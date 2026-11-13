@@ -90,8 +90,8 @@ static void view_ndof(struct nk_context* ctx, float row) {
         : G.ndof_found ? "device found" : "no device found";
 #endif
     nk_label_colored(ctx, st, NK_TEXT_LEFT, P.dim);
-    tip(ctx, "Rolling (twisting the cap about the line of sight) needs free rotation: View > Camera.\nThe turntable cannot roll");
-    nk_label_colored(ctx, "roll needs View > Camera free rotation", NK_TEXT_LEFT, P.dim);
+    tip(ctx, "3D mouse rotation follows the screen axes and enables free rotation,\nincluding roll; mouse-only navigation can still use the turntable");
+    nk_label_colored(ctx, "rotation enables free camera", NK_TEXT_LEFT, P.dim);
     tip(ctx, "Read a 3D mouse (SpaceMouse); the cap moves the model like a hand holding it.\nButton 1 fits the model, button 2 the iso view");
     nk_checkbox_label(ctx, "3D mouse", &G.ndof_on);
     tip(ctx, "Sensitivity, 1 = default");

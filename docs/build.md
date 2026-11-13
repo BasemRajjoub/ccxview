@@ -1,5 +1,10 @@
 # Building ccxview
 
+`make test-ndof-camera` checks raw 3D mouse axes through the actual camera code
+without opening a window or device. It covers direction, screen-space rotation,
+both up-axis conventions, poles, rolled views, pivots, flips and rotation locks,
+and is also included in `make test`.
+
 ```sh
 make                 # Linux/macOS -> build/ccxview
 make PORTABLE=1      # Linux build for glibc >= 2.34

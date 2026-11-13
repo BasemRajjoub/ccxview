@@ -51,14 +51,6 @@ int cv_ndof_version_cmp(const char* a, const char* b) {
     }
 }
 
-/* In turntable mode a twist about the line of sight does nothing: true once the roll has been
-   asked for (past the dead zone and 10 % of travel) for 0.4 s on end, not by a tremor.
-   *held is the caller's running time. */
-bool cv_ndof_roll_hint(float* held, const cv_ndof_state* s, float dead, float dt) {
-    if (fabsf(s->r[2]) > fmaxf(dead, 0.10f)) *held += dt; else *held = 0.f;
-    return *held >= 0.4f;
-}
-
 /* Raw driver axes (TX TY TZ RX RY RZ, about +-350 at full travel on the 3Dconnexion
    drivers) to a state. Same permutation and signs as Blender's GHOST_NDOFManagerCocoa:
    t = (TX, -TZ, TY), r = (-RX, RZ, -RY). The signs are untested on a device. */
@@ -516,7 +508,7 @@ bool cv_ndof_move_opt(const cv_ndof_state* s, float dt, float dist, const cv_ndo
     m->pan[1] = -v[1] * dist * k;
     m->zoom = expf(-v[2] * k);            /* toward the user: the model nearer, the distance shorter */
     const float w = 1.5f * k;
-    m->pitch = v[3] * w; m->yaw = -v[4] * w; m->roll = v[5] * w;
+    m->pitch = v[3] * w; m->yaw = v[4] * w; m->roll = v[5] * w;
     for (int i = 0; i < 6; i++) if (v[i] != 0) return true;
     return false;
 }

@@ -581,34 +581,24 @@ void cam_orbit_about(float yaw, float pitch, bool on, v3 pivot) {
     G.cam.target = cv_pivot_target(pivot, eye0, r0, u0, f0, r1, u1, f1, G.cam.dist);
 }
 
-/* A 3D mouse state (ndof.h) for dt seconds, in object mode: pan and zoom rates scale with
-   the distance to the camera target, the rotation is the mouse orbit's (turntable, or free
-   with roll, per G.orbit_free) about the last mouse rotation's pivot, else the target.
-   Wakes the idle redraw (app_idle.c). */
+/* Object-mode navigation in the screen frame, independent of the mouse's turntable
+   axes. Rotation enables free orientation so no component is lost at a pole. */
 bool app_ndof_apply(const cv_ndof_state* s, float dt) {
     cv_ndof_move m;
     cv_ndof_opt o;
     o.speed = G.ndof_speed; o.dead = G.ndof_dead * 0.01f;
     o.zoom_lift = G.ndof_zoom_lift; memcpy(o.flip, G.ndof_flip, sizeof o.flip);
     o.lock_rot = G.ndof_lock_rot; o.lock_pan = G.ndof_lock_pan; o.dominant = G.ndof_dominant;
-    static float held;      /* roll does nothing in turntable mode: say so once per run, when it is meant */
-    static bool told;
-    if (G.orbit_free || G.ndof_lock_rot) held = 0.f;
-    else if (!told && cv_ndof_roll_hint(&held, s, o.dead, dt)) {
-        told = true;
-        snprintf(G.note, sizeof G.note, "Rolling needs free rotation: View > Camera");
-        G.note_t = cv_now();
-    }
     if (!G.loaded || !cv_ndof_move_opt(s, dt, G.cam.dist, &o, &m)) return false;
     v3 eye, fwd, right, up;
     cam_basis(&G.cam, &eye, &fwd, &right, &up);
     G.cam.target = v3_add(G.cam.target, v3_add(v3_scale(right, m.pan[0]), v3_scale(up, m.pan[1])));
     G.cam.dist = CV_MAX(G.cam.dist * m.zoom, 1e-5f * CV_MAX(G.diag, 1e-6f));
-    if (m.yaw != 0 || m.pitch != 0) cam_orbit_about(m.yaw, m.pitch, G.orbit_pivot_on, G.orbit_pivot);
-    if (G.orbit_free && m.roll != 0) {
-        v3 eye, f, r, u;
-        cam_basis(&G.cam, &eye, &f, &r, &u);
-        cam_turn(f, m.roll, G.orbit_pivot_on ? G.orbit_pivot : G.cam.target);   /* a rigid turn about it: it stays put in the view */
+    v3 turn = v3_add(v3_add(v3_scale(right, m.pitch), v3_scale(up, m.yaw)), v3_scale(fwd, -m.roll));
+    float angle = sqrtf(v3_dot(turn, turn));
+    if (angle > 0) {
+        app_set_orbit_free(true);
+        cam_turn(v3_scale(turn, 1.f / angle), angle, G.orbit_pivot_on ? G.orbit_pivot : G.cam.target);
     }
     app_wake();
     return true;
@@ -832,4 +822,3 @@ static void probe_px(float px, float py, bool keep) {
 
 void do_pick(float px, float py) { probe_px(px, py, false); }
 void app_probe_keep(float px, float py) { probe_px(px, py, true); }
-

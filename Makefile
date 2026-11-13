@@ -102,7 +102,19 @@ build/obj/test/%.o: %.c
 build/test_main: $(TEST_OBJ) build/video_mp4_nosan.o
 	$(CC) $(CFLAGS) -fsanitize=address,undefined $^ -o $@ -lm -lpthread -ldl
 
-test: build/test_main
+NDOF_TEST_GC = -Wl,--gc-sections
+ifeq ($(UNAME),Darwin)
+  NDOF_TEST_GC = -Wl,-dead_strip
+endif
+build/test_ndof_camera: tests/test_ndof_camera.c src/app_cam.c src/ndof.c $(wildcard src/*.h)
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fsanitize=address,undefined -ffunction-sections -fdata-sections tests/test_ndof_camera.c src/app_cam.c src/ndof.c -o $@ $(NDOF_TEST_GC) -lpthread -lm
+
+.PHONY: test-ndof-camera
+test-ndof-camera: build/test_ndof_camera
+	./build/test_ndof_camera
+
+test: build/test_main test-ndof-camera
 	./build/test_main
 	scripts/check-sources.sh
 	sh tests/launcher.sh

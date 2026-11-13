@@ -18,16 +18,6 @@ static void test_ndof(void) {
     CHECK(cv_ndof_version_cmp("1.3.4.99", "1.3.4.473") < 0);
     CHECK(cv_ndof_version_cmp("1.10", "1.9") > 0);
     CHECK(cv_ndof_version_cmp("1.3", "1.3.0.1") < 0);
-    {
-        cv_ndof_state rs = { { 0, 0, 0 }, { 0, 0, 0.5f }, 0 };
-        float held = 0;
-        CHECK(!cv_ndof_roll_hint(&held, &rs, 0.03f, 0.2f));          /* 0.2 s: not yet */
-        CHECK(cv_ndof_roll_hint(&held, &rs, 0.03f, 0.25f));          /* sustained */
-        rs.r[2] = 0.05f;
-        CHECK(!cv_ndof_roll_hint(&held, &rs, 0.03f, 1.f) && held == 0.f);   /* a tremor resets it */
-        rs.r[2] = 0.5f;
-        CHECK(!cv_ndof_roll_hint(&held, &rs, 0.6f, 1.f));            /* inside the dead zone */
-    }
     cv_ndof_clear();
     CHECK(cv_ndof_get_status() == CV_NDOF_NO_DRIVER || cv_ndof_get_status() == CV_NDOF_DRIVER);
     CHECK(cv_ndof_move_of(&s, 0.1f, 10.f, 1.f, &a));
@@ -47,7 +37,7 @@ static void test_ndof(void) {
     CHECK(cv_ndof_move_of(&p, 1.f, 10.f, 1.f, &c));
     CHECK_NEAR(c.zoom, exp(-1.0), 1e-6);              /* pulled toward the user: nearer */
     CHECK_NEAR(c.pitch, 1.5, 1e-6);
-    CHECK_NEAR(c.yaw, -1.5, 1e-6);
+    CHECK_NEAR(c.yaw, 1.5, 1e-6);
     CHECK_NEAR(c.roll, 1.5, 1e-6);
     {   /* options: flips, zoom axis, locks, dominant axis, dead zone */
         cv_ndof_opt o, od;
