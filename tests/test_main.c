@@ -1651,6 +1651,7 @@ static void test_localsys_requests(void) {
 #include "t_numfmt.h"
 #include "t_nkfmt.h"
 #include "t_loads.h"
+#include "t_inpname.h"
 #include "../src/cap.h"
 #include "../src/label.h"
 #include "t_cap.h"
@@ -1684,6 +1685,8 @@ int main(void) {
     test_numfmt();
     test_nkfmt();
     test_loads();
+    test_inp_many_sets();
+    test_inp_surface_order();
     test_steps();
     test_load_cards();
     test_cap();
