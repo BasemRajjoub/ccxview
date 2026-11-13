@@ -198,7 +198,9 @@ typedef struct { char name[64]; bool is_elem; CV_VEC(uint32_t) ids; } vset;
 typedef struct { char name[64]; CV_VEC(uint32_t) elem; CV_VEC(uint8_t) face; CV_VEC(uint32_t) nodes; } vsurf;
 typedef cv_section section;                                   /* kind unused in sdofs */
 typedef struct { char elset[64]; float off; } shoff;     /* *SHELL SECTION, OFFSET= */
-typedef struct { cv_link l; CV_VEC(uint32_t) nodes; CV_VEC(uint32_t) elems; } vlink;   /* elems: a rigid ELSET, expanded at the end */
+/* elems: a rigid ELSET, expanded at the end. The names of what a keyword referred to before it was
+   defined (sname: surfaces, rnset / relset: the rigid body's sets) wait here until the deck is read. */
+typedef struct { cv_link l; CV_VEC(uint32_t) nodes; CV_VEC(uint32_t) elems; char sname[2][64], rnset[64], relset[64]; } vlink;
 typedef struct { char name[64]; cv_csys cs; bool bad; } vorient;
 /* a section's orientation, by name; the layers of a composite shell may each name one */
 typedef struct { char elset[64]; char ori[64]; bool mixed; uint32_t lay0, nlay; } osect;
@@ -337,6 +339,28 @@ static bool each_elem(P* p, const char* tok, node_fn fn, void* arg) {
 static int find_surf(P* p, const char* raw) {
     char nm[64]; snprintf(nm, sizeof nm, "%s", raw); upcase(nm);
     return nidx_find(&p->ix_surf, p, surf_key, p->surfs.n, nm, 0, false);
+}
+
+static void up_copy(char* dst, const char* src) { snprintf(dst, 64, "%s", src); upcase(dst); }
+
+static void link_add_node(P* p, uint32_t n, void* a);
+static void link_add_elem(P* p, uint32_t e, void* a);
+/* the surfaces and sets some links named before they were defined; final: what is still
+   missing is an unreadable line */
+static void links_resolve(P* p, bool final) {
+    for (size_t i = 0; i < p->links.n; i++) {
+        vlink* v = &p->links.a[i];
+        bool miss = false;
+        for (int j = 0; j < 2; j++) {
+            if (!v->sname[j][0]) continue;
+            if (v->l.surf[j] < 0) v->l.surf[j] = find_surf(p, v->sname[j]);
+            if (v->l.surf[j] >= 0) v->sname[j][0] = 0; else miss = true;
+        }
+        void* ix = (void*)(intptr_t)i;
+        if (v->rnset[0]) { if (each_node(p, v->rnset, link_add_node, ix)) v->rnset[0] = 0; else miss = true; }
+        if (v->relset[0]) { if (each_elem(p, v->relset, link_add_elem, ix)) v->relset[0] = 0; else miss = true; }
+        if (final && miss) p->bad_lines++;
+    }
 }
 
 static vlink* new_link(P* p, int kind, const char* name) {
@@ -706,8 +730,8 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (rn && to_u32(rn, &r)) v->l.ref = r;
         if (ro && to_u32(ro, &r)) v->l.rot = r;
         void* ix = (void*)(intptr_t)(p->links.n - 1);
-        if (ns && !each_node(p, ns, link_add_node, ix)) p->bad_lines++;
-        if (es && !each_elem(p, es, link_add_elem, ix)) p->bad_lines++;
+        if (ns && !each_node(p, ns, link_add_node, ix)) up_copy(v->rnset, ns);
+        if (es && !each_elem(p, es, link_add_elem, ix)) up_copy(v->relset, es);
         return;
     }
     if (strcmp(kw, "COUPLING") == 0) {                 /* *KINEMATIC / *DISTRIBUTING follow: dofs, ignored */
@@ -716,8 +740,7 @@ static void do_keyword(P* p, const char* s, const char* e) {
         if (!v) return;
         uint32_t r;
         if (rn && to_u32(rn, &r)) v->l.ref = r;
-        if (sf) v->l.surf[0] = find_surf(p, sf);
-        if (sf && v->l.surf[0] < 0) p->bad_lines++;
+        if (sf) { v->l.surf[0] = find_surf(p, sf); if (v->l.surf[0] < 0) up_copy(v->sname[0], sf); }
         return;
     }
     if (strcmp(kw, "DISTRIBUTINGCOUPLING") == 0) {   /* ELSET of one DCOUP3D element: its node is the ref */
@@ -1072,7 +1095,7 @@ static void do_data(P* p, const char* s, const char* e) {
             if (n < 2) { p->bad_lines++; return; }
             l->l.surf[0] = find_surf(p, f[0]);
             l->l.surf[1] = find_surf(p, f[1]);
-            if (l->l.surf[0] < 0 || l->l.surf[1] < 0) p->bad_lines++;
+            for (int j = 0; j < 2; j++) if (l->l.surf[j] < 0) up_copy(l->sname[j], f[j]);
             p->st = S_SKIP;
             return;
         }
@@ -1195,6 +1218,7 @@ static void do_data(P* p, const char* s, const char* e) {
             int n = fields(s, e, f, 32);
             cv_mchange m = { cur_step(p), p->mc_add, -1, 0, -1 };
             if (p->mc_pair) {
+                links_resolve(p, false);
                 int a = n > 1 ? find_surf(p, f[0]) : -1, b = n > 1 ? find_surf(p, f[1]) : -1;
                 for (size_t k = 0; a >= 0 && k < p->links.n; k++) {
                     const cv_link* l = &p->links.a[k].l;
@@ -1279,6 +1303,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     p.d = d; p.rd = rd; p.user = user; p.cset = -1; p.nodeset = -1; p.cdisc = -1;
     parse_text(&p, data, size);
     finish_element(&p);
+    links_resolve(&p, true);
     char msg[160];
 
     if (p.bad_lines) { snprintf(msg, sizeof msg, "%zu unreadable data lines skipped", p.bad_lines); cv_msg_add(&d->msgs, 0, false, msg); }

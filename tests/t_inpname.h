@@ -1,4 +1,13 @@
-/* t_inpname.h -- inp.c: lookups by name (many sets) (#45) */
+/* t_inpname.h -- inp.c: lookups by name (many sets) and surfaces named before they are defined (#44, #45) */
+
+static bool inpname_reader(void* user, const char* path, char** data, size_t* size) {
+    if (strcmp(path, "surf.inp") != 0) return false;
+    const char* t = "*SURFACE, TYPE=NODE, NAME=Inc\n3, 1.\n4, 1.\n";
+    *size = strlen(t);
+    *data = malloc(*size + 1);
+    memcpy(*data, t, *size + 1);
+    return true;
+}
 
 static void test_inp_many_sets(void) {
     enum { N = 50000 };
@@ -21,4 +30,56 @@ static void test_inp_many_sets(void) {
     cv_inp_free(&d);
     free(d.msgs.a);
     free(deck);
+}
+
+static int inpname_unreadable(const cv_inp* d) {
+    for (size_t i = 0; i < d->msgs.n; i++) if (strstr(d->msgs.a[i].text, "unreadable data lines")) return atoi(d->msgs.a[i].text);
+    return 0;
+}
+
+static void test_inp_surface_order(void) {
+    const char* deck =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,0,1,0\n4,0,0,1\n9,5,5,5\n"
+        "*ELEMENT, TYPE=C3D4, ELSET=E\n1,1,2,3,4\n"
+        "*SURFACE, TYPE=NODE, NAME=Before\n1, 1.\n"
+        "*COUPLING, REF NODE=9, SURFACE=before, CONSTRAINT NAME=c1\n*KINEMATIC\n1, 3\n"
+        "*COUPLING, REF NODE=9, SURFACE=AFTER, CONSTRAINT NAME=c2\n*KINEMATIC\n1, 3\n"
+        "*COUPLING, REF NODE=9, SURFACE=inc, CONSTRAINT NAME=c3\n*KINEMATIC\n1, 3\n"
+        "*COUPLING, REF NODE=9, SURFACE=nowhere, CONSTRAINT NAME=c4\n*KINEMATIC\n1, 3\n"
+        "*SURFACE, TYPE=NODE, NAME=After\n2, 1.\n"
+        "*INCLUDE, INPUT=surf.inp\n"
+        "*SURFACE, TYPE=NODE, NAME=M\n3, 1.\n"
+        "*TIE, NAME=t1\nafter, m\n"
+        "*TIE, NAME=t2\nlate, m\n"
+        "*CONTACT PAIR, INTERACTION=I\nm, LATE\n"
+        "*SURFACE, TYPE=NODE, NAME=Late\n4, 1.\n"
+        "*NSET, NSET=NA\n1\n"
+        "*RIGID BODY, NSET=LATENS, REF NODE=9\n"
+        "*RIGID BODY, NSET=gone, REF NODE=9\n"
+        "*NSET, NSET=LateNS\n2, 3\n";
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), inpname_reader, NULL));
+    int idx[3];
+    for (int k = 0; k < 3; k++) {
+        const char* want[3] = { "BEFORE", "AFTER", "INC" };
+        idx[k] = -1;
+        for (int i = 0; i < d.nsurfs; i++) if (!strcmp(d.surfs[i].name, want[k])) idx[k] = i;
+        CHECK(idx[k] >= 0);
+    }
+    CHECK_EQ(d.nlinks, 4 + 2 + 1 + 2);
+    if (d.nlinks == 9) {
+        CHECK_EQ(d.links[0].surf[0], idx[0]);            /* defined before, any case */
+        CHECK_EQ(d.links[1].surf[0], idx[1]);            /* defined after */
+        CHECK_EQ(d.links[2].surf[0], idx[2]);            /* defined in an included file */
+        CHECK_EQ(d.links[3].surf[0], -1);                /* never defined */
+        CHECK_EQ(d.links[4].surf[0], idx[1]);            /* *TIE: after, m */
+        CHECK(d.links[4].surf[1] >= 0);
+        CHECK(d.links[5].surf[0] >= 0 && d.links[5].surf[1] >= 0);  /* t2 and the contact pair: LATE comes after them */
+        CHECK(d.links[6].surf[0] >= 0 && d.links[6].surf[1] >= 0);
+        CHECK_EQ(d.links[7].n, 2);                       /* rigid body of a set defined below it */
+        CHECK_EQ(d.links[8].n, 0);
+    }
+    CHECK_EQ(inpname_unreadable(&d), 2);                 /* c4 and the rigid body of a set never defined */
+    cv_inp_free(&d);
+    free(d.msgs.a);
 }
