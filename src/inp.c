@@ -136,6 +136,62 @@ int32_t find_idix(const cv_idix* v, uint32_t n, uint32_t id) {
     return lo < n && v[lo].id == id ? v[lo].ix : -2;
 }
 
+/* ---- name index: open addressing over (name, salt) -> position in a caller's array.
+   It follows the array lazily: a lookup first indexes the entries added since the last one
+   (key() gives name and salt of entry i). First entry of a key wins, or the last one. */
+typedef struct { uint32_t h; int32_t ix; } nslot;                     /* ix -1: empty */
+typedef struct { nslot* s; size_t cap, used, done; bool failed; } nidx;
+typedef const char* (*nidx_key)(const void* ctx, size_t i, int* salt);
+
+static uint32_t nidx_hash(const char* name, int salt) {
+    uint32_t h = 2166136261u ^ (uint32_t)salt;
+    for (; *name; name++) h = (h ^ (unsigned char)*name) * 16777619u;
+    return h ^ h >> 15;
+}
+static nslot* nidx_slot(nidx* t, uint32_t h, const void* ctx, nidx_key key, const char* name, int salt) {
+    for (size_t i = h & (t->cap - 1);; i = (i + 1) & (t->cap - 1)) {
+        nslot* q = &t->s[i];
+        if (q->ix < 0) return q;
+        int sl;
+        if (q->h == h && !strcmp(key(ctx, (size_t)q->ix, &sl), name) && sl == salt) return q;
+    }
+}
+static int nidx_find(nidx* t, const void* ctx, nidx_key key, size_t count, const char* name, int salt, bool last) {
+    while (!t->failed && t->done < count) {
+        int sl, cur = (int)t->done;
+        const char* nm = key(ctx, t->done, &sl);
+        if (t->used * 2 >= t->cap) {                      /* grow: rehash from the stored hashes */
+            size_t nc = t->cap ? t->cap * 2 : 64;
+            nslot* ns = malloc(nc * sizeof *ns);
+            if (!ns) { t->failed = true; break; }
+            for (size_t i = 0; i < nc; i++) ns[i].ix = -1;
+            for (size_t i = 0; i < t->cap; i++)
+                if (t->s[i].ix >= 0) {
+                    size_t j = t->s[i].h & (nc - 1);
+                    while (ns[j].ix >= 0) j = (j + 1) & (nc - 1);
+                    ns[j] = t->s[i];
+                }
+            free(t->s); t->s = ns; t->cap = nc;
+        }
+        uint32_t h = nidx_hash(nm, sl);
+        nslot* q = nidx_slot(t, h, ctx, key, nm, sl);
+        if (q->ix < 0) { q->h = h; q->ix = cur; t->used++; }
+        else if (last) q->ix = cur;
+        t->done++;
+    }
+    if (t->failed || !t->cap) {                           /* no index (out of memory): scan */
+        int r = -1;
+        for (size_t i = 0; i < count; i++) {
+            int sl;
+            if (!strcmp(key(ctx, i, &sl), name) && sl == salt) { if (!last) return (int)i; r = (int)i; }
+        }
+        return r;
+    }
+    nslot* q = nidx_slot(t, nidx_hash(name, salt), ctx, key, name, salt);
+    return q->ix;
+}
+static void nidx_free(nidx* t) { free(t->s); memset(t, 0, sizeof *t); }
+
 /* ---- parser state ---------------------------------------------------------------------- */
 
 typedef struct { char name[64]; bool is_elem; CV_VEC(uint32_t) ids; } vset;
@@ -171,6 +227,7 @@ typedef struct {
     CV_VEC(uint32_t) eid, eoff, conn;
     CV_VEC(uint8_t) etype;
     CV_VEC(vset) sets;
+    nidx ix_set, ix_surf, ix_amp, ix_mat, ix_ori, ix_inter;       /* by name: sets (salt = is_elem), surfaces, amplitudes; at the end materials, orientations, interactions (the last of a name) */
     CV_VEC(vsurf) surfs;
     CV_VEC(section) sects;
     CV_VEC(shoff) shoffs;
@@ -228,10 +285,14 @@ static void note(P* p, const char* fmt, const char* a) {
     cv_msg_add(&p->d->msgs, p->depth == 0 ? p->line : 0, false, msg);
 }
 
+static const char* set_key(const void* c, size_t i, int* salt) { const vset* v = &((const P*)c)->sets.a[i]; *salt = v->is_elem; return v->name; }
+static const char* surf_key(const void* c, size_t i, int* salt) { *salt = 0; return ((const P*)c)->surfs.a[i].name; }
+static const char* amp_key(const void* c, size_t i, int* salt) { *salt = 0; return ((const P*)c)->amps.a[i].a.name; }
+static const char* mat_key(const void* c, size_t i, int* salt) { *salt = 0; return ((const P*)c)->mats.a[i]; }
+static const char* ori_key(const void* c, size_t i, int* salt) { *salt = 0; return ((const P*)c)->oris.a[i].name; }
+static const char* inter_key(const void* c, size_t i, int* salt) { *salt = 0; return ((const P*)c)->inters.a[i].name; }
 static int find_set(P* p, const char* name, bool is_elem) {
-    for (size_t i = 0; i < p->sets.n; i++)
-        if (p->sets.a[i].is_elem == is_elem && strcmp(p->sets.a[i].name, name) == 0) return (int)i;
-    return -1;
+    return nidx_find(&p->ix_set, p, set_key, p->sets.n, name, is_elem, false);
 }
 
 static int get_set(P* p, const char* raw, bool is_elem) {
@@ -275,8 +336,7 @@ static bool each_elem(P* p, const char* tok, node_fn fn, void* arg) {
 }
 static int find_surf(P* p, const char* raw) {
     char nm[64]; snprintf(nm, sizeof nm, "%s", raw); upcase(nm);
-    for (size_t i = 0; i < p->surfs.n; i++) if (strcmp(p->surfs.a[i].name, nm) == 0) return (int)i;
-    return -1;
+    return nidx_find(&p->ix_surf, p, surf_key, p->surfs.n, nm, 0, false);
 }
 
 static vlink* new_link(P* p, int kind, const char* name) {
@@ -355,7 +415,8 @@ const char* cv_inp_proc_name(int proc) { return proc > 0 && proc < CV_PROC_N ? p
 static int16_t find_amp(P* p, const char* raw) {
     if (!raw || !raw[0]) return 0;
     char nm[64]; snprintf(nm, sizeof nm, "%s", raw); upcase(nm);
-    for (size_t i = 0; i < p->amps.n; i++) if (!strcmp(p->amps.a[i].a.name, nm)) return (int16_t)CV_MIN(i + 1, 32767u);
+    int ai = nidx_find(&p->ix_amp, p, amp_key, p->amps.n, nm, 0, false);
+    if (ai >= 0) return (int16_t)CV_MIN((size_t)ai + 1, 32767u);
     note(p, "AMPLITUDE=%s is not defined before it is used", nm);
     return 0;
 }
@@ -367,7 +428,8 @@ static int16_t delayed_amp(P* p, int16_t amp, const char* td) {
     if (amp <= 0 || (size_t)amp > p->amps.n || !td || !to_f(td, &dt) || dt == 0) return amp;
     char nm[64];
     snprintf(nm, sizeof nm, "%.40s DELAY %g", p->amps.a[amp - 1].a.name, dt);
-    for (size_t i = 0; i < p->amps.n; i++) if (!strcmp(p->amps.a[i].a.name, nm)) return (int16_t)CV_MIN(i + 1, 32767u);
+    int ai = nidx_find(&p->ix_amp, p, amp_key, p->amps.n, nm, 0, false);
+    if (ai >= 0) return (int16_t)CV_MIN((size_t)ai + 1, 32767u);
     vamp v;
     memset(&v, 0, sizeof v);
     v.a = p->amps.a[amp - 1].a;
@@ -1199,6 +1261,15 @@ static void parse_text(P* p, const char* data, size_t size) {
     }
 }
 
+/* an element set of the finished deck by name, as cv_inp_set (d->sets keeps the order of p->sets) */
+static const cv_set* fin_set(P* p, const cv_inp* d, const char* name) {
+    char up[64];
+    snprintf(up, sizeof up, "%s", name);
+    upcase(up);
+    int i = find_set(p, up, true);
+    return i >= 0 && i < d->nsets ? &d->sets[i] : NULL;
+}
+
 /* ---- public ------------------------------------------------------------------------------ */
 
 bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, void* user) {
@@ -1315,8 +1386,10 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
         for (size_t j = 0; j < v->nodes.n; j++) if (!u || v->nodes.a[j] != v->nodes.a[u - 1]) v->nodes.a[u++] = v->nodes.a[j];
         cv_link* t = &d->links[d->nlinks++];
         *t = v->l;
-        for (size_t k = 0; t->kind == CV_LINK_CONTACT && k < p.inters.n; k++)
-            if (!strcmp(p.inters.a[k].name, t->name)) t->mu = p.inters.a[k].mu;
+        if (t->kind == CV_LINK_CONTACT) {
+            int k = nidx_find(&p.ix_inter, &p, inter_key, p.inters.n, t->name, 0, true);
+            if (k >= 0) t->mu = p.inters.a[k].mu;
+        }
         t->nodes = v->nodes.a; t->n = (uint32_t)u;
         v->nodes.a = NULL;
     }
@@ -1324,7 +1397,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     /* materials: from *MATERIAL order, plus any named only in a section */
     for (size_t i = 0; i < p.sects.n; i++) {
         bool have = false;
-        for (size_t k = 0; k < p.mats.n; k++) have |= strcmp(p.mats.a[k], p.sects.a[i].mat) == 0;
+        have = nidx_find(&p.ix_mat, &p, mat_key, p.mats.n, p.sects.a[i].mat, 0, true) >= 0;
         if (!have) {
             char* c = malloc(64);
             cv_matprop mp;
@@ -1347,9 +1420,9 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     for (int k = 0; k < d->nmats; k++) snprintf(d->mats[k], 64, "%s", p.mats.a[k]);
     d->mprop = p.mprop.a; p.mprop.a = NULL;
     for (size_t i = 0; i < p.sects.n; i++) {
-        const cv_set* es = cv_inp_set(d, p.sects.a[i].elset, true);
+        const cv_set* es = fin_set(&p, d, p.sects.a[i].elset);
         int mi = 0;
-        for (int k = 0; k < d->nmats; k++) if (strcmp(d->mats[k], p.sects.a[i].mat) == 0) mi = k + 1;
+        mi = nidx_find(&p.ix_mat, &p, mat_key, p.mats.n, p.sects.a[i].mat, 0, true) + 1;
         if (!es) continue;
         for (uint32_t j = 0; j < es->n; j++) {
             uint32_t e = cv_frd_elem_index(f, es->ids[j]);
@@ -1359,7 +1432,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     d->sects = p.sects.a; d->nsects = (int)p.sects.n; p.sects.a = NULL; p.sects.n = 0;
     /* shell offsets: per element, the last section that names it */
     for (size_t i = 0; i < p.shoffs.n; i++) {
-        const cv_set* es = cv_inp_set(d, p.shoffs.a[i].elset, true);
+        const cv_set* es = fin_set(&p, d, p.shoffs.a[i].elset);
         if (!es || (!d->shell_off && !p.shoffs.a[i].off)) continue;
         if (!d->shell_off && !(d->shell_off = calloc(CV_MAX(f->n_elems, 1), sizeof(float)))) goto oom;
         for (uint32_t j = 0; j < es->n; j++) {
@@ -1394,9 +1467,10 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
             const osect* o = &p.osects.a[i];
             int32_t ix = -2;                               /* -2: no orientation */
             if (!o->ori[0] && !o->mixed) continue;
-            for (size_t k = 0; k < p.oris.n; k++) if (strcmp(p.oris.a[k].name, o->ori) == 0) ix = p.oris.a[k].bad ? -1 : (int32_t)k;
+            int ok = nidx_find(&p.ix_ori, &p, ori_key, p.oris.n, o->ori, 0, true);
+            if (ok >= 0) ix = p.oris.a[ok].bad ? -1 : (int32_t)ok;
             if (o->mixed) ix = -1;
-            const cv_set* es = cv_inp_set(d, o->elset, true);
+            const cv_set* es = fin_set(&p, d, o->elset);
             for (uint32_t j = 0; es && ix != -2 && j < es->n; j++) {
                 cv_idix t = { es->ids[j], ix };
                 if (!cv_push(eo, t)) { cv_free_vec(eo); goto oom; }
@@ -1413,7 +1487,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     {   /* composite shells: element -> its last composite section */
         CV_VEC(cv_idix) ce = { 0 };
         for (size_t i = 0; i < p.osects.n; i++) {
-            const cv_set* es = p.osects.a[i].nlay ? cv_inp_set(d, p.osects.a[i].elset, true) : NULL;
+            const cv_set* es = p.osects.a[i].nlay ? fin_set(&p, d, p.osects.a[i].elset) : NULL;
             for (uint32_t j = 0; es && j < es->n; j++) {
                 cv_idix t = { es->ids[j], (int32_t)i };
                 if (!cv_push(ce, t)) { cv_free_vec(ce); goto oom; }
@@ -1437,13 +1511,13 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
         d->ncomps = (uint32_t)u;
         for (size_t i = 0; i < p.layers.n; i++) {
             int32_t ix = -2;
-            for (size_t k = 0; p.layers.a[i].ori[0] && k < p.oris.n; k++)
-                if (strcmp(p.oris.a[k].name, p.layers.a[i].ori) == 0) ix = p.oris.a[k].bad ? -1 : (int32_t)k;
+            int ok = p.layers.a[i].ori[0] ? nidx_find(&p.ix_ori, &p, ori_key, p.oris.n, p.layers.a[i].ori, 0, true) : -1;
+            if (ok >= 0) ix = p.oris.a[ok].bad ? -1 : (int32_t)ok;
             if (p.layers.a[i].ori[0] && ix == -2) ix = -1;     /* names one not defined */
             d->layer_ori[i] = ix;
             d->layer_t[i] = p.layers.a[i].t;
             d->layer_mat[i] = -1;
-            for (int k = 0; k < d->nmats; k++) if (strcmp(d->mats[k], p.layers.a[i].mat) == 0) d->layer_mat[i] = k;
+            d->layer_mat[i] = nidx_find(&p.ix_mat, &p, mat_key, p.mats.n, p.layers.a[i].mat, 0, true);
         }
         cv_free_vec(ce);
     }
@@ -1495,6 +1569,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     cv_free_vec(p.sets);
     for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); }
     cv_free_vec(p.surfs);
+    nidx_free(&p.ix_set); nidx_free(&p.ix_surf); nidx_free(&p.ix_amp); nidx_free(&p.ix_mat); nidx_free(&p.ix_ori); nidx_free(&p.ix_inter);
     return true;
 
 oom:
@@ -1516,6 +1591,7 @@ oom:
     cv_free_vec(p.sets);
     for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); }
     cv_free_vec(p.surfs);
+    nidx_free(&p.ix_set); nidx_free(&p.ix_surf); nidx_free(&p.ix_amp); nidx_free(&p.ix_mat); nidx_free(&p.ix_ori); nidx_free(&p.ix_inter);
     cv_inp_free(d);
     cv_msg_add(&d->msgs, 0, false, "out of memory reading the deck");
     return false;
