@@ -18,6 +18,8 @@ static struct {
     bool*   surf_on;
     bool*   link_on;
     uint8_t* nvis;              /* per shown node: in a visible element (NULL = all) */
+    uint8_t* orphan;            /* per shown node: not used by any element */
+    const uint32_t* orphan_ids;
     /* position lookup into the shown geometry, built on first need */
     uint64_t* key;              /* sorted grid cell key per entry */
     uint32_t* idx;              /* node index per entry */
@@ -70,7 +72,7 @@ void deck_clear(void) {
     cv_elemmap_free(&D.M);
     cv_inp_free(&D.d);
     free(D.d.msgs.a);
-    free(D.set_on); free(D.set_hide); free(D.set_alpha); free(D.surf_on); free(D.link_on); free(D.nvis); free(D.rm);
+    free(D.set_on); free(D.set_hide); free(D.set_alpha); free(D.surf_on); free(D.link_on); free(D.nvis); free(D.orphan); free(D.rm);
     memset(&D, 0, sizeof D);
     cv_render_aux(CV_AUX_HLPT, NULL, NULL, NULL, 0);
     cv_render_aux(CV_AUX_HLTRI, NULL, NULL, NULL, 0);
@@ -613,6 +615,32 @@ static void surface_nodes(const cv_frd* f, const cv_surface* s, u32vec* out) {
     }
 }
 
+static bool link_orphan_ref(uint32_t id, float p[3], float d[6]) {
+    uint32_t n = cv_frd_node_index(&G.frd, id);
+    if (n == UINT32_MAX || node_visible(n)) return false;
+    if (D.orphan_ids != G.frd.node_id) {
+        free(D.orphan);
+        D.orphan = NULL;
+        D.orphan_ids = NULL;
+    }
+    if (!D.orphan) {
+        D.orphan = malloc(G.frd.n_nodes);
+        if (!D.orphan) {
+            cv_msg_add(&G.msgs, 0, false, "out of memory: isolated coupling reference nodes may be hidden");
+            return false;
+        }
+        memset(D.orphan, 1, G.frd.n_nodes);
+        if (G.frd.n_elems)
+            for (uint32_t j = 0; j < G.frd.eoff[G.frd.n_elems]; j++) D.orphan[G.frd.conn[j]] = 0;
+        D.orphan_ids = G.frd.node_id;
+    }
+    if (!D.orphan[n]) return false;
+    node_pd(n, p, d);
+    if (G.crop_on)
+        for (int k = 0; k < 3; k++) if (p[k] < G.job.crop_lo[k] || p[k] > G.job.crop_hi[k]) return false;
+    return true;
+}
+
 /* Displacement of the deck-only nodes: the mean over the nodes each one is tied to
    through its links (a rigid body's or coupling's driven set, an equation's other
    terms). An estimate, no rotation; enough for the glyphs to follow the shape. */
@@ -705,6 +733,7 @@ static void refresh_links(void) {
             if (!D.link_on[i] || l->kind == CV_LINK_TIE || l->kind == CV_LINK_CONTACT) continue;
             float r[3], rd[6];
             bool have_ref = l->ref && deck_node_pd(l->ref, r, rd);
+            bool orphan_ref = !have_ref && l->ref && link_orphan_ref(l->ref, r, rd);
             u32vec tgt = {0};
             for (uint32_t j = 0; j < l->n; j++) {
                 uint32_t n = shown_node(&G.frd, l->nodes[j]);
@@ -713,9 +742,10 @@ static void refresh_links(void) {
             if (l->surf[0] >= 0 && l->surf[0] < D.d.nsurfs) surface_nodes(&G.frd, &D.d.surfs[l->surf[0]], &tgt);
             for (size_t j = 0; j < tgt.n; j++) {
                 float p[3], d[6];
+                if (orphan_ref && !node_visible(tgt.a[j])) continue;
                 node_pd(tgt.a[j], p, d);
-                if (l->kind == CV_LINK_EQUATION && j == 0 && !have_ref) { memcpy(r, p, sizeof r); memcpy(rd, d, sizeof rd); have_ref = true; continue; }
-                if (!have_ref) continue;
+                if (l->kind == CV_LINK_EQUATION && j == 0 && !have_ref && !orphan_ref) { memcpy(r, p, sizeof r); memcpy(rd, d, sizeof rd); have_ref = true; continue; }
+                if (!have_ref && !orphan_ref) continue;
                 if (l->kind == CV_LINK_EQUATION && G.frd.node_id[tgt.a[j]] == l->ref) continue;
                 deck_seg(&lp, &ld, r, p, rd);
                 /* the far end carries its own displacement: patch the last vertex */

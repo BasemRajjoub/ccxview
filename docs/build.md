@@ -5,6 +5,9 @@ without opening a window or device. It covers direction, screen-space rotation,
 both up-axis conventions, poles, rolled views, pivots, flips and rotation locks,
 and is also included in `make test`.
 
+`make test-deck-links` checks coupling visibility after mesh visibility changes,
+including isolated reference nodes, hidden elements and cropping.
+
 ```sh
 make                 # Linux/macOS -> build/ccxview
 make PORTABLE=1      # Linux build for glibc >= 2.34

@@ -245,7 +245,8 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 nk_property_float(ctx, "#geometry point size", 1.f, &G.geo_size, 20.f, 1.f, 0.1f);
             }
         }
-        if (deck_has_bc() || deck_has_loads() || deck_has_discrete()) {   /* the deck's supports, loads, springs */
+        bool has_links = deck_get() && deck_get()->nlinks;
+        if (deck_has_bc() || deck_has_loads() || deck_has_discrete() || has_links) {
             nk_layout_row_dynamic(ctx, row, 2);
             if (deck_has_bc() || deck_has_loads()) {
                 tip(ctx, "Supports of the step on screen: a cone per held DOF (double base for a rotation), along the\nnode's *TRANSFORM axes; a prescribed displacement as an arrow with a bar across its tail,\na prescribed rotation as a turning arrow, a temperature as a cross");
@@ -257,12 +258,12 @@ static void section_layers(struct nk_context* ctx, float s, float row) {
                 tip(ctx, "Springs as zigzags, dashpots as pistons, gaps as facing bars, masses as cubes.\nA one-node spring points along its dof to a ground bar.");
                 nk_checkbox_label(ctx, "Springs, masses", &G.show_disc);
             }
-            if (deck_get() && deck_get()->nlinks) {
+            if (has_links) {
                 tip(ctx, "Rigid bodies, couplings and equations as spiders from the reference node;\ntick single ones under Groups > Couplings");
                 nk_checkbox_label(ctx, "Couplings", &G.show_links);
             }
         }
-        if ((geo_loaded() || deck_has_bc() || deck_has_loads() || deck_has_discrete())) uii_hsep(ctx, s);
+        if (geo_loaded() || deck_has_bc() || deck_has_loads() || deck_has_discrete() || has_links) uii_hsep(ctx, s);
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Balls at the field's minimum and maximum (legend settings: go there)");
         nk_checkbox_label(ctx, "Min / max", &G.show_markers);
