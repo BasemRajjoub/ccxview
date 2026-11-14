@@ -114,8 +114,8 @@ build/test_ndof_camera: tests/test_ndof_camera.c src/app_cam.c src/ndof.c $(wild
 test-ndof-camera: build/test_ndof_camera
 	./build/test_ndof_camera
 
-build/test_deck_links: tests/test_deck_links.c src/app_deck.c $(wildcard src/*.h) $(patsubst %.c,build/obj/test/%.o,$(CORE) $(CORE_EXTRA)) build/video_mp4_nosan.o
-	$(CC) $(CPPFLAGS) $(CFLAGS) -fsanitize=address,undefined -ffunction-sections -fdata-sections tests/test_deck_links.c $(patsubst %.c,build/obj/test/%.o,$(CORE) $(CORE_EXTRA)) build/video_mp4_nosan.o -o $@ $(NDOF_TEST_GC) -lm -lpthread -ldl
+build/test_deck_links: tests/test_deck_links.c src/app_deck.c $(wildcard src/*.h) $(patsubst %.c,build/obj/test/%.o,$(filter-out src/video_mp4.c,$(CORE)) $(CORE_EXTRA)) build/video_mp4_nosan.o
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fsanitize=address,undefined -ffunction-sections -fdata-sections tests/test_deck_links.c $(patsubst %.c,build/obj/test/%.o,$(filter-out src/video_mp4.c,$(CORE)) $(CORE_EXTRA)) build/video_mp4_nosan.o -o $@ $(NDOF_TEST_GC) -lm -lpthread -ldl
 
 .PHONY: test-deck-links
 test-deck-links: build/test_deck_links
