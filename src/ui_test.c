@@ -698,6 +698,39 @@ static bool shell_pair_available(struct nk_context* ctx) {
     return st->nfields == 4 && !strcmp(st->fields[0].name, "DISP") &&
            !strcmp(st->fields[1].name, "STRESS") && cv_shell_pair(st, &top, &bottom) && top == 2 && bottom == 3;
 }
+static bool shell_missing_deck(struct nk_context* ctx) { return shell_pair_available(ctx) && !deck_loaded(); }
+static size_t shell_missing_messages;
+static void shell_missing_begin(struct nk_context* ctx) {
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+    app_pick_field("STRESS", CV_COMP_MISES, 0);
+    G.show_msgs = false;
+    shell_missing_messages = G.msgs.n;
+}
+static void shell_missing_scalar(struct nk_context* ctx) { app_set_elem_nodal_avg(CV_EN_AVG_SCALAR); }
+static void shell_missing_tensor(struct nk_context* ctx) {
+    G.show_msgs = false;
+    shell_missing_messages = G.msgs.n;
+    app_set_elem_nodal_avg(CV_EN_AVG_TENSOR);
+}
+static bool shell_missing_warning(struct nk_context* ctx) {
+    if (!G.show_msgs || !win_of(ctx, "Messages")) return false;
+    bool skipped = false, instructions = false;
+    for (size_t i = shell_missing_messages; i < G.msgs.n; i++) {
+        const char* text = G.msgs.a[i].text;
+        if (strstr(text, "Stress averaging skipped")) skipped = true;
+        if (strstr(text, "same base name as the FRD") && strstr(text, "include files") &&
+            strstr(text, "in the FRD folder, then reload the FRD.")) instructions = true;
+    }
+    return skipped && instructions;
+}
+static void shell_missing_end(struct nk_context* ctx) {
+    shell_missing_messages = G.msgs.n;
+    G.show_msgs = false;
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+}
+static bool shell_missing_disabled(struct nk_context* ctx) {
+    return !G.show_msgs && G.msgs.n == shell_missing_messages;
+}
 static bool shell_face_sample(struct nk_context* ctx) {
     return shell_pair_available(ctx) && !strcmp(cv_basename(G.path), "SANDWICH_MASTER.frd");
 }
@@ -827,8 +860,8 @@ static bool shell_legacy_selected(struct nk_context* ctx) {
 }
 static bool shell_principal_selected(struct nk_context* ctx) { return G.comp == CV_COMP_P1; }
 static bool shell_mises_selected(struct nk_context* ctx) { return G.comp == CV_COMP_MISES; }
-static bool shell_avg_scalar(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_SCALAR; }
-static bool shell_avg_tensor(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_TENSOR; }
+static bool shell_avg_scalar(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_SCALAR && !G.show_msgs; }
+static bool shell_avg_tensor(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_TENSOR && !G.show_msgs; }
 static bool shell_avg_none(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_NONE; }
 static uint32_t shell_test_slot(uint32_t eid, uint32_t nid) {
     uint32_t e = cv_frd_elem_index(&G.frd, eid), n = cv_frd_node_index(&G.frd, nid);
@@ -1472,6 +1505,12 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
     PANELS_ANSWER
 
 static const step script[] = {
+    CASE_IF("shell field: missing INP explains how to enable averaging", shell_missing_deck),
+    DO(shell_missing_begin), WAIT(3), EXPECT(shell_missing_disabled, "unaveraged stress needs no INP warning"),
+    DO(shell_missing_scalar), WAIT(3), EXPECT(shell_missing_warning, "scalar averaging opens Messages with INP and reload instructions"),
+    DO(shell_missing_tensor), WAIT(3), EXPECT(shell_missing_warning, "component averaging also opens Messages with instructions"),
+    DO(shell_missing_end), WAIT(3), EXPECT(shell_missing_disabled, "disabling averaging adds no warning"),
+
     CASE_IF("shell field: Both renders the physical top and bottom faces", shell_face_sample),
     DO(shell_face_open), WAIT(120), DO(shell_face_capture), WAIT(5),
     EXPECT(shell_face_matches, "opaque positive-normal face matches Top"),

@@ -89,7 +89,10 @@ by element ID, using the same last-section-wins rule as section coloring.
 Different sections never average together, even if they use the same material
 or all FRD material IDs are zero. Elements with no known INP section retain
 their unaveraged values, and a message is recorded. Without a companion INP,
-no cross-element stress averaging is performed.
+no cross-element stress averaging is performed. Selecting an averaging mode
+without a readable companion INP opens Messages with instructions: place an INP
+with the same base name as the FRD, together with its referenced include files,
+in the FRD folder, then reload the FRD.
 Hiding elements recomputes the average. Averaging can conceal real stress jumps;
 compare with the unaveraged display when assessing results. The chosen mode is
 saved with the model's view.

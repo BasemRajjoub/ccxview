@@ -344,16 +344,23 @@ static void refresh_elem_surfaces(int fi, const cv_field_desc* d) {
     if (paired) { top_fi = pair_top; bot_fi = pair_bot; }
     int32_t* sections = NULL;
     if (G.elem_nodal_avg != CV_EN_AVG_NONE && cv_field_is_stress(d->name) && cv_tensor_order(d)) {
-        sections = malloc((size_t)CV_MAX(G.frd.n_elems, 1) * sizeof *sections);
-        if (!sections) {
-            cv_msg_add(&G.msgs, 0, false, "out of memory mapping stress averaging sections; values are not averaged");
+        const cv_inp* deck = deck_get();
+        if (!deck) {
+            cv_msg_add(&G.msgs, 0, false, "Stress averaging skipped: the companion INP model is missing or could not be read.");
+            cv_msg_add(&G.msgs, 0, false, "Place an INP with the same base name as the FRD, plus its include files, "
+                       "in the FRD folder, then reload the FRD.");
         } else {
-            cv_elem_sections(&G.frd, deck_get(), sections);
-            for (uint32_t e = 0; e < G.frd.n_elems; e++)
-                if ((!G.vis || G.vis[e]) && sections[e] < 0 && G.frd.etype[e] >= 1 && G.frd.etype[e] <= 10) {
-                    cv_msg_add(&G.msgs, 0, false, "stress averaging: elements without an INP section keep their unaveraged values");
-                    break;
-                }
+            sections = malloc((size_t)CV_MAX(G.frd.n_elems, 1) * sizeof *sections);
+            if (!sections) {
+                cv_msg_add(&G.msgs, 0, false, "out of memory mapping stress averaging sections; values are not averaged");
+            } else {
+                cv_elem_sections(&G.frd, deck, sections);
+                for (uint32_t e = 0; e < G.frd.n_elems; e++)
+                    if ((!G.vis || G.vis[e]) && sections[e] < 0 && G.frd.etype[e] >= 1 && G.frd.etype[e] <= 10) {
+                        cv_msg_add(&G.msgs, 0, false, "stress averaging: elements without an INP section keep their unaveraged values");
+                        break;
+                    }
+            }
         }
     }
     float* base = elem_display_scalar(group ? stress : fi, sections);
@@ -1215,7 +1222,13 @@ void app_set_shell_side(int side) {
 
 void app_set_elem_nodal_avg(int mode) {
     G.elem_nodal_avg = CV_MAX(0, CV_MIN(mode, CV_EN_AVG_N - 1));
-    if (G.loaded && G.field_elem_nodal) refresh_field();
+    if (G.loaded && G.field_elem_nodal) {
+        refresh_field();
+        int fi = find_field(G.step, G.field_name);
+        if (G.elem_nodal_avg != CV_EN_AVG_NONE && G.field_src == 0 && !deck_loaded() && fi >= 0 &&
+            cv_field_is_stress(G.field_name) && cv_tensor_order(&G.frd.steps[G.step].fields[fi]))
+            G.show_msgs = true;
+    }
 }
 
 /* ---- a field the user chose: it shows on the faces at once (#26) ----------------- */
