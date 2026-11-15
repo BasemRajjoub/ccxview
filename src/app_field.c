@@ -226,7 +226,7 @@ static bool elem_turn_cyl(const cv_frd* f, const cv_field_desc* d, float* values
     return true;
 }
 
-static float* elem_tensor_average(int fi) {
+static float* elem_tensor_average(int fi, const int32_t* sections) {
     const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
     const float* raw = cache_get_elem(G.step, fi);
     if (!raw) return NULL;
@@ -284,8 +284,8 @@ static float* elem_tensor_average(int fi) {
         free(values);
         if (unmatched) cv_msg_add(&G.msgs, 0, false, "compare: unmatched element-node pairs have no data");
     }
-    if (!cv_elem_nodal_average(&G.frd, G.vis, a, d->ncomp) ||
-        (b && !cv_elem_nodal_average(&G.frd, G.vis, b, d->ncomp))) goto oom;
+    if (!cv_elem_nodal_average(&G.frd, G.vis, sections, a, d->ncomp) ||
+        (b && !cv_elem_nodal_average(&G.frd, G.vis, sections, b, d->ncomp))) goto oom;
     cv_field_scalar(a, d->ncomp, ns, G.comp, out);
     if (b) {
         cv_field_scalar(b, d->ncomp, ns, G.comp, other_scalar);
@@ -299,14 +299,14 @@ oom:
     return NULL;
 }
 
-static float* elem_display_scalar(int fi) {
+static float* elem_display_scalar(int fi, const int32_t* sections) {
     if (fi < 0 || fi >= G.frd.steps[G.step].nfields) return NULL;
     const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
     bool stress = d->irtype == 3 && cv_field_is_stress(d->name) && cv_tensor_order(d);
-    if (stress && G.elem_nodal_avg == CV_EN_AVG_TENSOR) return elem_tensor_average(fi);
+    if (stress && G.elem_nodal_avg == CV_EN_AVG_TENSOR) return elem_tensor_average(fi, sections);
     float* scalar = elem_field_scalar(fi);
     if (scalar && stress && G.elem_nodal_avg == CV_EN_AVG_SCALAR &&
-        !cv_elem_nodal_average(&G.frd, G.vis, scalar, 1)) {
+        !cv_elem_nodal_average(&G.frd, G.vis, sections, scalar, 1)) {
         cv_msg_add(&G.msgs, 0, false, "out of memory averaging element-nodal stress");
         free(scalar);
         return NULL;
@@ -342,9 +342,24 @@ static void refresh_elem_surfaces(int fi, const cv_field_desc* d) {
     bool paired = !group && cv_shell_pair(step, &pair_top, &pair_bot) &&
                   (fi == pair_top || fi == pair_bot);
     if (paired) { top_fi = pair_top; bot_fi = pair_bot; }
-    float* base = elem_display_scalar(group ? stress : fi);
-    float* top = group || paired ? elem_display_scalar(top_fi) : NULL;
-    float* bot = group || paired ? elem_display_scalar(bot_fi) : NULL;
+    int32_t* sections = NULL;
+    if (G.elem_nodal_avg != CV_EN_AVG_NONE && cv_field_is_stress(d->name) && cv_tensor_order(d)) {
+        sections = malloc((size_t)CV_MAX(G.frd.n_elems, 1) * sizeof *sections);
+        if (!sections) {
+            cv_msg_add(&G.msgs, 0, false, "out of memory mapping stress averaging sections; values are not averaged");
+        } else {
+            cv_elem_sections(&G.frd, deck_get(), sections);
+            for (uint32_t e = 0; e < G.frd.n_elems; e++)
+                if ((!G.vis || G.vis[e]) && sections[e] < 0 && G.frd.etype[e] >= 1 && G.frd.etype[e] <= 10) {
+                    cv_msg_add(&G.msgs, 0, false, "stress averaging: elements without an INP section keep their unaveraged values");
+                    break;
+                }
+        }
+    }
+    float* base = elem_display_scalar(group ? stress : fi, sections);
+    float* top = group || paired ? elem_display_scalar(top_fi, sections) : NULL;
+    float* bot = group || paired ? elem_display_scalar(bot_fi, sections) : NULL;
+    free(sections);
     if (group && (top_fi < 0 || bot_fi < 0))
         cv_msg_add(&G.msgs, 0, false, "shell stress: missing or incompatible top or bottom field; that surface has no data");
     for (uint32_t e = 0; e < G.frd.n_elems; e++) {

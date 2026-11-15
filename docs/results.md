@@ -75,12 +75,18 @@ node. Component averaging first takes the equal-weight mean of each tensor
 component, then computes the selected quantity. These can give different
 results. The result is interpolated over each displayed triangle.
 
-Only visible elements with the same material contribute; solids and shells
+Only visible elements in the same INP section and with the same FRD material ID
+contribute; solids and shells
 are separate, as are the shell's top and bottom fields. A shell node only takes
 contributions from shells whose undeformed normals have a positive dot product
 with its own normal; degenerate shells with no normal retain their own values.
-Non-finite records do not contribute, and missing values remain missing. Material
-ID 0 is treated as one material when material information is unavailable.
+Non-finite records do not contribute, and missing values remain missing.
+Section membership is mapped from the companion INP (including its includes)
+by element ID, using the same last-section-wins rule as section coloring.
+Different sections never average together, even if they use the same material
+or all FRD material IDs are zero. Elements with no known INP section retain
+their unaveraged values, and a message is recorded. Without a companion INP,
+no cross-element stress averaging is performed.
 Hiding elements recomputes the average. Averaging can conceal real stress jumps;
 compare with the unaveraged display when assessing results. The chosen mode is
 saved with the model's view.

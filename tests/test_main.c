@@ -73,10 +73,11 @@ static void test_element_nodal_average(void) {
     uint32_t mat[] = { 1,1,2,1,1,1,2 };
     uint8_t type[] = { 1,1,1,7,7,7,7 };
     uint8_t vis[] = { 1,1,1,1,1,1,1 };
+    int32_t sections[] = { 0,0,0,1,1,1,1 };
     cv_frd f = {0};
     f.n_nodes = 5; f.n_elems = 7; f.xyz = xyz; f.conn = conn; f.eoff = off; f.emat = mat; f.etype = type;
     float v[] = { 10,0,0, 30,0,0, 500,0,0, 100,0,0, 300,0,0, 900,0,0, 700,0,0 };
-    CHECK(cv_elem_nodal_average(&f, vis, v, 1));
+    CHECK(cv_elem_nodal_average(&f, vis, sections, v, 1));
     CHECK_NEAR(v[0], 20, 1e-6); CHECK_NEAR(v[3], 20, 1e-6);
     CHECK_NEAR(v[6], 500, 1e-6);
     CHECK_NEAR(v[9], 200, 1e-6); CHECK_NEAR(v[12], 200, 1e-6);
@@ -84,7 +85,7 @@ static void test_element_nodal_average(void) {
 
     float hidden[] = { 10,0,0, 30,0,0, 500,0,0, NAN,0,0, 300,0,0, 900,0,0, 700,0,0 };
     vis[1] = 0;
-    CHECK(cv_elem_nodal_average(&f, vis, hidden, 1));
+    CHECK(cv_elem_nodal_average(&f, vis, sections, hidden, 1));
     CHECK_NEAR(hidden[0], 10, 1e-6); CHECK_NEAR(hidden[3], 30, 1e-6);
     CHECK(isnan(hidden[9])); CHECK_NEAR(hidden[12], 300, 1e-6);
 
@@ -92,8 +93,8 @@ static void test_element_nodal_average(void) {
     vis[1] = 1;
     tensor[0] = 100; tensor[3 * 6] = -100;
     cv_field_scalar(tensor, 6, 21, CV_COMP_MISES, scalars);
-    CHECK(cv_elem_nodal_average(&f, vis, scalars, 1));
-    CHECK(cv_elem_nodal_average(&f, vis, tensor, 6));
+    CHECK(cv_elem_nodal_average(&f, vis, sections, scalars, 1));
+    CHECK(cv_elem_nodal_average(&f, vis, sections, tensor, 6));
     float after[21];
     cv_field_scalar(tensor, 6, 21, CV_COMP_MISES, after);
     CHECK_NEAR(scalars[0], 100, 1e-6); CHECK_NEAR(scalars[3], 100, 1e-6);
@@ -101,7 +102,7 @@ static void test_element_nodal_average(void) {
 
     float incomplete[21 * 6] = {0};
     incomplete[0] = 100; incomplete[1] = NAN; incomplete[3 * 6] = -100;
-    CHECK(cv_elem_nodal_average(&f, vis, incomplete, 6));
+    CHECK(cv_elem_nodal_average(&f, vis, sections, incomplete, 6));
     CHECK_NEAR(incomplete[0], 100, 1e-6); CHECK(isnan(incomplete[1]));
     CHECK_NEAR(incomplete[3 * 6], -100, 1e-6);
 
@@ -113,8 +114,26 @@ static void test_element_nodal_average(void) {
     degenerate.n_nodes = 4; degenerate.n_elems = 2; degenerate.xyz = degenerate_xyz;
     degenerate.conn = degenerate_conn; degenerate.eoff = degenerate_off; degenerate.etype = degenerate_type;
     float d[] = { 7,0,0, 20,0,0 };
-    CHECK(cv_elem_nodal_average(&degenerate, NULL, d, 1));
+    int32_t ds[] = { 0,0 };
+    CHECK(cv_elem_nodal_average(&degenerate, NULL, ds, d, 1));
     CHECK_NEAR(d[0], 7, 1e-6); CHECK_NEAR(d[3], 20, 1e-6);
+
+    /* A zero-material FRD must still respect section interfaces. */
+    uint32_t zero_material[7] = {0};
+    f.emat = zero_material;
+    sections[1] = 2;
+    float interface[] = { 10,0,0, 1000,0,0, 30,0,0, 100,0,0, 300,0,0, 900,0,0, 700,0,0 };
+    CHECK(cv_elem_nodal_average(&f, NULL, sections, interface, 1));
+    CHECK_NEAR(interface[0], 20, 1e-6); CHECK_NEAR(interface[6], 20, 1e-6);
+    CHECK_NEAR(interface[3], 1000, 1e-6);
+    CHECK_NEAR(interface[9], 1100.f / 3, 1e-4);
+
+    float unknown[] = { 10,0,0, 1000,0,0, 30,0,0, 100,0,0, 300,0,0, 900,0,0, 700,0,0 };
+    sections[0] = sections[2] = -1;
+    CHECK(cv_elem_nodal_average(&f, NULL, sections, unknown, 1));
+    CHECK_NEAR(unknown[0], 10, 1e-6); CHECK_NEAR(unknown[6], 30, 1e-6);
+    CHECK(cv_elem_nodal_average(&f, NULL, NULL, unknown, 1));
+    CHECK_NEAR(unknown[9], 1100.f / 3, 1e-4);
 }
 
 /* Two Hex8 sharing a face along x: 12 nodes (ids 100..111), elements 7 and 8

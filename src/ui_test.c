@@ -733,6 +733,15 @@ static uint32_t shell_test_slot(uint32_t eid, uint32_t nid) {
     for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) if (G.frd.conn[j] == n) return j;
     return UINT32_MAX;
 }
+static int shell_test_section(uint32_t e) {
+    const cv_inp* d = deck_get();
+    for (int i = d ? d->nsects - 1 : -1; i >= 0; i--) {
+        const cv_set* s = cv_inp_set(d, d->sects[i].elset, true);
+        for (uint32_t j = 0; s && j < s->n; j++)
+            if (s->ids[j] == G.frd.elem_id[e]) return i;
+    }
+    return -1;
+}
 static bool shell_sample_values(struct nk_context* ctx) {
     if (strcmp(cv_basename(G.path), "SANDWICH_MASTER.frd")) return true;
     uint32_t a = shell_test_slot(3, 5), b = shell_test_slot(4, 5), s = shell_test_slot(13, 5);
@@ -784,13 +793,15 @@ static bool shell_sample_values(struct nk_context* ctx) {
     ok = ok && fabsf(G.data_max - 102.53239f) < 0.001f;
 
     uint32_t ae = cv_frd_elem_index(&G.frd, 3), node = cv_frd_node_index(&G.frd, 5);
+    int section = shell_test_section(ae);
+    if (section < 0) return false;
     const float* raw = cache_get_elem(G.step, stress);
     if (!raw) return false;
     double sum[6] = {0}, scalar_sum = 0;
     int count = 0;
     for (uint32_t e = 0; e < G.frd.n_elems; e++) {
         if (G.frd.etype[e] < 1 || G.frd.etype[e] > 6 || G.frd.emat[e] != G.frd.emat[ae] ||
-            (G.vis && !G.vis[e])) continue;
+            shell_test_section(e) != section || (G.vis && !G.vis[e])) continue;
         for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
             if (G.frd.conn[j] != node) continue;
             bool finite = true;
@@ -831,6 +842,39 @@ static bool shell_sample_values(struct nk_context* ctx) {
     ok = ok && restored && G.elem_nodal_avg == CV_EN_AVG_TENSOR &&
          fabsf(G.elem_top[a] - cv_von_mises(mean)) < 1e-4f;
     if (saved) remove(view);
+    uint32_t interface_slots[] = { shell_test_slot(60, 95), shell_test_slot(100, 95) };
+    uint32_t interface_elems[] = { cv_frd_elem_index(&G.frd, 60), cv_frd_elem_index(&G.frd, 100) };
+    if (interface_slots[0] == UINT32_MAX || interface_slots[1] == UINT32_MAX) return false;
+    ok = ok && G.frd.emat[interface_elems[0]] == 0 && G.frd.emat[interface_elems[1]] == 0 &&
+         shell_test_section(interface_elems[0]) >= 0 &&
+         shell_test_section(interface_elems[0]) != shell_test_section(interface_elems[1]);
+    raw = cache_get_elem(G.step, stress);
+    if (!raw) return false;
+    for (int mode = CV_EN_AVG_SCALAR; mode <= CV_EN_AVG_TENSOR; mode++) {
+        app_set_elem_nodal_avg(mode);
+        float actual[2];
+        for (int side = 0; side < 2; side++) {
+            double components[6] = {0}, total = 0;
+            int n = 0;
+            for (uint32_t e = 0; e < G.frd.n_elems; e++) {
+                if (G.frd.etype[e] < 1 || G.frd.etype[e] > 6 ||
+                    shell_test_section(e) != shell_test_section(interface_elems[side]) ||
+                    (G.vis && !G.vis[e])) continue;
+                for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
+                    if (G.frd.node_id[G.frd.conn[j]] != 95) continue;
+                    for (int c = 0; c < 6; c++) components[c] += raw[6 * (size_t)j + c];
+                    total += cv_von_mises(raw + 6 * (size_t)j);
+                    n++;
+                }
+            }
+            if (!n) return false;
+            for (int c = 0; c < 6; c++) mean[c] = (float)(components[c] / n);
+            float expected = mode == CV_EN_AVG_SCALAR ? (float)(total / n) : cv_von_mises(mean);
+            actual[side] = G.elem_top[interface_slots[side]];
+            ok = ok && fabsf(actual[side] - expected) < 1e-4f;
+        }
+        ok = ok && fabsf(actual[0] - actual[1]) > 1e-3f;
+    }
     app_set_elem_nodal_avg(CV_EN_AVG_NONE);
     return ok;
 }
@@ -854,7 +898,8 @@ static bool shell_avg_hidden(struct nk_context* ctx) {
     double sum = 0;
     int count = 0;
     for (uint32_t k = 0; k < G.frd.n_elems; k++) {
-        if (!G.vis[k] || G.frd.etype[k] < 1 || G.frd.etype[k] > 6 || G.frd.emat[k] != G.frd.emat[ae]) continue;
+        if (!G.vis[k] || G.frd.etype[k] < 1 || G.frd.etype[k] > 6 || G.frd.emat[k] != G.frd.emat[ae] ||
+            shell_test_section(k) != shell_test_section(ae)) continue;
         for (uint32_t j = G.frd.eoff[k]; j < G.frd.eoff[k + 1]; j++)
             if (G.frd.conn[j] == node && isfinite(raw[6 * (size_t)j])) {
                 sum += raw[6 * (size_t)j]; count++;

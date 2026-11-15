@@ -29,10 +29,11 @@ bool  cv_comp_match(const char* label, const char* given);   /* also the old lab
 int   cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
 bool  cv_field_is_stress(const char* name);
 
-/* Equal-weight element-node averaging, separated by material and solid/shell.
+/* Equal-weight element-node averaging, separated by section, material and solid/shell.
    Shell contributions whose undeformed normals oppose one another are kept apart.
-   Non-finite records and hidden elements do not contribute. Values are in-place. */
-bool  cv_elem_nodal_average(const cv_frd* f, const uint8_t* vis, float* vals, int ncomp);
+   Non-finite records and hidden elements do not contribute. Values are in-place.
+   sections has one raw section index per element; negative or missing means no averaging. */
+bool  cv_elem_nodal_average(const cv_frd* f, const uint8_t* vis, const int32_t* sections, float* vals, int ncomp);
 
 /* One scalar per node from decoded values (vals[node*ncomp + c]). NaN stays NaN. */
 void  cv_field_scalar(const float* vals, int ncomp, uint32_t n, int comp, float* out);

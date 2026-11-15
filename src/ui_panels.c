@@ -675,7 +675,8 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                     static const char* avg[] = { "Stress: not averaged", "Stress: average scalars", "Stress: average components" };
                     nk_layout_row_dynamic(ctx, row, 1);
                     uii_test_mark(ctx, "#element nodal averaging");
-                    tip(ctx, "Average visible element-node stresses with equal weights, separately for solids, shell sides and materials.\n"
+                    tip(ctx, "Average visible element-node stresses with equal weights within each INP section, separately for solids, shell sides and materials.\n"
+                             "Never average across sections, even with the same material. Without a section, values stay unaveraged.\n"
                              "Oppositely oriented shell faces are not averaged. Averaging may hide stress jumps.\n"
                              "Scalars: calculate von Mises or principal stress first. Components: average the tensor first.");
                     int mode = nk_combo(ctx, avg, CV_EN_AVG_N, G.elem_nodal_avg, (int)row, nk_vec2(260 * s, 4 * row + 20 * s));

@@ -15,6 +15,9 @@ typedef struct {
 
 bool cv_eclass_sets(cv_eclass* c, const cv_frd* f, const cv_set* sets, int nsets);   /* false on OOM */
 bool cv_eclass_sections(cv_eclass* c, const cv_frd* f, const cv_inp* d);
+/* Raw section indices by result element ID; -1 if unassigned, later section wins.
+   A missing deck leaves every element unassigned. out has f->n_elems entries. */
+void cv_elem_sections(const cv_frd* f, const cv_inp* d, int32_t* out);
 void cv_eclass_free(cv_eclass* c);
 
 /* class i's colour: 12 clearly distinct, then golden-angle hues; the grey of none apart */

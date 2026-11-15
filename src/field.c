@@ -379,6 +379,7 @@ void cv_field_scalar(const float* v, int nc, uint32_t n, int comp, float* out) {
 
 typedef struct {
     uint32_t node, material, elem, slot;
+    int32_t section;
     bool shell;
 } avg_entry;
 
@@ -386,6 +387,7 @@ static int avg_entry_cmp(const void* aa, const void* bb) {
     const avg_entry* a = aa;
     const avg_entry* b = bb;
     if (a->node != b->node) return a->node < b->node ? -1 : 1;
+    if (a->section != b->section) return a->section < b->section ? -1 : 1;
     if (a->material != b->material) return a->material < b->material ? -1 : 1;
     if (a->shell != b->shell) return a->shell ? 1 : -1;
     return 0;
@@ -408,8 +410,9 @@ static void avg_shell_normal(const cv_frd* f, uint32_t e, double out[3]) {
     else out[0] = out[1] = out[2] = 0;
 }
 
-bool cv_elem_nodal_average(const cv_frd* f, const uint8_t* vis, float* vals, int nc) {
+bool cv_elem_nodal_average(const cv_frd* f, const uint8_t* vis, const int32_t* sections, float* vals, int nc) {
     if (nc < 1 || nc > CV_MAX_COMP) return false;
+    if (!sections) return true;
     size_t ns = f->n_elems ? f->eoff[f->n_elems] : 0;
     if (ns > SIZE_MAX / sizeof(avg_entry) ||
         ns > SIZE_MAX / ((size_t)nc * sizeof(float)) ||
@@ -423,18 +426,19 @@ bool cv_elem_nodal_average(const cv_frd* f, const uint8_t* vis, float* vals, int
     for (uint32_t e = 0; e < f->n_elems; e++) {
         int type = f->etype[e];
         bool shell = type >= 7 && type <= 10;
-        if ((vis && !vis[e]) || type < 1 || type > 10) continue;
+        if (sections[e] < 0 || (vis && !vis[e]) || type < 1 || type > 10) continue;
         if (shell) avg_shell_normal(f, e, normals + 3 * (size_t)e);
         for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
             bool finite = true;
             for (int c = 0; c < nc; c++) finite &= isfinite(original[(size_t)j * nc + c]);
-            if (finite) ent[count++] = (avg_entry){ f->conn[j], f->emat ? f->emat[e] : 0, e, j, shell };
+            if (finite) ent[count++] = (avg_entry){ f->conn[j], f->emat ? f->emat[e] : 0, e, j, sections[e], shell };
         }
     }
     qsort(ent, count, sizeof *ent, avg_entry_cmp);
     for (size_t a = 0; a < count;) {
         size_t z = a + 1;
-        while (z < count && ent[z].node == ent[a].node && ent[z].material == ent[a].material &&
+        while (z < count && ent[z].node == ent[a].node && ent[z].section == ent[a].section &&
+               ent[z].material == ent[a].material &&
                ent[z].shell == ent[a].shell) z++;
         if (!ent[a].shell) {
             double sum[CV_MAX_COMP] = {0};
