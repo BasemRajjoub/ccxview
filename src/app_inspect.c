@@ -94,6 +94,21 @@ float app_pick_average_of(int kind) {
 
 float app_pick_average(void) { return app_pick_average_of(app_pick_head()); }
 
+float app_pick_surface_value(int kind, int side) {
+    if (!G.probe_on || !G.has_field || !G.field_elem_nodal) return NAN;
+    uint32_t e = G.probe.elem;
+    if (kind == CV_PK_NODE) return app_elem_node_value(e, G.probe.node, side);
+    if (kind == CV_PK_ELEM) return app_elem_mean_value(e, side);
+    uint32_t nd[8];
+    int n = app_pick_nodes_of(kind, nd), count = 0;
+    double sum = 0;
+    for (int i = 0; i < n; i++) {
+        float v = app_elem_node_value(e, nd[i], side);
+        if (isfinite(v)) { sum += v; count++; }
+    }
+    return count ? (float)(sum / count) : NAN;
+}
+
 bool app_pick_anchor(float p[3]) {
     if (!G.loaded || !G.probe_on || G.probe.elem >= G.frd.n_elems || G.probe.node >= G.frd.n_nodes) return false;
     uint32_t r[32];

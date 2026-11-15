@@ -25,7 +25,19 @@ int main(void) {
     G.skin.pt = skin_nodes; G.skin.n_pt = 3;
     G.scalar = scalar; G.elem_val = elem;
     G.elem_top = top; G.elem_bottom = bottom; G.vis = visible;
+    G.elem_nslots = 4;
     G.minmax_n = 1;
+
+    assert(app_elem_node_value(0, 1, 1) == 3 && app_elem_node_value(0, 1, 2) == 2);
+    assert(app_elem_node_value(1, 4, 1) == 13 && app_elem_node_value(1, 4, 2) == 30);
+    assert(isnan(app_elem_node_value(0, 4, 1)));
+    assert(app_elem_mean_value(0, 1) == 2 && app_elem_mean_value(0, 2) == -1.5f);
+    top[0] = NAN;
+    assert(isnan(app_elem_node_value(0, 0, 1)) && app_elem_mean_value(0, 1) == 3);
+    top[0] = 1;
+    G.elem_bottom = NULL;
+    assert(isnan(app_elem_node_value(0, 1, 2)) && isnan(app_elem_mean_value(0, 2)));
+    G.elem_bottom = bottom;
 
     app_refresh_range();
     assert(G.data_min == -5 && G.data_max == 30);

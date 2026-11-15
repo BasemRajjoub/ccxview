@@ -1051,6 +1051,146 @@ static bool shell_avg_shown(struct nk_context* ctx) {
            fabsf(G.elem_top[a] - shell_avg_before) < 1e-6f;
 }
 static void shell_avg_reset(struct nk_context* ctx) { app_set_elem_nodal_avg(CV_EN_AVG_NONE); }
+static bool shell_inspect_available(struct nk_context* ctx) { return shell_face_sample(ctx) && deck_loaded(); }
+static void shell_inspect_open(struct nk_context* ctx) {
+    app_pick_field("STRESS", 0, 0);
+    app_set_elem_nodal_avg(CV_EN_AVG_SCALAR);
+    app_set_shell_side(0);
+    G.probe_on = true; G.probe_ip = 0;
+    G.probe.elem = cv_frd_elem_index(&G.frd, 1);
+    G.probe.node = cv_frd_node_index(&G.frd, 9);
+    G.pick_kinds = 1 << CV_PK_NODE;
+    app_pick_clear();
+}
+static bool shell_inspect_node(struct nk_context* ctx) {
+    uint32_t e = G.probe.elem, n = G.probe.node;
+    if (fabsf(app_pick_surface_value(CV_PK_NODE, 1) - -48.08488f) > 1e-4f ||
+        fabsf(app_pick_surface_value(CV_PK_NODE, 2) - 57.017035f) > 1e-4f) return false;
+    char text[256], a[32], b[32], top[48], bottom[48], names[CV_MAX_COMP][12];
+    float v[CV_MAX_COMP];
+    fmt_num(a, sizeof a, -48.08488f); fmt_num(b, sizeof b, 57.017035f);
+    snprintf(top, sizeof top, "Top = %s", a); snprintf(bottom, sizeof bottom, "Bottom = %s", b);
+    uii_probe_value_text(text, sizeof text);
+    if (!strstr(text, "element-node") || !strstr(text, top) || !strstr(text, bottom)) return false;
+    if (app_field_comps(e, n, 1, names, v, CV_MAX_COMP) != 6 || strcmp(names[0], "SXX") ||
+        fabsf(v[0] - -48.08488f) > 1e-4f) return false;
+    if (app_field_comps(e, n, 2, names, v, CV_MAX_COMP) != 6 || fabsf(v[0] - 57.017035f) > 1e-4f) return false;
+    int stress, pos, neg;
+    if (!cv_stress_group(&G.frd.steps[G.step], &stress, &pos, &neg)) return false;
+    uint32_t slots[] = {shell_test_slot(1, 9), shell_test_slot(2, 9), shell_test_slot(8, 9), shell_test_slot(9, 9)};
+    for (int side = 1; side <= 2; side++) {
+        const float* raw = cache_get_elem(G.step, side == 1 ? pos : neg);
+        if (!raw || app_field_comps(e, n, side, names, v, CV_MAX_COMP) != 6) return false;
+        for (int c = 0; c < 6; c++) {
+            double mean = 0;
+            for (int j = 0; j < 4; j++) mean += raw[(size_t)slots[j] * 6 + c] / 4.;
+            if (fabs(v[c] - mean) > 1e-4) return false;
+        }
+    }
+    unsigned old = G.tag_groups;
+    G.tag_groups = 1u << CV_TAG_COMP;
+    const char* lines[32]; bool heads[32];
+    int count = uii_details_tag(lines, heads, 32), side = 0;
+    bool found[2] = {false, false};
+    for (int i = 0; i < count; i++) {
+        if (!strcmp(lines[i], "Top")) side = 1;
+        if (!strcmp(lines[i], "Bottom")) side = 2;
+        if (side && strstr(lines[i], "SXX") && strstr(lines[i], side == 1 ? a : b)) found[side - 1] = true;
+    }
+    G.tag_groups = old;
+    return found[0] && found[1];
+}
+static bool shell_inspect_element(struct nk_context* ctx) {
+    int old = G.pick_kinds;
+    G.pick_kinds = 1 << CV_PK_ELEM;
+    char text[256], a[32], b[32], top[48], bottom[48];
+    uii_probe_value_text(text, sizeof text);
+    fmt_num(a, sizeof a, -75.97248875f); fmt_num(b, sizeof b, 86.05227125f);
+    snprintf(top, sizeof top, "Top = %s", a); snprintf(bottom, sizeof bottom, "Bottom = %s", b);
+    bool ok = strstr(text, "element node mean") && strstr(text, top) && strstr(text, bottom) &&
+              fabsf(app_pick_surface_value(CV_PK_ELEM, 1) - -75.97248875f) < 1e-4f &&
+              fabsf(app_pick_surface_value(CV_PK_ELEM, 2) - 86.05227125f) < 1e-4f;
+    G.pick_kinds = old;
+    return ok;
+}
+static bool shell_inspect_modes(struct nk_context* ctx) {
+    uint32_t e = G.probe.elem, n = G.probe.node;
+    bool ok = true;
+    char names[CV_MAX_COMP][12], text[256];
+    float v[CV_MAX_COMP];
+    for (int mode = CV_EN_AVG_NONE; mode < CV_EN_AVG_N; mode++) {
+        app_set_elem_nodal_avg(mode);
+        for (int side = 1; side <= 2; side++) {
+            float expected = mode == CV_EN_AVG_NONE ? side == 1 ? -98.9174f : 108.95f
+                                                   : side == 1 ? -48.08488f : 57.017035f;
+            ok &= app_field_comps(e, n, side, names, v, CV_MAX_COMP) == 6 && fabsf(v[0] - expected) < 1e-4f;
+            app_set_shell_side(side);
+            uii_probe_value_text(text, sizeof text);
+            ok &= strstr(text, "element-node") && !strstr(text, side == 1 ? "Bottom =" : "Top =");
+        }
+    }
+    app_pick_field("STRESS", -1, 0);
+    ok &= app_field_comps(e, n, 1, names, v, CV_MAX_COMP) == 6 &&
+          fabsf(v[0] - -48.08488f) < 1e-4f && G.comp == -1;
+    app_pick_field("STRESS", 0, 0);
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+    uint32_t other = cv_frd_elem_index(&G.frd, 2);
+    ok &= app_field_comps(other, n, 1, names, v, CV_MAX_COMP) == 6 && fabsf(v[0] - 2.74764f) < 1e-4f;
+    int stress, top, bottom;
+    cv_step* st = &G.frd.steps[G.step];
+    if (!cv_stress_group(st, &stress, &top, &bottom) || bottom < 0) return false;
+    char saved[sizeof st->fields[bottom].name];
+    memcpy(saved, st->fields[bottom].name, sizeof saved);
+    snprintf(st->fields[bottom].name, sizeof st->fields[bottom].name, "TEST_MISSING");
+    refresh_field();
+    ok &= isnan(app_elem_node_value(e, n, 2)) &&
+          app_field_comps(e, n, 2, names, v, CV_MAX_COMP) == 6 && isnan(v[0]);
+    memcpy(st->fields[bottom].name, saved, sizeof saved);
+    refresh_field();
+    app_set_shell_side(0);
+    if (app_compare_open(G.path)) {
+        ok &= app_field_comps(e, n, 1, names, v, CV_MAX_COMP) == 6 && fabsf(v[0]) < 1e-6f;
+        app_compare_close();
+    } else ok = false;
+    return ok;
+}
+static bool shell_inspect_solids(struct nk_context* ctx) {
+    bool ok = true;
+    uint32_t n = cv_frd_node_index(&G.frd, 95);
+    for (int i = 0; i < 2; i++) {
+        uint32_t e = cv_frd_elem_index(&G.frd, i ? 100 : 60);
+        G.probe.elem = e; G.probe.node = n;
+        app_set_elem_nodal_avg(CV_EN_AVG_SCALAR);
+        char text[256], names[CV_MAX_COMP][12];
+        float v[CV_MAX_COMP];
+        uii_probe_value_text(text, sizeof text);
+        ok &= !app_elem_has_sides(e) && !strstr(text, "Top =") && !strstr(text, "Bottom =") &&
+              app_field_comps(e, n, 1, names, v, CV_MAX_COMP) == 6 &&
+              fabsf(v[0] - app_elem_node_value(e, n, 1)) < 1e-6f;
+    }
+    return ok;
+}
+static bool shell_inspect_nodal(struct nk_context* ctx) {
+    app_pick_field("DISP", 0, 0);
+    char names[CV_MAX_COMP][12];
+    float v[CV_MAX_COMP];
+    int fi = -1;
+    for (int i = 0; i < G.frd.steps[G.step].nfields; i++)
+        if (!strcmp(G.frd.steps[G.step].fields[i].name, "DISP")) fi = i;
+    const float* raw = fi >= 0 ? cache_get(G.step, fi) : NULL;
+    if (G.field_elem_nodal || !raw) return false;
+    int nc = G.frd.steps[G.step].fields[fi].ncomp;
+    if (app_field_comps(G.probe.elem, G.probe.node, 1, names, v, CV_MAX_COMP) != nc) return false;
+    for (int c = 0; c < nc; c++) if (v[c] != raw[(size_t)G.probe.node * nc + c]) return false;
+    return true;
+}
+static void shell_inspect_close(struct nk_context* ctx) {
+    G.probe_on = false;
+    G.pick_kinds = CV_PK_DEFAULT;
+    app_pick_field("STRESS", 0, 0);
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+    app_set_shell_side(0);
+}
 static bool symbols_off(struct nk_context* ctx) { return !G.show_bc && !G.show_loads && !G.show_links && !G.show_disc; }
 static bool symbols_on(struct nk_context* ctx) { return G.show_bc && G.show_loads && G.show_links && G.show_disc; }
 static bool edges_toggled(struct nk_context* ctx) { return G.show_edges != was.edges; }
@@ -1551,6 +1691,15 @@ static const step script[] = {
     DO(shell_avg_hide), WAIT(120), EXPECT(shell_avg_hidden, "hiding a solid recomputes its neighbours' average"),
     DO(shell_avg_show), WAIT(120), EXPECT(shell_avg_shown, "showing it restores the average"),
     DO(shell_avg_reset),
+
+    CASE_IF("shell Inspect: element-node values, separate sides and matching components", shell_inspect_available),
+    DO(shell_inspect_open), WAIT(3),
+    EXPECT(shell_inspect_node, "node 9 reports its shell-side values, not the element mean or mixed STRESS"),
+    EXPECT(shell_inspect_element, "element means are labelled and kept separate for Top and Bottom"),
+    EXPECT(shell_inspect_modes, "components follow averaging, side, element, missing fields and comparison"),
+    EXPECT(shell_inspect_solids, "solid components match their section-isolated display without shell-side labels"),
+    EXPECT(shell_inspect_nodal, "ordinary nodal components keep their existing values"),
+    DO(shell_inspect_close),
 
     CASE("toolbar: the colour map list opens under its tooltip and picks a map"),
     DO(snapshot), AT_TIP("Toolbar", TIP_CMAP), WAIT(30), EXPECT(tip_cmap, "the tooltip shows"),

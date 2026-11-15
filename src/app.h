@@ -741,6 +741,7 @@ int  app_pick_nodes_of(int kind, uint32_t out[8]);   /* CV_PK_FACE: the face's r
 int  app_pick_nodes(uint32_t out[8]);             /* those of the head kind (a face or edge); 0 none */
 float app_pick_average_of(int kind);              /* the field over them (the element's value per element) */
 float app_pick_average(void);                     /* ... of the head kind */
+float app_pick_surface_value(int kind, int side); /* element-node value or node mean, side 1 top / 2 bottom */
 bool app_pick_anchor(float p[3]);                 /* where the probed item is drawn: the node, the centre of the element, face or edge */
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* app_label.c: labels on the model */
@@ -798,9 +799,12 @@ void app_measure_sync(void);                         /* per frame: lines and lab
 /* the label anchors: n of them, pos[3] disp[6] each to anc (9 per), texts to txt, the
    measurement each belongs to (its index) to which */
 uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t* which, uint32_t max);
-/* the shown .frd field's stored components at a node (global, as the file has them);
-   names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
-int app_field_comps(uint32_t node, char names[][12], float* vals, int max);
+bool app_elem_has_sides(uint32_t elem);           /* the current field uses separate shell surfaces */
+float app_elem_node_value(uint32_t elem, uint32_t node, int side); /* displayed element-node scalar */
+float app_elem_mean_value(uint32_t elem, int side);              /* finite node scalars, equal weights */
+/* Element-nodal components follow the display's units, coordinates and averaging;
+   side 1 top / 2 bottom. Other FRD fields retain their global nodal components. */
+int app_field_comps(uint32_t elem, uint32_t node, int side, char names[][12], float* vals, int max);
 void app_goto_node(uint32_t node);       /* centre the camera on a node, probe it */
 bool app_find(uint32_t id, bool element);/* by file id: probe + centre; false if absent */
 void app_reload(void);                   /* open the same file again, keeping camera, step and field */

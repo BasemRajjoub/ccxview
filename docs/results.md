@@ -103,9 +103,20 @@ comparison, scalar mode averages the per-element-node A−B scalar differences;
 component mode averages the matched A and B tensors separately before computing
 and subtracting their scalar results.
 
-The element value reported by the probe is the mean over the selected element's
-slots (and over both shell sides when Both is selected), not an interpolated
-point value. Formulae and other analyses that name a result block continue to use
+For element-nodal results, Inspect node and its probe tag report the selected
+element's value at that node, using the same averaging as the contour, not a
+shared-node compatibility value or a pixel-interpolated value. Inspect element
+reports an explicitly labelled **element node mean**, equally weighting its
+finite node scalars. **Both** lists **Top** and **Bottom** separately for nodes,
+element means and components; opposite shell surfaces are never combined into
+one Inspect value. Face and edge readouts average only their own element-node
+values. Solids continue to use their own stress values without shell-side labels.
+The component panel follows the same element, shell surface, units, coordinate
+system and averaging mode as the contour. With scalar averaging, a displayed
+von Mises or principal value need not equal the invariant recomputed from the
+displayed mean components.
+
+Formulae and other analyses that name a result block continue to use
 that block's nodal representation, not the combined surface display.
 The legend range uses element-nodal values; multiple extrema markers currently
 rank element means rather than individual element-node values.

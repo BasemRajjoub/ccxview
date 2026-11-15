@@ -141,7 +141,7 @@ float* to_csys(const cv_field_desc* d, const cv_frd* f, const float* vals) {
     return t;
 }
 
-static float* elem_field_scalar(int fi) {
+static float* elem_field_scalar(int fi, int comp) {
     if (fi < 0 || fi >= G.frd.steps[G.step].nfields) return NULL;
     const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
     const float* vals = cache_get_elem(G.step, fi);
@@ -164,7 +164,7 @@ static float* elem_field_scalar(int fi) {
         vals = turned;
     }
     float* scalar = malloc(CV_MAX(nslots, 1) * sizeof(float));
-    if (scalar) cv_field_scalar(vals, d->ncomp, nslots, G.comp, scalar);
+    if (scalar) cv_field_scalar(vals, d->ncomp, nslots, comp, scalar);
     else cv_msg_add(&G.msgs, 0, false, "out of memory preparing element-nodal values");
     free(turned);
     if (!scalar || !G.diff_mode || !G.cmp_on) return scalar;
@@ -180,9 +180,9 @@ static float* elem_field_scalar(int fi) {
     size_t other_slots = G.cmp.n_elems ? G.cmp.eoff[G.cmp.n_elems] : 0;
     float* values = compatible ? malloc(CV_MAX(other_slots * (size_t)other->ncomp, 1) * sizeof(float)) : NULL;
     float* result = compatible ? malloc(CV_MAX(other_slots, 1) * sizeof(float)) : NULL;
-    float* xyz = compatible && G.csys > 0 && G.comp >= 0 && cv_cyl_applies(other)
+    float* xyz = compatible && G.csys > 0 && comp >= 0 && cv_cyl_applies(other)
                ? malloc(CV_MAX(other_slots * 3, 1) * sizeof(float)) : NULL;
-    bool need_xyz = compatible && G.csys > 0 && G.comp >= 0 && cv_cyl_applies(other);
+    bool need_xyz = compatible && G.csys > 0 && comp >= 0 && cv_cyl_applies(other);
     if (!compatible || !values || !result || (need_xyz && !xyz)) {
         cv_msg_add(&G.msgs, 0, false, compatible ? "compare: out of memory decoding element-nodal field"
                                                 : "compare: matching element-nodal field is missing or incompatible");
@@ -196,7 +196,7 @@ static float* elem_field_scalar(int fi) {
                 memcpy(xyz + 3 * j, G.cmp.xyz + 3 * G.cmp.conn[j], 3 * sizeof(float));
             cv_cyl_values(other, xyz, other_slots, G.csys - 1, G.csys_o, values);
         }
-        cv_field_scalar(values, other->ncomp, other_slots, G.comp, result);
+        cv_field_scalar(values, other->ncomp, other_slots, comp, result);
         size_t unmatched = 0;
         for (uint32_t e = 0; e < G.frd.n_elems; e++) {
             uint32_t other_e = cv_frd_elem_index(&G.cmp, G.frd.elem_id[e]);
@@ -215,8 +215,8 @@ static float* elem_field_scalar(int fi) {
     return scalar;
 }
 
-static bool elem_turn_cyl(const cv_frd* f, const cv_field_desc* d, float* values, size_t nslots) {
-    if (G.csys <= 0 || G.comp < 0 || !cv_cyl_applies(d)) return true;
+static bool elem_turn_cyl(const cv_frd* f, const cv_field_desc* d, float* values, size_t nslots, int comp) {
+    if (G.csys <= 0 || comp < 0 || !cv_cyl_applies(d)) return true;
     float* xyz = malloc(CV_MAX(nslots * 3, 1) * sizeof(float));
     if (!xyz) return false;
     for (size_t j = 0; j < nslots; j++)
@@ -226,7 +226,7 @@ static bool elem_turn_cyl(const cv_frd* f, const cv_field_desc* d, float* values
     return true;
 }
 
-static float* elem_tensor_average(int fi, const int32_t* sections) {
+static float* elem_tensor_average(int fi, const int32_t* sections, int comp) {
     const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
     const float* raw = cache_get_elem(G.step, fi);
     if (!raw) return NULL;
@@ -238,7 +238,7 @@ static float* elem_tensor_average(int fi, const int32_t* sections) {
     float* other_scalar = NULL;
     if (!a || !out) goto oom;
     memcpy(a, raw, nv * sizeof(float));
-    if (!elem_turn_cyl(&G.frd, d, a, ns)) goto oom;
+    if (!elem_turn_cyl(&G.frd, d, a, ns, comp)) goto oom;
     if (G.diff_mode && G.cmp_on) {
         int step = G.cmp.n_steps ? CV_MIN(G.step, G.cmp.n_steps - 1) : -1, field = -1;
         if (step >= 0)
@@ -262,7 +262,7 @@ static float* elem_tensor_average(int fi, const int32_t* sections) {
         cv_frd_read_elem_field(&G.cmp, other, values, &G.msgs);
         deck_compare_localize_elem(&G.cmp, step, other, values);
         units_apply(other->name, other->ncomp, values, ons);
-        if (!elem_turn_cyl(&G.cmp, other, values, ons)) { free(values); goto oom; }
+        if (!elem_turn_cyl(&G.cmp, other, values, ons, comp)) { free(values); goto oom; }
         size_t unmatched = 0;
         for (uint32_t e = 0; e < G.frd.n_elems; e++) {
             uint32_t oe = cv_frd_elem_index(&G.cmp, G.frd.elem_id[e]);
@@ -286,9 +286,9 @@ static float* elem_tensor_average(int fi, const int32_t* sections) {
     }
     if (!cv_elem_nodal_average(&G.frd, G.vis, sections, a, d->ncomp) ||
         (b && !cv_elem_nodal_average(&G.frd, G.vis, sections, b, d->ncomp))) goto oom;
-    cv_field_scalar(a, d->ncomp, ns, G.comp, out);
+    cv_field_scalar(a, d->ncomp, ns, comp, out);
     if (b) {
-        cv_field_scalar(b, d->ncomp, ns, G.comp, other_scalar);
+        cv_field_scalar(b, d->ncomp, ns, comp, other_scalar);
         for (size_t j = 0; j < ns; j++) out[j] -= other_scalar[j];
     }
     free(a); free(b); free(other_scalar);
@@ -299,12 +299,12 @@ oom:
     return NULL;
 }
 
-static float* elem_display_scalar(int fi, const int32_t* sections) {
+static float* elem_display_scalar(int fi, const int32_t* sections, int comp) {
     if (fi < 0 || fi >= G.frd.steps[G.step].nfields) return NULL;
     const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
     bool stress = d->irtype == 3 && cv_field_is_stress(d->name) && cv_tensor_order(d);
-    if (stress && G.elem_nodal_avg == CV_EN_AVG_TENSOR) return elem_tensor_average(fi, sections);
-    float* scalar = elem_field_scalar(fi);
+    if (stress && G.elem_nodal_avg == CV_EN_AVG_TENSOR) return elem_tensor_average(fi, sections, comp);
+    float* scalar = elem_field_scalar(fi, comp);
     if (scalar && stress && G.elem_nodal_avg == CV_EN_AVG_SCALAR &&
         !cv_elem_nodal_average(&G.frd, G.vis, sections, scalar, 1)) {
         cv_msg_add(&G.msgs, 0, false, "out of memory averaging element-nodal stress");
@@ -363,9 +363,9 @@ static void refresh_elem_surfaces(int fi, const cv_field_desc* d) {
             }
         }
     }
-    float* base = elem_display_scalar(group ? stress : fi, sections);
-    float* top = group || paired ? elem_display_scalar(top_fi, sections) : NULL;
-    float* bot = group || paired ? elem_display_scalar(bot_fi, sections) : NULL;
+    float* base = elem_display_scalar(group ? stress : fi, sections, G.comp);
+    float* top = group || paired ? elem_display_scalar(top_fi, sections, G.comp) : NULL;
+    float* bot = group || paired ? elem_display_scalar(bot_fi, sections, G.comp) : NULL;
     free(sections);
     if (group && (top_fi < 0 || bot_fi < 0))
         cv_msg_add(&G.msgs, 0, false, "shell stress: missing or incompatible top or bottom field; that surface has no data");
@@ -1014,8 +1014,94 @@ void app_mesh_set(int q) {
     refresh_field();
 }
 
-int app_field_comps(uint32_t node, char names[][12], float* vals, int max) {
+static uint32_t elem_node_slot(uint32_t elem, uint32_t node) {
+    if (elem >= G.frd.n_elems || node >= G.frd.n_nodes) return UINT32_MAX;
+    for (uint32_t j = G.frd.eoff[elem]; j < G.frd.eoff[elem + 1]; j++)
+        if (G.frd.conn[j] == node) return j;
+    return UINT32_MAX;
+}
+
+static int elem_surface_field(uint32_t elem, int side) {
+    if (!G.field_elem_nodal || G.field_src != 0 || elem >= G.frd.n_elems) return -1;
+    int fi = find_field(G.step, G.field_name);
+    if (fi < 0 || G.frd.etype[elem] < 7 || G.frd.etype[elem] > 10) return fi;
+    const cv_step* st = &G.frd.steps[G.step];
+    int stress, top, bottom;
+    if ((cv_stress_group(st, &stress, &top, &bottom) && (fi == stress || fi == top || fi == bottom)) ||
+        (cv_shell_pair(st, &top, &bottom) && (fi == top || fi == bottom)))
+        return side == 2 ? bottom : top;
+    return fi;
+}
+
+bool app_elem_has_sides(uint32_t elem) {
+    return elem_surface_field(elem, 1) != elem_surface_field(elem, 2);
+}
+
+float app_elem_node_value(uint32_t elem, uint32_t node, int side) {
+    uint32_t j = elem_node_slot(elem, node);
+    const float* v = side == 2 ? G.elem_bottom : G.elem_top;
+    return G.field_elem_nodal && v && j < G.elem_nslots ? v[j] : NAN;
+}
+
+float app_elem_mean_value(uint32_t elem, int side) {
+    const float* v = side == 2 ? G.elem_bottom : G.elem_top;
+    if (!G.field_elem_nodal || !v || elem >= G.frd.n_elems) return NAN;
+    double sum = 0;
+    uint32_t count = 0;
+    for (uint32_t j = G.frd.eoff[elem]; j < G.frd.eoff[elem + 1] && j < G.elem_nslots; j++)
+        if (isfinite(v[j])) { sum += v[j]; count++; }
+    return count ? (float)(sum / count) : NAN;
+}
+
+int app_field_comps(uint32_t elem, uint32_t node, int side, char names[][12], float* vals, int max) {
     if (!G.loaded || G.field_src != 0 || node >= G.frd.n_nodes) return 0;
+    if (G.field_elem_nodal) {
+        uint32_t slot = elem_node_slot(elem, node);
+        if (slot == UINT32_MAX) return 0;
+        int fi = elem_surface_field(elem, side), fallback = find_field(G.step, G.field_name);
+        if (fallback < 0) return 0;
+        const cv_field_desc* d = &G.frd.steps[G.step].fields[fi >= 0 ? fi : fallback];
+        static struct {
+            bool valid;
+            uint64_t gen;
+            const float* xyz;
+            uint32_t elem, node;
+            int field, n;
+            char names[CV_MAX_COMP][12];
+            float vals[CV_MAX_COMP];
+        } cache[2];
+        int k = side == 2;
+        if (!cache[k].valid || cache[k].gen != G.field_gen || cache[k].xyz != G.frd.xyz ||
+            cache[k].elem != elem || cache[k].node != node || cache[k].field != fi) {
+            cache[k].valid = false;
+            int32_t* sections = NULL;
+            if (fi >= 0 && G.elem_nodal_avg != CV_EN_AVG_NONE && cv_field_is_stress(d->name) &&
+                cv_tensor_order(d) && deck_loaded()) {
+                sections = malloc((size_t)CV_MAX(G.frd.n_elems, 1) * sizeof *sections);
+                if (!sections) {
+                    cv_msg_add(&G.msgs, 0, false, "out of memory preparing Inspect stress components");
+                    return 0;
+                }
+                cv_elem_sections(&G.frd, deck_get(), sections);
+            }
+            cache[k].n = d->ncomp;
+            for (int c = 0; c < d->ncomp; c++) {
+                memcpy(cache[k].names[c], d->comp[c], 12);
+                if (G.csys > 0 && cv_cyl_applies(d)) cv_cyl_comp_name(d, c, cache[k].names[c]);
+                float* values = fi >= 0 ? elem_display_scalar(fi, sections, c) : NULL;
+                if (fi >= 0 && !values) { free(sections); return 0; }
+                cache[k].vals[c] = values ? values[slot] : NAN;
+                free(values);
+            }
+            free(sections);
+            cache[k].gen = G.field_gen; cache[k].xyz = G.frd.xyz;
+            cache[k].elem = elem; cache[k].node = node; cache[k].field = fi;
+            cache[k].valid = true;
+        }
+        int n = CV_MIN(cache[k].n, max);
+        for (int c = 0; c < n; c++) { memcpy(names[c], cache[k].names[c], 12); vals[c] = cache[k].vals[c]; }
+        return n;
+    }
     int fi = find_field(G.step, G.field_name);
     const float* v = fi >= 0 ? cache_get(G.step, fi) : NULL;
     if (!v) return 0;

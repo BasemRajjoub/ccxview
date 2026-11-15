@@ -90,6 +90,19 @@ static float probe_value_now(void) {
    average; "no field" */
 void uii_probe_value_text(char* out, size_t n) {
     char num[32];
+    if (G.has_field && G.field_elem_nodal && !G.probe_ip && !app_nrec_active()) {
+        int kind = app_pick_head(), side = G.shell_side == 2 ? 2 : 1;
+        const char* what = kind == CV_PK_NODE ? "element-node" : kind == CV_PK_ELEM ? "element node mean" : "node mean";
+        fmt_num(num, sizeof num, app_pick_surface_value(kind, side));
+        if (G.shell_side == 0 && app_elem_has_sides(G.probe.elem)) {
+            char bottom[32];
+            fmt_num(bottom, sizeof bottom, app_pick_surface_value(kind, 2));
+            snprintf(out, n, "%s (%s): Top = %s; Bottom = %s", G.field_label, what, num, bottom);
+        } else {
+            snprintf(out, n, "%s (%s) = %s", G.field_label, what, num);
+        }
+        return;
+    }
     uint32_t nd[8];
     if (G.has_field && app_pick_nodes(nd)) {
         fmt_num(num, sizeof num, app_pick_average());

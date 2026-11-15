@@ -59,6 +59,20 @@ static bool in_set(const cv_set* s, uint32_t id) {        /* ids sorted */
     return lo < s->n && s->ids[lo] == id;
 }
 
+static void elem_result_lines(uint32_t e, uint32_t n, int kind) {
+    bool sides = app_elem_has_sides(e);
+    const char* what = kind == CV_PK_NODE ? "element-node" : kind == CV_PK_ELEM ? "element node mean" : "node mean";
+    line(false, "%s (%s)", G.field_label, what);
+    for (int side = 1; side <= (sides ? 2 : 1); side++) {
+        if (sides && G.shell_side && G.shell_side != side) continue;
+        char value[32];
+        float v = kind == CV_PK_NODE ? app_elem_node_value(e, n, side)
+                : kind == CV_PK_ELEM ? app_elem_mean_value(e, side) : app_pick_surface_value(kind, side);
+        fmt_num(value, sizeof value, v);
+        line(false, "   %s%s", sides ? side == 1 ? "Top = " : "Bottom = " : "= ", value);
+    }
+}
+
 /* the node: where it is and goes, the field there, its every component, the elements on it */
 static void node_lines(uint32_t n) {
     const cv_frd* f = &G.frd;
@@ -76,19 +90,26 @@ static void node_lines(uint32_t n) {
         line(false, "displaced to   %.6g, %.6g, %.6g", x[0] + u[0], x[1] + u[1], x[2] + u[2]);
     }
     if (G.has_field) {
-        fmt_num(a, sizeof a, G.elem_mode && !G.field_elem_nodal ? NAN : G.scalar[n]);
         if (G.field_elem_nodal)
-            line(false, "%s node average = %s  (element value below)", G.field_name, a);
-        else
+            elem_result_lines(G.probe.elem, n, CV_PK_NODE);
+        else {
+            fmt_num(a, sizeof a, G.elem_mode ? NAN : G.scalar[n]);
             line(false, "%s = %s%s", G.field_label, a, G.elem_mode ? "  (shown per element, below)" : "");
+        }
         if (G.probe_ip) { fmt_num(a, sizeof a, G.probe_value); line(false, "integration point %d: %s", G.probe_ip, a); }
     }
     char names[CV_MAX_COMP][12];
     float v[CV_MAX_COMP];
-    int k = app_field_comps(n, names, v, CV_MAX_COMP);
-    if (k) {
+    bool sided = G.field_elem_nodal && app_elem_has_sides(G.probe.elem);
+    for (int side = 1; side <= (sided ? 2 : 1); side++) {
+        if (sided && G.shell_side && G.shell_side != side) continue;
+        int k = app_field_comps(G.probe.elem, n, side, names, v, CV_MAX_COMP);
+        if (!k) continue;
         cur = GR_COMP;
-        line(true, "field components: %s (global, input units)", G.field_name);
+        if (side == 1 || G.shell_side == 2)
+            line(true, "field components: %s (%s)", G.field_name,
+                 G.field_elem_nodal ? "element-node, displayed units/axes" : "global, input units");
+        if (sided) line(false, "%s", side == 1 ? "Top" : "Bottom");
         char t[LW];
         size_t o = 0;
         t[0] = 0;
@@ -133,7 +154,8 @@ static void elem_lines(uint32_t n, uint32_t e) {
     line(true, "element nodes (%u): a click probes one", m);
     id_rows("nodes", ids, m);
     cur = GR_ELEM;
-    if (G.has_field && (G.elem_mode || G.field_elem_nodal)) { fmt_num(a, sizeof a, G.elem_val[e]); line(false, "%s (element) = %s", G.field_label, a); }
+    if (G.has_field && G.field_elem_nodal) elem_result_lines(e, n, CV_PK_ELEM);
+    else if (G.has_field && G.elem_mode) { fmt_num(a, sizeof a, G.elem_val[e]); line(false, "%s (element) = %s", G.field_label, a); }
     char fl[LW], ml[LW];                              /* the checks, a group when one applies */
     bool fo = G.has_field && fail_probe_text(n, e, fl, sizeof fl), mo = G.has_field && mesh_probe_text(e, ml, sizeof ml);
     if (!fo && !mo) return;
@@ -176,7 +198,9 @@ static void face_lines(uint32_t e, int face) {
         for (int k = 0; k < 3; k++) nrm[k] = -nrm[k];
     for (int k = 0; k < 3; k++) if (fabsf(nrm[k]) < 5e-4f) nrm[k] = 0.f;     /* no "-0.000" */
     line(false, "%s  %.3f, %.3f, %.3f", solid ? "outward normal" : "normal", nrm[0], nrm[1], nrm[2]);
-    if (G.has_field) {
+    if (G.has_field && G.field_elem_nodal) {
+        elem_result_lines(e, G.probe.node, CV_PK_FACE);
+    } else if (G.has_field) {
         fmt_num(a, sizeof a, app_pick_average_of(CV_PK_FACE));
         line(false, "%s average %s", G.field_label, a);
         line(false, "   %s", G.elem_mode ? "the element's value" : "over the face's nodes");
@@ -203,11 +227,12 @@ static void edge_lines(void) {
     }
     fmt_num(a, sizeof a, len);
     line(false, "length %s (undeformed%s)", a, n == 3 ? ", through its mid node" : "");
-    if (G.has_field && G.scalar && !G.elem_mode) {
+    if (G.has_field && G.scalar && !G.elem_mode && !G.field_elem_nodal) {
         fmt_num(a, sizeof a, G.scalar[r[0]]); fmt_num(b, sizeof b, G.scalar[r[n - 1]]);
         line(false, "%s at the ends %s, %s", G.field_label, a, b);
     }
-    if (G.has_field) { fmt_num(a, sizeof a, app_pick_average_of(CV_PK_EDGE)); line(false, "average %s%s", a, G.elem_mode ? " (the element's value)" : ""); }
+    if (G.has_field && G.field_elem_nodal) elem_result_lines(G.probe.elem, G.probe.node, CV_PK_EDGE);
+    else if (G.has_field) { fmt_num(a, sizeof a, app_pick_average_of(CV_PK_EDGE)); line(false, "average %s%s", a, G.elem_mode ? " (the element's value)" : ""); }
 }
 
 /* the selection's totals, two lines a kind selected: how many and their size (undeformed),
