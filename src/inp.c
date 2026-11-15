@@ -195,7 +195,14 @@ static void nidx_free(nidx* t) { free(t->s); memset(t, 0, sizeof *t); }
 /* ---- parser state ---------------------------------------------------------------------- */
 
 typedef struct { char name[64]; bool is_elem; CV_VEC(uint32_t) ids; } vset;
-typedef struct { char name[64]; CV_VEC(uint32_t) elem; CV_VEC(uint8_t) face; CV_VEC(uint32_t) nodes; } vsurf;
+typedef struct { char name[64]; int face; } surf_set;   /* face -1: a node set */
+typedef struct {
+    char name[64];
+    CV_VEC(uint32_t) elem;
+    CV_VEC(uint8_t) face;
+    CV_VEC(uint32_t) nodes;
+    CV_VEC(surf_set) pending;
+} vsurf;
 typedef cv_section section;                                   /* kind unused in sdofs */
 typedef struct { char elset[64]; float off; } shoff;     /* *SHELL SECTION, OFFSET= */
 /* elems: a rigid ELSET, expanded at the end. The names of what a keyword referred to before it was
@@ -361,6 +368,29 @@ static void links_resolve(P* p, bool final) {
         if (v->relset[0]) { if (each_elem(p, v->relset, link_add_elem, ix)) v->relset[0] = 0; else miss = true; }
         if (final && miss) p->bad_lines++;
     }
+}
+
+/* the sets a surface named before they were defined; final: what is still missing is an
+   unreadable line */
+static void surface_resolve(P* p, vsurf* sf, bool final) {
+    size_t keep = 0;
+    for (size_t j = 0; j < sf->pending.n; j++) {
+        surf_set r = sf->pending.a[j];
+        int si = find_set(p, r.name, r.face >= 0);
+        if (si < 0) {
+            if (final) p->bad_lines++;
+            else sf->pending.a[keep++] = r;
+            continue;
+        }
+        const vset* set = &p->sets.a[si];
+        for (size_t k = 0; k < set->ids.n; k++) {
+            if (r.face < 0) {
+                if (!cv_push(sf->nodes, set->ids.a[k])) p->oom = true;
+            } else if (!cv_push(sf->elem, set->ids.a[k]) || !cv_push(sf->face, (uint8_t)r.face))
+                p->oom = true;
+        }
+    }
+    sf->pending.n = keep;
 }
 
 static vlink* new_link(P* p, int kind, const char* name) {
@@ -980,7 +1010,9 @@ static void do_data(P* p, const char* s, const char* e) {
             if (each_elem(p, f[0], add_dload, &d)) return;
             int si = !strcmp(lab, "P") ? find_surf(p, f[0]) : -1;   /* *DSLOAD: SURFACE, P, value: its faces */
             if (si < 0) { p->bad_lines++; return; }
-            const vsurf* sf = &p->surfs.a[si];
+            vsurf* sf = &p->surfs.a[si];
+            surface_resolve(p, sf, false);
+            if (sf->pending.n) p->bad_lines++;   /* a set not defined yet: its faces are not loaded */
             for (size_t k = 0; k < sf->elem.n; k++) { d.face = sf->face.a[k]; add_dload(p, sf->elem.a[k], &d); }
             return;
         }
@@ -1040,7 +1072,12 @@ static void do_data(P* p, const char* s, const char* e) {
                 if (to_u32(f[0], &v)) { if (!cv_push(sf->nodes, v)) p->oom = true; return; }
                 char nm[64]; snprintf(nm, sizeof nm, "%s", f[0]); upcase(nm);
                 int o = find_set(p, nm, false);
-                if (o < 0) { p->bad_lines++; return; }
+                if (o < 0) {
+                    surf_set r = {.face = -1};
+                    up_copy(r.name, nm);
+                    if (!cv_push(sf->pending, r)) p->oom = true;
+                    return;
+                }
                 for (size_t j = 0; j < p->sets.a[o].ids.n; j++) if (!cv_push(sf->nodes, p->sets.a[o].ids.a[j])) p->oom = true;
                 return;
             }
@@ -1058,7 +1095,12 @@ static void do_data(P* p, const char* s, const char* e) {
             }
             char nm[64]; snprintf(nm, sizeof nm, "%s", f[0]); upcase(nm);
             int o = find_set(p, nm, true);
-            if (o < 0) { p->bad_lines++; return; }
+            if (o < 0) {
+                surf_set r = {.face = face - 1};
+                up_copy(r.name, nm);
+                if (!cv_push(sf->pending, r)) p->oom = true;
+                return;
+            }
             for (size_t j = 0; j < p->sets.a[o].ids.n; j++)
                 if (!cv_push(sf->elem, p->sets.a[o].ids.a[j]) || !cv_push(sf->face, (uint8_t)(face - 1))) p->oom = true;
             return;
@@ -1303,6 +1345,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     p.d = d; p.rd = rd; p.user = user; p.cset = -1; p.nodeset = -1; p.cdisc = -1;
     parse_text(&p, data, size);
     finish_element(&p);
+    for (size_t i = 0; i < p.surfs.n; i++) surface_resolve(&p, &p.surfs.a[i], true);
     links_resolve(&p, true);
     char msg[160];
 
@@ -1592,7 +1635,7 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     cv_free_vec(p.links); cv_free_vec(p.inters);
     for (size_t i = 0; i < p.sets.n; i++) cv_free_vec(p.sets.a[i].ids);
     cv_free_vec(p.sets);
-    for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); }
+    for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); cv_free_vec(p.surfs.a[i].pending); }
     cv_free_vec(p.surfs);
     nidx_free(&p.ix_set); nidx_free(&p.ix_surf); nidx_free(&p.ix_amp); nidx_free(&p.ix_mat); nidx_free(&p.ix_ori); nidx_free(&p.ix_inter);
     return true;
@@ -1614,7 +1657,7 @@ oom:
     cv_free_vec(p.mats); cv_free_vec(p.mprop);
     for (size_t i = 0; i < p.sets.n; i++) cv_free_vec(p.sets.a[i].ids);
     cv_free_vec(p.sets);
-    for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); }
+    for (size_t i = 0; i < p.surfs.n; i++) { cv_free_vec(p.surfs.a[i].elem); cv_free_vec(p.surfs.a[i].face); cv_free_vec(p.surfs.a[i].nodes); cv_free_vec(p.surfs.a[i].pending); }
     cv_free_vec(p.surfs);
     nidx_free(&p.ix_set); nidx_free(&p.ix_surf); nidx_free(&p.ix_amp); nidx_free(&p.ix_mat); nidx_free(&p.ix_ori); nidx_free(&p.ix_inter);
     cv_inp_free(d);

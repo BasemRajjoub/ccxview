@@ -15,7 +15,7 @@ does with the results is in [results.md](results.md).
 | `*NODE` | coordinates; `NSET=` makes a node set |
 | `*ELEMENT` | connectivity, `TYPE=`, `ELSET=`; the element types below |
 | `*NSET`, `*ELSET` | named sets, `GENERATE` too; listed under Groups, selectable |
-| `*SURFACE` | `TYPE=ELEMENT` (element faces) and `TYPE=NODE`; drawn under Groups > Surfaces |
+| `*SURFACE` | `TYPE=ELEMENT` (element faces) and `TYPE=NODE`; referenced sets may be defined later, including in an include file; drawn under Groups > Surfaces |
 | `*SOLID SECTION`, `*SHELL SECTION`, `*BEAM SECTION`, ... | `MATERIAL=` per `ELSET=`: the material of each element, for the Material groups |
 | `*MATERIAL` | the material's name |
 | `*BOUNDARY` | supports (Layers > Supports), cyan. A held DOF: a cone per axis with its tip on the node, a second base for a held rotation. A value other than 0: a prescribed displacement, an arrow with a bar across its tail; a prescribed rotation, a turning arrow. DOF 11: a temperature, a small cross |
