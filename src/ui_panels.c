@@ -617,6 +617,16 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
             tip(ctx, "One value per element (mean of its nodes) instead of a smooth nodal field");
             if (nk_checkbox_label(ctx, "Per element (flat)", &em)) app_set_elem_mode(em);
             faces_note(ctx, s, row);
+            nk_layout_row_template_begin(ctx, row);
+            nk_layout_row_template_push_dynamic(ctx);
+            nk_layout_row_template_push_static(ctx, 100 * s);
+            nk_layout_row_template_end(ctx);
+            nk_spacing(ctx, 1);
+            tip(ctx, "The field integrated over the shown elements at every step: volume integral and average\n"
+                     "(the homogenised <S>, <E> of an RVE); in its window a set, a surface or node sums instead");
+            if (nk_button_label(ctx, "integrate...")) {
+                if (GI.open) app_integ_close(); else app_integ_open(CV_IK_VOLUME, "shown");
+            }
             {   /* components of vectors and tensors in a cylindrical system */
                 static const char* cs[] = { "coordinates: global x y z", "cylindrical about X", "cylindrical about Y", "cylindrical about Z" };
                 tip(ctx, "Vector and tensor components in a cylindrical system: r radial, t hoop, a axial (.frd fields; invariants stay)");
@@ -707,16 +717,6 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 uii_field_options(ctx, s, row, d, active);
                 if (open) G.fields_open[0] = 0;
                 nk_tree_state_pop(ctx);
-            }
-            nk_layout_row_template_begin(ctx, row);
-            nk_layout_row_template_push_dynamic(ctx);
-            nk_layout_row_template_push_static(ctx, 100 * s);
-            nk_layout_row_template_end(ctx);
-            nk_spacing(ctx, 1);
-            tip(ctx, "The field integrated over the shown elements at every step: volume integral and average\n"
-                     "(the homogenised <S>, <E> of an RVE); in its window a set, a surface or node sums instead");
-            if (nk_button_label(ctx, "integrate...")) {
-                if (GI.open) app_integ_close(); else app_integ_open(CV_IK_VOLUME, "shown");
             }
             section_calc(ctx, s, row);
             section_failure(ctx, s, row);
