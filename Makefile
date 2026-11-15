@@ -121,7 +121,15 @@ build/test_deck_links: tests/test_deck_links.c src/app_deck.c $(wildcard src/*.h
 test-deck-links: build/test_deck_links
 	./build/test_deck_links
 
-test: build/test_main test-ndof-camera test-deck-links
+build/test_field_range: tests/test_field_range.c src/app_field.c src/field.c src/label.c $(wildcard src/*.h)
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DCV_DEBUG -fsanitize=address,undefined -ffunction-sections -fdata-sections tests/test_field_range.c src/app_field.c src/field.c src/label.c -o $@ $(NDOF_TEST_GC) -lm
+
+.PHONY: test-field-range
+test-field-range: build/test_field_range
+	./build/test_field_range
+
+test: build/test_main test-ndof-camera test-deck-links test-field-range
 	./build/test_main
 	scripts/check-sources.sh
 	sh tests/launcher.sh

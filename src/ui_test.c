@@ -691,6 +691,185 @@ static bool ortho_off(struct nk_context* ctx) { return !G.cam.ortho; }
 static bool field_other(struct nk_context* ctx) { return G.field_src == 0 && strcmp(G.field_name, "DISP") != 0; }
 static bool field_disp(struct nk_context* ctx) { return G.field_src == 0 && !strcmp(G.field_name, "DISP"); }
 static bool comp_changed(struct nk_context* ctx) { return G.comp != was.comp; }
+static bool shell_pair_available(struct nk_context* ctx) {
+    int top, bottom;
+    if (G.frd.n_steps == 0) return false;
+    const cv_step* st = &G.frd.steps[G.step];
+    return st->nfields == 4 && !strcmp(st->fields[0].name, "DISP") &&
+           !strcmp(st->fields[1].name, "STRESS") && cv_shell_pair(st, &top, &bottom) && top == 2 && bottom == 3;
+}
+static void shell_pair_open(struct nk_context* ctx) {
+    fields_open(ctx);
+    app_pick_field("DISP", CV_COMP_MAG, 0);
+    app_set_shell_side(0);
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+    *uii_fnode_state("DISP", false) = NK_MINIMIZED;
+    *uii_fnode_state("STRESS", false) = NK_MINIMIZED;
+}
+static bool shell_field_selected(struct nk_context* ctx) {
+    return G.field_src == 0 && !strcmp(G.field_name, "STRESS") &&
+           *uii_fnode_state("STRESS", false) == NK_MAXIMIZED &&
+           find_mark("Toolbar", "#shell side") && find_mark("Scene", "#shell side");
+}
+static bool shell_bottom_selected(struct nk_context* ctx) {
+    return G.shell_side == 2 && find_mark("Toolbar", "#shell side") && find_mark("Scene", "#shell side");
+}
+static bool shell_top_selected(struct nk_context* ctx) {
+    return G.shell_side == 1 && find_mark("Toolbar", "#shell side") && find_mark("Scene", "#shell side");
+}
+static void shell_legacy_bottom(struct nk_context* ctx) { app_pick_field("STRNEG", CV_COMP_MISES, 0); }
+static bool shell_legacy_selected(struct nk_context* ctx) {
+    return G.field_src == 0 && !strcmp(G.field_name, "STRESS") &&
+           find_mark("Toolbar", "#shell side") && find_mark("Scene", "#shell side");
+}
+static bool shell_principal_selected(struct nk_context* ctx) { return G.comp == CV_COMP_P1; }
+static bool shell_mises_selected(struct nk_context* ctx) { return G.comp == CV_COMP_MISES; }
+static bool shell_avg_scalar(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_SCALAR; }
+static bool shell_avg_tensor(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_TENSOR; }
+static bool shell_avg_none(struct nk_context* ctx) { return G.elem_nodal_avg == CV_EN_AVG_NONE; }
+static uint32_t shell_test_slot(uint32_t eid, uint32_t nid) {
+    uint32_t e = cv_frd_elem_index(&G.frd, eid), n = cv_frd_node_index(&G.frd, nid);
+    if (e == UINT32_MAX || n == UINT32_MAX) return UINT32_MAX;
+    for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) if (G.frd.conn[j] == n) return j;
+    return UINT32_MAX;
+}
+static bool shell_sample_values(struct nk_context* ctx) {
+    if (strcmp(cv_basename(G.path), "SANDWICH_MASTER.frd")) return true;
+    uint32_t a = shell_test_slot(3, 5), b = shell_test_slot(4, 5), s = shell_test_slot(13, 5);
+    if (a == UINT32_MAX || b == UINT32_MAX || s == UINT32_MAX) return false;
+    uint32_t covered = 0;
+    for (uint32_t e = 0; e < G.frd.n_elems; e++)
+        if (G.skin.cover_shell && G.skin.cover_shell[e]) covered++;
+    app_pick_field("STRESS", 0, 0);
+    app_set_shell_side(0);
+    bool ok = covered == 16 && fabsf(G.elem_top[a] - -0.000166599f) < 1e-7f &&
+              fabsf(G.elem_top[b] - -0.00722377f) < 1e-7f &&
+              fabsf(G.elem_top[s] - 35.9168f) < 1e-4f &&
+              fabsf(G.elem_bottom[s] - -31.2593f) < 1e-4f;
+    app_set_shell_side(2);
+    ok = ok && fabsf(G.elem_top[a] - -0.000166599f) < 1e-7f &&
+         fabsf(G.elem_bottom[s] - -31.2593f) < 1e-4f;
+    cv_step* step = &G.frd.steps[G.step];
+    int stress, top, bottom;
+    if (!cv_stress_group(step, &stress, &top, &bottom) || bottom < 0) return false;
+    char name[sizeof step->fields[bottom].name];
+    memcpy(name, step->fields[bottom].name, sizeof name);
+    snprintf(step->fields[bottom].name, sizeof step->fields[bottom].name, "TEST_MISSING");
+    refresh_field();
+    ok = ok && isnan(G.elem_bottom[s]) && isfinite(G.elem_top[s]) && isfinite(G.elem_bottom[a]);
+    memcpy(step->fields[bottom].name, name, sizeof name);
+    char stress_name[sizeof step->fields[stress].name];
+    memcpy(stress_name, step->fields[stress].name, sizeof stress_name);
+    snprintf(step->fields[stress].name, sizeof step->fields[stress].name, "TEST_OTHER");
+    app_pick_field("TEST_OTHER", 0, 0);
+    ok = ok && fabsf(G.elem_top[s] - 2.3288f) < 1e-4f && fabsf(G.elem_bottom[s] - 2.3288f) < 1e-4f;
+    memcpy(step->fields[stress].name, stress_name, sizeof stress_name);
+    app_set_shell_side(0);
+    app_pick_field("STRESS", 0, 0);
+    bool compared = app_compare_open(G.path);
+    ok = ok && compared;
+    if (compared) {
+        ok = ok && fabsf(G.elem_top[a]) < 1e-7f && fabsf(G.elem_top[s]) < 1e-7f &&
+             fabsf(G.elem_bottom[s]) < 1e-7f;
+        app_compare_close();
+    }
+    app_pick_field("STRESS", CV_COMP_MISES, 0);
+    app_set_shell_side(1);
+    float solid = G.elem_top[a];
+    ok = ok && fabsf(G.data_max - 101.32308f) < 0.001f;
+    app_set_shell_side(2);
+    ok = ok && fabsf(G.data_max - 102.53239f) < 0.001f &&
+         fabsf(G.elem_top[a] - solid) < 1e-7f && fabsf(G.elem_bottom[a] - solid) < 1e-7f;
+    app_set_shell_side(0);
+    ok = ok && fabsf(G.data_max - 102.53239f) < 0.001f;
+
+    uint32_t ae = cv_frd_elem_index(&G.frd, 3), node = cv_frd_node_index(&G.frd, 5);
+    const float* raw = cache_get_elem(G.step, stress);
+    if (!raw) return false;
+    double sum[6] = {0}, scalar_sum = 0;
+    int count = 0;
+    for (uint32_t e = 0; e < G.frd.n_elems; e++) {
+        if (G.frd.etype[e] < 1 || G.frd.etype[e] > 6 || G.frd.emat[e] != G.frd.emat[ae] ||
+            (G.vis && !G.vis[e])) continue;
+        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
+            if (G.frd.conn[j] != node) continue;
+            bool finite = true;
+            for (int c = 0; c < 6; c++) finite &= isfinite(raw[6 * (size_t)j + c]);
+            if (!finite) continue;
+            for (int c = 0; c < 6; c++) sum[c] += raw[6 * (size_t)j + c];
+            scalar_sum += cv_von_mises(raw + 6 * (size_t)j);
+            count++;
+        }
+    }
+    if (!count) return false;
+    float mean[6];
+    for (int c = 0; c < 6; c++) mean[c] = (float)(sum[c] / count);
+    app_set_elem_nodal_avg(CV_EN_AVG_SCALAR);
+    ok = ok && fabsf(G.elem_top[a] - (float)(scalar_sum / count)) < 1e-4f;
+    app_set_elem_nodal_avg(CV_EN_AVG_TENSOR);
+    ok = ok && fabsf(G.elem_top[a] - cv_von_mises(mean)) < 1e-4f &&
+         isfinite(G.elem_top[s]) && isfinite(G.elem_bottom[s]) &&
+         fabsf(G.elem_top[s] - G.elem_bottom[s]) > 1e-4f &&
+         fabsf(G.elem_top[s] - G.elem_top[a]) > 1e-4f;
+    compared = app_compare_open(G.path);
+    ok = ok && compared;
+    if (compared) {
+        ok = ok && fabsf(G.elem_top[a]) < 1e-6f && fabsf(G.elem_top[s]) < 1e-6f &&
+             fabsf(G.elem_bottom[s]) < 1e-6f;
+        app_set_elem_nodal_avg(CV_EN_AVG_SCALAR);
+        ok = ok && fabsf(G.elem_top[a]) < 1e-6f && fabsf(G.elem_top[s]) < 1e-6f;
+        app_compare_close();
+    }
+    app_set_elem_nodal_avg(CV_EN_AVG_TENSOR);
+    char view[1200];
+    snprintf(view, sizeof view, "%s/ui-test-average.ccxview", T.dir);
+    FILE* existing = fopen(view, "rb");
+    if (existing) { fclose(existing); return false; }
+    bool saved = app_view_save(view);
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+    bool restored = saved && app_view_load(view);
+    ok = ok && restored && G.elem_nodal_avg == CV_EN_AVG_TENSOR &&
+         fabsf(G.elem_top[a] - cv_von_mises(mean)) < 1e-4f;
+    if (saved) remove(view);
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+    return ok;
+}
+static float shell_avg_before;
+static void shell_avg_hide(struct nk_context* ctx) {
+    app_pick_field("STRESS", 0, 0);
+    app_set_elem_nodal_avg(CV_EN_AVG_SCALAR);
+    uint32_t a = shell_test_slot(3, 5), e = cv_frd_elem_index(&G.frd, 4);
+    shell_avg_before = a != UINT32_MAX ? G.elem_top[a] : NAN;
+    if (e != UINT32_MAX) app_hide_elems(&e, 1);
+}
+static bool shell_avg_hidden(struct nk_context* ctx) {
+    uint32_t a = shell_test_slot(3, 5), e = cv_frd_elem_index(&G.frd, 4);
+    if (app_busy() || a == UINT32_MAX || e == UINT32_MAX || !G.vis || G.vis[e]) return false;
+    const cv_step* st = &G.frd.steps[G.step];
+    int fi = -1;
+    for (int i = 0; i < st->nfields; i++) if (!strcmp(st->fields[i].name, "STRESS")) fi = i;
+    const float* raw = fi < 0 ? NULL : cache_get_elem(G.step, fi);
+    if (!raw) return false;
+    uint32_t ae = cv_frd_elem_index(&G.frd, 3), node = cv_frd_node_index(&G.frd, 5);
+    double sum = 0;
+    int count = 0;
+    for (uint32_t k = 0; k < G.frd.n_elems; k++) {
+        if (!G.vis[k] || G.frd.etype[k] < 1 || G.frd.etype[k] > 6 || G.frd.emat[k] != G.frd.emat[ae]) continue;
+        for (uint32_t j = G.frd.eoff[k]; j < G.frd.eoff[k + 1]; j++)
+            if (G.frd.conn[j] == node && isfinite(raw[6 * (size_t)j])) {
+                sum += raw[6 * (size_t)j]; count++;
+            }
+    }
+    return count && fabsf(G.elem_top[a] - (float)(sum / count)) < 1e-6f &&
+           fabsf(G.elem_top[a] - shell_avg_before) > 1e-8f;
+}
+static void shell_avg_show(struct nk_context* ctx) { app_show_all(); }
+static bool shell_avg_shown(struct nk_context* ctx) {
+    uint32_t a = shell_test_slot(3, 5), e = cv_frd_elem_index(&G.frd, 4);
+    return !app_busy() && G.vis && e != UINT32_MAX && G.vis[e] && a != UINT32_MAX &&
+           fabsf(G.elem_top[a] - shell_avg_before) < 1e-6f;
+}
+static void shell_avg_reset(struct nk_context* ctx) { app_set_elem_nodal_avg(CV_EN_AVG_NONE); }
 static bool symbols_off(struct nk_context* ctx) { return !G.show_bc && !G.show_loads && !G.show_links && !G.show_disc; }
 static bool symbols_on(struct nk_context* ctx) { return G.show_bc && G.show_loads && G.show_links && G.show_disc; }
 static bool edges_toggled(struct nk_context* ctx) { return G.show_edges != was.edges; }
@@ -1106,6 +1285,7 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
 #define TIP_FLYDEPTH "How far ahead of the eye the cut lies"
 
 #define CASE(name)          { OP_CASE, name }
+#define CASE_IF(name, test) { OP_CASE, name, .ok = test }
 #define AT_TIP(win, text)   { OP_AT_TIP, win, text }
 /* the same, and the next step (a click) in that very frame: the mouse was not seen
    hovering there first, as after a fast move */
@@ -1144,6 +1324,32 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
     PANELS_ANSWER
 
 static const step script[] = {
+    CASE_IF("shell field: toolbar and sidebar sides stay in sync", shell_pair_available),
+    DO(shell_pair_open), WAIT(3),
+    AT_TIP("Toolbar", "The result field shown"), CLICK, WAIT(2), AT_POPUP("Toolbar", 0.5f, 0.35f), CLICK, WAIT(3),
+    EXPECT(shell_field_selected, "shell stress picked from the toolbar and opened in the sidebar"),
+    AT_TIP("Scene", "#element nodal averaging"), CLICK, WAIT(2), AT_POPUP("Scene", 0.5f, 0.45f), CLICK, WAIT(3),
+    EXPECT(shell_avg_scalar, "scalar averaging selected"),
+    AT_TIP("Scene", "#element nodal averaging"), CLICK, WAIT(2), AT_POPUP("Scene", 0.5f, 0.72f), CLICK, WAIT(3),
+    EXPECT(shell_avg_tensor, "component averaging selected"),
+    AT_TIP("Scene", "#element nodal averaging"), CLICK, WAIT(2), AT_POPUP("Scene", 0.5f, 0.08f), CLICK, WAIT(3),
+    EXPECT(shell_avg_none, "unaveraged stress selected"),
+    AT_TIP("Toolbar", "#shell side"), CLICK, WAIT(2), AT_POPUP("Toolbar", 0.5f, 0.72f), CLICK, WAIT(3),
+    EXPECT(shell_bottom_selected, "Bottom selected from the toolbar and shown in both places"),
+    AT_TIP("Scene", "#shell side"), CLICK, WAIT(2), AT_POPUP("Scene", 0.5f, 0.45f), CLICK, WAIT(3),
+    EXPECT(shell_top_selected, "Top selected from the sidebar and shown in both places"),
+    DO(shell_legacy_bottom), WAIT(3), EXPECT(shell_legacy_selected, "a saved STRNEG field uses the same controls"),
+    AT_TIP("Scene", "#comp STRESS S1"), CLICK, WAIT(3),
+    EXPECT(shell_principal_selected, "sidebar component is selected"),
+    AT_TIP("Toolbar", "The component or invariant"), CLICK, WAIT(2), AT_POPUP("Toolbar", 0.5f, 0.04f), CLICK, WAIT(3),
+    EXPECT(shell_mises_selected, "toolbar component is selected"),
+    EXPECT(shell_sample_values, "solid element-nodal and shell side values, including a missing side"),
+
+    CASE_IF("shell field: averaging follows element visibility", shell_pair_available),
+    DO(shell_avg_hide), WAIT(120), EXPECT(shell_avg_hidden, "hiding a solid recomputes its neighbours' average"),
+    DO(shell_avg_show), WAIT(120), EXPECT(shell_avg_shown, "showing it restores the average"),
+    DO(shell_avg_reset),
+
     CASE("toolbar: the colour map list opens under its tooltip and picks a map"),
     DO(snapshot), AT_TIP("Toolbar", TIP_CMAP), WAIT(30), EXPECT(tip_cmap, "the tooltip shows"),
     CLICK, EXPECT(toolbar_popup, "the list opens"), EXPECT(tip_none, "no tooltip over an open list"),
@@ -1919,6 +2125,7 @@ void ui_test_frame(struct nk_context* ctx) {
             n_marks = 0;
             return;
         case OP_CASE:                           /* every case starts from the same state */
+            if (s->ok && !s->ok(ctx)) { T.pc++; next_case(); continue; }
             if (!T.resetting) {
                 if (T.name && !T.case_failed) fprintf(stderr, "ok    %s\n", T.name);
                 T.name = s->a; T.cases++; T.case_failed = false; T.phase = 0;

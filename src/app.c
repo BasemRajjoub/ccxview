@@ -460,6 +460,7 @@ static void frame(void) {
             d.rmin -= t; d.rmax += 1.f - t;
         }
         d.bands = G.bands;
+        d.shell_side = G.shell_side;
         for (int k = 0; k < 2; k++) {            /* values outside a locked range */
             int m = G.range_lock ? G.oor_mode[k] : 0;
             float g = k ? CV_OOR_BELOW : CV_OOR_ABOVE;
@@ -470,7 +471,7 @@ static void frame(void) {
         /* a .dat field lives on the Gauss points only: the faces stay plain */
         bool nrec = app_nrec_active();
         int fm = (!G.has_field || (G.field_src == 1 && !nrec)) ? CV_COLOR_SOLID
-               : (G.elem_mode || nrec) ? CV_COLOR_ELEM : CV_COLOR_NODAL;
+               : (G.elem_mode || G.field_elem_nodal || nrec) ? CV_COLOR_ELEM : CV_COLOR_NODAL;
         d.faces = G.show_faces;
         d.faces_color = G.faces_mode == FM_FIELD ? fm
                       : G.faces_mode == FM_PLAIN ? CV_COLOR_SOLID : CV_COLOR_GROUP;

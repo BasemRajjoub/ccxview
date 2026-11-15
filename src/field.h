@@ -13,6 +13,8 @@ enum { CV_COMP_MAG = -1, CV_COMP_MISES = -2,
        CV_COMP_P1_XZ = -6, CV_COMP_P2_XZ = -7, CV_COMP_P3_XZ = -8,      /* shears xy xz yz */
        CV_COMP_STATUS = -9 };   /* CONTACT: the contact status, worked out by the app (NaN here) */
 #define CV_MAX_OPTS (CV_MAX_COMP + 5)   /* components + magnitude, von Mises, 3 principal (or a status) */
+#define CV_SHELL_PAIR_TITLE "Shell stress"
+#define CV_STRESS_TITLE "Stress"
 
 typedef struct {
     char label[40];
@@ -21,8 +23,16 @@ typedef struct {
 
 /* Options for one field, derived ones first (magnitude / von Mises / principal). */
 const char* cv_field_title(const char* name);     /* the name as shown: STRPOS -> "STRPOS (shell top)" */
+bool  cv_shell_pair(const cv_step* step, int* top, int* bottom);
+bool  cv_stress_group(const cv_step* step, int* stress, int* top, int* bottom);
 bool  cv_comp_match(const char* label, const char* given);   /* also the old labels: "S1 max" */
 int   cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
+bool  cv_field_is_stress(const char* name);
+
+/* Equal-weight element-node averaging, separated by material and solid/shell.
+   Shell contributions whose undeformed normals oppose one another are kept apart.
+   Non-finite records and hidden elements do not contribute. Values are in-place. */
+bool  cv_elem_nodal_average(const cv_frd* f, const uint8_t* vis, float* vals, int ncomp);
 
 /* One scalar per node from decoded values (vals[node*ncomp + c]). NaN stays NaN. */
 void  cv_field_scalar(const float* vals, int ncomp, uint32_t n, int comp, float* out);

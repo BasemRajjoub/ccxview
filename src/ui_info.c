@@ -76,8 +76,11 @@ static void node_lines(uint32_t n) {
         line(false, "displaced to   %.6g, %.6g, %.6g", x[0] + u[0], x[1] + u[1], x[2] + u[2]);
     }
     if (G.has_field) {
-        fmt_num(a, sizeof a, G.elem_mode ? NAN : G.scalar[n]);
-        line(false, "%s = %s%s", G.field_label, a, G.elem_mode ? "  (shown per element, below)" : "");
+        fmt_num(a, sizeof a, G.elem_mode && !G.field_elem_nodal ? NAN : G.scalar[n]);
+        if (G.field_elem_nodal)
+            line(false, "%s node average = %s  (element value below)", G.field_name, a);
+        else
+            line(false, "%s = %s%s", G.field_label, a, G.elem_mode ? "  (shown per element, below)" : "");
         if (G.probe_ip) { fmt_num(a, sizeof a, G.probe_value); line(false, "integration point %d: %s", G.probe_ip, a); }
     }
     char names[CV_MAX_COMP][12];
@@ -130,7 +133,7 @@ static void elem_lines(uint32_t n, uint32_t e) {
     line(true, "element nodes (%u): a click probes one", m);
     id_rows("nodes", ids, m);
     cur = GR_ELEM;
-    if (G.has_field && G.elem_mode) { fmt_num(a, sizeof a, G.elem_val[e]); line(false, "%s (element) = %s", G.field_label, a); }
+    if (G.has_field && (G.elem_mode || G.field_elem_nodal)) { fmt_num(a, sizeof a, G.elem_val[e]); line(false, "%s (element) = %s", G.field_label, a); }
     char fl[LW], ml[LW];                              /* the checks, a group when one applies */
     bool fo = G.has_field && fail_probe_text(n, e, fl, sizeof fl), mo = G.has_field && mesh_probe_text(e, ml, sizeof ml);
     if (!fo && !mo) return;

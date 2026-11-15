@@ -268,6 +268,8 @@ bool cv_localsys_init(cv_localsys* L, const cv_inp* d, const cv_frd* f);
    in place. Returns CV_LOC_ bits, 0 when the values were global already. */
 int  cv_localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
                        const cv_field_desc* desc, float* vals);
+int  cv_localsys_apply_elem(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
+                            const cv_field_desc* desc, float* vals);
 void cv_localsys_free(cv_localsys* L);
 
 /* The records of a .dat block CalculiX printed in a local system (*EL PRINT,

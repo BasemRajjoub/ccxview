@@ -231,6 +231,7 @@ void uii_window_contact_key(struct nk_context* ctx, float s, float row);
 
 /* ---- ui_fopts.c: a field's options subgroup in Fields; the open state of its subgroups by name */
 int* uii_fnode_state(const char* key, bool open);
+void uii_shell_sides(struct nk_context* ctx, float s, float row);
 void uii_field_options(struct nk_context* ctx, float s, float row, const cv_field_desc* d, bool active);
 void uii_gauss_options(struct nk_context* ctx, float s, float row, const char* name);
 

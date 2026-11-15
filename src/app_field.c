@@ -26,7 +26,10 @@ size_t app_total_msgs(void) {
 enum { CACHE_BUDGET = 768u << 20 };   /* bytes of decoded values kept around */
 
 void cache_clear(void) {
-    for (int i = 0; i < CV_CACHE_N; i++) free(G.cache[i].vals);
+    for (int i = 0; i < CV_CACHE_N; i++) {
+        free(G.cache[i].vals);
+        free(G.cache[i].elem_vals);
+    }
     memset(G.cache, 0, sizeof G.cache);
 }
 
@@ -43,11 +46,12 @@ const float* cache_get(int step, int field) {
         size_t total = bytes; int used = 0, lru = -1;
         for (int i = 0; i < CV_CACHE_N; i++) {
             if (!G.cache[i].vals) continue;
-            total += G.cache[i].bytes; used++;
+            total += G.cache[i].bytes + G.cache[i].elem_bytes; used++;
             if (lru < 0 || G.cache[i].used < G.cache[lru].used) lru = i;
         }
         if ((total <= CACHE_BUDGET && used < CV_CACHE_N) || lru < 0) break;
         free(G.cache[lru].vals);
+        free(G.cache[lru].elem_vals);
         memset(&G.cache[lru], 0, sizeof G.cache[lru]);
     }
     int slot = 0;
@@ -59,6 +63,52 @@ const float* cache_get(int step, int field) {
     deck_localize(step, d, v);
     units_apply(d->name, d->ncomp, v, G.frd.n_nodes);
     G.cache[slot] = (cv_cache_entry){ step, field, v, bytes, ++G.cache_clock };
+    return v;
+}
+
+const float* cache_get_elem(int step, int field) {
+    const cv_field_desc* d = &G.frd.steps[step].fields[field];
+    if (d->irtype != 3) return NULL;
+    if (!cache_get(step, field)) return NULL;
+    int slot = 0;
+    while (slot < CV_CACHE_N &&
+           !(G.cache[slot].vals && G.cache[slot].step == step && G.cache[slot].field == field)) slot++;
+    if (slot == CV_CACHE_N) return NULL;
+    if (G.cache[slot].elem_vals) {
+        G.cache[slot].used = ++G.cache_clock;
+        return G.cache[slot].elem_vals;
+    }
+
+    size_t nslots = G.frd.n_elems ? G.frd.eoff[G.frd.n_elems] : 0;
+    size_t bytes = CV_MAX(nslots * (size_t)d->ncomp, 1) * sizeof(float);
+    for (;;) {
+        size_t total = bytes;
+        int lru = -1;
+        for (int i = 0; i < CV_CACHE_N; i++) {
+            if (!G.cache[i].vals) continue;
+            total += G.cache[i].bytes + G.cache[i].elem_bytes;
+            if (i != slot && (lru < 0 || G.cache[i].used < G.cache[lru].used)) lru = i;
+        }
+        if (total <= CACHE_BUDGET) break;
+        if (lru < 0) {
+            cv_msg_add(&G.msgs, 0, false, "element-nodal results exceed the decoded-field cache budget");
+            return NULL;
+        }
+        free(G.cache[lru].vals);
+        free(G.cache[lru].elem_vals);
+        memset(&G.cache[lru], 0, sizeof G.cache[lru]);
+    }
+    float* v = malloc(bytes);
+    if (!v) {
+        cv_msg_add(&G.msgs, 0, false, "out of memory decoding element-nodal results");
+        return NULL;
+    }
+    cv_frd_read_elem_field(&G.frd, d, v, &G.msgs);
+    deck_localize_elem(step, d, v);
+    units_apply(d->name, d->ncomp, v, nslots);
+    G.cache[slot].elem_vals = v;
+    G.cache[slot].elem_bytes = bytes;
+    G.cache[slot].used = ++G.cache_clock;
     return v;
 }
 
@@ -89,6 +139,244 @@ float* to_csys(const cv_field_desc* d, const cv_frd* f, const float* vals) {
     memcpy(t, vals, bytes);
     cv_cyl_values(d, f->xyz, f->n_nodes, G.csys - 1, G.csys_o, t);
     return t;
+}
+
+static float* elem_field_scalar(int fi) {
+    if (fi < 0 || fi >= G.frd.steps[G.step].nfields) return NULL;
+    const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
+    const float* vals = cache_get_elem(G.step, fi);
+    if (!vals) return NULL;
+    size_t nslots = G.frd.n_elems ? G.frd.eoff[G.frd.n_elems] : 0;
+    float* turned = NULL;
+    if (G.csys > 0 && cv_cyl_applies(d)) {
+        turned = malloc(CV_MAX(nslots * (size_t)d->ncomp, 1) * sizeof(float));
+        float* xyz = malloc(CV_MAX(nslots * 3, 1) * sizeof(float));
+        if (!turned || !xyz) {
+            free(turned); free(xyz);
+            cv_msg_add(&G.msgs, 0, false, "out of memory transforming element-nodal values");
+            return NULL;
+        }
+        memcpy(turned, vals, nslots * (size_t)d->ncomp * sizeof(float));
+        for (size_t j = 0; j < nslots; j++)
+            memcpy(xyz + 3 * j, G.frd.xyz + 3 * G.frd.conn[j], 3 * sizeof(float));
+        cv_cyl_values(d, xyz, nslots, G.csys - 1, G.csys_o, turned);
+        free(xyz);
+        vals = turned;
+    }
+    float* scalar = malloc(CV_MAX(nslots, 1) * sizeof(float));
+    if (scalar) cv_field_scalar(vals, d->ncomp, nslots, G.comp, scalar);
+    else cv_msg_add(&G.msgs, 0, false, "out of memory preparing element-nodal values");
+    free(turned);
+    if (!scalar || !G.diff_mode || !G.cmp_on) return scalar;
+
+    int step = G.cmp.n_steps ? CV_MIN(G.step, G.cmp.n_steps - 1) : -1, field = -1;
+    if (step >= 0)
+        for (int i = 0; i < G.cmp.steps[step].nfields; i++)
+            if (!strcmp(G.cmp.steps[step].fields[i].name, d->name)) field = i;
+    const cv_field_desc* other = field >= 0 ? &G.cmp.steps[step].fields[field] : NULL;
+    bool compatible = other && other->irtype == 3 && other->ncomp == d->ncomp;
+    for (int i = 0; compatible && i < d->ncomp; i++)
+        if (strcmp(d->comp[i], other->comp[i])) compatible = false;
+    size_t other_slots = G.cmp.n_elems ? G.cmp.eoff[G.cmp.n_elems] : 0;
+    float* values = compatible ? malloc(CV_MAX(other_slots * (size_t)other->ncomp, 1) * sizeof(float)) : NULL;
+    float* result = compatible ? malloc(CV_MAX(other_slots, 1) * sizeof(float)) : NULL;
+    float* xyz = compatible && G.csys > 0 && G.comp >= 0 && cv_cyl_applies(other)
+               ? malloc(CV_MAX(other_slots * 3, 1) * sizeof(float)) : NULL;
+    bool need_xyz = compatible && G.csys > 0 && G.comp >= 0 && cv_cyl_applies(other);
+    if (!compatible || !values || !result || (need_xyz && !xyz)) {
+        cv_msg_add(&G.msgs, 0, false, compatible ? "compare: out of memory decoding element-nodal field"
+                                                : "compare: matching element-nodal field is missing or incompatible");
+        for (size_t j = 0; j < nslots; j++) scalar[j] = NAN;
+    } else {
+        cv_frd_read_elem_field(&G.cmp, other, values, &G.msgs);
+        deck_compare_localize_elem(&G.cmp, step, other, values);
+        units_apply(other->name, other->ncomp, values, other_slots);
+        if (need_xyz) {
+            for (size_t j = 0; j < other_slots; j++)
+                memcpy(xyz + 3 * j, G.cmp.xyz + 3 * G.cmp.conn[j], 3 * sizeof(float));
+            cv_cyl_values(other, xyz, other_slots, G.csys - 1, G.csys_o, values);
+        }
+        cv_field_scalar(values, other->ncomp, other_slots, G.comp, result);
+        size_t unmatched = 0;
+        for (uint32_t e = 0; e < G.frd.n_elems; e++) {
+            uint32_t other_e = cv_frd_elem_index(&G.cmp, G.frd.elem_id[e]);
+            for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
+                uint32_t match = UINT32_MAX;
+                if (other_e != UINT32_MAX)
+                    for (uint32_t k = G.cmp.eoff[other_e]; k < G.cmp.eoff[other_e + 1]; k++)
+                        if (G.cmp.node_id[G.cmp.conn[k]] == G.frd.node_id[G.frd.conn[j]]) { match = k; break; }
+                if (match == UINT32_MAX) { scalar[j] = NAN; unmatched++; }
+                else scalar[j] -= result[match];
+            }
+        }
+        if (unmatched) cv_msg_add(&G.msgs, 0, false, "compare: unmatched element-node pairs have no data");
+    }
+    free(values); free(result); free(xyz);
+    return scalar;
+}
+
+static bool elem_turn_cyl(const cv_frd* f, const cv_field_desc* d, float* values, size_t nslots) {
+    if (G.csys <= 0 || G.comp < 0 || !cv_cyl_applies(d)) return true;
+    float* xyz = malloc(CV_MAX(nslots * 3, 1) * sizeof(float));
+    if (!xyz) return false;
+    for (size_t j = 0; j < nslots; j++)
+        memcpy(xyz + 3 * j, f->xyz + 3 * (size_t)f->conn[j], 3 * sizeof(float));
+    cv_cyl_values(d, xyz, nslots, G.csys - 1, G.csys_o, values);
+    free(xyz);
+    return true;
+}
+
+static float* elem_tensor_average(int fi) {
+    const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
+    const float* raw = cache_get_elem(G.step, fi);
+    if (!raw) return NULL;
+    size_t ns = G.frd.n_elems ? G.frd.eoff[G.frd.n_elems] : 0;
+    size_t nv = ns * (size_t)d->ncomp;
+    float* a = malloc(CV_MAX(nv, 1) * sizeof(float));
+    float* b = NULL;
+    float* out = malloc(CV_MAX(ns, 1) * sizeof(float));
+    float* other_scalar = NULL;
+    if (!a || !out) goto oom;
+    memcpy(a, raw, nv * sizeof(float));
+    if (!elem_turn_cyl(&G.frd, d, a, ns)) goto oom;
+    if (G.diff_mode && G.cmp_on) {
+        int step = G.cmp.n_steps ? CV_MIN(G.step, G.cmp.n_steps - 1) : -1, field = -1;
+        if (step >= 0)
+            for (int i = 0; i < G.cmp.steps[step].nfields; i++)
+                if (!strcmp(G.cmp.steps[step].fields[i].name, d->name)) field = i;
+        const cv_field_desc* other = field >= 0 ? &G.cmp.steps[step].fields[field] : NULL;
+        bool compatible = other && other->irtype == 3 && other->ncomp == d->ncomp;
+        for (int i = 0; compatible && i < d->ncomp; i++)
+            if (strcmp(d->comp[i], other->comp[i])) compatible = false;
+        if (!compatible) {
+            cv_msg_add(&G.msgs, 0, false, "compare: matching element-nodal field is missing or incompatible");
+            for (size_t j = 0; j < ns; j++) out[j] = NAN;
+            free(a);
+            return out;
+        }
+        size_t ons = G.cmp.n_elems ? G.cmp.eoff[G.cmp.n_elems] : 0;
+        float* values = malloc(CV_MAX(ons * (size_t)d->ncomp, 1) * sizeof(float));
+        b = malloc(CV_MAX(nv, 1) * sizeof(float));
+        other_scalar = malloc(CV_MAX(ns, 1) * sizeof(float));
+        if (!values || !b || !other_scalar) { free(values); goto oom; }
+        cv_frd_read_elem_field(&G.cmp, other, values, &G.msgs);
+        deck_compare_localize_elem(&G.cmp, step, other, values);
+        units_apply(other->name, other->ncomp, values, ons);
+        if (!elem_turn_cyl(&G.cmp, other, values, ons)) { free(values); goto oom; }
+        size_t unmatched = 0;
+        for (uint32_t e = 0; e < G.frd.n_elems; e++) {
+            uint32_t oe = cv_frd_elem_index(&G.cmp, G.frd.elem_id[e]);
+            for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
+                uint32_t match = UINT32_MAX;
+                if (oe != UINT32_MAX)
+                    for (uint32_t k = G.cmp.eoff[oe]; k < G.cmp.eoff[oe + 1]; k++)
+                        if (G.cmp.node_id[G.cmp.conn[k]] == G.frd.node_id[G.frd.conn[j]]) { match = k; break; }
+                bool valid = match != UINT32_MAX;
+                if (!valid) unmatched++;
+                for (int c = 0; valid && c < d->ncomp; c++)
+                    valid = isfinite(a[(size_t)j * d->ncomp + c]) && isfinite(values[(size_t)match * d->ncomp + c]);
+                for (int c = 0; c < d->ncomp; c++) {
+                    b[(size_t)j * d->ncomp + c] = valid ? values[(size_t)match * d->ncomp + c] : NAN;
+                    if (!valid) a[(size_t)j * d->ncomp + c] = NAN;
+                }
+            }
+        }
+        free(values);
+        if (unmatched) cv_msg_add(&G.msgs, 0, false, "compare: unmatched element-node pairs have no data");
+    }
+    if (!cv_elem_nodal_average(&G.frd, G.vis, a, d->ncomp) ||
+        (b && !cv_elem_nodal_average(&G.frd, G.vis, b, d->ncomp))) goto oom;
+    cv_field_scalar(a, d->ncomp, ns, G.comp, out);
+    if (b) {
+        cv_field_scalar(b, d->ncomp, ns, G.comp, other_scalar);
+        for (size_t j = 0; j < ns; j++) out[j] -= other_scalar[j];
+    }
+    free(a); free(b); free(other_scalar);
+    return out;
+oom:
+    cv_msg_add(&G.msgs, 0, false, "out of memory averaging element-nodal stress");
+    free(a); free(b); free(out); free(other_scalar);
+    return NULL;
+}
+
+static float* elem_display_scalar(int fi) {
+    if (fi < 0 || fi >= G.frd.steps[G.step].nfields) return NULL;
+    const cv_field_desc* d = &G.frd.steps[G.step].fields[fi];
+    bool stress = d->irtype == 3 && cv_field_is_stress(d->name) && cv_tensor_order(d);
+    if (stress && G.elem_nodal_avg == CV_EN_AVG_TENSOR) return elem_tensor_average(fi);
+    float* scalar = elem_field_scalar(fi);
+    if (scalar && stress && G.elem_nodal_avg == CV_EN_AVG_SCALAR &&
+        !cv_elem_nodal_average(&G.frd, G.vis, scalar, 1)) {
+        cv_msg_add(&G.msgs, 0, false, "out of memory averaging element-nodal stress");
+        free(scalar);
+        return NULL;
+    }
+    return scalar;
+}
+
+static void clear_elem_surfaces(void) {
+    free(G.elem_top); free(G.elem_bottom);
+    G.elem_top = G.elem_bottom = NULL;
+    G.elem_nslots = 0;
+    G.field_elem_nodal = false;
+}
+
+static void refresh_elem_surfaces(int fi, const cv_field_desc* d) {
+    clear_elem_surfaces();
+    G.field_elem_nodal = d->irtype == 3;
+    if (!G.field_elem_nodal || G.field_src != 0) return;
+    size_t nslots = G.frd.n_elems ? G.frd.eoff[G.frd.n_elems] : 0;
+    G.elem_top = malloc(CV_MAX(nslots, 1) * sizeof(float));
+    G.elem_bottom = malloc(CV_MAX(nslots, 1) * sizeof(float));
+    if (!G.elem_top || !G.elem_bottom) {
+        clear_elem_surfaces();
+        cv_msg_add(&G.msgs, 0, false, "out of memory preparing element-nodal shell display");
+        return;
+    }
+    G.elem_nslots = nslots;
+    const cv_step* step = &G.frd.steps[G.step];
+    int stress, top_fi, bot_fi;
+    bool group = cv_stress_group(step, &stress, &top_fi, &bot_fi) &&
+                 (fi == stress || fi == top_fi || fi == bot_fi);
+    int pair_top, pair_bot;
+    bool paired = !group && cv_shell_pair(step, &pair_top, &pair_bot) &&
+                  (fi == pair_top || fi == pair_bot);
+    if (paired) { top_fi = pair_top; bot_fi = pair_bot; }
+    float* base = elem_display_scalar(group ? stress : fi);
+    float* top = group || paired ? elem_display_scalar(top_fi) : NULL;
+    float* bot = group || paired ? elem_display_scalar(bot_fi) : NULL;
+    if (group && (top_fi < 0 || bot_fi < 0))
+        cv_msg_add(&G.msgs, 0, false, "shell stress: missing or incompatible top or bottom field; that surface has no data");
+    for (uint32_t e = 0; e < G.frd.n_elems; e++) {
+        bool shell = G.frd.etype[e] >= 7 && G.frd.etype[e] <= 10;
+        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++) {
+            G.elem_top[j] = shell && (group || paired) ? (top ? top[j] : NAN) : (base ? base[j] : NAN);
+            G.elem_bottom[j] = shell && (group || paired) ? (bot ? bot[j] : NAN) : (base ? base[j] : NAN);
+        }
+    }
+    free(base); free(top); free(bot);
+
+    for (uint32_t e = 0; e < G.frd.n_elems; e++) {
+        double sum = 0;
+        uint32_t count = 0;
+        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++)
+            for (int side = 0; side < (G.shell_side == 0 ? 2 : 1); side++) {
+                float x = G.shell_side == 2 || side ? G.elem_bottom[j] : G.elem_top[j];
+                if (isfinite(x)) { sum += x; count++; }
+            }
+        G.elem_val[e] = count ? (float)(sum / count) : NAN;
+    }
+}
+
+void refresh_elem_visibility(void) {
+    if (!G.field_elem_nodal || G.elem_nodal_avg == CV_EN_AVG_NONE || G.field_src != 0) return;
+    int fi = find_field(G.step, G.field_name);
+    if (fi >= 0 && cv_field_is_stress(G.frd.steps[G.step].fields[fi].name) &&
+        cv_tensor_order(&G.frd.steps[G.step].fields[fi])) {
+        refresh_elem_surfaces(fi, &G.frd.steps[G.step].fields[fi]);
+        G.field_gen++;
+        app_sel_field_changed();
+    }
 }
 
 static const char* opt_label(const cv_field_desc* d, int comp) {
@@ -181,19 +469,33 @@ static void group_runs(void) {
         cv_render_groups(NULL, 0, NULL, NULL, 0);
         return;
     }
-    uint32_t* first = calloc((size_t)ng + 1, sizeof(uint32_t));
-    uint32_t* fill = malloc(((size_t)ng + 1) * sizeof(uint32_t));
+    int runs = 2 * ng;
+    uint32_t* first = calloc((size_t)runs + 1, sizeof(uint32_t));
+    uint32_t* fill = malloc(((size_t)runs + 1) * sizeof(uint32_t));
     uint32_t* tri = malloc(G.skin.n_tri * 3 * sizeof(uint32_t));
-    if (!first || !fill || !tri) { free(first); free(fill); free(tri); cv_render_groups(NULL, 0, NULL, NULL, 0); return; }
-    for (size_t t = 0; t < G.skin.n_tri; t++) first[of[G.skin.tri_elem[t]] + 1]++;
-    for (int g = 0; g < ng; g++) first[g + 1] += first[g];
-    memcpy(fill, first, ((size_t)ng + 1) * sizeof(uint32_t));
+    float* colors = malloc((size_t)runs * 3 * sizeof(float));
+    if (!first || !fill || !tri || !colors) {
+        free(first); free(fill); free(tri); free(colors);
+        cv_render_groups(NULL, 0, NULL, NULL, 0);
+        return;
+    }
+    memcpy(colors, rgb, (size_t)ng * 3 * sizeof(float));
+    memcpy(colors + 3 * ng, rgb, (size_t)ng * 3 * sizeof(float));
     for (size_t t = 0; t < G.skin.n_tri; t++) {
-        uint32_t k = fill[of[G.skin.tri_elem[t]]]++;
+        uint32_t e = G.skin.tri_elem[t];
+        int g = of[e] + (G.skin.cover_shell && G.skin.cover_shell[e] ? ng : 0);
+        first[g + 1]++;
+    }
+    for (int g = 0; g < runs; g++) first[g + 1] += first[g];
+    memcpy(fill, first, ((size_t)runs + 1) * sizeof(uint32_t));
+    for (size_t t = 0; t < G.skin.n_tri; t++) {
+        uint32_t e = G.skin.tri_elem[t];
+        int g = of[e] + (G.skin.cover_shell && G.skin.cover_shell[e] ? ng : 0);
+        uint32_t k = fill[g]++;
         memcpy(tri + 3 * k, G.skin.tri + 3 * t, 3 * sizeof(uint32_t));
     }
-    cv_render_groups(tri, G.skin.n_tri, first, rgb, ng);
-    free(first); free(fill); free(tri);
+    cv_render_groups(tri, G.skin.n_tri, first, colors, runs);
+    free(first); free(fill); free(tri); free(colors);
 }
 
 /* the group runs, and the see-through ones that follow the colours and the skin */
@@ -234,14 +536,20 @@ enum { ELEMTRI_MAX = 4000000 };
 void refresh_tri_values(void) {
     bool nrec = app_nrec_active();
     if (nrec) nrec_apply();                    /* the averaging again: the shown elements or the threshold changed */
-    bool want = (G.elem_mode && G.field_src != 1) || nrec;
-    if (!want || !G.has_field || !G.skin.n_tri) { cv_render_tri_values(NULL, 0); cv_render_aux(CV_AUX_ELEMTRI, NULL, NULL, NULL, 0); return; }
+    bool elem_nodal = G.field_elem_nodal && G.elem_top && G.elem_bottom;
+    bool want = (G.elem_mode && G.field_src != 1) || nrec || elem_nodal;
+    if (!want || !G.has_field || !G.skin.n_tri) {
+        cv_render_tri_values(NULL, 0);
+        cv_render_aux(CV_AUX_ELEMTRI, NULL, NULL, NULL, 0);
+        return;
+    }
     if (G.skin.n_tri <= ELEMTRI_MAX) {
         size_t nv = G.skin.n_tri * 3;
         float* pos = malloc(nv * 3 * sizeof(float));
         float* disp = G.disp ? malloc(nv * 3 * sizeof(float)) : NULL;
         float* val = malloc(nv * sizeof(float));
-        if (pos && val && (disp || !G.disp)) {
+        float* val2 = elem_nodal ? malloc(nv * sizeof(float)) : NULL;
+        if (pos && val && (disp || !G.disp) && (val2 || !elem_nodal)) {
             for (size_t t = 0; t < G.skin.n_tri; t++) {
                 uint32_t e = G.skin.tri_elem[t];
                 CV_ASSERT(e < G.frd.n_elems);
@@ -250,17 +558,27 @@ void refresh_tri_values(void) {
                     CV_ASSERT(n < G.frd.n_nodes);
                     memcpy(pos + (3 * t + k) * 3, G.frd.xyz + 3 * n, 3 * sizeof(float));
                     if (disp) memcpy(disp + (3 * t + k) * 3, G.disp + 3 * n, 3 * sizeof(float));
-                    val[3 * t + k] = nrec ? nrec_value(e, n) : G.elem_val[e];
+                    if (elem_nodal) {
+                        uint32_t slot = UINT32_MAX;
+                        for (uint32_t j = G.frd.eoff[e]; j < G.frd.eoff[e + 1]; j++)
+                            if (G.frd.conn[j] == n) { slot = j; break; }
+                        val[3 * t + k] = slot == UINT32_MAX ? G.scalar[n] : G.elem_top[slot];
+                        val2[3 * t + k] = slot == UINT32_MAX ? G.scalar[n] : G.elem_bottom[slot];
+                    } else {
+                        val[3 * t + k] = nrec ? nrec_value(e, n) : G.elem_val[e];
+                    }
                 }
             }
-            cv_render_aux(CV_AUX_ELEMTRI, pos, disp, val, (uint32_t)nv);
+            if (elem_nodal) cv_render_aux3(CV_AUX_ELEMTRI, pos, disp, val, val2, (uint32_t)nv);
+            else cv_render_aux(CV_AUX_ELEMTRI, pos, disp, val, (uint32_t)nv);
             cv_render_tri_values(NULL, 0);
-            free(pos); free(disp); free(val);
+            free(pos); free(disp); free(val); free(val2);
             return;
         }
-        free(pos); free(disp); free(val);      /* out of memory: the texture path below */
+        free(pos); free(disp); free(val); free(val2); /* out of memory: the texture path below */
     }
     cv_render_aux(CV_AUX_ELEMTRI, NULL, NULL, NULL, 0);
+    if (elem_nodal) cv_msg_add(&G.msgs, 0, false, "element-nodal surface coloring exceeds the expanded-triangle limit");
     float* t = realloc(G.tri_val, G.skin.n_tri * sizeof(float));
     if (!t) { cv_render_tri_values(NULL, 0); return; }
     G.tri_val = t;
@@ -275,7 +593,7 @@ void refresh_tri_values(void) {
 /* the two extreme values as balls: at their node, or the element's centre */
 static bool extreme_pos(uint32_t at, float p[3], float d[3]) {
     if (at == UINT32_MAX || G.field_src == 1) return false;
-    if (!G.elem_mode) {
+    if (!G.elem_mode && !G.field_elem_nodal) {
         memcpy(p, G.frd.xyz + 3 * at, 3 * sizeof(float));
         if (G.disp) memcpy(d, G.disp + 3 * at, 3 * sizeof(float)); else d[0] = d[1] = d[2] = 0;
         return true;
@@ -294,7 +612,7 @@ void refresh_markers(void) {
     float* pos = malloc(CV_MAX(cap, 1) * 3 * sizeof *pos);
     float* disp = malloc(CV_MAX(cap, 1) * 3 * sizeof *disp);
     float* val = malloc(CV_MAX(cap, 1) * sizeof *val);
-    const float* v = G.elem_mode ? G.elem_val : G.scalar;
+    const float* v = (G.elem_mode || G.field_elem_nodal) ? G.elem_val : G.scalar;
     if (pos && disp && val && G.has_field && v)
         for (uint32_t i = 0; i < cap; i++) {
             uint32_t at = i < G.ext_n ? G.ext_lo[i] : G.ext_hi[i - G.ext_n];
@@ -314,7 +632,7 @@ static void refresh_extremes(const float* v, const uint32_t* ids, size_t n) {
     G.ext_n = 0;
     if (!lo || !hi || G.field_src == 1) return;   /* Gauss point fields: no balls */
     uint32_t* sub = NULL;
-    if (G.elem_mode && G.vis) {                     /* hidden elements are out of the range */
+    if ((G.elem_mode || G.field_elem_nodal) && G.vis) { /* hidden elements are out of the range */
         sub = malloc(CV_MAX(n, 1) * sizeof *sub);
         if (!sub) return;
         size_t m = 0;
@@ -349,12 +667,13 @@ const char* app_field_category(double v) {
 
 void app_refresh_range(void) {
     if (!G.has_field) return;
-    const float* v = G.elem_mode ? G.elem_val : G.scalar;
-    size_t n = G.elem_mode ? G.frd.n_elems : G.frd.n_nodes;
+    bool elem_nodal = G.field_elem_nodal && G.elem_top && G.elem_bottom;
+    const float* v = (G.elem_mode || elem_nodal) ? G.elem_val : G.scalar;
+    size_t n = (G.elem_mode || elem_nodal) ? G.frd.n_elems : G.frd.n_nodes;
     const uint32_t* ids = NULL;             /* the subset actually shown, when not everything */
     if (G.field_src == 1) {
         if (app_nrec_active()) nrec_values(&v, &n); else gp_values(&v, &n);
-    } else if (!G.elem_mode && G.skin.n_pt) {
+    } else if (!G.elem_mode && !elem_nodal && G.skin.n_pt) {
         ids = G.skin.pt; n = G.skin.n_pt;
     }
     G.data_min = INFINITY; G.data_max = -INFINITY;
@@ -362,16 +681,28 @@ void app_refresh_range(void) {
     G.nan_count = 0;
     for (size_t k = 0; k < n; k++) {
         uint32_t i = ids ? ids[k] : (uint32_t)k;
-        if (G.elem_mode && G.field_src != 1 && G.vis && !G.vis[i]) continue;
-        float x = v[i];
-        if (x != x) { G.nan_count++; continue; }
-        if (isinf(x)) continue;
-        if (x < G.data_min) { G.data_min = x; G.min_at = i; }
-        if (x > G.data_max) { G.data_max = x; G.max_at = i; }
+        if ((G.elem_mode || elem_nodal) && G.field_src != 1 && G.vis && !G.vis[i]) continue;
+        if (elem_nodal) {
+            for (uint32_t j = G.frd.eoff[i]; j < G.frd.eoff[i + 1]; j++) {
+                for (int side = 0; side < (G.shell_side == 0 ? 2 : 1); side++) {
+                    float x = G.shell_side == 2 ? G.elem_bottom[j] : side ? G.elem_bottom[j] : G.elem_top[j];
+                    if (x != x) { G.nan_count++; continue; }
+                    if (isinf(x)) continue;
+                    if (x < G.data_min) { G.data_min = x; G.min_at = i; }
+                    if (x > G.data_max) { G.data_max = x; G.max_at = i; }
+                }
+            }
+        } else {
+            float x = v[i];
+            if (x != x) { G.nan_count++; continue; }
+            if (isinf(x)) continue;
+            if (x < G.data_min) { G.data_min = x; G.min_at = i; }
+            if (x > G.data_max) { G.data_max = x; G.max_at = i; }
+        }
     }
     if (G.min_at == UINT32_MAX) { G.data_min = 0; G.data_max = 1; }   /* nothing but NaN */
     refresh_extremes(v, ids, n);
-    CV_ASSERT(G.min_at == UINT32_MAX || G.min_at < (G.field_src == 1 ? n : G.elem_mode ? G.frd.n_elems : G.frd.n_nodes));
+    CV_ASSERT(G.min_at == UINT32_MAX || G.min_at < (G.field_src == 1 ? n : (G.elem_mode || elem_nodal) ? G.frd.n_elems : G.frd.n_nodes));
     CV_ASSERT(G.data_min <= G.data_max);
     refresh_markers();
     if (app_label_on(CV_LABEL_MINMAX)) app_label_changed();
@@ -673,7 +1004,22 @@ int app_field_comps(uint32_t node, char names[][12], float* vals, int max) {
 }
 
 void refresh_field(void) {
-    if (G.field_src == 1) { refresh_field_dat(); return; }
+    if (G.field_src == 1) {
+        clear_elem_surfaces();
+        G.field_elem_nodal = false;
+        refresh_field_dat();
+        return;
+    }
+    clear_elem_surfaces();
+    G.field_elem_nodal = false;
+    if (G.field_src == 0 && G.step >= 0 && G.step < G.frd.n_steps) {
+        int stress, top, bottom;
+        const cv_step* step = &G.frd.steps[G.step];
+        if (cv_stress_group(step, &stress, &top, &bottom) &&
+            ((top >= 0 && !strcmp(G.field_name, "STRPOS")) ||
+             (bottom >= 0 && !strcmp(G.field_name, "STRNEG"))))
+            snprintf(G.field_name, sizeof G.field_name, "%s", step->fields[stress].name);
+    }
     int fi = G.field_src >= 2 ? -1 : find_field(G.step, G.field_name);
     G.has_field = (G.field_src == 2 && refresh_field_calc()) || (G.field_src == 3 && refresh_field_fail())
                || (G.field_src == 4 && refresh_field_mesh());
@@ -689,14 +1035,39 @@ void refresh_field(void) {
             if (G.comp == CV_COMP_STATUS && !strcmp(d->name, "CONTACT") && !app_cdisp_status_field(G.scalar))
                 for (uint32_t i = 0; i < G.frd.n_nodes; i++) G.scalar[i] = NAN;
             bool diff = subtract_compare(d);
+            if (d->irtype == 3 && G.diff_mode && G.cmp_on) diff = true;
             cv_elem_mean(&G.frd, G.scalar, G.elem_val);
+            refresh_elem_surfaces(fi, d);
             G.has_field = true;
             char t[64];
             snprintf(t, sizeof t, "%s%s", diff ? "A-B " : "", d->name);
             set_label(t, NULL, opt_label(d, G.comp), d->name, G.comp);
-            if (strcmp(cv_field_title(d->name), d->name)) {       /* STRPOS: the legend says top / bottom */
+            int stress, group_top, group_bottom;
+            bool group = cv_stress_group(&G.frd.steps[G.step], &stress, &group_top, &group_bottom) &&
+                         (fi == stress || fi == group_top || fi == group_bottom);
+            if (G.field_elem_nodal && group) {
+                const char* side = G.shell_side == 1 ? "top" : G.shell_side == 2 ? "bottom" : "top / bottom";
+                snprintf(G.field_label, sizeof G.field_label, "%sStress (shell %s) %s",
+                         diff ? "A-B " : "", side, opt_label(d, G.comp));
+                snprintf(G.legend_lines[0], sizeof G.legend_lines[0], "%sStress (shell %s)",
+                         diff ? "A-B " : "", side);
+            } else if (G.field_elem_nodal && (!strcmp(d->name, "STRPOS") || !strcmp(d->name, "STRNEG"))) {
+                int top, bottom;
+                bool paired = cv_shell_pair(&G.frd.steps[G.step], &top, &bottom);
+                const char* title = paired && G.shell_side == 0 ? "STRPOS / STRNEG (shell top / bottom)"
+                                   : cv_field_title(G.shell_side == 2 ? "STRNEG" : "STRPOS");
+                snprintf(G.field_label, sizeof G.field_label, "%s%s%s%s", diff ? "A-B " : "", title,
+                         strlen(opt_label(d, G.comp)) ? " " : "", opt_label(d, G.comp));
+                snprintf(G.legend_lines[0], sizeof G.legend_lines[0], "%s%s", diff ? "A-B " : "", title);
+            } else if (strcmp(cv_field_title(d->name), d->name)) {
                 snprintf(G.field_label, sizeof G.field_label, "%s%s%s", cv_field_title(d->name), strlen(opt_label(d, G.comp)) ? " " : "", opt_label(d, G.comp));
                 snprintf(G.legend_lines[0], sizeof G.legend_lines[0], "%s", cv_field_title(d->name));
+            }
+            if (G.field_elem_nodal && cv_field_is_stress(d->name) && cv_tensor_order(d) &&
+                G.elem_nodal_avg != CV_EN_AVG_NONE) {
+                size_t used = strlen(G.legend_lines[1]);
+                snprintf(G.legend_lines[1] + used, sizeof G.legend_lines[1] - used, " (%s avg)",
+                         G.elem_nodal_avg == CV_EN_AVG_SCALAR ? "scalar" : "component");
             }
         }
     }
@@ -820,6 +1191,16 @@ void app_select(const char* field, int comp) {
     G.range_lock = false;
     refresh_field();
     app_cdisp_field_chosen(G.field_name, G.comp);   /* a CONTACT component colours the contact display too */
+}
+
+void app_set_shell_side(int side) {
+    G.shell_side = CV_MAX(0, CV_MIN(side, 2));
+    if (G.loaded && G.field_elem_nodal) refresh_field();
+}
+
+void app_set_elem_nodal_avg(int mode) {
+    G.elem_nodal_avg = CV_MAX(0, CV_MIN(mode, CV_EN_AVG_N - 1));
+    if (G.loaded && G.field_elem_nodal) refresh_field();
 }
 
 /* ---- a field the user chose: it shows on the faces at once (#26) ----------------- */

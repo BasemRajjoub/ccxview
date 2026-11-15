@@ -133,15 +133,19 @@ static void loc_say(int bits, const char* field) {
     }
 }
 
-void deck_localize(int step, const cv_field_desc* d, float* vals) {
+static void deck_localize_values(int step, const cv_field_desc* d, float* vals, bool slots) {
     if (!D.on || !G.frd.n_steps || step < 0 || step >= G.frd.n_steps) return;
     if (!D.L_tried) {
         D.L_tried = true;
         if (!cv_localsys_init(&D.L, &D.d, &G.frd)) cv_msg_add(&G.msgs, 0, false, "out of memory: results in local systems stay local");
     }
-    int r = cv_localsys_apply(&D.L, &D.d, &G.frd, G.frd.steps[step].step, d, vals);
+    int r = slots ? cv_localsys_apply_elem(&D.L, &D.d, &G.frd, G.frd.steps[step].step, d, vals)
+                  : cv_localsys_apply(&D.L, &D.d, &G.frd, G.frd.steps[step].step, d, vals);
     if (r) loc_say(r, d->name);
 }
+
+void deck_localize(int step, const cv_field_desc* d, float* vals) { deck_localize_values(step, d, vals, false); }
+void deck_localize_elem(int step, const cv_field_desc* d, float* vals) { deck_localize_values(step, d, vals, true); }
 
 void deck_localize_dat(cv_dat* dat, const cv_frd* f) {
     if (!D.on) return;
@@ -167,15 +171,19 @@ void deck_compare_open(const char* frd_path) {
     else { cv_inp_free(&C.d); free(C.d.msgs.a); memset(&C.d, 0, sizeof C.d); }
 }
 
-void deck_compare_localize(const cv_frd* f, int step, const cv_field_desc* d, float* vals) {
+static void deck_compare_localize_values(const cv_frd* f, int step, const cv_field_desc* d, float* vals, bool slots) {
     if (!C.on || step < 0 || step >= f->n_steps) return;
     if (!C.tried) {
         C.tried = true;
         if (!cv_localsys_init(&C.L, &C.d, f)) cv_msg_add(&G.msgs, 0, false, "out of memory: results in local systems stay local");
     }
-    int r = cv_localsys_apply(&C.L, &C.d, f, f->steps[step].step, d, vals);
+    int r = slots ? cv_localsys_apply_elem(&C.L, &C.d, f, f->steps[step].step, d, vals)
+                  : cv_localsys_apply(&C.L, &C.d, f, f->steps[step].step, d, vals);
     if (r) loc_say(r, d->name);
 }
+
+void deck_compare_localize(const cv_frd* f, int step, const cv_field_desc* d, float* vals) { deck_compare_localize_values(f, step, d, vals, false); }
+void deck_compare_localize_elem(const cv_frd* f, int step, const cv_field_desc* d, float* vals) { deck_compare_localize_values(f, step, d, vals, true); }
 
 /* Parse a deck; includes resolve against its folder. */
 bool deck_read(const char* path, cv_inp* d) {

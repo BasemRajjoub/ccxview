@@ -217,8 +217,13 @@ void unload(void) {
     free(G.frd.msgs.a);
     memset(&G.frd.msgs, 0, sizeof G.frd.msgs);
     cv_map_close(&G.map);
-    free(G.scalar); free(G.elem_val); free(G.tri_val); free(G.disp); free(G.disp2);
+    free(G.scalar); free(G.elem_val); free(G.elem_top); free(G.elem_bottom); free(G.tri_val); free(G.disp); free(G.disp2);
     G.scalar = G.elem_val = G.tri_val = G.disp = G.disp2 = NULL;
+    G.elem_top = G.elem_bottom = NULL;
+    G.elem_nslots = 0;
+    G.field_elem_nodal = false;
+    G.shell_side = 0;
+    G.elem_nodal_avg = CV_EN_AVG_NONE;
     G.harmonic = false;
     for (int a = 0; a < CV_AXIS_N; a++) { free(G.axis_rgb[a]); G.axis_rgb[a] = NULL; }
     geo_clear();
@@ -720,6 +725,7 @@ void poll_job(void) {
             free(G.vis);
             G.vis = j->vis;                       /* the mask this skin was built from */
             j->vis = NULL;
+            refresh_elem_visibility();
             refresh_tri_values();
             refresh_tri_colors();
             refresh_gauss();

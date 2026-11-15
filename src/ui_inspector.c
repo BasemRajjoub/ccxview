@@ -82,7 +82,7 @@ static float probe_value_now(void) {
     if (!G.has_field) return NAN;
     if (app_nrec_active()) return nrec_value(G.probe.elem, G.probe.node);
     if (G.probe_ip) return G.probe_value;
-    if ((G.elem_mode || G.field_src == 1) && G.elem_val) return G.elem_val[G.probe.elem];
+    if ((G.elem_mode || G.field_elem_nodal || G.field_src == 1) && G.elem_val) return G.elem_val[G.probe.elem];
     return G.scalar ? G.scalar[G.probe.node] : NAN;
 }
 
@@ -101,7 +101,7 @@ void uii_probe_value_text(char* out, size_t n) {
     if (app_field_category(v)) snprintf(num, sizeof num, "%s", app_field_category(v));
     if (!G.has_field) snprintf(out, n, "no field");
     else if (G.probe_ip) snprintf(out, n, "point %d: %s = %s", G.probe_ip, G.field_label, num);
-    else snprintf(out, n, "%s%s = %s", G.field_label, G.elem_mode ? " (elem)" : "", num);
+    else snprintf(out, n, "%s%s = %s", G.field_label, (G.elem_mode || G.field_elem_nodal) ? " (elem)" : "", num);
 }
 
 /* "node 123  element 4  S Mises = 4.5e2": the probe in a line (the status bar) */
@@ -167,7 +167,7 @@ static void model_summary(struct nk_context* ctx, float s, float row) {
         nk_label(ctx, t, NK_TEXT_LEFT);
     }
     if (G.has_field) {
-        snprintf(t, sizeof t, "%s%s", G.field_label, G.elem_mode ? " (per element)" : "");
+        snprintf(t, sizeof t, "%s%s", G.field_label, (G.elem_mode || G.field_elem_nodal) ? " (per element)" : "");
         nk_label(ctx, t, NK_TEXT_LEFT);
         fmt_num(a, sizeof a, G.data_min); fmt_num(b, sizeof b, G.data_max);
         snprintf(t, sizeof t, "   from %s to %s", a, b);

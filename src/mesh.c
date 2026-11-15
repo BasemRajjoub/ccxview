@@ -244,6 +244,35 @@ static inline uint32_t face_min(const cv_frd* f, uint32_t e, const face_t* fc) {
     return m;
 }
 
+static bool same_face_nodes(const cv_frd* f, uint32_t a, uint32_t b, bool mid) {
+    uint32_t na[8], nb[8];
+    int ca = mid ? cv_elem_face_nodes(f, a >> 3, (int)(a & 7), na)
+                 : cv_elem_face_corners(f, a >> 3, (int)(a & 7), na);
+    int cb = mid ? cv_elem_face_nodes(f, b >> 3, (int)(b & 7), nb)
+                 : cv_elem_face_corners(f, b >> 3, (int)(b & 7), nb);
+    if (ca != cb) return false;
+    for (int i = 0; i < ca; i++) {
+        bool found = false;
+        for (int j = 0; j < cb; j++) if (na[i] == nb[j]) { found = true; break; }
+        if (!found) return false;
+    }
+    int corners = cv_elem_face_corners(f, a >> 3, (int)(a & 7), na);
+    if (ca == 2 * corners) {
+        cv_elem_face_nodes(f, a >> 3, (int)(a & 7), na);
+        for (int i = 0; i < corners; i++) {
+            bool found = false;
+            for (int j = 0; j < corners; j++) {
+                uint32_t x = na[i], y = na[(i + 1) % corners];
+                uint32_t u = nb[j], v = nb[(j + 1) % corners];
+                if (((x == u && y == v) || (x == v && y == u)) && na[corners + i] == nb[corners + j])
+                    found = true;
+            }
+            if (!found) return false;
+        }
+    }
+    return true;
+}
+
 typedef struct {
     CV_VEC(uint32_t) tri;
     CV_VEC(uint32_t) tri_elem;
@@ -478,19 +507,18 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
     emit_t o = {0};
     uint32_t* off = calloc((size_t)N + 1, sizeof *off);
     uint32_t* faces = NULL;
+    uint8_t* exposed = NULL;
     uint8_t*  used = calloc(CV_MAX(N, 1), 1);
-    if (!off || !used) goto oom;
+    uint8_t* cover = calloc(CV_MAX(E, 1), 1);
+    if (!off || !used || !cover) goto oom;
 
-    /* 1. count solid faces per smallest corner node; shells go straight out */
+    /* 1. count solid faces per smallest corner node */
     for (uint32_t e = 0; e < E; e++) {
         if (vis && !vis[e]) continue;
         const face_t* ft; bool solid;
         int nf = faces_of(f->etype[e], &ft, &solid);
         for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) used[f->conn[j]] = 1;
-        if (!solid) {
-            for (int i = 0; i < nf; i++) if (!emit_face(&o, f, e, &ft[i], i, mid)) goto oom;
-            continue;
-        }
+        if (!solid) continue;
         for (int i = 0; i < nf; i++) off[face_min(f, e, &ft[i]) + 1]++;
     }
     for (uint32_t i = 0; i < N; i++) off[i + 1] += off[i];
@@ -498,7 +526,8 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
 
     /* 2. bucket the face codes */
     faces = malloc(CV_MAX(nfaces, 1) * sizeof *faces);
-    if (!faces) goto oom;
+    exposed = calloc(CV_MAX(nfaces, 1), 1);
+    if (!faces || !exposed) goto oom;
     {
         uint32_t* fill = malloc(((size_t)N + 1) * sizeof *fill);
         if (!fill) goto oom;
@@ -534,6 +563,7 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
                 }
                 if (!matched.a[i]) {
                     uint32_t code = keys.a[i].code, e = code >> 3;
+                    exposed[b + i] = 1;
                     const face_t* ft; bool solid;
                     faces_of(f->etype[e], &ft, &solid);
                     if (!emit_face(&o, f, e, &ft[code & 7], (int)(code & 7), mid)) {
@@ -544,6 +574,39 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
         }
         cv_free_vec(keys);
         cv_free_vec(matched);
+    }
+
+    /* Shells come after solids so coincident faces win the equal-depth test. */
+    for (uint32_t e = 0; e < E; e++) {
+        if (vis && !vis[e]) continue;
+        const face_t* ft; bool solid;
+        int nf = faces_of(f->etype[e], &ft, &solid);
+        if (solid || !nf) continue;
+        face_t face = ft[0];
+        if (face.n == 3 || face.n == 4) {
+            uint32_t code = e << 3, m = face_min(f, e, &face);
+            fkey shell_key;
+            face_key(f, code, &shell_key);
+            for (uint32_t i = off[m]; i < off[m + 1]; i++) {
+                if (!exposed[i]) continue;
+                fkey solid_key;
+                face_key(f, faces[i], &solid_key);
+                if (memcmp(shell_key.k, solid_key.k, sizeof shell_key.k) ||
+                    !same_face_nodes(f, code, faces[i], mid)) continue;
+                cover[e] = 1;
+                if (face.n == 4) {
+                    uint32_t shell[8], other[8];
+                    int n = mid ? cv_elem_face_nodes(f, e, 0, shell) : cv_elem_face_corners(f, e, 0, shell);
+                    if (mid) cv_elem_face_nodes(f, faces[i] >> 3, (int)(faces[i] & 7), other);
+                    else cv_elem_face_corners(f, faces[i] >> 3, (int)(faces[i] & 7), other);
+                    int start = n == 8 ? 4 : 0;
+                    if (shell[start] != other[start] && shell[start] != other[start + 2])
+                        for (int j = 0; j < 4; j++) face.v[j] = ft[0].v[(j + 1) % 4];
+                }
+                break;
+            }
+        }
+        if (!emit_face(&o, f, e, &face, 0, mid)) goto oom;
     }
 
     /* 4. beams contribute edges only */
@@ -587,20 +650,21 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
     s->tri = o.tri.a;           s->n_tri = o.tri.n / 3;
     s->tri_elem = o.tri_elem.a;
     s->face = o.faces.a;        s->n_face = o.faces.n;
+    s->cover_shell = cover; cover = NULL;
     cv_free_vec(o.edges);
-    free(off); free(faces); free(used);
+    free(off); free(faces); free(exposed); free(used);
     if (!skin_features(s, f, vis, crease_deg, mid)) { cv_skin_free(s); return false; }
     return true;
 
 oom:
     cv_free_vec(o.tri); cv_free_vec(o.tri_elem); cv_free_vec(o.edges); cv_free_vec(o.faces);
-    free(off); free(faces); free(used);
+    free(off); free(faces); free(exposed); free(used); free(cover);
     cv_skin_free(s);
     return false;
 }
 
 void cv_skin_free(cv_skin* s) {
-    free(s->tri); free(s->tri_elem); free(s->edge); free(s->pt); free(s->face); free(s->fedge);
+    free(s->tri); free(s->tri_elem); free(s->edge); free(s->pt); free(s->face); free(s->fedge); free(s->cover_shell);
     memset(s, 0, sizeof *s);
 }
 
@@ -632,7 +696,13 @@ cv_pick cv_pick_ray(const cv_frd* f, const cv_skin* s, const float* disp, float 
         float v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * inv;
         if (v < 0.f || u + v > 1.f) continue;
         float tt = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv;
-        if (tt > 0.f && tt < r.t) { r.t = tt; r.hit = true; r.elem = s->tri_elem[t]; r.tri = (uint32_t)t; }
+        bool same = r.hit && f->etype[s->tri_elem[t]] >= 7 && f->etype[s->tri_elem[t]] <= 10 &&
+                    f->etype[r.elem] >= 1 && f->etype[r.elem] <= 6;
+        for (int k = 0; same && k < 3; k++) {
+            uint32_t n = s->tri[3 * t + k];
+            if (n != s->tri[3 * r.tri] && n != s->tri[3 * r.tri + 1] && n != s->tri[3 * r.tri + 2]) same = false;
+        }
+        if (tt > 0.f && (tt < r.t || same)) { r.t = tt; r.hit = true; r.elem = s->tri_elem[t]; r.tri = (uint32_t)t; }
     }
     if (!r.hit) return r;
     float h[3] = { o[0] + d[0] * r.t, o[1] + d[1] * r.t, o[2] + d[2] * r.t };

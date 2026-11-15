@@ -7,9 +7,11 @@ What ccxview does with each result block of a CalculiX `.frd` and with the
 
 Every block is read, whatever its name: ASCII and binary (float or double),
 up to 32 components (continuation lines of blocks with more than six), a node
-without a value is no value (NaN). The name of a block only matters for the
-few things listed under "By name" below; everything else follows from the
-number of components and their names:
+without a value is no value (NaN). IRTYPE 3 element-nodal records are kept
+per element-connectivity slot for face coloring, so adjacent elements can
+retain different values at a shared node. The name of a block only matters
+for the few things listed under "By name" below; everything else follows from
+the number of components and their names:
 
 | The block has | What is offered |
 |---|---|
@@ -53,6 +55,53 @@ not built in: write them as a formula (`S1 - S3`, ...).
 | `SDV` | `SDV` | the state variables as components |
 | `PS3DF`, `PT3DF`, `TS3DF`, `TT3DF`, `MAXU`, `MAXS`, `PRESS`, `MF` | fluid, maxima | components, with their units |
 | `CELS`, `PCONTAC`, `DEPTH`, `HCRIT`, `SEN`, `THSTRAIN`, ... | | components as written, no units |
+
+When IRTYPE 3 `STRESS` and at least one of `STRPOS` or `STRNEG` have matching
+components in the same step, the toolbar and Fields panel combine them as
+**Stress**. Solids use their own element-nodal `STRESS` values regardless of
+the side selection. For shells, **Both (top + bottom)** colors the positive-normal
+face from `STRPOS` and the reverse face from `STRNEG`; **Top** or **Bottom**
+shows that surface on either face. A missing or incompatible shell surface has
+no value (grey), and a message is recorded. The selected component and colormap
+are shared. The independent shell `STRESS` values are not offered by this display.
+When only compatible `STRPOS` and `STRNEG` are present, they remain combined as
+**Shell stress**. Incompatible fields remain separate.
+
+For element-nodal stress, the Fields panel offers **not averaged** (the default),
+**average scalars**, and **average components**. The first retains each element's
+own node values. Scalar averaging computes the selected quantity, such as von
+Mises, for each element-node and then takes its equal-weight mean at a shared
+node. Component averaging first takes the equal-weight mean of each tensor
+component, then computes the selected quantity. These can give different
+results. The result is interpolated over each displayed triangle.
+
+Only visible elements with the same material contribute; solids and shells
+are separate, as are the shell's top and bottom fields. A shell node only takes
+contributions from shells whose undeformed normals have a positive dot product
+with its own normal; degenerate shells with no normal retain their own values.
+Non-finite records do not contribute, and missing values remain missing. Material
+ID 0 is treated as one material when material information is unavailable.
+Hiding elements recomputes the average. Averaging can conceal real stress jumps;
+compare with the unaveraged display when assessing results. The chosen mode is
+saved with the model's view.
+
+Component averaging requires a complete finite tensor; an incomplete tensor
+does not contribute and retains any individually available component. In a
+comparison, scalar mode averages the per-element-node A−B scalar differences;
+component mode averages the matched A and B tensors separately before computing
+and subtracting their scalar results.
+
+The element value reported by the probe is the mean over the selected element's
+slots (and over both shell sides when Both is selected), not an interpolated
+point value. Formulae and other analyses that name a result block continue to use
+that block's nodal representation, not the combined surface display.
+The legend range uses element-nodal values; multiple extrema markers currently
+rank element means rather than individual element-node values.
+
+When a visible shell shares a face's nodes with a visible solid, the shell is
+drawn after the solid so its results take precedence on the coincident surface.
+Matching quadrilateral faces use the same diagonal, including when deformed.
+Hiding the shell exposes the solid face again.
 
 "Turned to global" needs the deck beside the results: see
 [Results in local systems](keywords.md#results-in-local-systems).

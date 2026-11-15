@@ -66,9 +66,12 @@ typedef struct {
     float* vals;
     size_t bytes;
     uint64_t used;           /* LRU stamp */
+    float* elem_vals;        /* IRTYPE 3: connectivity-slot values */
+    size_t elem_bytes;
 } cv_cache_entry;
 
 enum { CV_CACHE_N = 8 };
+enum { CV_EN_AVG_NONE, CV_EN_AVG_SCALAR, CV_EN_AVG_TENSOR, CV_EN_AVG_N };
 
 /* Background work: loading a file, or rebuilding the skin after a group change. */
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
@@ -170,6 +173,9 @@ typedef struct {
     bool      has_field;      /* current step has the selected field */
     unsigned  field_gen;      /* bumped when the values or displacements change */
     bool      elem_mode;
+    bool      field_elem_nodal;
+    int       elem_nodal_avg;  /* element-nodal stress averaging, CV_EN_AVG_* */
+    int       shell_side;      /* 0: front/top + back/bottom, 1: top, 2: bottom */
     int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points), 2: calculated, 3: failure, 4: mesh quality */
     int       fail_crit;      /* failure field: the criterion (CV_FC_*) and what it shows (CV_FO_*) */
     int       fail_out;
@@ -200,6 +206,9 @@ typedef struct {
 
     float*    scalar;         /* n_nodes */
     float*    elem_val;       /* n_elems */
+    float*    elem_top;       /* per connectivity slot, shell IRTYPE 3 display */
+    float*    elem_bottom;
+    size_t    elem_nslots;
     float*    tri_val;        /* n_tri */
     float*    disp;           /* 3 * n_nodes, NULL when the step has no DISP */
     float*    disp2;          /* harmonic response: -DISPI (imaginary part), NULL otherwise */
@@ -578,6 +587,8 @@ bool app_lin_csv(const char* path);
 void app_hist_close(void);
 bool app_hist_csv(const char* path);
 void app_select(const char* field, int comp);
+void app_set_shell_side(int side);
+void app_set_elem_nodal_avg(int mode);
 void app_select_src(const char* field, int comp, int src);
 /* Show the formula expr as the field (field_src 2). false: it does not compile,
    calc_err says why, and the field shown stays. */
@@ -940,10 +951,12 @@ bool deck_has_loads(void);
 bool deck_has_discrete(void);
 /* values CalculiX wrote in local systems turned to global in place (inp.h) */
 void deck_localize(int step, const cv_field_desc* d, float* vals);   /* step: index into G.frd */
+void deck_localize_elem(int step, const cv_field_desc* d, float* vals);
 void deck_localize_dat(cv_dat* dat, const cv_frd* f);
 bool deck_read(const char* path, cv_inp* d);                         /* includes from its folder */
 void deck_compare_open(const char* frd_path);                         /* the comparison run's own deck */
 void deck_compare_localize(const cv_frd* f, int step, const cv_field_desc* d, float* vals);
+void deck_compare_localize_elem(const cv_frd* f, int step, const cv_field_desc* d, float* vals);
 void deck_compare_close(void);
 bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted (tie, contact surfaces) */
 /* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */

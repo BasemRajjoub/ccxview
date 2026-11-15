@@ -18,6 +18,7 @@ typedef struct {
     char     name[16];
     int      ncomp;                      /* stored components (pseudo "ALL" excluded) */
     char     comp[CV_MAX_COMP][12];
+    int      irtype;                      /* 1 nodal, 3 element-nodal */
     int      fmt;                        /* 1 ASCII, 2 binary float, 3 binary double */
     uint64_t data_off;                   /* byte offset of the first data record */
     uint64_t line;                       /* 1-based line of data_off (ASCII) */
@@ -94,9 +95,12 @@ uint32_t* cv_frd_match_elems(const cv_frd* from, const cv_frd* to, cv_elem_match
 /* (Re)build the node and element id maps from node_id / elem_id; false on OOM. */
 bool     cv_frd_build_maps(cv_frd* f, size_t* node_dups, size_t* elem_dups);
 
-/* Decode one field into out[node * ncomp + c]. Nodes without a value get NaN.
-   Problems go to `msgs` (may be NULL). */
+/* Decode a nodal field into out[node * ncomp + c]. Nodes without a value get NaN.
+   IRTYPE 3 is averaged at shared nodes for this compatibility view. */
 void     cv_frd_read_field(const cv_frd* f, const cv_field_desc* d, float* out, cv_msgs* msgs);
+/* Decode IRTYPE 3 into out[connectivity_slot * ncomp + c], preserving distinct
+   values where an element shares a node with another. Unwritten slots get NaN. */
+void     cv_frd_read_elem_field(const cv_frd* f, const cv_field_desc* d, float* out, cv_msgs* msgs);
 
 int         cv_frd_type_nodes(int frd_type);   /* nodes per element, 0 if unknown */
 const char* cv_frd_type_name(int frd_type);

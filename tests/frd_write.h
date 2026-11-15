@@ -103,4 +103,29 @@ static void fw_field(FILE* o, const char* name, int ncomp, const char* const* co
     fprintf(o, " -3\n");
 }
 
+/* Element-nodal values; elem_id and node_id identify a connectivity slot. */
+static void fw_field_elem(FILE* o, const char* name, int ncomp, const char* const* comps,
+                          uint32_t n, const uint32_t* elem_id, const uint32_t* node_id,
+                          const float* vals, int binary) {
+    fprintf(o, " -4  %-8s%4d%5d\n", name, ncomp, 3);
+    for (int c = 0; c < ncomp; c++) fprintf(o, " -5  %-8s%4d%5d%5d%5d\n", comps[c], 1, 2, c + 1, 0);
+    for (int c0 = 0; c0 < ncomp; c0 += 6) {
+        int k = ncomp - c0 < 6 ? ncomp - c0 : 6;
+        for (uint32_t i = 0; i < n; i++) {
+            const float* v = vals + (size_t)i * ncomp + c0;
+            if (binary) {
+                int32_t ids[2] = { (int32_t)elem_id[i], (int32_t)node_id[i] };
+                fwrite(ids, 4, 2, o);
+                fwrite(v, 4, (size_t)k, o);
+            } else if (c0 == 0) {
+                fprintf(o, " -1%10u%10u", elem_id[i], node_id[i]);
+                for (int c = 0; c < k; c++) fprintf(o, "%12.5E", v[c]);
+                fprintf(o, "\n");
+            }
+        }
+        if (!binary) break;
+    }
+    fprintf(o, " -3\n");
+}
+
 #endif

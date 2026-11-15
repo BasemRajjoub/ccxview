@@ -168,24 +168,42 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
     /* the field and its component, as the Fields tree picks them */
     if (G.loaded && G.frd.n_steps > 0 && G.step < G.frd.n_steps && G.frd.steps[G.step].nfields > 0) {
         const cv_step* st = &G.frd.steps[G.step];
+        int stress, group_top, group_bottom, shell_top, shell_bottom;
+        bool group = cv_stress_group(st, &stress, &group_top, &group_bottom);
+        bool shell_pair = !group && cv_shell_pair(st, &shell_top, &shell_bottom);
+        bool group_active = group && G.field_src == 0 &&
+                            (!strcmp(G.field_name, "STRESS") ||
+                             (group_top >= 0 && !strcmp(G.field_name, "STRPOS")) ||
+                             (group_bottom >= 0 && !strcmp(G.field_name, "STRNEG")));
+        bool shell_active = shell_pair && G.field_src == 0 &&
+                            (!strcmp(G.field_name, "STRPOS") || !strcmp(G.field_name, "STRNEG"));
         nk_layout_row_push(ctx, 24 * s);
         uii_vsep(ctx);
         nk_layout_row_push(ctx, 110 * s);
-        const char* fname = G.field_src == 2 ? "calculated" : G.field_src == 3 ? "failure"   /* what shows, whatever its source */
+        const char* fname = group_active ? CV_STRESS_TITLE : shell_active ? CV_SHELL_PAIR_TITLE :
+                            G.field_src == 2 ? "calculated" : G.field_src == 3 ? "failure"   /* what shows, whatever its source */
                           : G.field_src == 4 ? "mesh quality" : cv_field_title(G.field_name);
         tip(ctx, "The result field shown (Fields tree: the same, with the calculated and failure fields)");
         if (nk_combo_begin_label(ctx, fname[0] ? fname : "field", nk_vec2(220 * s, CV_MIN(st->nfields, 12) * row + 20 * s))) {
             nk_layout_row_dynamic(ctx, row, 1);
-            for (int f = 0; f < st->nfields; f++)
-                if (nk_combo_item_label(ctx, cv_field_title(st->fields[f].name), NK_TEXT_LEFT)) {
+            for (int f = 0; f < st->nfields; f++) {
+                if (group && (f == group_top || f == group_bottom)) continue;
+                if (shell_pair && f == shell_bottom) continue;
+                const char* title = group && f == stress ? CV_STRESS_TITLE :
+                                    shell_pair && f == shell_top ? CV_SHELL_PAIR_TITLE : cv_field_title(st->fields[f].name);
+                if (nk_combo_item_label(ctx, title, NK_TEXT_LEFT)) {
                     cv_scalar_opt o[CV_MAX_OPTS];
                     int n = app_field_options(&st->fields[f], o, CV_MAX_OPTS);
-                    app_pick_field(st->fields[f].name, n ? o[0].comp : 0, 0);
+                    const char* name = shell_active && f == shell_top ? G.field_name : st->fields[f].name;
+                    app_pick_field(name, n ? o[0].comp : 0, 0);
+                    *uii_fnode_state(st->fields[f].name, true) = NK_MAXIMIZED;
                 }
+            }
             nk_combo_end(ctx);
         }
-        const cv_field_desc* cur = NULL;
-        for (int f = 0; G.field_src == 0 && f < st->nfields; f++) if (!strcmp(st->fields[f].name, G.field_name)) cur = &st->fields[f];
+        const cv_field_desc* cur = group_active ? &st->fields[stress] : shell_active ? &st->fields[shell_top] : NULL;
+        for (int f = 0; !group_active && !shell_active && G.field_src == 0 && f < st->nfields; f++)
+            if (!strcmp(st->fields[f].name, G.field_name)) cur = &st->fields[f];
         if (cur) {
             cv_scalar_opt o[CV_MAX_OPTS];
             int n = app_field_options(cur, o, CV_MAX_OPTS), ci = -1;
@@ -194,9 +212,15 @@ void panel_toolbar(struct nk_context* ctx, float s, float row) {
             tip(ctx, "The component or invariant of the field");
             if (nk_combo_begin_label(ctx, ci >= 0 ? o[ci].label : "component", nk_vec2(200 * s, CV_MIN(n, 12) * row + 20 * s))) {
                 nk_layout_row_dynamic(ctx, row, 1);
-                for (int i = 0; i < n; i++) if (nk_combo_item_label(ctx, o[i].label, NK_TEXT_LEFT)) app_pick_field(cur->name, o[i].comp, 0);
+                for (int i = 0; i < n; i++)
+                    if (nk_combo_item_label(ctx, o[i].label, NK_TEXT_LEFT))
+                        app_pick_field(shell_active ? G.field_name : cur->name, o[i].comp, 0);
                 nk_combo_end(ctx);
             }
+        }
+        if (group_active || shell_active) {
+            nk_layout_row_push(ctx, 130 * s);
+            uii_shell_sides(ctx, s, row);
         }
     }
     nk_layout_row_push(ctx, 24 * s);
@@ -770,8 +794,9 @@ void legend_controls(struct nk_context* ctx, float s, float row) {
         }
         nk_layout_row_dynamic(ctx, row, 2);
         tip(ctx, "Centre the view on the field's minimum / maximum");
-        if (nk_button_label(ctx, "go to min") && G.min_at != UINT32_MAX) { G.show_markers = true; app_find(G.elem_mode ? G.frd.elem_id[G.min_at] : G.frd.node_id[G.min_at], G.elem_mode); }
-        if (nk_button_label(ctx, "go to max") && G.max_at != UINT32_MAX) { G.show_markers = true; app_find(G.elem_mode ? G.frd.elem_id[G.max_at] : G.frd.node_id[G.max_at], G.elem_mode); }
+        bool elem_at = G.elem_mode || G.field_elem_nodal;
+        if (nk_button_label(ctx, "go to min") && G.min_at != UINT32_MAX) { G.show_markers = true; app_find(elem_at ? G.frd.elem_id[G.min_at] : G.frd.node_id[G.min_at], elem_at); }
+        if (nk_button_label(ctx, "go to max") && G.max_at != UINT32_MAX) { G.show_markers = true; app_find(elem_at ? G.frd.elem_id[G.max_at] : G.frd.node_id[G.max_at], elem_at); }
         nk_layout_row_dynamic(ctx, row, 1);
         tip(ctx, "Drag a box in the view next: the probe goes to the field's max inside it,\n"
                  "with the min beside it (also Ctrl+Shift+drag at any time; Esc cancels)");

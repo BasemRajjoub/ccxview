@@ -7,7 +7,38 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static bool is_stress(const char* name) {
+static bool matching_elem_fields(const cv_field_desc* a, const cv_field_desc* b) {
+    if (a->irtype != 3 || b->irtype != 3 || a->ncomp != b->ncomp) return false;
+    for (int i = 0; i < a->ncomp; i++)
+        if (strcmp(a->comp[i], b->comp[i])) return false;
+    return true;
+}
+
+bool cv_shell_pair(const cv_step* step, int* top, int* bottom) {
+    *top = *bottom = -1;
+    for (int i = 0; i < step->nfields; i++) {
+        if (!strcmp(step->fields[i].name, "STRPOS")) *top = i;
+        if (!strcmp(step->fields[i].name, "STRNEG")) *bottom = i;
+    }
+    if (*top < 0 || *bottom < 0) return false;
+    return matching_elem_fields(&step->fields[*top], &step->fields[*bottom]);
+}
+
+bool cv_stress_group(const cv_step* step, int* stress, int* top, int* bottom) {
+    *stress = *top = *bottom = -1;
+    for (int i = 0; i < step->nfields; i++) {
+        if (!strcmp(step->fields[i].name, "STRESS")) *stress = i;
+        if (!strcmp(step->fields[i].name, "STRPOS")) *top = i;
+        if (!strcmp(step->fields[i].name, "STRNEG")) *bottom = i;
+    }
+    if (*stress < 0 || step->fields[*stress].irtype != 3) return false;
+    const cv_field_desc* d = &step->fields[*stress];
+    if (*top >= 0 && !matching_elem_fields(d, &step->fields[*top])) *top = -1;
+    if (*bottom >= 0 && !matching_elem_fields(d, &step->fields[*bottom])) *bottom = -1;
+    return *top >= 0 || *bottom >= 0;
+}
+
+bool cv_field_is_stress(const char* name) {
     return strncmp(name, "STRESS", 6) == 0 || strncmp(name, "ZZS", 3) == 0 || strncmp(name, "stresses", 8) == 0 ||   /* .dat */
            !strcmp(name, "STRPOS") || !strcmp(name, "STRNEG") || !strcmp(name, "STRMID");   /* shell faces */
 }
@@ -146,7 +177,7 @@ void cv_cyl_comp_name(const cv_field_desc* d, int c, char out[12]) {
 
 int cv_vec_comps(const cv_field_desc* d) {
     if (d->ncomp == 3) return 3;
-    if (d->ncomp != 6 || tensor_order(d) || is_stress(d->name)) return 0;
+    if (d->ncomp != 6 || tensor_order(d) || cv_field_is_stress(d->name)) return 0;
     for (int c = 0; c < 3; c++) {
         size_t k = strlen(d->comp[c]);
         if (k < 1 || d->comp[c][k - 1] != '1' + c) return 0;
@@ -160,7 +191,7 @@ int cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max) {
         snprintf(out[n].label, sizeof out[n].label, "|%s|", d->name);
         out[n++].comp = CV_COMP_MAG;
     }
-    if (d->ncomp == 6 && is_stress(d->name) && n < max) {
+    if (d->ncomp == 6 && cv_field_is_stress(d->name) && n < max) {
         snprintf(out[n].label, sizeof out[n].label, "von Mises");
         out[n++].comp = CV_COMP_MISES;
     }
@@ -344,6 +375,91 @@ void cv_field_scalar(const float* v, int nc, uint32_t n, int comp, float* out) {
             out[i] = NAN;
         }
     }
+}
+
+typedef struct {
+    uint32_t node, material, elem, slot;
+    bool shell;
+} avg_entry;
+
+static int avg_entry_cmp(const void* aa, const void* bb) {
+    const avg_entry* a = aa;
+    const avg_entry* b = bb;
+    if (a->node != b->node) return a->node < b->node ? -1 : 1;
+    if (a->material != b->material) return a->material < b->material ? -1 : 1;
+    if (a->shell != b->shell) return a->shell ? 1 : -1;
+    return 0;
+}
+
+static void avg_shell_normal(const cv_frd* f, uint32_t e, double out[3]) {
+    uint32_t b = f->eoff[e];
+    int n = f->etype[e] == 7 || f->etype[e] == 8 ? 3 : 4;
+    out[0] = out[1] = out[2] = 0;
+    if (f->eoff[e + 1] - b < (uint32_t)n || !f->xyz) return;
+    for (int i = 0; i < n; i++) {
+        const float* p = f->xyz + 3 * (size_t)f->conn[b + (uint32_t)i];
+        const float* q = f->xyz + 3 * (size_t)f->conn[b + (uint32_t)((i + 1) % n)];
+        out[0] += ((double)p[1] - q[1]) * ((double)p[2] + q[2]);
+        out[1] += ((double)p[2] - q[2]) * ((double)p[0] + q[0]);
+        out[2] += ((double)p[0] - q[0]) * ((double)p[1] + q[1]);
+    }
+    double len = sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+    if (isfinite(len) && len > 0) for (int k = 0; k < 3; k++) out[k] /= len;
+    else out[0] = out[1] = out[2] = 0;
+}
+
+bool cv_elem_nodal_average(const cv_frd* f, const uint8_t* vis, float* vals, int nc) {
+    if (nc < 1 || nc > CV_MAX_COMP) return false;
+    size_t ns = f->n_elems ? f->eoff[f->n_elems] : 0;
+    if (ns > SIZE_MAX / sizeof(avg_entry) ||
+        ns > SIZE_MAX / ((size_t)nc * sizeof(float)) ||
+        (size_t)f->n_elems > SIZE_MAX / (3 * sizeof(double))) return false;
+    avg_entry* ent = malloc(CV_MAX(ns, 1) * sizeof *ent);
+    float* original = malloc(CV_MAX(ns * (size_t)nc, 1) * sizeof *original);
+    double* normals = calloc(CV_MAX((size_t)f->n_elems, 1), 3 * sizeof *normals);
+    if (!ent || !original || !normals) { free(ent); free(original); free(normals); return false; }
+    memcpy(original, vals, ns * (size_t)nc * sizeof *original);
+    size_t count = 0;
+    for (uint32_t e = 0; e < f->n_elems; e++) {
+        int type = f->etype[e];
+        bool shell = type >= 7 && type <= 10;
+        if ((vis && !vis[e]) || type < 1 || type > 10) continue;
+        if (shell) avg_shell_normal(f, e, normals + 3 * (size_t)e);
+        for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) {
+            bool finite = true;
+            for (int c = 0; c < nc; c++) finite &= isfinite(original[(size_t)j * nc + c]);
+            if (finite) ent[count++] = (avg_entry){ f->conn[j], f->emat ? f->emat[e] : 0, e, j, shell };
+        }
+    }
+    qsort(ent, count, sizeof *ent, avg_entry_cmp);
+    for (size_t a = 0; a < count;) {
+        size_t z = a + 1;
+        while (z < count && ent[z].node == ent[a].node && ent[z].material == ent[a].material &&
+               ent[z].shell == ent[a].shell) z++;
+        if (!ent[a].shell) {
+            double sum[CV_MAX_COMP] = {0};
+            for (size_t k = a; k < z; k++)
+                for (int c = 0; c < nc; c++) sum[c] += original[(size_t)ent[k].slot * nc + c];
+            for (size_t k = a; k < z; k++)
+                for (int c = 0; c < nc; c++) vals[(size_t)ent[k].slot * nc + c] = (float)(sum[c] / (z - a));
+        } else {
+            for (size_t i = a; i < z; i++) {
+                const double* ni = normals + 3 * (size_t)ent[i].elem;
+                double sum[CV_MAX_COMP] = {0};
+                size_t n = 0;
+                for (size_t k = a; k < z; k++) {
+                    const double* nk = normals + 3 * (size_t)ent[k].elem;
+                    if (ni[0] * nk[0] + ni[1] * nk[1] + ni[2] * nk[2] <= 0) continue;
+                    for (int c = 0; c < nc; c++) sum[c] += original[(size_t)ent[k].slot * nc + c];
+                    n++;
+                }
+                if (n) for (int c = 0; c < nc; c++) vals[(size_t)ent[i].slot * nc + c] = (float)(sum[c] / n);
+            }
+        }
+        a = z;
+    }
+    free(ent); free(original); free(normals);
+    return true;
 }
 
 bool cv_range(const float* v, size_t n, float* mn, float* mx) {
