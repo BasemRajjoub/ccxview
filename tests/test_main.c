@@ -1941,6 +1941,7 @@ int main(void) {
     test_loads();
     test_inp_many_sets();
     test_inp_surface_order();
+    test_inp_surface_sets();
     test_steps();
     test_load_cards();
     test_cap();
