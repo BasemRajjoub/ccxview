@@ -698,6 +698,109 @@ static bool shell_pair_available(struct nk_context* ctx) {
     return st->nfields == 4 && !strcmp(st->fields[0].name, "DISP") &&
            !strcmp(st->fields[1].name, "STRESS") && cv_shell_pair(st, &top, &bottom) && top == 2 && bottom == 3;
 }
+static bool shell_face_sample(struct nk_context* ctx) {
+    return shell_pair_available(ctx) && !strcmp(cv_basename(G.path), "SANDWICH_MASTER.frd");
+}
+static struct {
+    cv_camera cam;
+    bool active, deform, shading, markers, range_lock;
+    bool sym[3], mirrored;
+    int sym_at[3];
+    float alpha, rmin, rmax;
+    unsigned char rgb[3];
+    bool captured;
+} shell_face;
+unsigned char* cv_read_pixels_region(int x, int y, int w, int h, int fb_h);
+static void shell_face_open(struct nk_context* ctx) {
+    shell_face.active = true;
+    shell_face.cam = G.cam;
+    shell_face.deform = G.deform; shell_face.shading = G.shading; shell_face.markers = G.show_markers;
+    shell_face.alpha = G.model_alpha;
+    memcpy(shell_face.sym, G.sym, sizeof G.sym);
+    memcpy(shell_face.sym_at, G.sym_at, sizeof G.sym_at);
+    memset(G.sym, 0, sizeof G.sym);
+    shell_face.mirrored = false;
+    shell_face.range_lock = G.range_lock;
+    shell_face.rmin = G.rmin; shell_face.rmax = G.rmax;
+    G.deform = G.shading = G.show_markers = false;
+    G.model_alpha = 1.f;
+    app_set_elem_nodal_avg(CV_EN_AVG_NONE);
+    app_pick_field("STRESS", 0, 0);
+    G.range_lock = true; G.rmin = -120.f; G.rmax = 120.f;
+    uint32_t e = cv_frd_elem_index(&G.frd, 13);
+    app_isolate_elems(&e, 1);
+    app_view(CV_VIEW_NZ);                 /* this sample's shell normals point toward -Z */
+    app_fit_element(e);
+    app_set_shell_side(1);
+}
+static unsigned char* shell_face_pixel(void) {
+    float x, y;
+    if (!app_project(v3_make(shell_face.mirrored ? -62.5f : 62.5f, 5.f, 0.f), &x, &y)) return NULL;
+    if (x < G.vp_x || x >= G.vp_x + G.vp_w || y < G.vp_y || y >= G.vp_y + G.vp_h) return NULL;
+    cv_pick pk;
+    float o[3], d[3];
+    if (!app_pick(x, y, &pk, o, d) || G.frd.elem_id[pk.elem] != 13) return NULL;
+    return cv_read_pixels_region((int)x, (int)y, 1, 1, sapp_height());
+}
+static void shell_face_capture(struct nk_context* ctx) {
+    unsigned char* px = shell_face_pixel();
+    shell_face.captured = px != NULL;
+    if (px) memcpy(shell_face.rgb, px, 3);
+    free(px);
+    app_set_shell_side(0);
+}
+static bool shell_face_matches(struct nk_context* ctx) {
+    unsigned char* px = shell_face_pixel();
+    bool ok = shell_face.captured && px && !memcmp(shell_face.rgb, px, 3);
+    if (!ok && px && shell_face.captured)
+        fprintf(stderr, "      shell face RGB: %u,%u,%u; expected %u,%u,%u\n",
+                px[0], px[1], px[2], shell_face.rgb[0], shell_face.rgb[1], shell_face.rgb[2]);
+    free(px);
+    return ok;
+}
+static void shell_face_back(struct nk_context* ctx) { app_view(CV_VIEW_PZ); app_set_shell_side(2); }
+static bool shell_face_distinct(struct nk_context* ctx) {
+    unsigned char* px = shell_face_pixel();
+    bool ok = shell_face.captured && px &&
+              abs((int)shell_face.rgb[0] - px[0]) + abs((int)shell_face.rgb[1] - px[1]) +
+              abs((int)shell_face.rgb[2] - px[2]) > 50;
+    free(px);
+    return ok;
+}
+static void shell_face_glass(struct nk_context* ctx) {
+    G.model_alpha = 0.6f;
+    app_see_refresh();
+    app_view(CV_VIEW_NZ); app_set_shell_side(1);
+}
+static void shell_face_mirror(struct nk_context* ctx) {
+    shell_face.mirrored = true;
+    G.sym[0] = true; G.sym_at[0] = CV_SYM_ZERO;
+    G.model_alpha = 1.f;
+    app_see_refresh();
+    app_view(CV_VIEW_NZ);
+    app_fit_element(cv_frd_elem_index(&G.frd, 13));
+    G.cam.target.x = -62.5f;
+    app_set_shell_side(1);
+}
+static void shell_face_mirror_glass(struct nk_context* ctx) {
+    G.model_alpha = 0.6f;
+    app_see_refresh();
+    app_set_shell_side(1);
+}
+static void shell_face_close(struct nk_context* ctx) {
+    if (!shell_face.active) return;
+    shell_face.active = false;
+    G.cam = shell_face.cam;
+    G.deform = shell_face.deform; G.shading = shell_face.shading; G.show_markers = shell_face.markers;
+    G.model_alpha = shell_face.alpha;
+    memcpy(G.sym, shell_face.sym, sizeof G.sym);
+    memcpy(G.sym_at, shell_face.sym_at, sizeof G.sym_at);
+    G.range_lock = shell_face.range_lock;
+    G.rmin = shell_face.rmin; G.rmax = shell_face.rmax;
+    app_set_shell_side(0);
+    app_show_all();
+    app_see_refresh();
+}
 static void shell_pair_open(struct nk_context* ctx) {
     fields_open(ctx);
     app_pick_field("DISP", CV_COMP_MAG, 0);
@@ -1369,8 +1472,23 @@ static bool tip_none(struct nk_context* ctx) { return !uii_tip_shown()[0]; }
     PANELS_ANSWER
 
 static const step script[] = {
+    CASE_IF("shell field: Both renders the physical top and bottom faces", shell_face_sample),
+    DO(shell_face_open), WAIT(120), DO(shell_face_capture), WAIT(5),
+    EXPECT(shell_face_matches, "opaque positive-normal face matches Top"),
+    DO(shell_face_back), WAIT(5), EXPECT(shell_face_distinct, "Top and Bottom pixels have distinct stress colours"),
+    DO(shell_face_capture), WAIT(5), EXPECT(shell_face_matches, "opaque reverse face matches Bottom"),
+    DO(shell_face_glass), WAIT(5), DO(shell_face_capture), WAIT(5),
+    EXPECT(shell_face_matches, "transparent positive-normal face matches Top"),
+    DO(shell_face_back), WAIT(5), DO(shell_face_capture), WAIT(5),
+    EXPECT(shell_face_matches, "transparent reverse face matches Bottom"),
+    DO(shell_face_mirror), WAIT(5), DO(shell_face_capture), WAIT(5),
+    EXPECT(shell_face_matches, "mirrored opaque positive-normal face matches Top"),
+    DO(shell_face_mirror_glass), WAIT(5), DO(shell_face_capture), WAIT(5),
+    EXPECT(shell_face_matches, "mirrored transparent positive-normal face matches Top"),
+    DO(shell_face_close), WAIT(120),
+
     CASE_IF("shell field: toolbar and sidebar sides stay in sync", shell_pair_available),
-    DO(shell_pair_open), WAIT(3),
+    DO(shell_face_close), DO(shell_pair_open), WAIT(3),
     AT_TIP("Toolbar", "The result field shown"), CLICK, WAIT(2), AT_POPUP("Toolbar", 0.5f, 0.35f), CLICK, WAIT(3),
     EXPECT(shell_field_selected, "shell stress picked from the toolbar and opened in the sidebar"),
     AT_TIP("Scene", "#element nodal averaging"), CLICK, WAIT(2), AT_POPUP("Scene", 0.5f, 0.45f), CLICK, WAIT(3),

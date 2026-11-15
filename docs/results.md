@@ -61,7 +61,10 @@ components in the same step, the toolbar and Fields panel combine them as
 **Stress**. Solids use their own element-nodal `STRESS` values regardless of
 the side selection. For shells, **Both (top + bottom)** colors the positive-normal
 face from `STRPOS` and the reverse face from `STRNEG`; **Top** or **Bottom**
-shows that surface on either face. A missing or incompatible shell surface has
+shows that surface on either face. The positive normal follows the right-hand
+rule of the shell connectivity, not the screen's up direction; opaque and
+transparent faces, including mirrored copies, use the same convention.
+A missing or incompatible shell surface has
 no value (grey), and a message is recorded. The selected component and colormap
 are shared. The independent shell `STRESS` values are not offered by this display.
 When only compatible `STRPOS` and `STRNEG` are present, they remain combined as

@@ -372,6 +372,11 @@ static void poll_watch(void) {
     seen_mt = mt; seen_sz = sz;
 }
 
+static bool matrix_mirrored(const float* M) {
+    return M[0] * (M[5] * M[10] - M[6] * M[9]) - M[1] * (M[4] * M[10] - M[6] * M[8])
+         + M[2] * (M[4] * M[9] - M[5] * M[8]) < 0;
+}
+
 static void frame(void) {
     bool was_busy = app_busy(), was_dlg = G.dlg_running;
     poll_job();
@@ -568,6 +573,7 @@ static void frame(void) {
                 app_copy_matrix(m, M);
                 m4_mul(d.mvp, mvp0, M);
                 m4_mul(d.mv, mv0, M);
+                d.mirrored = matrix_mirrored(M);
                 cv_render_draw(&d);
             }
         }
@@ -579,8 +585,7 @@ static void frame(void) {
                 app_copy_matrix(m, M);
                 m4_mul(ds.mvp, d0.mvp, M);
                 m4_mul(ds.mv, d0.mv, M);
-                ds.mirrored = M[0] * (M[5] * M[10] - M[6] * M[9]) - M[1] * (M[4] * M[10] - M[6] * M[8])
-                            + M[2] * (M[4] * M[9] - M[5] * M[8]) < 0;
+                ds.mirrored = matrix_mirrored(M);
                 cv_render_see_draw(&ds);
             }
         }

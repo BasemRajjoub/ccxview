@@ -724,6 +724,7 @@ void cv_render_init(void) {
         .shader = R.shd,
         .layout = layout,
         .index_type = SG_INDEXTYPE_UINT32,
+        .face_winding = SG_FACEWINDING_CCW,  /* shell connectivity's positive normal selects STRPOS */
         .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
     };
     pd.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
