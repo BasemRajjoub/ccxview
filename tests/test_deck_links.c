@@ -42,6 +42,13 @@ int main(void) {
     refresh_links();
     assert(segments == 2);
     D.nvis = visible;
+    mark_free_nodes(visible);                /* node 3 is in no element: shown */
+    assert(visible[2] == 1 && visible[3] == 0);
+    {   /* supports, loads, springs and labels at a reference node ask the same question */
+        float p[3], d[6];
+        assert(deck_node_pd(3, p, d));
+        assert(!deck_node_pd(4, p, d));
+    }
     refresh_links();
     assert(segments == 1);
     visible[0] = 0;
@@ -55,6 +62,8 @@ int main(void) {
     G.crop_on = true;
     G.job.crop_lo[0] = 0.5f;
     G.job.crop_hi[0] = G.job.crop_hi[1] = G.job.crop_hi[2] = 2;
+    mark_free_nodes(visible);                /* node 3 at x = 0: outside the crop box */
+    assert(visible[2] == 0);
     refresh_links();
     assert(segments == 0);
     G.crop_on = false;
@@ -62,7 +71,6 @@ int main(void) {
     refresh_links();
     assert(segments == 0);
 
-    free(D.orphan);
     free(G.frd.idmap.flat);
     free(G.frd.emap.flat);
     puts("deck link visibility: ok");
