@@ -231,28 +231,42 @@ void cv_cgrid_free(cv_cgrid* g) {
     free(g);
 }
 
+/* the gap from x to the interval lo .. hi */
+static float axis_gap(float x, float lo, float hi) { return x < lo ? lo - x : x > hi ? x - hi : 0; }
+
 uint32_t cv_cgrid_nearest(cv_cgrid* g, const float p[3], float maxd, cv_cproj* o) {
     if (!g) return UINT32_MAX;
     if (++g->stamp == 0) { memset(g->seen, 0, g->nf * sizeof(uint32_t)); g->stamp = 1; }
     int c[3];
     for (int i = 0; i < 3; i++) c[i] = cell_of(g, p[i], i);
     /* how far p lies outside the grid: the first rings may be empty */
-    float out = 0;
+    float out = 0, sc = 0;
     for (int i = 0; i < 3; i++) {
         float d = p[i] < g->lo[i] ? g->lo[i] - p[i] : p[i] - (g->lo[i] + g->h * g->dim[i]);
         if (d > out) out = d;
+        sc = fmaxf(sc, fmaxf(fabsf(p[i]), fabsf(g->lo[i]) + g->h * g->dim[i]));
     }
     int rmax = CV_MAX(g->dim[0], CV_MAX(g->dim[1], g->dim[2]));
     uint32_t best = UINT32_MAX;
     float bd = INFINITY;
     for (int r = 0; r <= rmax; r++) {
+        /* the cells that can hold a face as near as the best so far (or maxd) are visited, in the
+           same order as without this: the true distance from p to the cell, slackened for round-off */
+        float lim = fminf(bd, maxd), slack = 1e-5f * (sc + g->h);
+        float lim2 = (lim + slack) * (lim + slack);
         for (int z = c[2] - r; z <= c[2] + r; z++) {
             if (z < 0 || z >= g->dim[2]) continue;
+            float dz = axis_gap(p[2], z == 0 ? -INFINITY : g->lo[2] + g->h * z, z == g->dim[2] - 1 ? INFINITY : g->lo[2] + g->h * (z + 1));
+            if (dz * dz > lim2) continue;
             for (int y = c[1] - r; y <= c[1] + r; y++) {
                 if (y < 0 || y >= g->dim[1]) continue;
-                for (int x = c[0] - r; x <= c[0] + r; x++) {
+                float dy = axis_gap(p[1], y == 0 ? -INFINITY : g->lo[1] + g->h * y, y == g->dim[1] - 1 ? INFINITY : g->lo[1] + g->h * (y + 1));
+                if (dz * dz + dy * dy > lim2) continue;
+                bool row = abs(y - c[1]) == r || abs(z - c[2]) == r;      /* a whole row of the shell, else its two ends */
+                for (int x = c[0] - r; x <= c[0] + r; x += row || !r ? 1 : 2 * r) {
                     if (x < 0 || x >= g->dim[0]) continue;
-                    if (abs(x - c[0]) != r && abs(y - c[1]) != r && abs(z - c[2]) != r) continue;   /* the shell only */
+                    float dx = axis_gap(p[0], x == 0 ? -INFINITY : g->lo[0] + g->h * x, x == g->dim[0] - 1 ? INFINITY : g->lo[0] + g->h * (x + 1));
+                    if (dz * dz + dy * dy + dx * dx > lim2) continue;
                     size_t cell = ((size_t)z * g->dim[1] + y) * g->dim[0] + x;
                     for (uint32_t j = g->off[cell]; j < g->off[cell + 1]; j++) {
                         uint32_t f = g->ids[j];
