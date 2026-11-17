@@ -134,6 +134,39 @@ static void test_contact(void) {
     CHECK(!o.inside);
     CHECK_EQ(cv_cgrid_nearest(g, s3, 1.f, &o), UINT32_MAX);   /* not within reach */
     cv_cgrid_free(g);
+
+    /* random faces and points (some far off): the tree agrees with brute force */
+    enum { RF = 700 };
+    static float rf[RF * 12];
+    static uint8_t rn[RF];
+    uint32_t rs = 12345;
+#define RND() ((float)((rs = rs * 1664525u + 1013904223u) >> 8) / 16777216.f)
+    for (int f = 0; f < RF; f++) {
+        float c[3] = { RND() * 10, RND() * 10, RND() }, *q = rf + 12 * f;
+        rn[f] = f % 3 == 0 ? 3 : 4;
+        for (int k = 0; k < 4; k++) for (int i = 0; i < 3; i++) q[3 * k + i] = c[i] + (RND() - .5f) * (i == 2 ? .3f : .6f);
+        if (rn[f] == 3) memcpy(q + 9, q + 6, 3 * sizeof(float));
+    }
+    cv_cgrid* rg = cv_cgrid_build(rf, rn, RF);
+    int bad = 0;
+    for (int t = 0; t < 400; t++) {
+        float p[3] = { RND() * 14 - 2, RND() * 14 - 2, (RND() - .5f) * (t % 4 == 0 ? 60 : 2) };
+        float md = t % 5 == 0 ? 1.f : 1e30f, bd = INFINITY;
+        uint32_t bf = UINT32_MAX;
+        for (uint32_t f = 0; f < RF; f++) {
+            cv_cproj q;
+            if (!cv_contact_project(p, (const float (*)[3])(rf + 12 * f), rn[f], &q)) continue;
+            float d = sqrtf((p[0] - q.foot[0]) * (p[0] - q.foot[0]) + (p[1] - q.foot[1]) * (p[1] - q.foot[1]) + (p[2] - q.foot[2]) * (p[2] - q.foot[2]));
+            if (d < bd) { bd = d; bf = f; }
+        }
+        if (bd > md) bf = UINT32_MAX;
+        cv_cproj w;
+        uint32_t got = cv_cgrid_nearest(rg, p, md, &w);
+        if (got != bf) bad++;
+    }
+    CHECK_EQ(bad, 0);
+    cv_cgrid_free(rg);
+#undef RND
 }
 
 #endif

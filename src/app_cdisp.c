@@ -163,30 +163,65 @@ static void surf_corners(const cv_inp* dk, int si, uint32_t** fc, uint32_t* nf) 
     *fc = v.a; *nf = (uint32_t)(v.n / 4);
 }
 
+/* the searches' results kept per link, keyed by a hash of everything a search reads (the
+   master faces' corner points, the slave points): a rebuild that changed none of it, a
+   crease change or a second call, replays them */
+static struct { uint64_t key; uint32_t* f; size_t n; } Sc[16];
+
+static uint64_t hash_bytes(uint64_t h, const void* p, size_t n) {
+    const unsigned char* b = p;
+    size_t w = n / 8;
+    uint64_t x;
+    for (size_t i = 0; i < w; i++) { memcpy(&x, b + 8 * i, 8); h = (h ^ x) * 1099511628211ull; h ^= h >> 29; }
+    for (size_t i = w * 8; i < n; i++) h = (h ^ b[i]) * 1099511628211ull;
+    return h;
+}
+
 /* the nodes of link li's slave surface not paired yet: with the nearest face of its master */
 static void pair_by_search(const cv_inp* dk, int li) {
     uint32_t* fc = NULL, nf = 0;
     surf_corners(dk, dk->links[li].surf[1], &fc, &nf);
     float* xyz = nf ? malloc((size_t)nf * 12 * sizeof(float)) : NULL;
     uint8_t* nc = nf ? malloc(nf) : NULL;
+    float* sp = NULL;
+    uint32_t* res = NULL;
+    size_t ns = 0;
     if (xyz && nc) {
         for (uint32_t f = 0; f < nf; f++) {
             nc[f] = fc[4 * f + 3] == UINT32_MAX ? 3 : 4;
             for (int k = 0; k < 4; k++) true_pt(fc[4 * f + (k < nc[f] ? k : 2)], xyz + 12 * (size_t)f + 3 * k);
         }
-        cv_cgrid* g = cv_cgrid_build(xyz, nc, nf);
-        for (size_t j = 0; g && j < D.n.n; j++) {
+        sp = malloc((D.n.n + 1) * 3 * sizeof(float));
+        res = malloc((D.n.n + 1) * sizeof(uint32_t));
+        uint64_t key = 14695981039346656037ull;
+        key = hash_bytes(key, xyz, (size_t)nf * 12 * sizeof(float));
+        key = hash_bytes(key, nc, nf);
+        for (size_t j = 0; sp && j < D.n.n; j++) {
+            const cnode* q = &D.n.a[j];
+            if (q->link != li || q->nm) continue;
+            true_pt(q->node, sp + 3 * ns++);
+        }
+        if (sp) key = hash_bytes(key, sp, ns * 3 * sizeof(float));
+        bool hit = sp && res && li < (int)CV_COUNT(Sc) && Sc[li].f && Sc[li].key == key && Sc[li].n == ns;
+        cv_cgrid* g = hit ? NULL : cv_cgrid_build(xyz, nc, nf);
+        size_t k = 0;
+        for (size_t j = 0; sp && res && (hit || g) && j < D.n.n; j++) {
             cnode* q = &D.n.a[j];
             if (q->link != li || q->nm) continue;
-            float p[3];
-            cv_cproj o;
-            true_pt(q->node, p);
-            uint32_t f = cv_cgrid_nearest(g, p, 1e30f, &o);
+            uint32_t f;
+            if (hit) f = Sc[li].f[k];
+            else { cv_cproj o; f = cv_cgrid_nearest(g, sp + 3 * k, 1e30f, &o); }
+            res[k++] = f;
             if (f == UINT32_MAX) continue;
             pair_with(q, fc + 4 * (size_t)f, nc[f]);
         }
+        if (!hit && g && res && li < (int)CV_COUNT(Sc)) {
+            free(Sc[li].f);
+            Sc[li].f = res; res = NULL; Sc[li].key = key; Sc[li].n = ns;
+        }
         cv_cgrid_free(g);
     }
+    free(res); free(sp);
     free(xyz); free(nc); free(fc);
 }
 
