@@ -1740,6 +1740,7 @@ int main(void) {
     test_datip();
     test_nodalrec();
     test_ndof();
+    test_s3r();
     test_eclass();
     test_portal_wire();
     test_list_dir();

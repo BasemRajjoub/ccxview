@@ -2,7 +2,7 @@
    Headless: the expanded mesh, which shell each solid is part of, its axes and the
    nodal stresses in; forces and moments per unit width out.
 
-   CalculiX expands a shell into a solid (S3 -> C3D6, S4 -> C3D8, S6 -> C3D15,
+   CalculiX expands a shell into a solid (S3/S3R -> C3D6, S4 -> C3D8, S6 -> C3D15,
    S8 -> C3D20) and a composite into one such solid per layer, so the .frd holds
    stresses where a structural program shows section forces. They are integrated
    back through the thickness, in the shell's axes (rows e1 e2 e3, e3 its normal):
