@@ -494,7 +494,11 @@ bool cv_ndof_move_opt(const cv_ndof_state* s, float dt, float dist, const cv_ndo
     float t[3], r[3];
     for (int i = 0; i < 3; i++) { t[i] = dead_z(s->t[i], z); r[i] = dead_z(s->r[i], z); }
     /* effective axes: pan x, pan y, zoom, tilt, spin, roll */
-    float v[6] = { t[0], o->zoom_lift ? -t[2] : t[1], o->zoom_lift ? t[1] : t[2], r[0], r[1], r[2] };
+    /* zoom_lift turns the cap's frame a quarter about x, for the turns too (as 3Dconnexion's
+       driver does): the lift zooms, forward / back pans up and down, a twist rolls, a sideways
+       tilt spins */
+    float v[6] = { t[0], o->zoom_lift ? -t[2] : t[1], o->zoom_lift ? t[1] : t[2],
+                   r[0], o->zoom_lift ? -r[2] : r[1], o->zoom_lift ? r[1] : r[2] };
     for (int i = 0; i < 6; i++) if (o->flip[i]) v[i] = -v[i];
     if (o->lock_pan) v[0] = v[1] = v[2] = 0.f;
     if (o->lock_rot) v[3] = v[4] = v[5] = 0.f;

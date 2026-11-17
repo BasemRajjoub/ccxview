@@ -63,6 +63,9 @@ static void test_ndof(void) {
         CHECK_NEAR(w.zoom, exp(-0.1 * (0.4 - 0.03) / 0.97), 1e-6);
         CHECK_NEAR(w.pan[1], 10 * 0.1 * (0.8 - 0.03) / 0.97, 1e-6);
         CHECK_NEAR(w.pan[0], u.pan[0], 1e-6);
+        CHECK_NEAR(w.pitch, u.pitch, 1e-6);           /* the turns get the same quarter turn: */
+        CHECK_NEAR(w.yaw, -u.roll, 1e-6);             /* a sideways tilt spins, */
+        CHECK_NEAR(w.roll, u.yaw, 1e-6);              /* a twist rolls */
         o = od; o.lock_rot = true;
         CHECK(cv_ndof_move_opt(&f, 0.1f, 10.f, &o, &w));
         CHECK(w.pitch == 0 && w.yaw == 0 && w.roll == 0 && w.pan[0] == u.pan[0]);
