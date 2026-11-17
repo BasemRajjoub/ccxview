@@ -51,6 +51,28 @@ static void test_seltopo(void) {
     free(bn); free(be);
     sg_free(&g);
 
+    /* A pyramid completely enclosed by a brick and four tetrahedra has no boundary face. */
+    {
+        static tm_mesh m;
+        tm_init(&m);
+        uint32_t v[5] = {
+            tm_node(&m, 0, 0, 0), tm_node(&m, 1, 0, 0),
+            tm_node(&m, 1, 1, 0), tm_node(&m, 0, 1, 0), tm_node(&m, 0.5f, 0.5f, 1)
+        };
+        uint32_t pyramid[8] = { v[0], v[1], v[2], v[3], v[4], v[4], v[4], v[4] };
+        tm_elem(&m, 1, 0, pyramid, 8);
+        tm_brick(&m, 0, 0, -1, 0);
+        for (int i = 0; i < 4; i++) {
+            uint32_t tet[4] = { v[i], v[(i + 1) % 4], v[4], tm_node(&m, (float)i + 2, -1, 1) };
+            tm_elem(&m, 3, 0, tet, 4);
+        }
+        uint32_t selected[] = { 0, 1, 2, 3, 4, 5 };
+        CHECK(cv_sel_boundary(&m.f, selected, 6, &bn, &nbn, &be, &nbe));
+        CHECK_EQ(nbe, 5u);
+        for (uint32_t i = 0; i < nbe; i++) CHECK(be[i] != 0);
+        free(bn); free(be);
+    }
+
     /* ---- skin faces up to the creases, the chain of feature edges ---- */
     sg_make(&g, 3, 1, 1);
     f = &g.f;

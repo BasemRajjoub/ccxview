@@ -1719,6 +1719,7 @@ int main(void) {
     test_measure();
     test_tbtext();
     test_feature_edges();
+    test_pyramid_skin();
     test_plane_mask();
     test_box_elems();
     test_mid_faces();

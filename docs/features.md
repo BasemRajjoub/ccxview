@@ -843,7 +843,10 @@ so von Mises and principal values work as usual. Six-component DISP / FORC
 F4..F6 (rotations, moments) show without a unit. SHR (NXX NYY NXY MXX MYY MXY QX QY)
 is an ordinary field in force/length and moment/length. DISPREAL / DISPIMAG drive the
 deformation and the harmonic animation like DISP / DISPI. The solver code shows in the
-Inspector and the status bar. Element-nodal records are not read.
+Inspector and the status bar. Element-nodal records are not read. C3D5 pyramids are
+written as Hex8 elements with the apex repeated and stay listed as Hex8; their
+triangular sides join the neighbouring solid faces when the surface is built, and
+the collapsed apex face is not drawn.
 
 ## Settings and crashes
 
