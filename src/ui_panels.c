@@ -811,6 +811,8 @@ static void section_export(struct nk_context* ctx, float s, float row) {
     if (nk_button_label(ctx, "CSV nodes")) app_export_data(false);
     tip(ctx, "Legacy VTK unstructured grid with the field, for ParaView");
     if (nk_button_label(ctx, "VTK mesh")) app_export_data(true);
+    tip(ctx, "The model definition as a Markdown report (mesh, materials, sections, loads, constraints, steps) to <model>_report.md");
+    if (nk_button_label(ctx, "Export report...")) app_export_report(NULL);
     {
         char vp[1100];
         snprintf(vp, sizeof vp, "%.*s_view.ini", (int)(strrchr(G.path, '.') && strrchr(G.path, '.') > strrchr(G.path, cv_path_sep()) ? strrchr(G.path, '.') - G.path : (int)strlen(G.path)), G.path);

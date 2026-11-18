@@ -9,6 +9,7 @@
 #include "web.h"
 #include "log.h"
 #include "export.h"
+#include "report.h"
 #include "video.h"
 #include "gif.h"
 #include "ui.h"
@@ -773,6 +774,28 @@ bool app_export_data(bool vtk) {
     return ok;
 }
 
+bool app_export_report(const char* path) {
+    if (!G.loaded) return false;
+    char base[1024], def[1100];
+    snprintf(base, sizeof base, "%s", G.path);
+    char* dot = strrchr(base, '.');
+    char* sep = strrchr(base, cv_path_sep());
+    if (dot && (!sep || dot > sep)) *dot = 0;
+    snprintf(def, sizeof def, "%s_report.md", base);
+    if (!path) path = def;
+    FILE* fp = fopen(path, "w");
+    const char* ext = strrchr(G.path, '.');
+    bool only_deck = deck_loaded() && ext && !strcasecmp(ext, ".inp");    /* an .inp opened alone: its mesh is the model */
+    cv_report_opts o = { only_deck ? NULL : G.path, deck_loaded() ? deck_path() : NULL, G.units };
+    bool ok = fp && cv_report_md(fp, only_deck ? NULL : &G.frd, deck_loaded() ? deck_get() : NULL, &o);
+    if (fp && fclose(fp)) ok = false;
+    snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", path);
+    G.note_t = cv_now();
+    cv_msg_add(&G.msgs, 0, false, G.note);
+    if (ok) CV_EXPORTED(path);
+    return ok;
+}
+
 static void export_now(void) {
     char base[1024], path[1100];
     snprintf(base, sizeof base, "%s", G.path);
@@ -799,7 +822,7 @@ static void export_now(void) {
 
 static void cleanup(void) {
     if (app_busy()) cv_thread_join(&G.job.thread);
-    if (!O.shot_path && !O.nopts && !O.ui_test) settings_save(sapp_width(), sapp_height());   /* scripted runs leave the file alone */
+    if (!O.shot_path && !O.report && !O.nopts && !O.ui_test) settings_save(sapp_width(), sapp_height());   /* scripted runs leave the file alone */
     settings_free();
     cv_ndof_close();
     cv_render_closing();                    /* what unload refreshes (the pick markers) is not uploaded */
@@ -1183,6 +1206,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     if (getenv("CCXVIEW_LOG")) cv_log_open(getenv("CCXVIEW_LOG"));
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--shot") && i + 1 < argc) O.shot_path = argv[++i];
+        else if (!strcmp(argv[i], "--report") && i + 1 < argc) O.report = argv[++i];
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) O.shot_frames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--browse")) O.browse = 1;
         else if (!strcmp(argv[i], "--browse-stl")) O.browse = 2;

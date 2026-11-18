@@ -1225,6 +1225,11 @@ static void export_open(struct nk_context* ctx) {
 static bool export_gif(struct nk_context* ctx) { return G.exp_video && G.exp_gif; }
 static bool export_png(struct nk_context* ctx) { return !G.exp_video; }
 static bool export_mp4(struct nk_context* ctx) { return G.exp_video && !G.exp_gif; }
+static bool report_saved(struct nk_context* ctx) {
+    const char* p = strstr(G.note, "saved ");
+    const char* e = p ? strstr(p, "_report.md") : NULL;
+    return e && cv_file_size(p + 6) > 100;
+}
 static void export_end(struct nk_context* ctx) {
     G.exp_video = true; G.exp_gif = false;
     struct nk_window* w = win_of(ctx, "Scene"); if (w) w->scrollbar.y = 0;
@@ -2300,6 +2305,7 @@ static const step script[] = {
     DO(export_open), WAIT(3), AT_TIP("Scene", "Animated GIF, 256 fixed colours"), CLICK, WAIT(2), EXPECT(export_gif, "GIF chosen"),
     AT_TIP("Scene", "One PNG per frame"), CLICK, WAIT(2), EXPECT(export_png, "PNG sequence chosen"),
     AT_TIP("Scene", "H.264 video: small files"), CLICK, WAIT(2), EXPECT(export_mp4, "MP4 chosen"),
+    AT_TIP("Scene", "The model definition as a Markdown report"), CLICK, WAIT(3), EXPECT(report_saved, "the report is written beside the model"),
     DO(export_end), DO(sections_open), WAIT(2), PANELS_ANSWER,
 
     CASE("a window closed by the program (OK, Escape), the panels still answer"),

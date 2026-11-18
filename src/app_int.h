@@ -97,6 +97,7 @@ typedef struct {
     bool        no_edges;       /* --no-edges */
     float       outline;        /* --outline off|on|DEG: 0 off, > 0 the crease angle, < 0 unset */
     const char* argv_path;      /* the file to open */
+    const char* report;         /* --report FILE: write the model summary, quit */
     const char* shot_path;      /* --shot out.png: render, save the window, quit */
     int         shot_frames;    /* --frames N */
     int         frame_no;

@@ -626,6 +626,7 @@ void app_export_png(void);
 void app_export_animation(void);         /* per the Export section: deformation cycles or every step, PNGs or MP4 */
 int  app_export_progress(int* done, int* total);  /* a frame export running? fills done / total */
 void app_export_cancel(void);            /* stop a frame export; a video keeps what it has */
+bool app_export_report(const char* path);   /* the model summary as Markdown: path, or <model>_report.md beside the model when NULL */
 bool app_export_data(bool vtk);          /* nodes + field as CSV, or mesh + field as VTK, beside the model */
 bool app_project(v3 p, float* sx, float* sy);   /* world -> window pixels; false when behind the eye */
 /* app_select.c -- the selection: elements G.sel and nodes G.seln. Every change goes

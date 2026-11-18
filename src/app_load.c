@@ -652,6 +652,10 @@ static void apply_load(cv_job* j) {
         app_groups_changed();
     }
     /* last: what --field, --calc, --fail, --mesh chose is what is exported */
+    if (O.report) {
+        if (!app_export_report(O.report)) fprintf(stderr, "ccxview: cannot write %s\n", O.report);
+        if (!O.shot_path && O.export_kind == 0) sapp_request_quit();
+    }
     if (O.export_kind == 1) app_export_png();
     else if (O.export_kind == 3) app_export_data(false);
     else if (O.export_kind == 4) app_export_data(true);

@@ -1925,6 +1925,7 @@ static void test_localsys_requests(void) {
 #include "t_nodalrec.h"
 #include "t_ndof.h"
 #include "t_eclass.h"
+#include "t_report.h"
 #include "t_integ.h"
 #include "t_selset.h"
 #include "t_seltopo.h"
@@ -1997,6 +1998,7 @@ int main(void) {
     test_ndof();
     test_s3r();
     test_eclass();
+    test_report();
     test_portal_wire();
     test_list_dir();
     test_numbers();
