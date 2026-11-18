@@ -1,8 +1,10 @@
 /* t_inpname.h -- inp.c: lookups by name (many sets) and surfaces named before they are defined (#44, #45) */
 
 static bool inpname_reader(void* user, const char* path, char** data, size_t* size) {
-    if (strcmp(path, "surf.inp") != 0) return false;
-    const char* t = "*SURFACE, TYPE=NODE, NAME=Inc\n3, 1.\n4, 1.\n";
+    const char* t;
+    if (!strcmp(path, "surf.inp")) t = "*SURFACE, TYPE=NODE, NAME=Inc\n3, 1.\n4, 1.\n";
+    else if (!strcmp(path, "sets.inp")) t = "*NSET, NSET=IncNodes\n3, 4\n";
+    else return false;
     *size = strlen(t);
     *data = malloc(*size + 1);
     memcpy(*data, t, *size + 1);
@@ -80,6 +82,46 @@ static void test_inp_surface_order(void) {
         CHECK_EQ(d.links[8].n, 0);
     }
     CHECK_EQ(inpname_unreadable(&d), 2);                 /* c4 and the rigid body of a set never defined */
+    cv_inp_free(&d);
+    free(d.msgs.a);
+}
+
+static void test_inp_surface_sets(void) {
+    const char* deck =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,0,1,0\n4,0,0,1\n9,5,5,5\n"
+        "*ELEMENT, TYPE=C3D4\n1,1,2,3,4\n"
+        "*COUPLING, REF NODE=9, SURFACE=targets, CONSTRAINT NAME=c1\n*KINEMATIC\n1,6\n"
+        "*SURFACE, TYPE=NODE, NAME=Targets\ntargets,1.\n"
+        "*SURFACE, NAME=EFwd\nelems,S2\n"
+        "*SURFACE, TYPE=NODE, NAME=IncFwd\nincnodes,1.\n"
+        "*SURFACE, TYPE=NODE, NAME=MissingN\nnowhere,1.\n"
+        "*SURFACE, NAME=MissingE\nnowhere,S1\n"
+        "*NSET, NSET=Targets\n1,2\n"
+        "*ELSET, ELSET=Elems\n1\n"
+        "*INCLUDE, INPUT=sets.inp\n"
+        "*SURFACE, NAME=ELate\nlate,S3\n"
+        "*STEP\n*STATIC\n*DSLOAD\nEFwd, P, 2.\nELate, P, 3.\n*END STEP\n"
+        "*ELSET, ELSET=Late\n1\n";
+    cv_inp d;
+    CHECK(cv_inp_parse(&d, deck, strlen(deck), inpname_reader, NULL));
+    CHECK_EQ(d.nsurfs, 6);
+    CHECK_EQ(d.nlinks, 1);
+    if (d.nlinks == 1) CHECK_EQ(d.links[0].surf[0], 0);
+    /* EFwd's set is defined before the load: its face is loaded; ELate's after: an unreadable line */
+    CHECK_EQ(d.ndloads, 1);
+    if (d.ndloads == 1) CHECK(d.dloads[0].elem == 1 && d.dloads[0].face == 1 && d.dloads[0].value == 2.f);
+    if (d.nsurfs == 6) {
+        CHECK_EQ(d.surfs[0].nn, 2);
+        if (d.surfs[0].nn == 2) CHECK(d.surfs[0].nodes[0] == 1 && d.surfs[0].nodes[1] == 2);
+        CHECK_EQ(d.surfs[1].n, 1);
+        if (d.surfs[1].n == 1) CHECK(d.surfs[1].elem[0] == 1 && d.surfs[1].face[0] == 1);
+        CHECK_EQ(d.surfs[2].nn, 2);
+        if (d.surfs[2].nn == 2) CHECK(d.surfs[2].nodes[0] == 3 && d.surfs[2].nodes[1] == 4);
+        CHECK_EQ(d.surfs[3].nn, 0);
+        CHECK_EQ(d.surfs[4].n, 0);
+        CHECK_EQ(d.surfs[5].n, 1);
+    }
+    CHECK_EQ(inpname_unreadable(&d), 3);
     cv_inp_free(&d);
     free(d.msgs.a);
 }
