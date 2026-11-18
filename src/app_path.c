@@ -435,7 +435,7 @@ bool app_path_csv(const char* path) {
 const float* step_field_get(void* ud, int s, int fi) {
     step_scratch* h = ud;
     for (int i = 0; i < CV_CACHE_N; i++)
-        if (G.cache[i].vals && G.cache[i].step == s && G.cache[i].field == fi) return G.cache[i].vals;
+        if (G.cache[i].vals && !G.cache[i].slots && G.cache[i].step == s && G.cache[i].field == fi) return G.cache[i].vals;
     const cv_field_desc* d = &G.frd.steps[s].fields[fi];
     size_t need = (size_t)CV_MAX(G.frd.n_nodes, 1) * (size_t)d->ncomp;
     if (need > h->cap) { float* nb = realloc(h->buf, need * sizeof(float)); if (!nb) return NULL; h->buf = nb; h->cap = need; }
@@ -487,7 +487,7 @@ void refresh_hist(void) {
         if (G.comp >= d->ncomp) continue;
         const float* v = NULL;
         for (int i = 0; i < CV_CACHE_N; i++)            /* already decoded? */
-            if (G.cache[i].vals && G.cache[i].step == s && G.cache[i].field == fi) v = G.cache[i].vals;
+            if (G.cache[i].vals && !G.cache[i].slots && G.cache[i].step == s && G.cache[i].field == fi) v = G.cache[i].vals;
         if (!v) {
             size_t need = (size_t)CV_MAX(G.frd.n_nodes, 1) * (size_t)d->ncomp;
             if (need > cap) { float* nb = realloc(buf, need * sizeof(float)); if (!nb) break; buf = nb; cap = need; }

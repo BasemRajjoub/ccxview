@@ -85,7 +85,7 @@ float app_pick_average_of(int kind) {
     uint32_t nd[8];
     int n = app_pick_nodes_of(kind, nd);
     if (!n || !G.has_field) return NAN;
-    if (G.elem_mode || G.field_src == 1) return G.elem_val ? G.elem_val[G.probe.elem] : NAN;
+    if (G.elem_mode || G.field_elem_nodal || G.field_src == 1) return G.elem_val ? G.elem_val[G.probe.elem] : NAN;
     if (!G.scalar) return NAN;
     double s = 0;
     for (int i = 0; i < n; i++) s += G.scalar[nd[i]];
@@ -93,6 +93,21 @@ float app_pick_average_of(int kind) {
 }
 
 float app_pick_average(void) { return app_pick_average_of(app_pick_head()); }
+
+float app_pick_surface_value(int kind, int side) {
+    if (!G.probe_on || !G.has_field || !G.field_elem_nodal) return NAN;
+    uint32_t e = G.probe.elem;
+    if (kind == CV_PK_NODE) return app_elem_node_value(e, G.probe.node, side);
+    if (kind == CV_PK_ELEM) return app_elem_mean_value(e, side);
+    uint32_t nd[8];
+    int n = app_pick_nodes_of(kind, nd), count = 0;
+    double sum = 0;
+    for (int i = 0; i < n; i++) {
+        float v = app_elem_node_value(e, nd[i], side);
+        if (isfinite(v)) { sum += v; count++; }
+    }
+    return count ? (float)(sum / count) : NAN;
+}
 
 bool app_pick_anchor(float p[3]) {
     if (!G.loaded || !G.probe_on || G.probe.elem >= G.frd.n_elems || G.probe.node >= G.frd.n_nodes) return false;
@@ -118,7 +133,7 @@ static void push_node(cv_fvec* pos, cv_fvec* disp, uint32_t i) {
 }
 
 static void push_val(cv_fvec* val, uint32_t node) {
-    float v = !G.has_field ? 0.f : G.elem_mode && G.elem_val ? G.elem_val[G.probe.elem] : G.scalar ? G.scalar[node] : 0.f;
+    float v = !G.has_field ? 0.f : (G.elem_mode || G.field_elem_nodal) && G.elem_val ? G.elem_val[G.probe.elem] : G.scalar ? G.scalar[node] : 0.f;
     if (cv_reserve(*val, val->n + 1)) val->a[val->n++] = v;
 }
 

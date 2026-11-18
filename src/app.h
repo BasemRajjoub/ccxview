@@ -66,9 +66,11 @@ typedef struct {
     float* vals;
     size_t bytes;
     uint64_t used;           /* LRU stamp */
+    bool   slots;            /* IRTYPE 3: vals[connectivity slot * ncomp + c], not per node */
 } cv_cache_entry;
 
 enum { CV_CACHE_N = 8 };
+enum { CV_EN_AVG_NONE, CV_EN_AVG_SCALAR, CV_EN_AVG_TENSOR, CV_EN_AVG_N };
 
 /* Background work: loading a file, or rebuilding the skin after a group change. */
 enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
@@ -170,6 +172,9 @@ typedef struct {
     bool      has_field;      /* current step has the selected field */
     unsigned  field_gen;      /* bumped when the values or displacements change */
     bool      elem_mode;
+    bool      field_elem_nodal;
+    int       elem_nodal_avg;  /* element-nodal stress averaging, CV_EN_AVG_* */
+    int       shell_side;      /* 0: front/top + back/bottom, 1: top, 2: bottom */
     int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points), 2: calculated, 3: failure, 4: mesh quality */
     int       fail_crit;      /* failure field: the criterion (CV_FC_*) and what it shows (CV_FO_*) */
     int       fail_out;
@@ -200,6 +205,9 @@ typedef struct {
 
     float*    scalar;         /* n_nodes */
     float*    elem_val;       /* n_elems */
+    float*    elem_top;       /* per connectivity slot, shell IRTYPE 3 display */
+    float*    elem_bottom;
+    size_t    elem_nslots;
     float*    tri_val;        /* n_tri */
     float*    disp;           /* 3 * n_nodes, NULL when the step has no DISP */
     float*    disp2;          /* harmonic response: -DISPI (imaginary part), NULL otherwise */
@@ -578,6 +586,8 @@ bool app_lin_csv(const char* path);
 void app_hist_close(void);
 bool app_hist_csv(const char* path);
 void app_select(const char* field, int comp);
+void app_set_shell_side(int side);
+void app_set_elem_nodal_avg(int mode);
 void app_select_src(const char* field, int comp, int src);
 /* Show the formula expr as the field (field_src 2). false: it does not compile,
    calc_err says why, and the field shown stays. */
@@ -730,6 +740,7 @@ int  app_pick_nodes_of(int kind, uint32_t out[8]);   /* CV_PK_FACE: the face's r
 int  app_pick_nodes(uint32_t out[8]);             /* those of the head kind (a face or edge); 0 none */
 float app_pick_average_of(int kind);              /* the field over them (the element's value per element) */
 float app_pick_average(void);                     /* ... of the head kind */
+float app_pick_surface_value(int kind, int side); /* element-node value or node mean, side 1 top / 2 bottom */
 bool app_pick_anchor(float p[3]);                 /* where the probed item is drawn: the node, the centre of the element, face or edge */
 const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
 /* app_label.c: labels on the model */
@@ -787,9 +798,12 @@ void app_measure_sync(void);                         /* per frame: lines and lab
 /* the label anchors: n of them, pos[3] disp[6] each to anc (9 per), texts to txt, the
    measurement each belongs to (its index) to which */
 uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t* which, uint32_t max);
-/* the shown .frd field's stored components at a node (global, as the file has them);
-   names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
-int app_field_comps(uint32_t node, char names[][12], float* vals, int max);
+bool app_elem_has_sides(uint32_t elem);           /* the current field uses separate shell surfaces */
+float app_elem_node_value(uint32_t elem, uint32_t node, int side); /* displayed element-node scalar */
+float app_elem_mean_value(uint32_t elem, int side);              /* finite node scalars, equal weights */
+/* Element-nodal components follow the display's units, coordinates and averaging;
+   side 1 top / 2 bottom. Other FRD fields retain their global nodal components. */
+int app_field_comps(uint32_t elem, uint32_t node, int side, char names[][12], float* vals, int max);
 void app_goto_node(uint32_t node);       /* centre the camera on a node, probe it */
 bool app_find(uint32_t id, bool element);/* by file id: probe + centre; false if absent */
 void app_reload(void);                   /* open the same file again, keeping camera, step and field */
@@ -940,10 +954,12 @@ bool deck_has_loads(void);
 bool deck_has_discrete(void);
 /* values CalculiX wrote in local systems turned to global in place (inp.h) */
 void deck_localize(int step, const cv_field_desc* d, float* vals);   /* step: index into G.frd */
+void deck_localize_elem(int step, const cv_field_desc* d, float* vals);
 void deck_localize_dat(cv_dat* dat, const cv_frd* f);
 bool deck_read(const char* path, cv_inp* d);                         /* includes from its folder */
 void deck_compare_open(const char* frd_path);                         /* the comparison run's own deck */
 void deck_compare_localize(const cv_frd* f, int step, const cv_field_desc* d, float* vals);
+void deck_compare_localize_elem(const cv_frd* f, int step, const cv_field_desc* d, float* vals);
 void deck_compare_close(void);
 bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted (tie, contact surfaces) */
 /* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */

@@ -73,8 +73,8 @@ void app_sel_refresh(void) {
     app_selstats_dirty();
     if (!G.loaded || !app_sel_any()) return;
     cv_fvec pos = {0}, disp = {0}, tp = {0}, td = {0}, val = {0};
-    const float* nv = G.has_field && !G.elem_mode ? G.scalar : NULL;
-    const float* ev = G.has_field && G.elem_mode ? G.elem_val : NULL;
+    const float* nv = G.has_field && !G.elem_mode && !G.field_elem_nodal ? G.scalar : NULL;
+    const float* ev = G.has_field && (G.elem_mode || G.field_elem_nodal) ? G.elem_val : NULL;
     if (G.sel_n) {
         uint8_t* on = calloc(CV_MAX(G.frd.n_elems, 1), 1);
         if (!on) return;

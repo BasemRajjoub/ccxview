@@ -182,6 +182,7 @@ void cv_colormap_rgb(int cm, float t, float o[3]) {
     "uniform vec4 u_q;\n" \
     "out vec3 v_vpos;\n" \
     "out float v_s;\n" \
+    "out float v_s2;\n" \
     "out float v_r;\n" \
     "out vec3 v_n;\n" \
     "out vec3 v_wpos;\n"
@@ -217,10 +218,12 @@ static const char* kVS =
     "in vec3 a_pos;\n"
     "in vec3 a_disp;\n"
     "in float a_scal;\n"
+    "in float a_scal2;\n"
     "in vec3 a_disp2;\n"
     "void main() {\n"
     "  vec3 p = a_pos + a_disp * u_p.x + a_disp2 * u_q.y;\n"
     "  v_s = a_scal;\n"
+    "  v_s2 = a_scal2;\n"
     VS_TAIL
     "}\n";
 
@@ -258,6 +261,7 @@ static const char* kVSI =
     "  vec3 rad = a_m.x * u + a_m.y * v;\n"
     "  vec3 p = c + r * rad;\n"
     "  v_s = i_r.z;\n"
+    "  v_s2 = i_r.z;\n"
     VS_TAIL
     "  vec3 nm = a_m.z < 0.0 ? -w : a_m.z > 1.0 ? w : rad * L - w * (i_r.y - i_r.x);\n"
     "  v_n = mat3(u_mv) * nm;\n"
@@ -374,6 +378,7 @@ static const char* kVSG =
     "  vec3 p = i_c.xyz + i_disp * u_p.x + i_disp2 * u_q.y + o;\n"
     "  float nn = dot(nd, nd);\n"
     "  v_s = normal ? (nn > 0.0 ? dot(i_l.xyz, nd * nd) / nn : 0.0) : i_c.w;\n"
+    "  v_s2 = v_s;\n"
     VS_TAIL
     /* the surface normal: an ellipsoid's in closed form (the base axes scaled by
        1 / length^2); else by differences along theta and phi, a little off the poles
@@ -398,6 +403,7 @@ static const char* kFS =
     "uniform vec4 u_color;\n"                /* solid colour */
     "uniform vec4 u_rng;\n"                  /* min, max, bands, mode */
     "uniform vec4 u_flags;\n"                /* x: points as rings, y: shade, z: on top, w: selected (tinted) */
+    "uniform vec4 u_face;\n"                 /* x: shell side mode, y: mirrored winding */
     "uniform vec4 u_oora;\n"                 /* values above the locked range: rgb, w: 0 the map's end, 1 the rgb, 3 hidden */
     "uniform vec4 u_oorb;\n"                 /* below */
     "uniform vec4 u_pz;\n"                   /* projection: z_clip = x*z + y, w_clip = z*z + w */
@@ -406,6 +412,7 @@ static const char* kFS =
     "uniform sampler2D u_etex;\n"
     "in vec3 v_vpos;\n"
     "in float v_s;\n"
+    "in float v_s2;\n"
     "in float v_r;\n"
     "in vec3 v_wpos;\n"
     "in vec3 v_n;\n"
@@ -429,7 +436,10 @@ static const char* kFS =
     "  vec3 c = u_color.rgb;\n"
     "  if (false) {\n"
     "  } else if (mode > 0) {\n"
-    "    float s = v_s;\n"
+    "    float s = gl_FrontFacing ? v_s : v_s2;\n"
+    "    if (u_face.x > 0.5 && u_face.x < 1.5) s = v_s;\n"
+    "    else if (u_face.x > 1.5) s = v_s2;\n"
+    "    else if (u_face.y > 0.5) s = gl_FrontFacing ? v_s2 : v_s;\n"
     "#ifdef PRIM\n"
     "    if (mode == 2) {\n"
     "      int id = gl_PrimitiveID;\n"
@@ -468,7 +478,7 @@ static float g_tint;                         /* the next layers are the selectio
 static float g_alpha = 1.f;                  /* the next layers' opacity (imported geometry): u_color.a */
 static float g_ring;                         /* the next points are rings (u_flags.x) */
 static sg_view g_cmap;                       /* the next layers' colour map instead of the field's (the contact maps) */
-typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; float oora[4]; float oorb[4]; } fs_params;
+typedef struct { float color[4]; float rng[4]; float flags[4]; float pz[4]; float clip[4]; float oora[4]; float oorb[4]; float face[4]; } fs_params;
 
 /* ---- state ------------------------------------------------------------------- */
 
@@ -624,6 +634,7 @@ static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, con
                 [4] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_clip" },
                 [5] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_oora" },
                 [6] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_oorb" },
+                [7] = { .type = SG_UNIFORMTYPE_FLOAT4, .glsl_name = "u_face" },
             },
         },
         .views = {
@@ -645,7 +656,7 @@ static sg_shader make_shader_vs(const char* vs_src, const char* const* attr, con
 }
 
 static sg_shader make_shader(const char* fs_src) {
-    static const char* const attr[8] = { "a_pos", "a_disp", "a_scal", "a_disp2", NULL, NULL, NULL, NULL };
+    static const char* const attr[8] = { "a_pos", "a_disp", "a_scal", "a_disp2", "a_scal2", NULL, NULL, NULL };
     return make_shader_vs(kVS, attr, fs_src);
 }
 
@@ -706,18 +717,20 @@ void cv_render_init(void) {
     }
 
     sg_vertex_layout_state layout = {
-        .buffers = { [0].stride = 12, [1].stride = 12, [2].stride = 4, [3].stride = 12 },
+        .buffers = { [0].stride = 12, [1].stride = 12, [2].stride = 4, [3].stride = 12, [4].stride = 4 },
         .attrs = {
             [0] = { .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT3 },
             [1] = { .buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3 },
             [2] = { .buffer_index = 2, .format = SG_VERTEXFORMAT_FLOAT },
             [3] = { .buffer_index = 3, .format = SG_VERTEXFORMAT_FLOAT3 },
+            [4] = { .buffer_index = 4, .format = SG_VERTEXFORMAT_FLOAT },
         },
     };
     sg_pipeline_desc pd = {
         .shader = R.shd,
         .layout = layout,
         .index_type = SG_INDEXTYPE_UINT32,
+        .face_winding = SG_FACEWINDING_CCW,  /* shell connectivity's positive normal selects STRPOS */
         .depth = { .compare = SG_COMPAREFUNC_LESS_EQUAL, .write_enabled = true },
     };
     pd.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
@@ -979,7 +992,7 @@ void cv_render_outline(const uint32_t* fedge, size_t n_fedge) {
     R.ib_fedge = make_buf(fedge, n_fedge * 8, true); R.n_fedge = R.ib_fedge.id ? n_fedge : 0;
 }
 
-typedef struct { sg_buffer pos, disp, scal, disp2; } vset;
+typedef struct { sg_buffer pos, disp, scal, disp2, scal2; } vset;
 
 /* depth pull for edges, which lie on faces, as a fraction of the model size: above the
    depth buffer's step with the eye close to the model, far below any wall thickness */
@@ -1006,6 +1019,7 @@ static void uniforms(const cv_draw* d, bool has_disp, bool has_disp2, int mode, 
         .clip = { d->clip ? d->clip_n[0] : 0, d->clip ? d->clip_n[1] : 0, d->clip ? d->clip_n[2] : 0, d->clip ? d->clip_d : 1e30f },
         .oora = { d->oor[0][0], d->oor[0][1], d->oor[0][2], d->oor[0][3] },
         .oorb = { d->oor[1][0], d->oor[1][1], d->oor[1][2], d->oor[1][3] },
+        .face = { (float)d->shell_side, d->mirrored ? 1.f : 0.f, 0, 0 },
     };
     sg_apply_uniforms(1, &SG_RANGE(fs));
 }
@@ -1022,6 +1036,7 @@ static void draw_layer(sg_pipeline pip, vset v, sg_buffer ib, int count, int mod
             [1] = v.disp.id ? v.disp : v.pos,      /* no displacement: scale is 0 */
             [2] = v.scal.id ? v.scal : v.pos,
             [3] = v.disp2.id ? v.disp2 : v.pos,    /* no second part: its scale is 0 */
+            [4] = v.scal2.id ? v.scal2 : v.scal.id ? v.scal : v.pos,
         },
         .index_buffer = ib,
         .views = { [0] = g_cmap.id ? g_cmap : R.cmap_view, [1] = R.etex_view },
@@ -1038,18 +1053,26 @@ static struct { vset v; uint32_t n; } A[CV_AUX_N];
 static const sg_buffer NO_IB = {0};
 
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n) {
-    cv_render_aux2(which, pos, disp, NULL, scal, n);
+    cv_render_aux3(which, pos, disp, scal, NULL, n);
 }
 
 void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n) {
+    cv_render_aux3(which, pos, disp, scal, NULL, n);
+    if (which >= 0 && which < CV_AUX_N && n && disp2) {
+        kill_buf(&A[which].v.disp2);
+        A[which].v.disp2 = make_buf(disp2, (size_t)n * 12, false);
+    }
+}
+
+void cv_render_aux3(int which, const float* pos, const float* disp, const float* scal, const float* scal2, uint32_t n) {
     if (which < 0 || which >= CV_AUX_N) return;
-    kill_buf(&A[which].v.pos); kill_buf(&A[which].v.disp); kill_buf(&A[which].v.scal); kill_buf(&A[which].v.disp2);
+    kill_buf(&A[which].v.pos); kill_buf(&A[which].v.disp); kill_buf(&A[which].v.scal); kill_buf(&A[which].v.disp2); kill_buf(&A[which].v.scal2);
     A[which].n = 0;
     if (!pos || n == 0) return;
     A[which].v.pos = make_buf(pos, (size_t)n * 12, false);
     A[which].v.disp = make_buf(disp, (size_t)n * 12, false);
-    A[which].v.disp2 = make_buf(disp2, (size_t)n * 12, false);
     A[which].v.scal = make_buf(scal, (size_t)n * 4, false);
+    A[which].v.scal2 = make_buf(scal2, (size_t)n * 4, false);
     A[which].n = A[which].v.pos.id ? n : 0;
 }
 
@@ -1293,9 +1316,10 @@ static void see_runs_with(const cv_draw* d, bool glass, sg_pipeline pip) {
         const cv_see_run* r = &R.runs[i];
         if (!r->n || (r->alpha < 1.f) != glass || !(r->alpha > 0.f)) continue;
         g_alpha = glass ? r->alpha : 1.f;
-        if (r->solid) draw_layer(pip, mesh, R.ib_run_n, (int)r->n * 3, CV_COLOR_SOLID, r->rgb, d->shade, d, 1, false, 0.f, (int)r->first * 3);
-        else if (elem) draw_layer(pip, A[CV_AUX_ELEMTRI].v, R.ib_run_e, (int)r->n * 3, mode, d->face_rgb, d->shade, d, 1, false, 0.f, (int)r->first * 3);
-        else draw_layer(pip, mesh, R.ib_run_n, (int)r->n * 3, mode, d->face_rgb, d->shade, d, 1, false, 0.f, (int)r->first * 3);
+        float pull = r->cover_shell ? PULL * 0.01f : 0.f;
+        if (r->solid) draw_layer(pip, mesh, R.ib_run_n, (int)r->n * 3, CV_COLOR_SOLID, r->rgb, d->shade, d, 1, false, pull, (int)r->first * 3);
+        else if (elem) draw_layer(pip, A[CV_AUX_ELEMTRI].v, R.ib_run_e, (int)r->n * 3, mode, d->face_rgb, d->shade, d, 1, false, pull, (int)r->first * 3);
+        else draw_layer(pip, mesh, R.ib_run_n, (int)r->n * 3, mode, d->face_rgb, d->shade, d, 1, false, pull, (int)r->first * 3);
     }
     g_alpha = 1.f;
 }

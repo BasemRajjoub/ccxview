@@ -75,7 +75,7 @@ void app_see_refresh(void) {
     const float* rgb = NULL;
     int ncls = 0;
     bool grp = app_face_classes(&of, &ncls, &rgb);
-    uint32_t ng = grp ? (uint32_t)CV_MAX(ncls, 1) : 1, nk = ng * (LEVELS + 1);
+    uint32_t ng = grp ? (uint32_t)CV_MAX(ncls, 1) : 1, nk = 2 * ng * (LEVELS + 1);
     key = malloc(G.skin.n_tri * sizeof(uint32_t));
     cnt = calloc((size_t)nk + 1, sizeof(uint32_t));
     ids = malloc(G.skin.n_tri * sizeof(uint32_t));
@@ -84,7 +84,8 @@ void app_see_refresh(void) {
         uint32_t e = G.skin.tri_elem[t];
         uint32_t q = (uint32_t)lroundf(ma * ea[e] * LEVELS);
         uint32_t g = grp ? of[e] : 0;
-        key[t] = g * (LEVELS + 1) + CV_MIN(q, (uint32_t)LEVELS);
+        uint32_t cover = G.skin.cover_shell && G.skin.cover_shell[e] ? 1u : 0u;
+        key[t] = (cover * ng + g) * (LEVELS + 1) + CV_MIN(q, (uint32_t)LEVELS);
         cnt[key[t] + 1]++;
     }
     int nruns = 0;
@@ -94,8 +95,10 @@ void app_see_refresh(void) {
     nruns = 0;
     for (uint32_t k = 0; k < nk; k++) {
         if (cnt[k + 1] == cnt[k]) continue;
-        cv_see_run r = { cnt[k], cnt[k + 1] - cnt[k], (float)(k % (LEVELS + 1)) / LEVELS, { 0, 0, 0 }, grp };
-        if (grp) memcpy(r.rgb, rgb + 3 * (k / (LEVELS + 1)), sizeof r.rgb);
+        uint32_t cls = k / (LEVELS + 1);
+        cv_see_run r = { cnt[k], cnt[k + 1] - cnt[k], (float)(k % (LEVELS + 1)) / LEVELS,
+                         { 0, 0, 0 }, grp, cls >= ng };
+        if (grp) memcpy(r.rgb, rgb + 3 * (cls % ng), sizeof r.rgb);
         runs[nruns++] = r;
     }
     for (size_t t = 0; t < G.skin.n_tri; t++) ids[cnt[key[t]]++] = (uint32_t)t | (inward_cached(t) ? CV_SEE_FLIP : 0);

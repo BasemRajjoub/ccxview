@@ -33,6 +33,7 @@ dist/
 !samples/contact/contact.frd
 !samples/contact/contact_s2s.frd
 !samples/tie/tie.frd
+!samples/element_based_stress/SANDWICH_MASTER.frd
 !samples/tie/tie_WarnNodeMissTiedContact.nam
 
 # crash reports a run writes beside the program

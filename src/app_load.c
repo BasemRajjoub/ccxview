@@ -217,8 +217,13 @@ void unload(void) {
     free(G.frd.msgs.a);
     memset(&G.frd.msgs, 0, sizeof G.frd.msgs);
     cv_map_close(&G.map);
-    free(G.scalar); free(G.elem_val); free(G.tri_val); free(G.disp); free(G.disp2);
+    free(G.scalar); free(G.elem_val); free(G.elem_top); free(G.elem_bottom); free(G.tri_val); free(G.disp); free(G.disp2);
     G.scalar = G.elem_val = G.tri_val = G.disp = G.disp2 = NULL;
+    G.elem_top = G.elem_bottom = NULL;
+    G.elem_nslots = 0;
+    G.field_elem_nodal = false;
+    G.shell_side = 0;
+    G.elem_nodal_avg = CV_EN_AVG_NONE;
     G.harmonic = false;
     for (int a = 0; a < CV_AXIS_N; a++) { free(G.axis_rgb[a]); G.axis_rgb[a] = NULL; }
     geo_clear();
@@ -571,6 +576,8 @@ static void apply_load(cv_job* j) {
     if (O.look >= 0) app_view(O.look);
     if (O.target_set) G.cam.target = v3_make(O.target[0], O.target[1], O.target[2]);
     if (O.zoom > 0) G.cam.dist = fminf(G.cam.dist / O.zoom, app_dist_max());   /* never so far the model is gone */
+    if (O.elem_avg >= 0 && !G.reload_keep) app_set_elem_nodal_avg(O.elem_avg);   /* before the field: refreshed once */
+    if (O.shell_side >= 0 && !G.reload_keep) app_set_shell_side(O.shell_side);
     if (O.field && G.frd.n_steps > 0) {     /* NAME, or NAME:COMPONENT as the Fields tree names it (SHELL:Mxx) */
         char name[64];
         const char* colon = strchr(O.field, ':');
@@ -720,6 +727,7 @@ void poll_job(void) {
             free(G.vis);
             G.vis = j->vis;                       /* the mask this skin was built from */
             j->vis = NULL;
+            refresh_elem_visibility();
             refresh_tri_values();
             refresh_tri_colors();
             refresh_gauss();

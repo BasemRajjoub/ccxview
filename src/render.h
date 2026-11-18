@@ -51,6 +51,7 @@ typedef struct {
     float clay_alpha;          /* the interface layer's opacity: 1 solid, else see-through, its far side first */
     float csol_alpha;          /* the .cel's contact elements' opacity */
     bool  mirrored;            /* this instance is a mirror image: its triangles turn the other way */
+    int   shell_side;          /* IRTYPE 3 face values: 0 front/back, 1 top, 2 bottom */
     float hl_size;
     bool  geo_points, geo_curves, geo_surfaces;   /* cgx geometry */
     bool  supports, loads;     /* deck *BOUNDARY glyphs and *CLOAD / *DLOAD arrows */
@@ -131,6 +132,7 @@ enum { CV_AUX_GP, CV_AUX_HLPT, CV_AUX_HLTRI, CV_AUX_GEOPT, CV_AUX_GEOLN, CV_AUX_
           its faces penetrating (magenta); what the probe picked, an element, face or edge
           (app_inspect.c): its lines (vertex pairs) and its faces (toned) */
 void cv_render_aux(int which, const float* pos, const float* disp, const float* scal, uint32_t n);
+void cv_render_aux3(int which, const float* pos, const float* disp, const float* scal, const float* scal2, uint32_t n);
 /* the same with the second displacement part (harmonic: -DISPI, scaled by def_scale2) */
 void cv_render_aux2(int which, const float* pos, const float* disp, const float* disp2, const float* scal, uint32_t n);
 
@@ -185,7 +187,7 @@ void cv_render_draw(const cv_draw* d);
    skin's triangles are uploaded again (cv_render_indices clears it); NULL / 0 clears:
    every face opaque. Faces coloured per element without the expanded stream (the
    gl_PrimitiveID path of huge meshes) stay opaque. */
-typedef struct { uint32_t first, n; float alpha; float rgb[3]; bool solid; } cv_see_run;
+typedef struct { uint32_t first, n; float alpha; float rgb[3]; bool solid, cover_shell; } cv_see_run;
 #define CV_SEE_FLIP 0x80000000u
 void cv_render_see(const uint32_t* ids, uint32_t n, const cv_see_run* runs, int nruns);
 void cv_render_see_draw(const cv_draw* d);
