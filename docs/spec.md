@@ -55,6 +55,7 @@ src/
   app_integ.c   integrals over a set, step by step: the Integrals window's rows, its CSV, --integrate
   ui_integ.c    the Integrals window
   app_field.c   decoded-field cache, colourings, displacement, vectors, markers, path, compare
+  app_elemnodal.c element-nodal (IRTYPE 3) results: per-slot values, shell top / bottom, section averaging
   app_cam.c     camera, fit, symmetry copies, picking, find
   app_load.c    background loading, skin job, applying a load, reload, view state, --check
   app_settings.c the ini: one table of settings in sections (window, layers, colours, camera, display, animation, export, open panel sections), recent files (cfg.c)

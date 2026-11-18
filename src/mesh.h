@@ -60,6 +60,7 @@ typedef struct {
     uint32_t* pt;        size_t n_pt;
     uint32_t* face;      size_t n_face;   /* exterior faces as element << 3 | local face */
     uint32_t* fedge;     size_t n_fedge;  /* feature edges, 2 per edge */
+    uint8_t*  cover_shell;                /* per element: shell matches an exterior solid face */
 } cv_skin;
 
 #define CV_CREASE_DEG 30.f

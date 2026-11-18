@@ -332,8 +332,8 @@ static int block_var(const char* name, bool* nodal, bool* turnable) {
     return -1;
 }
 
-int cv_localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
-                      const cv_field_desc* desc, float* vals) {
+static int localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
+                          const cv_field_desc* desc, float* vals, bool slots) {
     if (!L->tr || !d->nsteps || !vals) return 0;
     bool nodal, turnable;
     int var = block_var(desc->name, &nodal, &turnable);
@@ -343,8 +343,10 @@ int cv_localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, in
     int nc = desc->ncomp, tens = cv_tensor_order(desc) == 1;
     if (turnable && nc != 3 && !tens) return 0;         /* generalized DOFs: CalculiX writes nothing local */
     int r = 0;
-    for (uint32_t i = 0; i < f->n_nodes; i++) {
-        float* v = vals + (size_t)i * nc;
+    uint32_t count = slots && f->n_elems ? f->eoff[f->n_elems] : slots ? 0 : f->n_nodes;
+    for (uint32_t j = 0; j < count; j++) {
+        uint32_t i = slots ? f->conn[j] : j;
+        float* v = vals + (size_t)j * nc;
         double Q[3][3];
         if (nodal) {
             if (L->tr[i] < 0) continue;
@@ -364,6 +366,16 @@ int cv_localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, in
         r |= CV_LOC_TURNED;
     }
     return r;
+}
+
+int cv_localsys_apply(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
+                      const cv_field_desc* desc, float* vals) {
+    return localsys_apply(L, d, f, step, desc, vals, false);
+}
+
+int cv_localsys_apply_elem(const cv_localsys* L, const cv_inp* d, const cv_frd* f, int step,
+                           const cv_field_desc* desc, float* vals) {
+    return localsys_apply(L, d, f, step, desc, vals, true);
 }
 
 void cv_localsys_free(cv_localsys* L) {

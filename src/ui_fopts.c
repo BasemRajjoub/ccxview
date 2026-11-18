@@ -22,6 +22,14 @@ int* uii_fnode_state(const char* key, bool open) {
     return &t[i].st;
 }
 
+void uii_shell_sides(struct nk_context* ctx, float s, float row) {
+    static const char* sides[] = { "Both (top + bottom)", "Top", "Bottom" };
+    uii_test_mark(ctx, "#shell side");
+    tip(ctx, "Shells: Both shows STRPOS on the front and STRNEG on the back; Top or Bottom uses that side on both faces. Solids use STRESS.");
+    int side = nk_combo(ctx, sides, 3, G.shell_side, (int)row, nk_vec2(240 * s, 4 * row + 20 * s));
+    if (side != G.shell_side) app_set_shell_side(side);
+}
+
 /* a size as a logarithmic slider between lo and hi, the value a button back to def */
 static bool log_row(struct nk_context* ctx, float row, const char* lab, const char* help, float* v, float lo, float hi, float def, const char* mark) {
     static const float ratio[3] = { 0.3f, 0.5f, 0.2f };

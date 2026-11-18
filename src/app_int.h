@@ -22,6 +22,8 @@ typedef struct {
     bool        vectors;        /* --vectors: arrow layer on */
     int         tensor;         /* --tensor STYLE: glyph layer on with that CV_GLYPH_* style, -1 = keep */
     int         traj;           /* --trajectories s1|s3|both: 0 s1, 1 s3, 2 both, -1 = keep */
+    int         elem_avg;       /* --elem-avg none|scalar|tensor: element-nodal stress averaging (CV_EN_AVG_*), -1 = keep */
+    int         shell_side;     /* --shell-side both|top|bottom: element-nodal shell surfaces 0 1 2, -1 = keep */
     bool        conv;           /* --conv: open the convergence window */
     int         win_w, win_h;   /* --size WxH */
     const char* field;          /* --field NAME[:COMP]: start on that .frd field, that option (else the first) */
@@ -105,13 +107,21 @@ extern cv_opts O;
 
 /* app_field.c: decoded fields, colours, displacement, the current step */
 void         cache_clear(void);
-const float* cache_get(int step, int field);
+const float* cache_get(int step, int field);         /* NULL for IRTYPE 3: no nodal values */
+const float* cache_get_elem(int step, int field);    /* IRTYPE 3 per connectivity slot, else NULL */
 void  units_apply(const char* field, int ncomp, float* v, size_t n);   /* model units -> shown */
 float units_len_raw(void);           /* shown lengths -> model lengths (the shape) */
 int          find_field(int step, const char* name);
 /* field d of step `step` of G.frd into out[node * ncomp + c], as cv_frd_read_field
    (not yet turned global nor converted); SHELL and REBAR worked out */
 void         field_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs);
+/* app_elemnodal.c: element-nodal (IRTYPE 3) values per connectivity slot in
+   G.elem_top / G.elem_bottom, G.elem_val their per-element mean */
+bool     refresh_elem_surfaces(int fi, const cv_field_desc* d);   /* false: fi is not element-nodal, or OOM */
+void     clear_elem_surfaces(void);
+void     refresh_elem_visibility(void);  /* the averaging again: the shown elements changed */
+uint32_t elem_node_slot(uint32_t elem, uint32_t node);            /* UINT32_MAX: not one of its nodes */
+int      elem_field_comps(uint32_t elem, uint32_t node, int side, char names[][12], float* vals, int max);
 /* app_shell.c: shell section forces (shell.h) as the field SHELL and the reinforcement
    of concrete shells (rebar.h) as REBAR, in every step with STRESS when the deck has shells */
 void shell_attach(void);                 /* after a load, deck and .frd in place */

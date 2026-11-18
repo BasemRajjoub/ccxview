@@ -49,7 +49,7 @@ cv_app G;
 static struct nk_context* g_nk;
 static void app_log(const char* tag, uint32_t level, uint32_t item, const char* msg, uint32_t line,
                     const char* file, void* user);
-cv_opts O = { .stl_alpha = -1, .faces = -1, .tensor = -1, .traj = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30, .avg_pct = -1 };
+cv_opts O = { .stl_alpha = -1, .faces = -1, .tensor = -1, .traj = -1, .elem_avg = -1, .shell_side = -1, .look = -1, .outline = -1, .win_w = 1400, .win_h = 900, .zoom = 1.f, .shot_frames = 30, .avg_pct = -1 };
 static struct nk_context* g_nk;
 
 /* ---- sokol callbacks --------------------------------------------------------------- */
@@ -372,6 +372,11 @@ static void poll_watch(void) {
     seen_mt = mt; seen_sz = sz;
 }
 
+static bool matrix_mirrored(const float* M) {
+    return M[0] * (M[5] * M[10] - M[6] * M[9]) - M[1] * (M[4] * M[10] - M[6] * M[8])
+         + M[2] * (M[4] * M[9] - M[5] * M[8]) < 0;
+}
+
 static void frame(void) {
     bool was_busy = app_busy(), was_dlg = G.dlg_running;
     poll_job();
@@ -460,6 +465,7 @@ static void frame(void) {
             d.rmin -= t; d.rmax += 1.f - t;
         }
         d.bands = G.bands;
+        d.shell_side = G.shell_side;
         for (int k = 0; k < 2; k++) {            /* values outside a locked range */
             int m = G.range_lock ? G.oor_mode[k] : 0;
             float g = k ? CV_OOR_BELOW : CV_OOR_ABOVE;
@@ -470,7 +476,7 @@ static void frame(void) {
         /* a .dat field lives on the Gauss points only: the faces stay plain */
         bool nrec = app_nrec_active();
         int fm = (!G.has_field || (G.field_src == 1 && !nrec)) ? CV_COLOR_SOLID
-               : (G.elem_mode || nrec) ? CV_COLOR_ELEM : CV_COLOR_NODAL;
+               : (G.elem_mode || G.field_elem_nodal || nrec) ? CV_COLOR_ELEM : CV_COLOR_NODAL;
         d.faces = G.show_faces;
         d.faces_color = G.faces_mode == FM_FIELD ? fm
                       : G.faces_mode == FM_PLAIN ? CV_COLOR_SOLID : CV_COLOR_GROUP;
@@ -567,6 +573,7 @@ static void frame(void) {
                 app_copy_matrix(m, M);
                 m4_mul(d.mvp, mvp0, M);
                 m4_mul(d.mv, mv0, M);
+                d.mirrored = matrix_mirrored(M);
                 cv_render_draw(&d);
             }
         }
@@ -578,8 +585,7 @@ static void frame(void) {
                 app_copy_matrix(m, M);
                 m4_mul(ds.mvp, d0.mvp, M);
                 m4_mul(ds.mv, d0.mv, M);
-                ds.mirrored = M[0] * (M[5] * M[10] - M[6] * M[9]) - M[1] * (M[4] * M[10] - M[6] * M[8])
-                            + M[2] * (M[4] * M[9] - M[5] * M[8]) < 0;
+                ds.mirrored = matrix_mirrored(M);
                 cv_render_see_draw(&ds);
             }
         }
@@ -796,6 +802,7 @@ static void cleanup(void) {
     if (!O.shot_path && !O.nopts && !O.ui_test) settings_save(sapp_width(), sapp_height());   /* scripted runs leave the file alone */
     settings_free();
     cv_ndof_close();
+    cv_render_closing();                    /* what unload refreshes (the pick markers) is not uploaded */
     unload();
     cv_render_shutdown();
     cv_snk_before_shutdown();
@@ -1256,6 +1263,17 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         else if (!strcmp(argv[i], "--ui-test") && i + 1 < argc) O.ui_test = argv[++i];
         else if (!strcmp(argv[i], "--version")) { printf("ccxview %s\n", CV_VERSION); exit(0); }
         else if (!strcmp(argv[i], "--field") && i + 1 < argc) O.field = argv[++i];
+        else if (!strcmp(argv[i], "--elem-avg") && i + 1 < argc) {
+            const char* t = argv[++i];
+            O.elem_avg = !strcmp(t, "none") ? CV_EN_AVG_NONE : !strcmp(t, "scalar") ? CV_EN_AVG_SCALAR
+                       : !strcmp(t, "tensor") ? CV_EN_AVG_TENSOR : -1;
+            if (O.elem_avg < 0) fprintf(stderr, "ccxview: --elem-avg %s: none, scalar or tensor\n", t);
+        }
+        else if (!strcmp(argv[i], "--shell-side") && i + 1 < argc) {
+            const char* t = argv[++i];
+            O.shell_side = !strcmp(t, "both") ? 0 : !strcmp(t, "top") ? 1 : !strcmp(t, "bottom") ? 2 : -1;
+            if (O.shell_side < 0) fprintf(stderr, "ccxview: --shell-side %s: both, top or bottom\n", t);
+        }
         else if (!strcmp(argv[i], "--calc") && i + 1 < argc) O.calc = argv[++i];
         else if (!strcmp(argv[i], "--formula-lib") && i + 1 < argc) O.formula_lib = argv[++i];
         else if (!strcmp(argv[i], "--fail") && i + 1 < argc) O.fail = argv[++i];

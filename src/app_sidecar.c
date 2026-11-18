@@ -76,6 +76,7 @@ static void view_put(cv_cfg* c) {
     cv_cfg_set(c, "mesh_field", t);
     cv_cfg_set_int(c, "comp", G.comp);
     cv_cfg_set_bool(c, "elem_mode", G.elem_mode);
+    cv_cfg_set_int(c, "elem_nodal_avg", G.elem_nodal_avg);
     cv_cfg_set_int(c, "csys", G.csys);
     cv_cfg_set_float(c, "csys_x", G.csys_o[0]); cv_cfg_set_float(c, "csys_y", G.csys_o[1]); cv_cfg_set_float(c, "csys_z", G.csys_o[2]);
     cv_cfg_set_bool(c, "deform", G.deform); cv_cfg_set_float(c, "deform_scale", G.deform_scale);
@@ -123,6 +124,7 @@ static void view_get(const cv_cfg* c) {
     const char* calc = cv_cfg_get(c, "calc", "");
     if (calc[0]) app_calc_set(calc);
     G.elem_mode = cv_cfg_get_bool(c, "elem_mode", G.elem_mode);
+    G.elem_nodal_avg = geti(c, "elem_nodal_avg", CV_EN_AVG_NONE, 0, CV_EN_AVG_N - 1);
     G.csys = geti(c, "csys", G.csys, 0, 3);
     G.csys_o[0] = getf(c, "csys_x", G.csys_o[0]); G.csys_o[1] = getf(c, "csys_y", G.csys_o[1]); G.csys_o[2] = getf(c, "csys_z", G.csys_o[2]);
     G.deform = cv_cfg_get_bool(c, "deform", G.deform);

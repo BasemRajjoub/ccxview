@@ -389,8 +389,8 @@ static void build_anchors(void) {
     A.serial++;
     if (!G.loaded || (!G.label_kinds && !app_measure_count())) return;
     const cv_frd* f = &G.frd;
-    bool nodal = G.has_field && !G.elem_mode && G.field_src != 1 && G.scalar;
-    bool elemv = G.has_field && (G.elem_mode || G.field_src == 1) && G.elem_val;
+    bool nodal = G.has_field && !G.elem_mode && !G.field_elem_nodal && G.field_src != 1 && G.scalar;
+    bool elemv = G.has_field && (G.elem_mode || G.field_elem_nodal || G.field_src == 1) && G.elem_val;
     if (on(CV_LABEL_VALUE) && !nodal) {           /* a per-element field: its value on the faces instead */
         A.kinds &= ~(1 << CV_LABEL_VALUE);
         if (elemv) A.kinds |= 1 << CV_LABEL_EVALUE;

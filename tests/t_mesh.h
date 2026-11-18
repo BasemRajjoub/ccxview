@@ -85,6 +85,13 @@ static void test_pyramid_skin(void) {
     uint32_t c[4];
     CHECK_EQ(cv_elem_face_corners(&m.f, 0, 1, c), 0);
     CHECK_EQ(cv_elem_face_corners(&m.f, 0, 2, c), 3);
+
+    uint32_t shell[3] = { v[0], v[1], v[4] };          /* on a triangle of the collapsed pyramid */
+    tm_elem(&m, 7, 0, shell, 3);
+    uint8_t shell_vis[3] = { 1, 0, 1 };
+    CHECK(cv_skin_build(&s, &m.f, shell_vis));
+    CHECK(s.cover_shell && s.cover_shell[2]);
+    cv_skin_free(&s);
 }
 
 /* three bricks along x: a plane hides the elements with any node beyond it,

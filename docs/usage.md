@@ -35,6 +35,10 @@ ccxview model.frd --field STRESS --tensor ellipsoid   # stress glyphs: ellipsoid
 ccxview model.frd --field STRESS --trajectories both  # principal stress trajectories: s1, s3, both
 ccxview model.frd --field DISP --history 17 # node 17 over all steps
 ccxview model.frd --field STRESS:SXX        # a field and its component, as the Fields tree names it
+ccxview shells.frd --field STRESS --elem-avg tensor --shell-side top
+                                            # element-nodal (IRTYPE 3) stress, e.g. FEMaster: averaged at shared nodes
+                                            #   within a section (needs the deck): none, scalar, tensor; shell surfaces
+                                            #   shown: both, top (STRPOS), bottom (STRNEG)
 ccxview plate.frd --field SHELL:Mxx         # shell section forces (with the deck): Nxx Nyy Nxy Mxx Myy Mxy Qx Qy
 ccxview slab.frd --field REBAR:As_x_bot --opt rebar_fcd=20 --opt rebar_fyd=435 --opt rebar_cover=40 --rebar-window
                                             # concrete shell reinforcement per width: As_x_top As_x_bot As_y_top

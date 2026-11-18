@@ -642,19 +642,46 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                 if (nk_checkbox_label(ctx, lab, &G.diff_mode)) app_select(G.field_name, G.comp);
             }
             uii_section_contact(ctx, s, row);       /* contact first: pairs, the .cel, the CONTACT block */
+            int stress, group_top, group_bottom, shell_top, shell_bottom;
+            bool group = cv_stress_group(st, &stress, &group_top, &group_bottom);
+            bool shell_pair = !group && cv_shell_pair(st, &shell_top, &shell_bottom);
             for (int f = 0; f < st->nfields; f++) {
+                if (group && (f == group_top || f == group_bottom)) continue;
+                if (shell_pair && f == shell_bottom) continue;
                 const cv_field_desc* d = &st->fields[f];
-                bool active = G.field_src == 0 && strcmp(d->name, G.field_name) == 0;
+                bool merged = group && f == stress;
+                bool shell = (shell_pair && f == shell_top) || merged;
+                bool active = G.field_src == 0 && (!strcmp(d->name, G.field_name) ||
+                              (shell_pair && shell && !strcmp(G.field_name, "STRNEG")) ||
+                              (merged && ((group_top >= 0 && !strcmp(G.field_name, "STRPOS")) ||
+                                          (group_bottom >= 0 && !strcmp(G.field_name, "STRNEG")))));
                 bool sf = !strcmp(d->name, "SHELL"), rb = !strcmp(d->name, "REBAR");   /* worked out from STRESS with the deck (app_shell.c) */
                 if (sf) tip(ctx, "Shell section forces per width from the stresses through the thickness, in the shell's axes:\n"
                                  "N membrane, M bending (positive: the +normal side pulls; about the OFFSET surface), Q transverse shear (rough)");
                 if (rb) tip(ctx, "Reinforcement of a concrete shell from its section forces: the steel per width each face needs\n"
                                  "in x and y (sandwich model, Wood-Armer), and where the concrete is crushed");
                 int* fs = uii_fnode_state(d->name, active);
-                if (!strcmp(G.fields_open, d->name)) { *fs = NK_MAXIMIZED; uii_scroll_here(ctx); }
-                if (!nk_tree_state_push(ctx, NK_TREE_NODE, sf ? "SHELL (shell forces)" : rb ? "REBAR (reinforcement)" : cv_field_title(d->name),
+                bool open = !strcmp(G.fields_open, d->name) ||
+                            (shell_pair && shell && !strcmp(G.fields_open, "STRNEG")) ||
+                            (merged && ((group_top >= 0 && !strcmp(G.fields_open, "STRPOS")) ||
+                                        (group_bottom >= 0 && !strcmp(G.fields_open, "STRNEG"))));
+                if (open) { *fs = NK_MAXIMIZED; uii_scroll_here(ctx); }
+                if (!nk_tree_state_push(ctx, NK_TREE_NODE, merged ? CV_STRESS_TITLE : shell ? CV_SHELL_PAIR_TITLE :
+                                        sf ? "SHELL (shell forces)" : rb ? "REBAR (reinforcement)" : cv_field_title(d->name),
                                         (enum nk_collapse_states*)fs))
                     continue;
+                if (active && shell) uii_shell_sides(ctx, s, row);
+                if (active && d->irtype == 3 && cv_field_is_stress(d->name) && cv_tensor_order(d)) {
+                    static const char* avg[] = { "Stress: not averaged", "Stress: average scalars", "Stress: average components" };
+                    nk_layout_row_dynamic(ctx, row, 1);
+                    uii_test_mark(ctx, "#element nodal averaging");
+                    tip(ctx, "Average visible element-node stresses with equal weights within each INP section, separately for solids, shell sides and materials.\n"
+                             "Never average across sections, even with the same material. Without a section, values stay unaveraged.\n"
+                             "Oppositely oriented shell faces are not averaged. Averaging may hide stress jumps.\n"
+                             "Scalars: calculate von Mises or principal stress first. Components: average the tensor first.");
+                    int mode = nk_combo(ctx, avg, CV_EN_AVG_N, G.elem_nodal_avg, (int)row, nk_vec2(260 * s, 4 * row + 20 * s));
+                    if (mode != G.elem_nodal_avg) app_set_elem_nodal_avg(mode);
+                }
                 cv_scalar_opt opts[CV_MAX_OPTS];
                 int n = app_field_options(d, opts, CV_MAX_OPTS);
                 nk_layout_row_dynamic(ctx, row, 1);
@@ -674,10 +701,11 @@ static void section_fields(struct nk_context* ctx, float s, float row) {
                             tip(ctx, t);
                         }
                     }
-                    if (nk_option_label(ctx, opts[i].label, sel) != sel) app_pick_field(d->name, opts[i].comp, 0);   /* the shown one again: back on the faces */
+                    if (nk_option_label(ctx, opts[i].label, sel) != sel)
+                        app_pick_field(shell_pair && shell && active ? G.field_name : d->name, opts[i].comp, 0);
                 }
                 uii_field_options(ctx, s, row, d, active);
-                if (!strcmp(G.fields_open, d->name)) G.fields_open[0] = 0;
+                if (open) G.fields_open[0] = 0;
                 nk_tree_state_pop(ctx);
             }
             nk_layout_row_template_begin(ctx, row);

@@ -345,6 +345,7 @@ static bool evaluate(char* why, size_t wn) {
         snprintf(why, wn, "%s", F.why);
         return true;
     }
+    if (G.frd.steps[G.step].fields[fi].irtype == 3) { snprintf(why, wn, "(STRESS is element-nodal: not supported)"); return false; }
     const float* sv = cache_get(G.step, fi);
     if (!sv) { snprintf(why, wn, "(out of memory)"); return false; }
     size_t nc = f->eoff[f->n_elems];
