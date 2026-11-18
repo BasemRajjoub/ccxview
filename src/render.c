@@ -522,8 +522,11 @@ static void kill_buf(sg_buffer* b) {
     b->id = 0;
 }
 
+static bool closing;                     /* cv_render_closing: nothing new goes to the GPU */
+void cv_render_closing(void) { closing = true; }
+
 static sg_buffer make_buf(const void* p, size_t bytes, bool index) {
-    if (!p || bytes == 0) return (sg_buffer){0};
+    if (closing || !p || bytes == 0) return (sg_buffer){0};
     sg_buffer_desc d = { .data = { p, bytes } };
     if (index) { d.usage.index_buffer = true; d.usage.vertex_buffer = false; }
     else d.usage.vertex_buffer = true;
@@ -545,6 +548,7 @@ void cv_render_groups(const uint32_t* tri, size_t n_tri, const uint32_t* first, 
 }
 
 static void make_etex(const float* v, int w, int h) {
+    if (closing) return;
     if (R.etex_view.id) sg_destroy_view(R.etex_view);
     if (R.etex_img.id) sg_destroy_image(R.etex_img);
     R.etex_img = sg_make_image(&(sg_image_desc){
@@ -555,6 +559,7 @@ static void make_etex(const float* v, int w, int h) {
 }
 
 static void make_cmap(int cm, bool reverse, bool grey, sg_image* img, sg_view* view) {
+    if (closing) return;
     uint8_t px[256 * 4];
     for (int i = 0; i < 256; i++) {
         float c[3];
@@ -575,6 +580,7 @@ static void make_cmap(int cm, bool reverse, bool grey, sg_image* img, sg_view* v
 void cv_render_colormap(int cm, bool reverse, bool grey) { make_cmap(cm, reverse, grey, &R.cmap_img, &R.cmap_view); }
 
 static void make_table(const float* rgb, int n, sg_image* img, sg_view* view) {
+    if (closing) return;
     uint8_t px[256 * 4];
     n = n < 1 ? 1 : n > 256 ? 256 : n;
     for (int i = 0; i < n; i++) {

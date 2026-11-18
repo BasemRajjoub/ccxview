@@ -796,6 +796,7 @@ static void cleanup(void) {
     if (!O.shot_path && !O.nopts && !O.ui_test) settings_save(sapp_width(), sapp_height());   /* scripted runs leave the file alone */
     settings_free();
     cv_ndof_close();
+    cv_render_closing();                    /* what unload refreshes (the pick markers) is not uploaded */
     unload();
     cv_render_shutdown();
     cv_snk_before_shutdown();

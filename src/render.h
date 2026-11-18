@@ -83,6 +83,9 @@ typedef struct {
 
 void cv_render_init(void);
 void cv_render_shutdown(void);
+/* the program is closing: GPU objects are only freed from now on, none made (on macOS the
+   window and its GL context can be gone before cleanup) */
+void cv_render_closing(void);
 void cv_render_clear_model(void);
 
 /* uploads (each replaces the previous buffer) */
