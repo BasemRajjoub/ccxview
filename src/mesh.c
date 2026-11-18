@@ -34,11 +34,16 @@ static int faces_of(int t, const face_t** out, bool* solid) {
 }
 
 /* FEMaster represents a five-node pyramid as a Hex8 with four copies of its apex. */
+static inline bool collapsed_hex(const cv_frd* f, uint32_t e) {
+    if (f->etype[e] != 1 || f->eoff[e + 1] - f->eoff[e] < 8) return false;
+    const uint32_t* cn = f->conn + f->eoff[e];
+    return cn[4] == cn[5] && cn[4] == cn[6] && cn[4] == cn[7];
+}
+
 static face_t face_shape(const cv_frd* f, uint32_t e, const face_t* fc) {
     face_t face = *fc;
-    if (f->etype[e] != 1 || f->eoff[e + 1] - f->eoff[e] < 8) return face;
+    if (!collapsed_hex(f, e)) return face;
     const uint32_t* cn = f->conn + f->eoff[e];
-    if (cn[4] != cn[5] || cn[4] != cn[6] || cn[4] != cn[7]) return face;
     face.n = 0;
     for (int i = 0; i < fc->n; i++) {
         bool seen = false;
@@ -237,10 +242,16 @@ uint32_t cv_box_elems(const cv_frd* f, const uint8_t* vis, const uint8_t* inside
 
 typedef struct { uint32_t k[4]; uint32_t code; } fkey;   /* sorted corners, e*8+face */
 
-static void face_key(const cv_frd* f, uint32_t code, fkey* out) {
+static void face_key(const cv_frd* f, uint32_t code, fkey* out, bool has_collapsed) {
     uint32_t e = code >> 3, fi = code & 7;
     uint32_t k[4] = { UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX };
-    cv_elem_face_corners(f, e, (int)fi, k);
+    if (has_collapsed && collapsed_hex(f, e)) cv_elem_face_corners(f, e, (int)fi, k);
+    else {
+        const face_t* ft; bool solid;
+        faces_of(f->etype[e], &ft, &solid);
+        const uint32_t* cn = f->conn + f->eoff[e];
+        for (int i = 0; i < ft[fi].n; i++) k[i] = cn[ft[fi].v[i]];
+    }
     /* sort 4 */
     for (int i = 1; i < 4; i++) {
         uint32_t x = k[i]; int j = i - 1;
@@ -313,8 +324,8 @@ static void put_edge(emit_t* o, uint32_t a, uint32_t b) {
 /* A face as triangles and its sides as edges. With mid (and a quadratic element)
    through its mid-side nodes: a corner triangle at every corner and the middle,
    so the colours and the shape follow every node of the face; else corners only. */
-static bool emit_face(emit_t* o, const cv_frd* f, uint32_t e, const face_t* fc, int local, bool mid) {
-    face_t shape = face_shape(f, e, fc);
+static bool emit_face(emit_t* o, const cv_frd* f, uint32_t e, const face_t* fc, int local, bool mid, bool has_collapsed) {
+    face_t shape = has_collapsed ? face_shape(f, e, fc) : *fc;
     if (shape.n < 3) return true;
     fc = &shape;
     if (!cv_push(o->faces, (e << 3) | (uint32_t)local)) return false;
@@ -493,6 +504,7 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
     uint32_t* off = calloc((size_t)N + 1, sizeof *off);
     uint32_t* faces = NULL;
     uint8_t*  used = calloc(CV_MAX(N, 1), 1);
+    bool has_collapsed = false;
     if (!off || !used) goto oom;
 
     /* 1. count solid faces per smallest corner node; shells go straight out */
@@ -502,11 +514,13 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
         int nf = faces_of(f->etype[e], &ft, &solid);
         for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) used[f->conn[j]] = 1;
         if (!solid) {
-            for (int i = 0; i < nf; i++) if (!emit_face(&o, f, e, &ft[i], i, mid)) goto oom;
+            for (int i = 0; i < nf; i++) if (!emit_face(&o, f, e, &ft[i], i, mid, false)) goto oom;
             continue;
         }
+        bool collapsed = collapsed_hex(f, e);
+        has_collapsed |= collapsed;
         for (int i = 0; i < nf; i++)
-            if (face_shape(f, e, &ft[i]).n >= 3) off[face_min(f, e, &ft[i]) + 1]++;
+            if (!collapsed || face_shape(f, e, &ft[i]).n >= 3) off[face_min(f, e, &ft[i]) + 1]++;
     }
     for (uint32_t i = 0; i < N; i++) off[i + 1] += off[i];
     size_t nfaces = off[N];
@@ -523,8 +537,9 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
             const face_t* ft; bool solid;
             int nf = faces_of(f->etype[e], &ft, &solid);
             if (!solid) continue;
+            bool collapsed = has_collapsed && collapsed_hex(f, e);
             for (int i = 0; i < nf; i++)
-                if (face_shape(f, e, &ft[i]).n >= 3)
+                if (!collapsed || face_shape(f, e, &ft[i]).n >= 3)
                     faces[fill[face_min(f, e, &ft[i])]++] = (e << 3) | (uint32_t)i;
         }
         free(fill);
@@ -540,7 +555,7 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
             if (!cv_reserve(keys, n) || !cv_reserve(matched, n)) {
                 cv_free_vec(keys); cv_free_vec(matched); goto oom;
             }
-            for (uint32_t i = 0; i < n; i++) { face_key(f, faces[b + i], &keys.a[i]); matched.a[i] = 0; }
+            for (uint32_t i = 0; i < n; i++) { face_key(f, faces[b + i], &keys.a[i], has_collapsed); matched.a[i] = 0; }
             for (uint32_t i = 0; i < n; i++) {
                 if (matched.a[i]) continue;
                 for (uint32_t j = i + 1; j < n; j++) {
@@ -553,7 +568,7 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
                     uint32_t code = keys.a[i].code, e = code >> 3;
                     const face_t* ft; bool solid;
                     faces_of(f->etype[e], &ft, &solid);
-                    if (!emit_face(&o, f, e, &ft[code & 7], (int)(code & 7), mid)) {
+                    if (!emit_face(&o, f, e, &ft[code & 7], (int)(code & 7), mid, has_collapsed)) {
                         cv_free_vec(keys); cv_free_vec(matched); goto oom;
                     }
                 }
