@@ -1720,6 +1720,7 @@ int main(void) {
     test_measure();
     test_tbtext();
     test_feature_edges();
+    test_pyramid_skin();
     test_plane_mask();
     test_box_elems();
     test_mid_faces();
@@ -1740,6 +1741,7 @@ int main(void) {
     test_datip();
     test_nodalrec();
     test_ndof();
+    test_s3r();
     test_eclass();
     test_portal_wire();
     test_list_dir();

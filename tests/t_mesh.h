@@ -51,6 +51,42 @@ static bool tm_has_fedge(const tm_mesh* m, const cv_skin* s, const float* p, con
     return false;
 }
 
+static void test_pyramid_skin(void) {
+    static tm_mesh m;
+    tm_init(&m);
+    uint32_t v[6] = {
+        tm_node(&m, 0, 0, 0), tm_node(&m, 1, 0, 0),
+        tm_node(&m, 1, 1, 0), tm_node(&m, 0, 1, 0),
+        tm_node(&m, 0.5f, 0.5f, 1), tm_node(&m, 0.5f, -1, 1)
+    };
+    uint32_t pyramid[8] = { v[0], v[1], v[2], v[3], v[4], v[4], v[4], v[4] };
+    uint32_t tet[4] = { v[0], v[1], v[4], v[5] };
+    tm_elem(&m, 1, 0, pyramid, 8);
+    tm_elem(&m, 3, 0, tet, 4);
+
+    cv_skin s;
+    uint8_t vis[2] = { 1, 0 };
+    CHECK(cv_skin_build(&s, &m.f, vis));
+    CHECK_EQ(s.n_face, 5u);
+    CHECK_EQ(s.n_tri, 6u);
+    CHECK_EQ(s.n_edge, 8u);
+    for (size_t i = 0; i < s.n_edge; i++) CHECK(s.edge[2 * i] != s.edge[2 * i + 1]);
+    cv_skin_free(&s);
+
+    vis[1] = 1;
+    CHECK(cv_skin_build(&s, &m.f, vis));
+    CHECK_EQ(s.n_face, 7u);
+    CHECK_EQ(s.n_tri, 8u);
+    CHECK_EQ(s.n_edge, 11u);
+    for (size_t i = 0; i < s.n_face; i++)
+        CHECK(s.face[i] != ((0u << 3) | 2u) && s.face[i] != ((1u << 3) | 0u));
+    cv_skin_free(&s);
+
+    uint32_t c[4];
+    CHECK_EQ(cv_elem_face_corners(&m.f, 0, 1, c), 0);
+    CHECK_EQ(cv_elem_face_corners(&m.f, 0, 2, c), 3);
+}
+
 /* three bricks along x: a plane hides the elements with any node beyond it,
    where the nodes are shown (displaced) */
 static void test_plane_mask(void) {

@@ -149,8 +149,10 @@ bool cv_sel_boundary(const cv_frd* f, const uint32_t* el, uint32_t ne,
             continue;
         }
         for (int i = 0; i < nf; i++) {
-            facet* x = &fa[m++];
+            facet* x = &fa[m];
             int nc = cv_elem_face_corners(f, e, i, x->c);
+            if (!nc) continue;
+            m++;
             sort4(x->c, nc);
             x->e = e; x->face = (int8_t)i; x->edge = -1;
         }

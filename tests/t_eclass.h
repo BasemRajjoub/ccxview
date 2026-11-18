@@ -1,6 +1,58 @@
 #include "../src/eclass.h"
 /* t_eclass.h -- unit tests for eclass.c (elements by set, by section; the palette). Included by test_main.c. */
 
+static void test_s3r(void) {
+    const char* deck =
+        "*NODE\n1,0,0,0\n2,1,0,0\n3,1,0,1\n4,0,0,1\n"
+        "*ELEMENT, TYPE=S3, ELSET=E\n10,1,2,3\n"
+        "*ELEMENT, TYPE=s3r, ELSET=E\n20,1,3,4\n"
+        "*MATERIAL, NAME=M\n*ELASTIC\n1.,0.\n"
+        "*SHELL SECTION, ELSET=E, MATERIAL=M\n0.1\n"
+        "*STEP\n*STATIC\n*EL FILE, GLOBAL=NO\nS\n*END STEP\n";
+    cv_inp d;
+    bool ok = cv_inp_parse(&d, deck, strlen(deck), NULL, NULL);
+    CHECK(ok);
+    if (!ok) return;
+    const cv_frd* f = &d.mesh;
+    const cv_set* set = cv_inp_set(&d, "E", true);
+    CHECK_EQ(f->n_elems, 2);
+    CHECK_EQ(d.nshells, 2);
+    CHECK(set && set->n == 2 && set->ids[0] == 10 && set->ids[1] == 20);
+    if (f->n_elems == 2 && d.nshells == 2) {
+        CHECK_EQ(d.shells[0], 10);
+        CHECK_EQ(d.shells[1], 20);
+        CHECK_EQ(f->etype[0], 7);
+        CHECK_EQ(f->etype[1], 7);
+        CHECK_EQ(f->eoff[1] - f->eoff[0], 3);
+        CHECK_EQ(f->eoff[2] - f->eoff[1], 3);
+        CHECK_EQ(f->emat[0], f->emat[1]);
+        cv_eclass c;
+        CHECK(cv_eclass_sections(&c, f, &d));
+        CHECK_EQ(c.n, 1);
+        if (c.n == 1) {
+            CHECK_EQ(c.of_elem[0], c.of_elem[1]);
+            CHECK(!strcmp(c.name[0], "shell: E (M)"));
+        }
+        cv_eclass_free(&c);
+        cv_localsys L;
+        ok = cv_localsys_init(&L, &d, f);
+        CHECK(ok);
+        if (ok && f->n_nodes == 4) {
+            /* node 4 belongs to the S3R only: it gets the same shell system as the S3 */
+            cv_field_desc st = { .name = "STRESS", .ncomp = 6, .comp = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" } };
+            float stress[24] = {0};
+            for (int i = 0; i < 4; i++) { stress[6 * i + 1] = 1; stress[6 * i + 2] = 3; }
+            CHECK_EQ(cv_localsys_apply(&L, &d, f, 1, &st, stress), CV_LOC_TURNED);
+            for (int i = 0; i < 4; i++) {
+                CHECK_NEAR(stress[6 * i + 1], 3, 1e-6);
+                CHECK_NEAR(stress[6 * i + 2], 1, 1e-6);
+            }
+        }
+        if (ok) cv_localsys_free(&L);
+    }
+    cv_inp_free(&d); free(d.msgs.a);
+}
+
 static void test_eclass(void) {
     const char* deck =
         "*NODE\n1, 0,0,0\n2, 1,0,0\n3, 1,1,0\n4, 0,1,0\n5, 0,0,1\n6, 1,0,1\n7, 1,1,1\n8, 0,1,1\n"

@@ -70,7 +70,7 @@ global when it decodes them (`cv_localsys` in `inp.h`), following ccx 2.22:
   node unless the request says `GLOBAL=YES`. Exact.
 - Element values (`STRESS`, `TOSTRAIN`, `MESTRAIN`, `FLUX`) only with
   `GLOBAL=NO`, in the system of the element: its `*ORIENTATION`, and for every
-  shell (`S3`..`S8R`) a system of its own even without one (gen3dfrom2d.f:
+  shell (`S3`/`S3R`..`S8R`) a system of its own even without one (gen3dfrom2d.f:
   normal = e3, the orientation's or the global x projected on the shell = e1).
   CalculiX turns them at each integration point and then averages at the nodes,
   so they come back exactly where every element around a node has the same
@@ -93,7 +93,7 @@ turned. For exact values everywhere, request `GLOBAL=YES` (the default of
 
 Solids `C3D4`, `C3D6`, `C3D8`, `C3D8R`, `C3D8I`, `C3D10`, `C3D10T`, `C3D15`,
 `C3D20`, `C3D20R` and the fluid `F3D4`/`F3D6`/`F3D8`; shells and plane
-elements `S3`, `S4`, `S4R`, `S6`, `S8`, `S8R`, `CPS*`, `CPE*`, `CAX*`, `M3D*`;
+elements `S3` (also accepted as `S3R`), `S4`, `S4R`, `S6`, `S8`, `S8R`, `CPS*`, `CPE*`, `CAX*`, `M3D*`;
 beams and trusses `B31`, `B31R`, `B32`, `B32R`, `T2D2`, `T3D2`, `T3D3`; the
 discrete `SPRINGA`, `SPRING1`, `SPRING2`, `DASHPOTA`, `DASHPOT1`,
 `DASHPOT2`, `MASS`, `GAPUNI`, `DCOUP3D`. Elements whose nodes are missing are

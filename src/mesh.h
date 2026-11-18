@@ -73,8 +73,9 @@ bool cv_skin_build_crease(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
 bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float crease_deg, bool mid);
 
 /* Corner nodes (dense indices) of face `face` (0-based, CalculiX order: S1 -> 0)
-   of element e. Returns 3 or 4, 0 if the element has no such face. Shells have
-   one face, whatever S-number the deck uses. */
+   of element e. Returns 3 or 4, 0 if the element has no such face (including
+   the collapsed apex face of a pyramid encoded as Hex8). Shells have one face,
+   whatever S-number the deck uses. */
 int  cv_elem_face_corners(const cv_frd* f, uint32_t e, int face, uint32_t out[4]);
 /* Every node of that face: its corners, then (a quadratic element) the mid-side
    nodes, the one between corners 0 and 1 first. Returns 3, 4, 6 or 8; 0 for none. */

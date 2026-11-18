@@ -18,7 +18,7 @@ static const struct { const char* name; int type, nn; } kElem[] = {
     {"C3D20", 4, 20}, {"C3D20R", 4, 20},
     {"C3D15", 5, 15},
     {"C3D10", 6, 10}, {"C3D10T", 6, 10},
-    {"S3", 7, 3}, {"CPS3", 7, 3}, {"CPE3", 7, 3}, {"CAX3", 7, 3}, {"M3D3", 7, 3},
+    {"S3", 7, 3}, {"S3R", 7, 3}, {"CPS3", 7, 3}, {"CPE3", 7, 3}, {"CAX3", 7, 3}, {"M3D3", 7, 3},
     {"S6", 8, 6}, {"CPS6", 8, 6}, {"CPE6", 8, 6}, {"CAX6", 8, 6}, {"M3D6", 8, 6},
     {"S4", 9, 4}, {"S4R", 9, 4}, {"CPS4", 9, 4}, {"CPS4R", 9, 4}, {"CPE4", 9, 4}, {"CPE4R", 9, 4},
     {"CAX4", 9, 4}, {"CAX4R", 9, 4}, {"M3D4", 9, 4}, {"M3D4R", 9, 4},
@@ -264,7 +264,7 @@ typedef struct {
     CV_VEC(vinter) inters;              /* the last one open: *FRICTION belongs to it */
     int16_t camp, csub;                 /* AMPLITUDE= and SUBMODEL, STEP= of the open load card */
     bool mc_add, mc_pair;               /* the open *MODEL CHANGE: ADD, TYPE=CONTACT PAIR */
-    CV_VEC(uint32_t) shells;            /* ids of S3..S8R elements */
+    CV_VEC(uint32_t) shells;            /* ids of S3/S3R..S8R elements */
     bool cshell;                        /* the open *ELEMENT block is shells */
     bool nodefile, elfile;              /* this step already had a *NODE FILE / *EL FILE */
     char outsys_c;                      /* 'G' / 'L' of the open output request */
