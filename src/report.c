@@ -368,7 +368,8 @@ bool cv_report_md(FILE* out, const cv_frd* f, const cv_inp* d, const cv_report_o
                     const cv_link* l = &d->links[i];
                     P("| %s | ", l->kind < 6 ? LN[l->kind] : "?"); esc(out, l->name); P(" | ");
                     if (l->ref) P("%u", l->ref); else P("-");
-                    P(" | %u | ", l->n);
+                    if (!l->n && l->surf[0] >= 0) P(" | via surface | ");   /* its nodes are the surface's: no count of their own */
+                    else P(" | %u | ", l->n);
                     for (int k = 0; k < 2; k++) {
                         if (l->surf[k] >= 0 && l->surf[k] < d->nsurfs) { const cv_surface* s = &d->surfs[l->surf[k]]; esc(out, s->name); P(" (%u %s)", s->nn ? s->nn : s->n, s->nn ? "nodes" : "faces"); } else P("-");
                         P(" | ");
