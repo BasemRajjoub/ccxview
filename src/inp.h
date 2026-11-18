@@ -95,7 +95,8 @@ typedef struct {
 /* Per *STEP: the procedure keyword (STATIC, FREQUENCY, ...; "" none) and the time
    period of its data line (1 when not given; 0 for procedures that take no time:
    FREQUENCY, BUCKLE, STEADY STATE DYNAMICS, ...). */
-typedef struct { char proc[32]; float period; } cv_stepinfo;
+typedef struct { char proc[32]; float period; bool nlgeom; float inc, tmin, tmax; } cv_stepinfo;
+/* nlgeom: *STEP, NLGEOM; inc, period, tmin, tmax: the step's time line (0 = not given) */
 
 /* *MODEL CHANGE, TYPE=ELEMENT, REMOVE / ADD: an element set (set >= 0) or element
    (set -1, elem) leaves the model or comes back from step `step` on.
@@ -139,7 +140,29 @@ typedef struct {
    first temperature). ISO: E, nu. ENG: E1 E2 E3 nu12 nu13 nu23 G12 G13 G23.
    ORTHO / ANISO: the first nine stiffness terms. sy: *PLASTIC's first stress, 0 none. */
 enum { CV_EL_NONE, CV_EL_ISO, CV_EL_ENG, CV_EL_ORTHO, CV_EL_ANISO };
-typedef struct { uint8_t el; float c[9]; float sy; } cv_matprop;
+typedef struct { uint8_t el; float c[9]; float sy; float rho, cond, alpha, alpha0, cp; uint16_t has; } cv_matprop;
+/* cv_matprop.has: *DENSITY, *CONDUCTIVITY, *EXPANSION (ZERO=), *SPECIFIC HEAT given (first row kept), and
+   _T: a table of more than one row (temperature dependent) */
+enum { CV_MP_RHO = 1, CV_MP_RHO_T = 2, CV_MP_COND = 4, CV_MP_COND_T = 8, CV_MP_EXP = 16, CV_MP_EXP_T = 32,
+       CV_MP_ZERO = 64, CV_MP_CP = 128, CV_MP_CP_T = 256 };
+
+/* What a *SHELL SECTION, *MEMBRANE SECTION, *BEAM SECTION or *BEAM GENERAL SECTION says, one per card with an
+   ELSET (cv_section keeps only those with a MATERIAL). kind: "shell", "membrane", "beam", "beamgeneral".
+   Shell: t = first thickness (0 not given), off = OFFSET= (has_off); a COMPOSITE one: nlay layers of ttot
+   together. Beam: shape = SECTION= (upper case), dim[0..ndim) its first data line, dir the second line
+   (has_dir). */
+typedef struct {
+    char kind[16], elset[64], mat[64], shape[16];
+    float t, off, ttot, dim[8], dir[3];
+    uint16_t nlay; uint8_t ndim;
+    bool has_off, has_dir, composite;
+} cv_secinfo;
+
+/* Which set or surface a *BOUNDARY / *CLOAD (*CFLUX) / *DLOAD (*DSLOAD, *DFLUX, *FILM, *RADIATE) / *TEMPERATURE
+   data line named: entries [first, first + n) of d->bcs / cloads / dloads / temps came from it. Lines that
+   give an id have no entry here. name: upper case. */
+enum { CV_LS_BC, CV_LS_CLOAD, CV_LS_DLOAD, CV_LS_TEMP };
+typedef struct { uint8_t kind; char name[64]; uint32_t first, n; } cv_loadsrc;
 
 /* id -> index pairs, sorted by id */
 typedef struct { uint32_t id; int32_t ix; } cv_idix;
@@ -170,6 +193,8 @@ typedef struct {
     cv_body*    body;       uint32_t nbody;
     cv_ntemp*   temps;      uint32_t ntemps;
     cv_pretension* pret;    uint32_t npret;
+    cv_secinfo* secinfo;    int nsecinfo;       /* deck order */
+    cv_loadsrc* lsrc;       uint32_t nlsrc;     /* deck order */
     cv_amp*     amps;       int namps;
     cv_stepinfo* stepinfo;                      /* per *STEP (nsteps) */
     cv_mchange* mchg;       uint32_t nmchg;     /* in deck order */

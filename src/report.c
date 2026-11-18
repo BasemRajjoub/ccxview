@@ -19,37 +19,53 @@ static void more(FILE* out, int n, int cap) { if (n > cap) fprintf(out, "\n... a
 static const char* base(const char* p) { return p ? cv_basename(p) : ""; }
 
 /* ---- grouped load lines ---- */
-typedef struct { int kind, a, b, amp; float val; uint32_t n, lo, hi; } grp;
+typedef struct { int kind, a, b, amp; float val; uint32_t n, lo, hi; const char* nm; bool surf; } grp;   /* nm: the set or surface a deck line named, NULL ids */
 typedef struct { grp g[256]; int n; uint32_t over; } grps;
-static void gadd(grps* G, int kind, int a, int b, float val, int amp, uint32_t id) {
+static void gadd(grps* G, int kind, int a, int b, float val, int amp, uint32_t id, const char* nm, uint32_t cnt) {
     for (int i = 0; i < G->n; i++) {
         grp* g = &G->g[i];
-        if (g->kind == kind && g->a == a && g->b == b && g->amp == amp && g->val == val) {
-            g->n++;
+        if (g->kind == kind && g->a == a && g->b == b && g->amp == amp && g->val == val && (g->nm == nm || (g->nm && nm && !strcmp(g->nm, nm)))) {
+            g->n += cnt;
             if (id < g->lo) g->lo = id;
             if (id > g->hi) g->hi = id;
             return;
         }
     }
     if (G->n >= 256) { G->over++; return; }
-    G->g[G->n++] = (grp){ kind, a, b, amp, val, 1, id, id };
+    G->g[G->n++] = (grp){ kind, a, b, amp, val, cnt, id, id, nm, false };
 }
 static const char* ampname(const cv_inp* d, int amp) { return amp > 0 && amp <= d->namps ? d->amps[amp - 1].name : "-"; }
-static void ids(FILE* out, const grp* g) { if (g->n == 1) P("%u", g->lo); else P("%u .. %u", g->lo, g->hi); }
+static void ids(FILE* out, const grp* g) {
+    if (g->nm) { P(g->surf ? "surface " : "set "); esc(out, g->nm); }
+    else if (g->n == 1) P("%u", g->lo);
+    else P("%u .. %u", g->lo, g->hi);
+}
+/* which entries of bcs / cloads / dloads / temps a named deck line made (CV_LS_) */
+typedef struct { uint8_t* m[4]; } cover;
+static void cover_init(cover* c, const cv_inp* d) {
+    uint32_t n[4] = { d->nbcs, d->ncloads, d->ndloads, d->ntemps };
+    for (int k = 0; k < 4; k++) c->m[k] = calloc(n[k] ? n[k] : 1, 1);
+    for (uint32_t i = 0; i < d->nlsrc; i++) {
+        const cv_loadsrc* s = &d->lsrc[i];
+        if (s->kind < 4 && c->m[s->kind] && s->first + (uint64_t)s->n <= n[s->kind]) memset(c->m[s->kind] + s->first, 1, s->n);
+    }
+}
+static void cover_free(cover* c) { for (int k = 0; k < 4; k++) free(c->m[k]); }
 
 static const char* DL[] = { "pressure", "edge load", "heat flux", "film", "radiation" };
 static const char* BL[] = { "gravity", "centrifugal", "body force", "Newton gravity", "volume heat" };
 
 static void dofs(FILE* out, int lo, int hi) { if (lo == hi) P("%d", lo); else P("%d-%d", lo, hi); }
 
-static void step_loads(FILE* out, const cv_inp* d, int s) {
+static void step_loads(FILE* out, const cv_inp* d, const cover* cv, int s) {
     grps* G = calloc(1, sizeof *G);
     if (!G) return;
     #define RESET() do { G->n = 0; G->over = 0; } while (0)
     #define TAIL() do { if (G->over) P("\n... and %u more groups\n", G->over); P("\n"); } while (0)
-    for (uint32_t i = 0; i < d->nbcs; i++) if (d->bcs[i].step == s && d->bcs[i].node) gadd(G, 0, d->bcs[i].dof_lo, d->bcs[i].dof_hi, d->bcs[i].value, d->bcs[i].amp, d->bcs[i].node);
+    for (uint32_t i = 0; i < d->nbcs; i++) if (d->bcs[i].step == s && d->bcs[i].node && !(cv->m[0] && cv->m[0][i])) gadd(G, 0, d->bcs[i].dof_lo, d->bcs[i].dof_hi, d->bcs[i].value, d->bcs[i].amp, d->bcs[i].node, NULL, 1);
+    for (uint32_t i = 0; i < d->nlsrc; i++) if (d->lsrc[i].kind == CV_LS_BC && d->bcs[d->lsrc[i].first].step == s) { const cv_bc* b = &d->bcs[d->lsrc[i].first]; gadd(G, 0, b->dof_lo, b->dof_hi, b->value, b->amp, 0, d->lsrc[i].name, d->lsrc[i].n); }
     if (G->n) {
-        P("Constraints (*BOUNDARY)\n\n| DOFs | Value | Amplitude | Nodes | Node ids |\n|---|---|---|---|---|\n");
+        P("Constraints (*BOUNDARY)\n\n| DOFs | Value | Amplitude | Nodes | Node set / node ids |\n|---|---|---|---|---|\n");
         for (int i = 0; i < G->n; i++) {
             grp* g = &G->g[i];
             P("| "); dofs(out, g->a, g->b); P(" | "); if (g->val == 0) P("0 (held)"); else P("%g", g->val);
@@ -58,9 +74,10 @@ static void step_loads(FILE* out, const cv_inp* d, int s) {
         TAIL();
     }
     RESET();
-    for (uint32_t i = 0; i < d->ncloads; i++) if (d->cloads[i].step == s && d->cloads[i].node) gadd(G, 0, d->cloads[i].dof, d->cloads[i].dof, d->cloads[i].value, d->cloads[i].amp, d->cloads[i].node);
+    for (uint32_t i = 0; i < d->ncloads; i++) if (d->cloads[i].step == s && d->cloads[i].node && !(cv->m[1] && cv->m[1][i])) gadd(G, 0, d->cloads[i].dof, d->cloads[i].dof, d->cloads[i].value, d->cloads[i].amp, d->cloads[i].node, NULL, 1);
+    for (uint32_t i = 0; i < d->nlsrc; i++) if (d->lsrc[i].kind == CV_LS_CLOAD && d->cloads[d->lsrc[i].first].step == s) { const cv_cload* b = &d->cloads[d->lsrc[i].first]; gadd(G, 0, b->dof, b->dof, b->value, b->amp, 0, d->lsrc[i].name, d->lsrc[i].n); }
     if (G->n) {
-        P("Concentrated loads (*CLOAD, *CFLUX)\n\n| DOF | Magnitude | Amplitude | Nodes | Total | Node ids |\n|---|---|---|---|---|---|\n");
+        P("Concentrated loads (*CLOAD, *CFLUX)\n\n| DOF | Magnitude | Amplitude | Nodes | Total | Node set / node ids |\n|---|---|---|---|---|---|\n");
         for (int i = 0; i < G->n; i++) {
             grp* g = &G->g[i];
             P("| %d | %g | ", g->a, g->val); esc(out, ampname(d, g->amp)); P(" | %u | %g | ", g->n, (double)g->val * g->n); ids(out, g); P(" |\n");
@@ -68,12 +85,14 @@ static void step_loads(FILE* out, const cv_inp* d, int s) {
         TAIL();
     }
     RESET();
-    for (uint32_t i = 0; i < d->ndloads; i++) if (d->dloads[i].step == s && d->dloads[i].elem) gadd(G, d->dloads[i].kind, 0, 0, d->dloads[i].value, d->dloads[i].amp, d->dloads[i].elem);
+    for (uint32_t i = 0; i < d->ndloads; i++) if (d->dloads[i].step == s && d->dloads[i].elem && !(cv->m[2] && cv->m[2][i])) gadd(G, d->dloads[i].kind, 0, 0, d->dloads[i].value, d->dloads[i].amp, d->dloads[i].elem, NULL, 1);
+    for (uint32_t i = 0; i < d->nlsrc; i++) if (d->lsrc[i].kind == CV_LS_DLOAD && d->dloads[d->lsrc[i].first].step == s) { const cv_dload* b = &d->dloads[d->lsrc[i].first]; gadd(G, b->kind, 0, 0, b->value, b->amp, 0, d->lsrc[i].name, d->lsrc[i].n); }
+    for (int i = 0; i < G->n; i++) for (int k = 0; G->g[i].nm && k < d->nsurfs; k++) if (!strcmp(d->surfs[k].name, G->g[i].nm) && !cv_inp_set(d, G->g[i].nm, true)) G->g[i].surf = true;
     if (G->n) {
-        P("Distributed loads on element faces (*DLOAD, *DSLOAD, *DFLUX, *FILM, *RADIATE)\n\n| Type | Value | Amplitude | Faces |\n|---|---|---|---|\n");
+        P("Distributed loads on element faces (*DLOAD, *DSLOAD, *DFLUX, *FILM, *RADIATE)\n\n| Type | Value | Amplitude | Faces | Element set / surface / element ids |\n|---|---|---|---|---|\n");
         for (int i = 0; i < G->n; i++) {
             grp* g = &G->g[i];
-            P("| %s | %g | ", g->kind >= 0 && g->kind < CV_DL_N ? DL[g->kind] : "?", g->val); esc(out, ampname(d, g->amp)); P(" | %u |\n", g->n);
+            P("| %s | %g | ", g->kind >= 0 && g->kind < CV_DL_N ? DL[g->kind] : "?", g->val); esc(out, ampname(d, g->amp)); P(" | %u | ", g->n); ids(out, g); P(" |\n");
         }
         TAIL();
     }
@@ -92,9 +111,10 @@ static void step_loads(FILE* out, const cv_inp* d, int s) {
         more(out, nb, CAP); P("\n");
     }
     RESET();
-    for (uint32_t i = 0; i < d->ntemps; i++) if (d->temps[i].step == s) gadd(G, 0, 0, 0, d->temps[i].value, d->temps[i].amp, d->temps[i].node);
+    for (uint32_t i = 0; i < d->ntemps; i++) if (d->temps[i].step == s && !(cv->m[3] && cv->m[3][i])) gadd(G, 0, 0, 0, d->temps[i].value, d->temps[i].amp, d->temps[i].node, NULL, 1);
+    for (uint32_t i = 0; i < d->nlsrc; i++) if (d->lsrc[i].kind == CV_LS_TEMP && d->temps[d->lsrc[i].first].step == s) { const cv_ntemp* b = &d->temps[d->lsrc[i].first]; gadd(G, 0, 0, 0, b->value, b->amp, 0, d->lsrc[i].name, d->lsrc[i].n); }
     if (G->n) {
-        P("Prescribed temperatures (*TEMPERATURE)\n\n| Temperature | Amplitude | Nodes | Node ids |\n|---|---|---|---|\n");
+        P("Prescribed temperatures (*TEMPERATURE)\n\n| Temperature | Amplitude | Nodes | Node set / node ids |\n|---|---|---|---|\n");
         for (int i = 0; i < G->n; i++) { grp* g = &G->g[i]; P("| %g | ", g->val); esc(out, ampname(d, g->amp)); P(" | %u | ", g->n); ids(out, g); P(" |\n"); }
         TAIL();
     }
@@ -176,15 +196,19 @@ bool cv_report_md(FILE* out, const cv_frd* f, const cv_inp* d, const cv_report_o
     else P("| Units | not set (CalculiX has none; set in the Units window) |\n");
     P("\n");
     if (d && d->nsteps > 0) {
-        P("Analysis steps\n\n| Step | Procedure | Time period |\n|---|---|---|\n");
+        P("Analysis steps\n\n| Step | Procedure | Time period | NLGEOM | Initial increment | Min increment | Max increment |\n|---|---|---|---|---|---|---|\n");
         for (int s = 0; s < d->nsteps && s < CAP; s++) {
             const char* pn = d->proc ? cv_inp_proc_name(d->proc[s]) : "";
+            const cv_stepinfo* si = d->stepinfo ? &d->stepinfo[s] : NULL;
             P("| %d | %s | ", s + 1, pn[0] ? pn : "-");
-            if (d->stepinfo && d->stepinfo[s].proc[0] && d->stepinfo[s].period > 0) P("%g", d->stepinfo[s].period); else P("-");
+            if (si && si->proc[0] && si->period > 0) P("%g", si->period); else P("-");
+            P(" | %s", si && si->nlgeom ? "yes" : "no");
+            float tv[3] = { si ? si->inc : 0, si ? si->tmin : 0, si ? si->tmax : 0 };
+            for (int k = 0; k < 3; k++) { P(" | "); if (tv[k] > 0) P("%g", tv[k]); else P("-"); }
             P(" |\n");
         }
         more(out, d->nsteps, CAP);
-        P("\nNonlinear geometry (NLGEOM), time increments and solver controls, output requests: not read.\n\n");
+        P("\nSolver controls (*CONTROLS, *SOLVER), output requests, contact and other step options: not read.\n\n");
     }
 
     /* 2. mesh */
@@ -239,11 +263,29 @@ bool cv_report_md(FILE* out, const cv_frd* f, const cv_inp* d, const cv_report_o
                 P(" | "); if (p && p->sy > 0) P("%g", p->sy); else P("none"); P(" | %u |\n", use ? use[i] : 0);
             }
             more(out, d->nmats, CAP);
-            P("\nNot read: density, thermal conductivity, expansion and specific heat, plasticity beyond the first yield stress, hardening, creep and other constitutive keywords.\n\n");
+            P("\n");
+            bool anyp = false;
+            for (int i = 0; d->mprop && i < d->nmats; i++) anyp |= d->mprop[i].has != 0;
+            if (anyp) {
+                P("Other properties (first row of each table; \"table\": more than one row, temperature dependent)\n\n| Material | Density | Conductivity | Expansion | Expansion zero | Specific heat |\n|---|---|---|---|---|---|\n");
+                for (int i = 0; i < d->nmats && i < CAP; i++) {
+                    const cv_matprop* p = &d->mprop[i];
+                    P("| "); esc(out, d->mats[i]); P(" |");
+                    const struct { uint16_t bit; float v; } col[] = { { CV_MP_RHO, p->rho }, { CV_MP_COND, p->cond }, { CV_MP_EXP, p->alpha } };
+                    for (int k = 0; k < 3; k++) {
+                        if (p->has & col[k].bit) P(" %g%s |", col[k].v, p->has & (col[k].bit << 1) ? " (table)" : ""); else P(" - |");
+                    }
+                    if (p->has & CV_MP_ZERO) P(" %g |", p->alpha0); else P(" - |");
+                    if (p->has & CV_MP_CP) P(" %g%s |", p->cp, p->has & CV_MP_CP_T ? " (table)" : ""); else P(" - |");
+                    P("\n");
+                }
+                more(out, d->nmats, CAP); P("\n");
+            }
+            P("Not read: plasticity beyond the first yield stress, hardening, creep, other constitutive keywords, and conductivity / expansion terms past the first value of orthotropic tables.\n\n");
             free(use);
         }
         /* 4. sections */
-        if (d->nsects || d->norients) {
+        if (d->nsects || d->nsecinfo || d->norients) {
             P("## 4. Sections and orientations\n\n");
             if (d->nsects) {
                 P("| Type | Element set | Material | Elements | Orientation |\n|---|---|---|---|---|\n");
@@ -266,7 +308,27 @@ bool cv_report_md(FILE* out, const cv_frd* f, const cv_inp* d, const cv_report_o
                     P(" |\n");
                 }
                 more(out, d->nsects, CAP);
-                P("\nShell thicknesses and beam cross-section dimensions: not read.\n\n");
+                P("\n");
+            }
+            if (d->nsecinfo) {
+                P("Shell, membrane and beam sections\n\n| Type | Element set | Material | Shape | Thickness | Offset | Dimensions | Direction |\n|---|---|---|---|---|---|---|---|\n");
+                for (int i = 0; i < d->nsecinfo && i < CAP; i++) {
+                    const cv_secinfo* q = &d->secinfo[i];
+                    bool beam = q->kind[0] == 'b';
+                    P("| %s | ", !strcmp(q->kind, "beamgeneral") ? "beam general" : q->kind); esc(out, q->elset); P(" | ");
+                    if (q->mat[0]) esc(out, q->mat); else P("-");
+                    P(" | "); if (q->shape[0]) esc(out, q->shape); else P("-");
+                    P(" | ");
+                    if (q->composite) P("composite: %u layers, total %g", q->nlay, q->ttot);
+                    else if (!beam && q->t > 0) P("%g", q->t); else P("-");
+                    P(" | "); if (q->has_off) P("%g", q->off); else P("-");
+                    P(" | ");
+                    if (beam && q->ndim) for (int k = 0; k < q->ndim; k++) P("%s%g", k ? ", " : "", q->dim[k]); else P("-");
+                    P(" | "); if (q->has_dir) P("%g, %g, %g", q->dir[0], q->dir[1], q->dir[2]); else P("-");
+                    P(" |\n");
+                }
+                more(out, d->nsecinfo, CAP);
+                P("\nShell offset is in thicknesses. Beam dimensions are the first data line as given (RECT: a, b; CIRC: r; PIPE: r, t; BOX: a, b, t1..t4; I: l, h, b1, b2, t1, t2, t3; GENERAL: A, I11, I12, I22, It); the direction is the second line (the approximate 1-direction n1). Integration points, composite layer details, other section keywords: not read.\n\n");
             }
             if (d->norients) P("Orientations (*ORIENTATION): %d. ", d->norients);
             if (d->ntransforms) P("Transforms (*TRANSFORM): %d systems on %u nodes.", d->ntransforms, d->nnode_tr);
@@ -275,15 +337,18 @@ bool cv_report_md(FILE* out, const cv_frd* f, const cv_inp* d, const cv_report_o
         /* 5. loads per step */
         {
             bool any = false;
+            cover cv;
+            cover_init(&cv, d);
             for (int s = -1; s < d->nsteps; s++) any |= step_has(d, s);
             if (any) {
                 P("## 5. Boundary conditions and loads\n\nValues as given in the deck, per step (a step keeps those of the steps before unless OP=NEW).\n\n");
                 for (int s = -1; s < d->nsteps; s++) {
                     if (!step_has(d, s)) continue;
                     if (s < 0) P("### Before the first step\n\n"); else P("### Step %d\n\n", s + 1);
-                    step_loads(out, d, s);
+                    step_loads(out, d, &cv, s);
                 }
             }
+            cover_free(&cv);
             if (d->namps) {
                 P("### Amplitudes\n\n| Name | Definition | Points | Time |\n|---|---|---|---|\n");
                 for (int i = 0; i < d->namps && i < CAP; i++) {
