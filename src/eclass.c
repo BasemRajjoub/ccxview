@@ -77,11 +77,9 @@ static const char* sect_name(const void* u, int i, char* t) {
     return t;
 }
 
-bool cv_eclass_sections(cv_eclass* c, const cv_frd* f, const cv_inp* d) {
-    memset(c, 0, sizeof *c);
-    int32_t* cls = malloc((size_t)CV_MAX(f->n_elems, 1) * sizeof *cls);
-    if (!cls) return false;
+void cv_elem_sections(const cv_frd* f, const cv_inp* d, int32_t* cls) {
     for (uint32_t e = 0; e < f->n_elems; e++) cls[e] = -1;
+    if (!d) return;
     for (int i = 0; i < d->nsects; i++) {             /* a later section wins */
         const cv_set* s = cv_inp_set(d, d->sects[i].elset, true);
         for (uint32_t j = 0; s && j < s->n; j++) {
@@ -89,6 +87,13 @@ bool cv_eclass_sections(cv_eclass* c, const cv_frd* f, const cv_inp* d) {
             if (e != UINT32_MAX) cls[e] = i;
         }
     }
+}
+
+bool cv_eclass_sections(cv_eclass* c, const cv_frd* f, const cv_inp* d) {
+    memset(c, 0, sizeof *c);
+    int32_t* cls = malloc((size_t)CV_MAX(f->n_elems, 1) * sizeof *cls);
+    if (!cls) return false;
+    cv_elem_sections(f, d, cls);
     bool ok = compact(c, f, cls, d->nsects, sect_name, d, "(no section)");
     free(cls);
     if (!ok) cv_eclass_free(c);

@@ -296,7 +296,7 @@ bool cv_calc_eval(cv_calc* c, const cv_frd* f, int step, cv_calc_get_fn get, voi
         int code = s->code;
         if (d && s->comp[0]) code = comp_index(d, s->comp, strlen(s->comp));
         else if (d && code <= CV_COMP_P1 && code >= CV_COMP_P3 && cv_tensor_order(d) == 2) code += CV_COMP_P1_XZ - CV_COMP_P1;
-        if (!d || (s->comp[0] && code < 0)) {
+        if (!d || d->irtype == 3 || (s->comp[0] && code < 0)) {   /* element-nodal: no value per node */
             snprintf(c->missing, sizeof c->missing, "%s%s%s", s->field, s->comp[0] ? "_" : "", s->comp);
             ok = false;
             break;

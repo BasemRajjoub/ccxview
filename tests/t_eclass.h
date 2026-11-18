@@ -47,8 +47,27 @@ static void test_s3r(void) {
                 CHECK_NEAR(stress[6 * i + 1], 3, 1e-6);
                 CHECK_NEAR(stress[6 * i + 2], 1, 1e-6);
             }
+            float slots[36] = {0};                     /* element-nodal: per connectivity slot */
+            for (int i = 0; i < 6; i++) { slots[6 * i + 1] = 1; slots[6 * i + 2] = 3; }
+            CHECK_EQ(cv_localsys_apply_elem(&L, &d, f, 1, &st, slots), CV_LOC_TURNED);
+            for (int i = 0; i < 6; i++) {
+                CHECK_NEAR(slots[6 * i + 1], 3, 1e-6);
+                CHECK_NEAR(slots[6 * i + 2], 1, 1e-6);
+            }
         }
         if (ok) cv_localsys_free(&L);
+        int32_t sections[2];                           /* S3 and S3R share the section: averaged */
+        cv_elem_sections(f, &d, sections);
+        CHECK_EQ(sections[0], 0);
+        CHECK_EQ(sections[1], 0);
+        float values[] = {10, 10, 10, 20, 20, 20};
+        CHECK(cv_elem_nodal_average(f, NULL, sections, values, 1));
+        CHECK_NEAR(values[0], 15, 1e-6);
+        CHECK_NEAR(values[1], 10, 1e-6);
+        CHECK_NEAR(values[2], 15, 1e-6);
+        CHECK_NEAR(values[3], 15, 1e-6);
+        CHECK_NEAR(values[4], 15, 1e-6);
+        CHECK_NEAR(values[5], 20, 1e-6);
     }
     cv_inp_free(&d); free(d.msgs.a);
 }
@@ -74,6 +93,21 @@ static void test_eclass(void) {
     }
     const cv_frd* f = &d.mesh;
     CHECK_EQ(f->n_elems, 4);
+    int32_t sections[4];
+    cv_elem_sections(f, &d, sections);
+    CHECK_EQ(sections[cv_frd_elem_index(f, 1)], 0);
+    CHECK_EQ(sections[cv_frd_elem_index(f, 2)], 1);
+    CHECK_EQ(sections[cv_frd_elem_index(f, 3)], 0);
+    CHECK_EQ(sections[cv_frd_elem_index(f, 4)], -1);
+    float values[32];
+    for (uint32_t e = 0; e < f->n_elems; e++)
+        for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++) values[j] = (float)(10 * (e + 1));
+    CHECK(cv_elem_nodal_average(f, NULL, sections, values, 1));
+    CHECK_NEAR(values[f->eoff[cv_frd_elem_index(f, 1)]], 20, 1e-6);
+    CHECK_NEAR(values[f->eoff[cv_frd_elem_index(f, 3)]], 20, 1e-6);
+    CHECK_NEAR(values[f->eoff[cv_frd_elem_index(f, 4)]], 40, 1e-6);
+    cv_elem_sections(f, NULL, sections);
+    for (int i = 0; i < 4; i++) CHECK_EQ(sections[i], -1);
     cv_eclass c;
     CHECK(cv_eclass_sets(&c, f, d.sets, d.nsets));
     CHECK_EQ(c.n, 4);                                   /* EALL, EPART, EONE, (no set); ETWIN unused */

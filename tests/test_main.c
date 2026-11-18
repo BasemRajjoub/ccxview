@@ -66,6 +66,76 @@ static buf_t slurp(FILE* o) {
 static const char* kDisp[] = { "D1", "D2", "D3" };
 static const char* kStress[] = { "SXX", "SYY", "SZZ", "SXY", "SYZ", "SZX" };
 
+static void test_element_nodal_average(void) {
+    float xyz[] = { 0,0,0, 1,0,0, 0,1,0, -1,0,0, 0,-1,0 };
+    uint32_t conn[] = { 0,1,2, 0,2,3, 0,3,4, 0,1,2, 0,2,3, 0,2,1, 0,1,2 };
+    uint32_t off[] = { 0,3,6,9,12,15,18,21 };
+    uint32_t mat[] = { 1,1,2,1,1,1,2 };
+    uint8_t type[] = { 1,1,1,7,7,7,7 };
+    uint8_t vis[] = { 1,1,1,1,1,1,1 };
+    int32_t sections[] = { 0,0,0,1,1,1,1 };
+    cv_frd f = {0};
+    f.n_nodes = 5; f.n_elems = 7; f.xyz = xyz; f.conn = conn; f.eoff = off; f.emat = mat; f.etype = type;
+    float v[] = { 10,0,0, 30,0,0, 500,0,0, 100,0,0, 300,0,0, 900,0,0, 700,0,0 };
+    CHECK(cv_elem_nodal_average(&f, vis, sections, v, 1));
+    CHECK_NEAR(v[0], 20, 1e-6); CHECK_NEAR(v[3], 20, 1e-6);
+    CHECK_NEAR(v[6], 500, 1e-6);
+    CHECK_NEAR(v[9], 200, 1e-6); CHECK_NEAR(v[12], 200, 1e-6);
+    CHECK_NEAR(v[15], 900, 1e-6); CHECK_NEAR(v[18], 700, 1e-6);
+
+    float hidden[] = { 10,0,0, 30,0,0, 500,0,0, NAN,0,0, 300,0,0, 900,0,0, 700,0,0 };
+    vis[1] = 0;
+    CHECK(cv_elem_nodal_average(&f, vis, sections, hidden, 1));
+    CHECK_NEAR(hidden[0], 10, 1e-6); CHECK_NEAR(hidden[3], 30, 1e-6);
+    CHECK(isnan(hidden[9])); CHECK_NEAR(hidden[12], 300, 1e-6);
+
+    float tensor[21 * 6] = {0}, scalars[21];
+    vis[1] = 1;
+    tensor[0] = 100; tensor[3 * 6] = -100;
+    cv_field_scalar(tensor, 6, 21, CV_COMP_MISES, scalars);
+    CHECK(cv_elem_nodal_average(&f, vis, sections, scalars, 1));
+    CHECK(cv_elem_nodal_average(&f, vis, sections, tensor, 6));
+    float after[21];
+    cv_field_scalar(tensor, 6, 21, CV_COMP_MISES, after);
+    CHECK_NEAR(scalars[0], 100, 1e-6); CHECK_NEAR(scalars[3], 100, 1e-6);
+    CHECK_NEAR(after[0], 0, 1e-6); CHECK_NEAR(after[3], 0, 1e-6);
+
+    float incomplete[21 * 6] = {0};
+    incomplete[0] = 100; incomplete[1] = NAN; incomplete[3 * 6] = -100;
+    CHECK(cv_elem_nodal_average(&f, vis, sections, incomplete, 6));
+    CHECK_NEAR(incomplete[0], 100, 1e-6); CHECK(isnan(incomplete[1]));
+    CHECK_NEAR(incomplete[3 * 6], -100, 1e-6);
+
+    float degenerate_xyz[] = { 0,0,0, 1,0,0, 2,0,0, 0,1,0 };
+    uint32_t degenerate_conn[] = { 0,1,2, 0,1,3 };
+    uint32_t degenerate_off[] = { 0,3,6 };
+    uint8_t degenerate_type[] = { 7,7 };
+    cv_frd degenerate = {0};
+    degenerate.n_nodes = 4; degenerate.n_elems = 2; degenerate.xyz = degenerate_xyz;
+    degenerate.conn = degenerate_conn; degenerate.eoff = degenerate_off; degenerate.etype = degenerate_type;
+    float d[] = { 7,0,0, 20,0,0 };
+    int32_t ds[] = { 0,0 };
+    CHECK(cv_elem_nodal_average(&degenerate, NULL, ds, d, 1));
+    CHECK_NEAR(d[0], 7, 1e-6); CHECK_NEAR(d[3], 20, 1e-6);
+
+    /* A zero-material FRD must still respect section interfaces. */
+    uint32_t zero_material[7] = {0};
+    f.emat = zero_material;
+    sections[1] = 2;
+    float interface[] = { 10,0,0, 1000,0,0, 30,0,0, 100,0,0, 300,0,0, 900,0,0, 700,0,0 };
+    CHECK(cv_elem_nodal_average(&f, NULL, sections, interface, 1));
+    CHECK_NEAR(interface[0], 20, 1e-6); CHECK_NEAR(interface[6], 20, 1e-6);
+    CHECK_NEAR(interface[3], 1000, 1e-6);
+    CHECK_NEAR(interface[9], 1100.f / 3, 1e-4);
+
+    float unknown[] = { 10,0,0, 1000,0,0, 30,0,0, 100,0,0, 300,0,0, 900,0,0, 700,0,0 };
+    sections[0] = sections[2] = -1;
+    CHECK(cv_elem_nodal_average(&f, NULL, sections, unknown, 1));
+    CHECK_NEAR(unknown[0], 10, 1e-6); CHECK_NEAR(unknown[6], 30, 1e-6);
+    CHECK(cv_elem_nodal_average(&f, NULL, NULL, unknown, 1));
+    CHECK_NEAR(unknown[9], 1100.f / 3, 1e-4);
+}
+
 /* Two Hex8 sharing a face along x: 12 nodes (ids 100..111), elements 7 and 8
    with materials 1 and 2, two steps of DISP (+pseudo ALL) and STRESS. */
 static buf_t two_hex(int binary) {
@@ -216,6 +286,147 @@ static void check_two_hex(int binary) {
 
 static void test_ascii(void)  { check_two_hex(0); }
 static void test_binary(void) { check_two_hex(1); }
+
+static void test_shell_on_solid(void) {
+    float xyz[] = {
+        0,0,0, 1,0,0, 1,1,0, 0,1,0,
+        0,0,1, 1,0,1, 1,1,1, 0,1,1,
+        0,0,-0.5f, 1,0,-0.5f, 1,1,-0.5f, 0,1,-0.5f,
+    };
+    uint32_t offsets[] = {0, 4, 12, 16};
+    uint32_t conn[] = {1,2,3,0, 0,1,2,3,4,5,6,7, 8,9,10,11};
+    uint8_t types[] = {9,1,9}, vis[] = {1,1,0};
+    cv_frd f = { .n_nodes = 12, .n_elems = 3, .xyz = xyz, .eoff = offsets, .conn = conn, .etype = types };
+    cv_skin sk;
+    CHECK(cv_skin_build(&sk, &f, vis));
+    CHECK_EQ(sk.n_tri, 14);
+    CHECK(sk.cover_shell[0] && !sk.cover_shell[1] && !sk.cover_shell[2]);
+    for (size_t t = 0; t < 12; t++) CHECK_EQ(sk.tri_elem[t], 1);
+    for (size_t t = 12; t < 14; t++) {
+        CHECK_EQ(sk.tri_elem[t], 0);
+        bool matches = false;
+        for (size_t u = 0; u < 12; u++) {
+            bool same = true;
+            for (int k = 0; k < 3; k++) {
+                uint32_t n = sk.tri[3 * t + k];
+                if (n != sk.tri[3 * u] && n != sk.tri[3 * u + 1] && n != sk.tri[3 * u + 2]) same = false;
+            }
+            if (same) matches = true;
+        }
+        CHECK(matches);
+    }
+    float o[] = {0.25f, 0.4f, -1}, up[] = {0,0,1};
+    cv_pick p = cv_pick_ray(&f, &sk, NULL, 0, o, up);
+    CHECK(p.hit && p.elem == 0);
+    float disp[36] = {0};
+    disp[3 * 2 + 2] = 0.2f;
+    p = cv_pick_ray(&f, &sk, disp, 1, o, up);
+    CHECK(p.hit && p.elem == 0);
+    float above[] = {0.25f, 0.4f, 2}, down[] = {0,0,-1};
+    p = cv_pick_ray(&f, &sk, NULL, 0, above, down);
+    CHECK(p.hit && p.elem == 1);
+    cv_skin_free(&sk);
+
+    vis[0] = 0;
+    CHECK(cv_skin_build(&sk, &f, vis));
+    p = cv_pick_ray(&f, &sk, NULL, 0, o, up);
+    CHECK(p.hit && p.elem == 1);
+    cv_skin_free(&sk);
+
+    vis[0] = 1; vis[1] = 0;
+    CHECK(cv_skin_build(&sk, &f, vis));
+    CHECK_EQ(sk.n_tri, 2);
+    CHECK(!sk.cover_shell[0]);
+    p = cv_pick_ray(&f, &sk, NULL, 0, o, up);
+    CHECK(p.hit && p.elem == 0);
+    cv_skin_free(&sk);
+
+    vis[1] = 1; vis[2] = 1;
+    CHECK(cv_skin_build(&sk, &f, vis));
+    CHECK(sk.cover_shell[0] && !sk.cover_shell[2]);
+    p = cv_pick_ray(&f, &sk, NULL, 0, o, up);
+    CHECK(p.hit && p.elem == 2);
+    cv_skin_free(&sk);
+
+    float qxyz[] = {
+        0,0,0, 1,0,0, 1,1,0, 0,1,0, 0,0,1, 1,0,1, 1,1,1, 0,1,1,
+        .5f,0,0, 1,.5f,0, .5f,1,0, 0,.5f,0,
+        0,0,.5f, 1,0,.5f, 1,1,.5f, 0,1,.5f,
+        .5f,0,1, 1,.5f,1, .5f,1,1, 0,.5f,1,
+    };
+    uint32_t qoff[] = {0, 8, 28};
+    uint32_t qconn[] = {0,3,2,1,11,10,9,8, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};
+    uint8_t qtype[] = {10,4};
+    cv_frd qf = { .n_nodes = 20, .n_elems = 2, .xyz = qxyz, .eoff = qoff, .conn = qconn, .etype = qtype };
+    CHECK(cv_skin_build(&sk, &qf, NULL));
+    CHECK_EQ(sk.n_tri, 42);
+    CHECK(sk.cover_shell[0]);
+    for (size_t t = 36; t < 42; t++) {
+        bool matches = false;
+        for (size_t u = 0; u < 36; u++) {
+            bool same = true;
+            for (int k = 0; k < 3; k++) {
+                uint32_t n = sk.tri[3 * t + k];
+                if (n != sk.tri[3 * u] && n != sk.tri[3 * u + 1] && n != sk.tri[3 * u + 2]) same = false;
+            }
+            if (same) matches = true;
+        }
+        CHECK(matches);
+    }
+    cv_skin_free(&sk);
+    qconn[4] = 10; qconn[5] = 11;
+    CHECK(cv_skin_build(&sk, &qf, NULL));
+    CHECK(!sk.cover_shell[0]);
+    cv_skin_free(&sk);
+}
+
+static void check_element_nodal(int binary) {
+    const uint32_t ids[6] = { 101, 102, 103, 104, 105, 106 };
+    const double xyz[18] = { 0,0,0, 1,0,0, 2,0,0, 0,1,0, 1,1,0, 2,1,0 };
+    const uint32_t elems[2] = { 41, 42 }, conn[8] = { 101,102,105,104, 102,103,106,105 };
+    const uint32_t record_elem[8] = { 41,41,41,41,42,42,42,42 };
+    const uint32_t record_node[8] = { 101,102,105,104, 102,103,106,105 };
+    const float top[8] = { 1,10,30,40, 20,2,50,60 };
+    const float bottom[8] = { -1,-10,-30,-40, -20,-2,-50,-60 };
+    const char* comps[] = { "MISES" };
+    FILE* o = tmp_open();
+    fw_nodes(o, 6, ids, xyz, binary);
+    fw_elems(o, 2, elems, 9, 4, conn, NULL, binary);
+    fw_step(o, 1, 0.1, 8, binary);
+    fw_field_elem(o, "STRPOS", 1, comps, 8, record_elem, record_node, top, binary);
+    fw_step(o, 1, 0.1, 8, binary);
+    fw_field_elem(o, "STRNEG", 1, comps, 8, record_elem, record_node, bottom, binary);
+    fprintf(o, "9999\n");
+    buf_t b = slurp(o);
+
+    cv_frd f;
+    CHECK(cv_frd_parse(&f, b.p, b.n));
+    CHECK_EQ(f.n_elems, 2);
+    CHECK_EQ(f.n_steps, 1);
+    CHECK_EQ(f.steps[0].nfields, 2);
+    if (f.n_steps == 1 && f.steps[0].nfields == 2) {
+        const cv_field_desc* td = &f.steps[0].fields[0];
+        const cv_field_desc* bd = &f.steps[0].fields[1];
+        CHECK_EQ(td->irtype, 3);
+        CHECK_EQ(bd->irtype, 3);
+        CHECK_EQ(td->fmt, binary ? 2 : 1);
+        float tv[8], bv[8], nodal[6];
+        cv_frd_read_elem_field(&f, td, tv, NULL);
+        cv_frd_read_elem_field(&f, bd, bv, NULL);
+        CHECK_NEAR(tv[1], 10, 1e-4);
+        CHECK_NEAR(tv[4], 20, 1e-4);     /* shared node 102 keeps an element-local value */
+        CHECK_NEAR(bv[1], -10, 1e-4);
+        CHECK_NEAR(bv[4], -20, 1e-4);
+        cv_frd_read_field(&f, td, nodal, NULL);
+        for (int i = 0; i < 6; i++) CHECK(isnan(nodal[i]));   /* per element only: no nodal values */
+    }
+    cv_frd_free(&f);
+    free(f.msgs.a);
+    free(b.p);
+}
+
+static void test_element_nodal_ascii(void) { check_element_nodal(0); }
+static void test_element_nodal_binary(void) { check_element_nodal(1); }
 
 static void test_truncated(void) {
     buf_t b = two_hex(0);
@@ -645,6 +856,44 @@ static void test_field_math(void) {
           && !cv_comp_match("SXX", "SX") && cv_comp_match("D4 (rot x)", "D4") && cv_comp_match("D4 (rot x)", "D4 rot"));
     CHECK(!strcmp(cv_field_title("STRPOS"), "STRPOS (shell top)") && !strcmp(cv_field_title("STRNEG"), "STRNEG (shell bottom)")
           && !strcmp(cv_field_title("STRMID"), "STRMID (shell mid-surface)") && !strcmp(cv_field_title("STRESS"), "STRESS"));
+    {
+        cv_field_desc fields[2] = {0};
+        cv_step step = { .nfields = 2, .fields = fields };
+        int top, bottom;
+        strcpy(fields[0].name, "STRNEG"); strcpy(fields[1].name, "STRPOS");
+        fields[0].irtype = fields[1].irtype = 3;
+        fields[0].ncomp = fields[1].ncomp = 6;
+        CHECK(cv_shell_pair(&step, &top, &bottom) && top == 1 && bottom == 0);
+        fields[0].ncomp = 3;
+        CHECK(!cv_shell_pair(&step, &top, &bottom));
+        fields[0].ncomp = 6; fields[0].irtype = 1;
+        CHECK(!cv_shell_pair(&step, &top, &bottom));
+        fields[0].irtype = 3; strcpy(fields[0].comp[0], "SXX");
+        CHECK(!cv_shell_pair(&step, &top, &bottom));
+        step.nfields = 1;
+        CHECK(!cv_shell_pair(&step, &top, &bottom));
+    }
+    {
+        cv_field_desc fields[3] = {0};
+        cv_step step = { .nfields = 3, .fields = fields };
+        int stress, top, bottom;
+        strcpy(fields[0].name, "STRESS");
+        strcpy(fields[1].name, "STRPOS");
+        strcpy(fields[2].name, "STRNEG");
+        for (int i = 0; i < 3; i++) {
+            fields[i].irtype = 3; fields[i].ncomp = 1;
+            strcpy(fields[i].comp[0], "SXX");
+        }
+        CHECK(cv_stress_group(&step, &stress, &top, &bottom) && stress == 0 && top == 1 && bottom == 2);
+        step.nfields = 2;
+        CHECK(cv_stress_group(&step, &stress, &top, &bottom) && top == 1 && bottom == -1);
+        step.nfields = 3; strcpy(fields[2].comp[0], "SYY");
+        CHECK(cv_stress_group(&step, &stress, &top, &bottom) && top == 1 && bottom == -1);
+        fields[1].irtype = 1;
+        CHECK(!cv_stress_group(&step, &stress, &top, &bottom));
+        fields[0].irtype = 1;
+        CHECK(!cv_stress_group(&step, &stress, &top, &bottom));
+    }
     {
         cv_field_desc dd = {0};
         strcpy(dd.name, "DISP"); dd.ncomp = 6;
@@ -1185,6 +1434,11 @@ static void test_localsys(void) {
     }
     CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &st, s), CV_LOC_TURNED);
     CHECK_NEAR(s[0], 0, 1e-6); CHECK_NEAR(s[1], 1, 1e-6); CHECK_NEAR(s[3], -0.5, 1e-6);
+    float slots[8 * 6] = {0};
+    slots[0] = 1; slots[6] = 2;
+    CHECK_EQ(cv_localsys_apply_elem(&L, &d, &d.mesh, 1, &st, slots), CV_LOC_TURNED);
+    CHECK_NEAR(slots[0], 0, 1e-6); CHECK_NEAR(slots[1], 1, 1e-6);
+    CHECK_NEAR(slots[6], 0, 1e-6); CHECK_NEAR(slots[7], 2, 1e-6);
     CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 2, &st, s), 0);   /* GLOBAL=YES in step 2 */
     CHECK_EQ(cv_localsys_apply(&L, &d, &d.mesh, 1, &ds, u), CV_LOC_TURNED);
     uint32_t n2 = cv_frd_node_index(&d.mesh, 2), n1 = cv_frd_node_index(&d.mesh, 1);
@@ -1746,7 +2000,11 @@ int main(void) {
     test_list_dir();
     test_numbers();
     test_ascii();
+    test_shell_on_solid();
     test_binary();
+    test_element_nodal_ascii();
+    test_element_nodal_binary();
+    test_element_nodal_average();
     test_truncated();
     test_fuzz();
     test_absurd_header();

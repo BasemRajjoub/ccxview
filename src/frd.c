@@ -401,12 +401,13 @@ static void msgf(cv_frd* f, uint64_t where, bool off, const char* fmt, long long
     cv_msg_add(&f->msgs, where, off, buf);
 }
 
-static uint64_t binary_field_bytes(int ncomp, int fmt, uint32_t n_rec) {
+static uint64_t binary_field_bytes(int ncomp, int irtype, int fmt, uint32_t n_rec) {
     int vsz = fmt == 3 ? 8 : 4;
+    int id_bytes = irtype == 3 ? 8 : 4;
     uint64_t total = 0;
     for (int c0 = 0; c0 < ncomp; c0 += 6) {
         int n = CV_MIN(ncomp - c0, 6);
-        total += (uint64_t)n_rec * (uint64_t)(4 + n * vsz);
+        total += (uint64_t)n_rec * (uint64_t)(id_bytes + n * vsz);
     }
     return total;
 }
@@ -430,8 +431,7 @@ static void shear_order(cv_field_desc* d) {
 }
 
 #define PUSH(v, x) do { if (!cv_push((v), (x))) goto oom; } while (0)
-/* a field record; IRTYPE 3 (element-nodal values, FEMaster's per-element results) is not read */
-#define PUSH_FR do { if (elnod) msgf(f, c.line, false, "element-nodal result block skipped (IRTYPE 3)", 0); else PUSH(frecs, fr); } while (0)
+#define PUSH_FR do { PUSH(frecs, fr); } while (0)
 
 bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
     memset(f, 0, sizeof *f);
@@ -460,7 +460,6 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
 
     bool in_hdr = false;                        /* between -4 and the field's data */
     field_rec fr;
-    bool elnod = false;                         /* the field being read is IRTYPE 3 */
     int hdr_ncomp = 0, hdr_seen = 0;
     bool saw_end = false;
 
@@ -540,7 +539,9 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
                 PUSH_FR;
             }
             memset(&fr, 0, sizeof fr);
-            { long long irt = 0; elnod = nt > 3 && tok_int(tb[3], te[3], &irt) && irt == 3; }
+            long long irt = 1;
+            if (nt > 3) tok_int(tb[3], te[3], &irt);
+            fr.d.irtype = (int)irt;
             fr.step = (int)steps.n - 1;
             if (fr.step < 0) {                          /* field before any 100CL */
                 cv_step s0 = { .ictype = -1 };
@@ -573,7 +574,7 @@ bool cv_frd_parse(cv_frd* f, const char* data, size_t size) {
                 /* Binary: the records start right after this line. */
                 if (fr.d.ncomp == 0) fr.d.ncomp = CV_MIN(CV_MAX(hdr_ncomp, 1), CV_MAX_COMP);
                 fr.d.data_off = (uint64_t)(c.p - data);
-                uint64_t bytes = binary_field_bytes(fr.d.ncomp, res_fmt, res_nrec);
+                uint64_t bytes = binary_field_bytes(fr.d.ncomp, fr.d.irtype, res_fmt, res_nrec);
                 if (bytes > (uint64_t)(c.end - c.p)) {
                     msgf(f, fr.d.data_off, true, "binary field data truncated", 0);
                     c.p = c.end;
@@ -816,11 +817,147 @@ void cv_frd_free(cv_frd* f) {
 
 /* ---- field decode ----------------------------------------------------------- */
 
+static bool rec_elem_ids(const char* s, const char* e, uint32_t* eid, uint32_t* nid, const char** values) {
+    uint32_t* ids[2] = { eid, nid };
+    for (int i = 0; i < 2; i++) {
+        while (s < e && (*s == ' ' || *s == '\t')) s++;
+        const char* b = s;
+        while (s < e && is_digit(*s)) s++;
+        long long v;
+        if (s == b || !tok_int(b, s, &v) || v < 0 || v > 0xFFFFFFFELL) return false;
+        *ids[i] = (uint32_t)v;
+    }
+    *values = s;
+    return true;
+}
+
+void cv_frd_read_elem_field(const cv_frd* f, const cv_field_desc* d, float* out, cv_msgs* msgs) {
+    int nc = d->ncomp;
+    size_t nslots = f->n_elems ? f->eoff[f->n_elems] : 0;
+    size_t total = nslots * (size_t)nc;
+    for (size_t i = 0; i < total; i++) out[i] = NAN;
+    if (d->irtype != 3) {
+        if (msgs) cv_msg_add(msgs, d->line, false, "element-nodal decode requested for a non-IRTYPE 3 field");
+        return;
+    }
+    if (d->data_off >= f->size || nc <= 0) return;
+
+    size_t unknown = 0, records = 0;
+    char buf[120];
+    uint8_t* seen = calloc(CV_MAX(nslots, 1), 1);
+    if (!seen) {
+        if (msgs) cv_msg_add(msgs, d->line, false, "out of memory tracking element-nodal records");
+        return;
+    }
+
+    if (d->fmt == 1) {
+        cursor c = { f->data, f->data + d->data_off, f->data + f->size, d->line - 1 };
+        const char *ls, *le;
+        uint32_t slot = UINT32_MAX;
+        int col = 0;
+        double v[CV_MAX_COMP];
+        while (next_line(&c, &ls, &le)) {
+            const char* s = ls;
+            while (s < le && *s == ' ') s++;
+            if (le - s < 2 || s[0] != '-') {
+                if (is_header_line(ls, le)) break;
+                continue;
+            }
+            if (s[1] == '3') break;
+            if (s[1] == '1' && (s + 2 == le || s[2] == ' ')) {
+                uint32_t eid, nid;
+                const char* values;
+                if (!rec_elem_ids(s + 2, le, &eid, &nid, &values)) {
+                    if (msgs) {
+                        snprintf(buf, sizeof buf, "%s: malformed element-nodal record", d->name);
+                        cv_msg_add(msgs, c.line, false, buf);
+                    }
+                    slot = UINT32_MAX;
+                    continue;
+                }
+                records++;
+                uint32_t e = cv_frd_elem_index(f, eid), n = cv_frd_node_index(f, nid);
+                slot = UINT32_MAX;
+                if (e != UINT32_MAX && n != UINT32_MAX)
+                    for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++)
+                        if (f->conn[j] == n) { slot = j; break; }
+                if (slot == UINT32_MAX) { unknown++; continue; }
+                if (seen[slot] && msgs) {
+                    snprintf(buf, sizeof buf, "%s: duplicate value for element %u, node %u (last value used)",
+                             d->name, eid, nid);
+                    cv_msg_add(msgs, c.line, false, buf);
+                }
+                seen[slot] = 1;
+                col = 0;
+                int nval = rec_values(values, le, false, NULL, v, nc);
+                for (int k = 0; k < nval; k++) out[(size_t)slot * nc + k] = (float)v[k];
+                col = nval;
+            } else if (s[1] == '2' && (s + 2 == le || s[2] == ' ')) {
+                if (slot == UINT32_MAX || col >= nc) continue;
+                const char* values = ls + 13 <= le ? ls + 13 : le;
+                int nval = rec_values(values, le, false, NULL, v, nc - col);
+                for (int k = 0; k < nval; k++) out[(size_t)slot * nc + col + k] = (float)v[k];
+                col += nval;
+            }
+        }
+    } else {
+        const char* p = f->data + d->data_off;
+        const char* end = f->data + f->size;
+        int vsz = d->fmt == 3 ? 8 : 4;
+        for (int c0 = 0; c0 < nc; c0 += 6) {
+            int nval = CV_MIN(nc - c0, 6);
+            size_t rec = 8 + (size_t)nval * vsz;
+            for (uint32_t r = 0; r < d->n_rec; r++) {
+                if ((size_t)(end - p) < rec) {
+                    if (msgs) {
+                        snprintf(buf, sizeof buf, "%s: binary element-nodal data truncated", d->name);
+                        cv_msg_add(msgs, (uint64_t)(p - f->data), true, buf);
+                    }
+                    goto done;
+                }
+                int32_t eid, nid;
+                memcpy(&eid, p, 4); memcpy(&nid, p + 4, 4);
+                const char* q = p + 8;
+                p += rec;
+                if (c0 == 0) records++;
+                uint32_t e = cv_frd_elem_index(f, (uint32_t)eid);
+                uint32_t n = cv_frd_node_index(f, (uint32_t)nid);
+                uint32_t slot = UINT32_MAX;
+                if (e != UINT32_MAX && n != UINT32_MAX)
+                    for (uint32_t j = f->eoff[e]; j < f->eoff[e + 1]; j++)
+                        if (f->conn[j] == n) { slot = j; break; }
+                if (slot == UINT32_MAX) { if (c0 == 0) unknown++; continue; }
+                float* o = out + (size_t)slot * nc + c0;
+                if (vsz == 4) memcpy(o, q, (size_t)nval * 4);
+                else for (int k = 0; k < nval; k++) { double x; memcpy(&x, q + 8 * k, 8); o[k] = (float)x; }
+                seen[slot] = 1;
+            }
+        }
+    }
+done:
+    if (d->shear_yzx)
+        for (size_t i = 0; i < nslots; i++) {
+            float* o = out + 6 * i, yz = o[3], zx = o[4];
+            o[3] = o[5]; o[4] = yz; o[5] = zx;
+        }
+    if (unknown && msgs) {
+        snprintf(buf, sizeof buf, "%s: %zu records reference an unknown element or a non-member node (ignored)",
+                 d->name, unknown);
+        cv_msg_add(msgs, d->line, false, buf);
+    }
+    if (d->n_rec && records != d->n_rec && msgs) {
+        snprintf(buf, sizeof buf, "%s: indexed %zu records, header declares %u", d->name, records, d->n_rec);
+        cv_msg_add(msgs, d->line, false, buf);
+    }
+    free(seen);
+}
+
 void cv_frd_read_field(const cv_frd* f, const cv_field_desc* d, float* out, cv_msgs* msgs) {
     const int nc = d->ncomp;
     const size_t total = (size_t)f->n_nodes * (size_t)nc;
     for (size_t i = 0; i < total; i++) out[i] = NAN;
     if (d->data_off >= f->size) return;
+    if (d->irtype == 3) return;           /* element-nodal: per element only, cv_frd_read_elem_field */
 
     size_t unknown = 0;
     char buf[120];
