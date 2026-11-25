@@ -103,13 +103,13 @@ jobs:
       - name: site for GitHub Pages
         if: env.PUBLISH == 'true'
         run: mkdir -p site && cp build/web/ccxview.html site/index.html
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         if: env.PUBLISH == 'true'
         with:
           path: site
       - id: deploy
         if: env.PUBLISH == 'true'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   # macOS (Apple Silicon): its own job, so a failure here never blocks the Linux, Windows
   # and web release. The archive is attached to the release by the next job.
