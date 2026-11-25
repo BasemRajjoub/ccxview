@@ -32,12 +32,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write               # the release
-      pages: write
-      id-token: write
-      actions: read                 # deploy-pages looks up the github-pages artifact
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     env:
       GH_TOKEN: ${{ github.token }}
       PUBLISH: ${{ github.event_name == 'push' || inputs.release }}
@@ -107,8 +101,22 @@ jobs:
         if: env.PUBLISH == 'true'
         with:
           path: site
+
+  # the browser build to GitHub Pages, in its own job: deploy-pages lists the run's
+  # artifacts, and an upload from the same job may not be listed yet. Re-runnable alone.
+  pages:
+    needs: release
+    if: github.event_name == 'push' || inputs.release
+    runs-on: ubuntu-22.04
+    permissions:
+      pages: write
+      id-token: write
+      actions: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - id: deploy
-        if: env.PUBLISH == 'true'
         uses: actions/deploy-pages@v5
 
   # macOS (Apple Silicon): its own job, so a failure here never blocks the Linux, Windows
