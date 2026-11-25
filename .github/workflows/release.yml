@@ -34,6 +34,7 @@ jobs:
       contents: write               # the release
       pages: write
       id-token: write
+      actions: read                 # deploy-pages looks up the github-pages artifact
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
