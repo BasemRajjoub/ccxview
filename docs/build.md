@@ -38,9 +38,8 @@ compiled in (Inter, Noto Sans Math, Lucide icons; regenerate with
 
 Change the number in `VERSION` (e.g. `0.2.0`), commit and push to master. GitHub
 Actions ([release.yml](../.github/workflows/release.yml)) then builds Linux,
-Windows (mingw-w64) and the web in one job, runs the unit tests and the
-interface test, creates the release `v0.2.0` with the three archives and
-generated notes, and updates the browser version on GitHub Pages. Other pushes
+Windows (mingw-w64) and the web in one job, runs the unit tests, creates the
+release `v0.2.0` with the three archives and generated notes, and updates the browser version on GitHub Pages. Other pushes
 build nothing. To build without releasing, run the workflow by hand from the
 Actions tab (it keeps the archives as artifacts for a week).
 
@@ -56,7 +55,8 @@ the same version.
 - `make uitest` (`scripts/ui-test.sh`): the real program driven by mouse events
   through its own event handler; checks that lists open, panels answer after
   every window is opened and closed, the wheel and drags do what they should.
-  A failed case saves a picture to `build/ui-test/`.
+  A failed case saves a picture to `build/ui-test/`. Not run by the release
+  workflow: run it locally before raising `VERSION`.
 - `make fuzz`: byte-flips every sample file through every reader.
 
 ## Timing
