@@ -36,7 +36,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PUBLISH: ${{ github.event_name == 'push' || inputs.release }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: version
         id: v
         run: |
@@ -46,13 +46,22 @@ jobs:
               echo "::error::release v$v exists already; raise the number in VERSION"
               exit 1
           fi
+      - name: apt packages from the cache
+        uses: actions/cache@v6
+        with:
+          path: ~/apt-cache               # the .debs: an Ubuntu mirror once took 9 minutes for them
+          key: apt-ubuntu-22.04-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: apt-ubuntu-22.04-
       - name: compilers and headers
         run: |   # the runner's package lists are usually fresh enough; update only when not
           p="libx11-dev libxi-dev libxcursor-dev libgl-dev gcc-mingw-w64-x86-64 patchelf"   # the interface test runs locally (scripts/ui-test.sh), not here
-          sudo apt-get install -y -qq --no-install-recommends $p || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $p; }
+          mkdir -p ~/apt-cache/partial
+          o="-o Dir::Cache::Archives=$HOME/apt-cache -o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          sudo apt-get install -y -qq --no-install-recommends $o $p || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $o $p; }
+          sudo chown -R "$USER" ~/apt-cache && rm -rf ~/apt-cache/partial ~/apt-cache/lock
       - name: emsdk from the cache
         id: emsdk
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: emsdk                     # with Emscripten's cache: libc and friends, built once
           key: emsdk-${{ env.EMSDK_VERSION }}
@@ -63,7 +72,7 @@ jobs:
           emsdk/emsdk install "$EMSDK_VERSION"
           emsdk/emsdk activate "$EMSDK_VERSION"
           rm -rf emsdk/downloads emsdk/.git   # the unpacked SDK is what the cache keeps
-      - uses: hendrikmuhs/ccache-action@v1.2
+      - uses: hendrikmuhs/ccache-action@v1.2.26
         with:
           key: release
           max-size: 300M
@@ -82,7 +91,7 @@ jobs:
           ! ./build/bin/ccxview --crash-test
           scripts/symbolize.sh ccxview-crash.txt build/bin/ccxview | tee /dev/stderr | grep -q 'crash_test_b at .*app.c'
       - run: scripts/pack-binaries.sh
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: env.PUBLISH != 'true'
         with:
           name: ccxview-${{ steps.v.outputs.tag }}
@@ -125,7 +134,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: build
         run: make -j"$(sysctl -n hw.ncpu)" RELEASE=1
       - name: test
@@ -137,7 +146,7 @@ jobs:
         run: |
           file build/ccxview
           scripts/pack-binaries.sh
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: ccxview-macos-arm64
           path: dist/ccxview-macos-arm64.tar.gz
@@ -153,8 +162,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: ccxview-macos-arm64
           path: dist
