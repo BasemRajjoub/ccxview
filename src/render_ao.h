@@ -13,7 +13,7 @@
 
 /* the GLSL header both render files put in front of their shaders */
 #ifdef __EMSCRIPTEN__
-#define GLSL_HDR "#version 300 es\nprecision highp float; precision highp int; precision highp sampler2D;\n"
+#define GLSL_HDR "#version 300 es\nprecision highp float; precision highp int; precision highp sampler2D; precision highp sampler2DShadow;\n"
 #else
 #define GLSL_HDR "#version 410\n"
 #endif
