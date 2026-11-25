@@ -1,0 +1,1243 @@
+/* app.h -- application state shared by app.c (loop, loading, camera) and ui.c. */
+#ifndef CV_APP_H
+#define CV_APP_H
+
+#include "frd.h"
+#include "elemnodal.h"
+#include "selstats.h"
+#include "mesh.h"
+#include "field.h"
+#include "glyph.h"
+#include "os.h"
+#include "render.h"
+#include "vmath.h"
+#include "dat.h"
+#include "datip.h"
+#include "ndof.h"
+#include "inp.h"
+#include "fbd.h"
+#include "sta.h"
+#include "anchor.h"
+#include "units.h"
+#include "selset.h"
+#include "selfilter.h"
+#include "filedlg.h"
+#include "cel.h"
+
+/* what the faces are coloured by */
+enum { FM_FIELD, FM_TYPE, FM_MAT, FM_GRP, FM_PLAIN, FM_ESET, FM_SECT, FM_N };   /* FM_TYPE + axis = FM for that axis;
+                                                                    new ones last: saved numbers keep their meaning */
+
+/* symmetry plane position along its axis */
+enum { CV_SYM_ZERO, CV_SYM_MIN, CV_SYM_MAX, CV_SYM_N };
+
+/* the side panel's sections and sub-sections: open or closed, kept in the settings */
+enum { CV_PTAB_MODEL, CV_PTAB_RESULTS, CV_PTAB_VIEW, CV_PTAB_RENDER, CV_PTAB_EXPORT, CV_PTAB_N };
+enum { CV_TREE_LAYERS, CV_TREE_GROUPS, CV_TREE_FIELDS, CV_TREE_VIEW, CV_TREE_EXPORT,
+       CV_TREE_CAMERA, CV_TREE_COLOURS, CV_TREE_DISPLAY, CV_TREE_MIRROR, CV_TREE_REPLICATE,
+       CV_TREE_CLIP, CV_TREE_FILE, CV_TREE_SYMBOLS, CV_TREE_CYCLIC, CV_TREE_LABELS, CV_TREE_IMPORT,
+       CV_TREE_CONTACT, CV_TREE_NDOF, CV_TREE_RENDER, CV_TREE_KEYS, CV_TREE_N };
+
+/* the title block's automatic lines (app_title.c), in the order shown */
+enum { CV_TB_TITLE, CV_TB_FILE, CV_TB_SOLVER, CV_TB_ANALYSIS, CV_TB_STEP, CV_TB_SCALE, CV_TB_UNITS,
+       CV_TB_USER, CV_TB_DATE, CV_TB_N };
+enum { CV_TB_FREE = 3 };       /* free lines: a label and a text each */
+enum { CV_TB_LINES = 32, CV_TB_TEXT = 2048 };   /* the template's rows shown, its size */
+
+enum { CV_VIEW_ISO, CV_VIEW_PX, CV_VIEW_NX, CV_VIEW_PY, CV_VIEW_NY, CV_VIEW_PZ, CV_VIEW_NZ };
+
+/* a kept stress classification line (Path window > keep): from node a to node b, or
+   from a along a direction (dir 1 the inward normal, 2..4 X, Y, Z; b UINT32_MAX) */
+typedef struct {
+    char     name[32];
+    uint32_t a, b;           /* node indices */
+    int      dir;
+    float    p[2][3];        /* the ends when it was kept */
+} cv_scl;
+
+typedef struct {
+    v3    target;
+    float dist, yaw, pitch, fovy;    /* turntable: yaw / pitch about the up axis */
+    v3    fdir, fup;                 /* free orbit: unit target -> eye, and the screen's up */
+    bool  ortho;
+} cv_camera;
+
+/* One decoded (step, field) pair. */
+typedef struct {
+    int    step, field;
+    float* vals;
+    size_t bytes;
+    uint64_t used;           /* LRU stamp */
+} cv_cache_entry;
+
+enum { CV_CACHE_N = 8 };
+
+/* Background work: loading a file, or rebuilding the skin after a group change. */
+enum { JOB_NONE, JOB_LOAD, JOB_SKIN };
+/* the Selection window's parts that fold */
+enum { CV_SELG_PICK, CV_SELG_NAMES, CV_SELG_USE, CV_SELG_NAMED, CV_SELG_N };
+/* the Inspector pane's tabs; what a click in the view probes */
+enum { CV_TAB_INSPECT, CV_TAB_SELECT, CV_TAB_MEASURE, CV_TAB_N };
+enum { CV_PK_NODE, CV_PK_ELEM, CV_PK_FACE, CV_PK_EDGE, CV_PK_N };
+#define CV_PK_DEFAULT ((1 << CV_PK_NODE) | (1 << CV_PK_ELEM))   /* G.pick_kinds: a node and its element */
+extern const char* const cv_pk_names[CV_PK_N];                    /* "node" ... "edge", as --pick-kind takes them */
+/* the Inspect tab's groups, a bit each in G.tag_groups: their lines on the probe's tag too */
+enum { CV_TAG_FACE, CV_TAG_EDGE, CV_TAG_COMP, CV_TAG_NODE, CV_TAG_ELEM, CV_TAG_CHECKS, CV_TAG_ENODES, CV_TAG_SEL, CV_TAG_IP, CV_TAG_N };
+#define CV_TAG_DEFAULT ((1 << CV_TAG_CHECKS) | (1 << CV_TAG_SEL))   /* failure, mesh quality, the selection's extremes */
+extern const char* const cv_tag_names[CV_TAG_N];                  /* "face" ... "selection", as --tag-groups takes them */
+enum { CV_EYE_OFF, CV_EYE_CUT, CV_EYE_HIDE };   /* G.fly_clip: nothing, the eye cuts, it hides whole elements */
+/* labels on the model (app_label.c): what they show */
+enum { CV_LABEL_NONE, CV_LABEL_NODE, CV_LABEL_ELEM, CV_LABEL_VALUE, CV_LABEL_EVALUE, CV_LABEL_SETS,
+       CV_LABEL_LINKS, CV_LABEL_LOADS, CV_LABEL_SUPPORTS, CV_LABEL_MATERIALS, CV_LABEL_GPVALUE, CV_LABEL_GPID, CV_LABEL_MINMAX, CV_LABEL_N };
+
+/* measurements between nodes (app_measure.c): their kinds, what their labels show */
+enum { CV_MEAS_DIST, CV_MEAS_ANGLE, CV_MEAS_CIRCLE, CV_MEAS_N };
+enum { CV_MSHOW_BOTH, CV_MSHOW_UNDEF, CV_MSHOW_DEF };
+
+typedef struct {
+    int       kind;
+    cv_thread thread;
+    cv_mutex  lock;
+    bool      done;          /* guarded by lock */
+    double    started;
+    /* inputs */
+    char      path[1024];
+    const cv_frd* frd;       /* JOB_SKIN: read-only while the job runs */
+    uint8_t*  vis;
+    bool      crop;
+    float     crop_lo[3], crop_hi[3];   /* world coordinates */
+    uint8_t*  eye_node;       /* per node, NULL: none; elements with a node set are hidden (the eye's plane) */
+    bool      eye_only;       /* only the eye's plane moved: keep the legend and the probe */
+    float     crease;         /* feature edges: degrees between faces that make a crease */
+    bool      mid;            /* quadratic faces through their mid-side nodes */
+    /* outputs */
+    bool      ok;
+    char      err[256];
+    cv_map    map;
+    cv_frd    frd_out;
+    cv_groups groups;
+    cv_skin   skin;
+    cv_dat    dat;            /* sibling .dat, if any */
+    cv_sta    sta;            /* sibling .sta / .cvg: increments and iterations */
+    cv_inp    deck;           /* the .inp (opened, or beside the .frd) */
+    char      deck_path[1024];
+    bool      has_deck;
+    bool      deck_geometry;  /* no .frd: the deck's mesh is what is shown */
+    bool      stl_model;      /* an .stl opened alone: its triangles are the mesh (Tri3, ids 1..n) */
+    bool      stl_binary;
+    char      dat_path[1024];
+    bool      has_dat;
+    cv_fbd    fbd;            /* cgx geometry (.fbd opened) */
+    bool      has_fbd;
+    bool      eval_cgx;       /* evaluate a cgx script with cgx */
+    bool      fbd_evaluated;
+    char      cgx_log[1024];
+    double    seconds;
+} cv_job;
+
+typedef struct {
+    /* file */
+    char      path[1024];
+    char      open_buf[1024];
+    int       open_len;
+    bool      loaded;
+    bool      stl_model;      /* the model is an STL file: mesh only, no results */
+    bool      stl_binary;
+    cv_map    map;
+    cv_frd    frd;
+    cv_groups groups;
+    cv_skin   skin;
+    v3        bmin, bmax;
+    float     diag;
+    v3        vmin, vmax;     /* view box: undeformed + deformed as drawn */
+    float     vdiag;
+    float     mean_edge;      /* mean skin edge length, for the edge fade */
+    float     sym_len;        /* symbol size in model units: sym_auto_len, or sym_size when set by hand */
+    float     sym_auto_len;   /* 2.5 % of the diagonal of the meshed part, undeformed */
+    cv_msgs   msgs;           /* loader + decode messages (frd.msgs holds the parser's) */
+    double    load_seconds;
+
+    cv_job    job;
+    bool      skin_dirty;     /* a group changed while a job was running */
+    bool      fit_pending;    /* the view fitted once the skin being built is in (crop to the selection) */
+
+    /* crop box, as fractions of the model bounding box per axis */
+    bool      crop_on;
+    float     crop_lo[3], crop_hi[3];
+
+    /* active field: name + option, looked up again in every step */
+    int       step;
+    char      field_name[64];   /* .frd names are short; .dat names are phrases */
+    int       comp;
+    bool      has_field;      /* current step has the selected field */
+    unsigned  field_gen;      /* bumped when the values or displacements change */
+    bool      elem_mode;
+    int       field_src;      /* 0: .frd (nodal), 1: .dat (integration points), 2: calculated, 3: failure, 4: mesh quality */
+    int       fail_crit;      /* failure field: the criterion (CV_FC_*) and what it shows (CV_FO_*) */
+    int       fail_out;
+    int       mesh_q;         /* mesh quality field: the measure (CV_MQ_*) */
+    float     mq_lim[16];     /* the user's quality limits by CV_MQ_* (quality.h), 0: the usual */
+    bool      mesh_deformed;  /* mesh quality on the deformed shape of the step on screen (true scale), else undeformed */
+    float     mesh_warn_pct;  /* mesh verdict: up to this % of elements past a limit is a warning, more is poor */
+    char      calc_expr[256]; /* the calculated field's formula (calc.h), kept across files */
+    char      calc_err[128];  /* why the last formula did not compile, "" when it did */
+    struct cv_calc* calc;     /* calc_expr compiled for this file, NULL none */
+    uint8_t*  vis;            /* last visibility mask (groups + crop), NULL = all */
+
+    /* integration-point display */
+    bool      show_gp;
+    bool      gp_colored;
+    float     gp_size;
+    bool      gp_on_top;      /* Gauss points drawn through the faces */
+    bool      nodal_recovery; /* a .dat field as nodal values extrapolated from its points (app_nrec.c) */
+    float     avg_pct;        /* averaged at a node where the variation is at most this many % of the range; 0 never, 100 always */
+    bool      avg_across_materials;
+    bool      en_on;          /* element-nodal results (IRTYPE 3) are offered and shown (app_enodal.c) */
+    int       en_avg;         /* CV_EN_AVG_*: not averaged, scalars, components */
+    int       en_side;        /* CV_EN_BOTH / TOP / BOTTOM: the surface of a shell shown */
+    int       probe_ip;       /* point hit by the probe (1-based), 0 none */
+    int       probe_dip;      /* the .dat point nearest the click, whatever field shows (1-based), 0 none */
+    char      field_label[96];   /* with the unit in [] when a unit set is chosen */
+    char      legend_lines[3][96];   /* the legend's title: the field, its component, its unit; any may be empty */
+
+    cv_cache_entry cache[CV_CACHE_N];
+    uint64_t  cache_clock;
+
+    float*    scalar;         /* n_nodes */
+    float*    elem_val;       /* n_elems */
+    float*    tri_val;        /* n_tri */
+    float*    disp;           /* 3 * n_nodes, NULL when the step has no DISP */
+    float*    disp2;          /* harmonic response: -DISPI (imaginary part), NULL otherwise */
+    bool      harmonic;       /* the step holds DISP + DISPI: animate as DISP cos wt - DISPI sin wt */
+    float     data_min, data_max;
+    uint32_t  min_at, max_at;        /* node (or element) holding the extreme, UINT32_MAX none */
+    int       minmax_n;              /* how many of each end the balls and the min / max labels show (1 .. 100) */
+    uint32_t* ext_lo;                /* the minmax_n smallest (first first) and largest: nodes (elements) */
+    uint32_t* ext_hi;
+    uint32_t  ext_n;                 /* how many each holds */
+    size_t    nan_count;             /* values without data */
+    bool      show_markers;          /* min / max balls */
+    bool      show_ghost;            /* undeformed edges behind the deformed shape */
+    bool      find_open;             /* Ctrl+F window */
+    int       seq_left, seq_total;   /* PNG sequence export: frames still to write */
+    bool      seq_anim;              /* Animate before the export, restored after */
+    int       seq_cycles;            /* video: cycles recorded */
+    bool      seq_steps;             /* the frames run through the increments instead of the deformation phase */
+    int       seq_hold;              /* steps mode: frames per increment */
+    int       seq_step0;             /* steps mode: the step to return to */
+    bool      seq_lock0;             /* range lock before the export, restored after */
+    /* the Export section's choices */
+    int       exp_kind;              /* 0 deformation cycle, 1 every step */
+    bool      exp_video;             /* one video file (MP4, or GIF with exp_gif) instead of a PNG sequence */
+    bool      exp_gif;               /* the video file is an animated GIF */
+    int       exp_cycles;            /* deformation cycles recorded */
+    int       exp_fps;               /* frames per second of a video / cycle */
+    bool      exp_lock_range;        /* keep the colour range fixed while recording */
+    bool      png_alpha;             /* the PNG of the view with a transparent background */
+    int       png_alpha_arm;         /* frames drawn with the background cleared to alpha 0 before the export reads them */
+    int       tree[CV_TREE_N];       /* CV_TREE_*: panel section expanded (nk_collapse_states) */
+    int       seq_warm;              /* frames to let pass before recording: the arming frame is drawn with the old state */
+    void*     video;                 /* an MP4 being written (cv_video*), frames of the sequence go there */
+    /* clip plane: everything beyond it is cut away at draw time */
+    bool      clip_on;
+    bool      clip_cap;              /* fill the cut through solid elements */
+    int       clip_axis;             /* 0..2 normal along X / Y / Z */
+    bool      clip_flip;
+    float     clip_pos;              /* fraction of the model box along that axis */
+    /* watching the file: reload when the solver writes more */
+    bool      watch;
+    uint64_t  watch_mtime, watch_size;
+    double    watch_t;
+    bool      reload_keep;           /* this load keeps camera, step and field */
+    int       keep_step;
+    char      keep_field[64];
+    int       keep_comp;
+    cv_camera keep_cam;
+    /* path plot: the field between two picked nodes, on the straight line through the
+       solid (sampled, interpolated in the elements) or on the shortest path over the
+       surface edges; or from one node along a direction to where the line leaves
+       the solid */
+    uint32_t  path_a;                /* first node, UINT32_MAX none */
+    bool      path_arm;              /* waiting for the second click */
+    bool      path_surface;          /* along the surface instead of straight */
+    uint32_t  path_end[2];           /* the end nodes; [1] UINT32_MAX when a ray ends on a face */
+    float     path_p[2][3];          /* the straight line's ends (undeformed) */
+    int       path_dir;              /* 0 to a picked node, 1 along the inward normal, 2..4 along X, Y, Z */
+    uint32_t  path_to;               /* the last picked end node, to go back to mode 0 */
+    uint32_t  path_tri;              /* the skin triangle clicked at the first node: its normal */
+    unsigned  path_gen;              /* bumped on every rebuild: the markers follow */
+    uint32_t* path_nodes;  uint32_t path_n;   /* surface: the nodes; straight: path_n samples */
+    float*    path_dist;
+    uint32_t* path_el;  float* path_w;        /* straight: element (UINT32_MAX outside) and 20 weights per sample */
+    bool      path_open;             /* the plot window */
+    bool      path_lin;              /* the window shows the linearization of the straight line (default) */
+    /* history: the current field at one node (or element) over every step */
+    bool      hist_open;
+    uint32_t  hist_node, hist_elem;  /* the element's node mean in per-element mode */
+    int       hist_n;
+    float*    hist_t;  float* hist_v;  int* hist_step;
+    bool      hist_by_step;          /* x axis: step number instead of time */
+    char      hist_key[480];         /* what the curve was built for */
+    /* stress linearization along the straight line between the path's two nodes (ASME) */
+    bool      lin_open;
+    float     lin_p[2][3];           /* the ends */
+    uint32_t  lin_a, lin_b;          /* their nodes, for the labels; UINT32_MAX a point on a face */
+    int       lin_fi;                /* the tensor field linearized, -1 none */
+    int       lin_n;                 /* sample points */
+    float*    lin_s;                 /* 6 per point, NaN where the line is outside the solid */
+    float     lin_t;                 /* line length */
+    int       lin_q;                 /* shown: 0 von Mises, 1 Tresca, 2..7 a component, 8 S1+S2+S3 */
+    bool      lin_asme;              /* bending from the components normal to the line only (5-A.4.1.2) */
+    char      lin_key[200];
+    cv_scl*   scl;                   /* kept lines, scl_n of them; restored from the model's .ccxview */
+    int       scl_n;
+    char      scl_name[32];          /* the name the next kept line gets (the Path window's box) */
+    /* comparison: a second results file on the same mesh, shown as A - B */
+    cv_map    cmp_map;
+    cv_frd    cmp;
+    bool      cmp_on;
+    char      cmp_path[1024];
+    bool      diff_mode;
+    int       dlg_kind;              /* what the open dialog picks: CV_DLG_MODEL, _STL (imported geometry), _COMPARE */
+    float     rmin, rmax;
+    bool      range_lock;
+    int       oor_mode[2];           /* a locked range: values above [0] and below [1]: 0 the map's end colour, 1 grey, 2 oor_rgb, 3 hidden */
+    float     oor_rgb[2][3];         /* the colours of mode 2 */
+    bool      center_zero;
+
+    bool      deform;
+    bool      deform_auto;
+    float     deform_scale;
+    float     auto_scale;
+
+    /* layers */
+    bool      show_faces, show_edges, show_nodes;
+    int       faces_mode;            /* FM_* */
+    bool      edges_field, nodes_field;
+    bool      edges_auto;            /* hide the edges while they are denser than ~3 px */
+    bool      edges_dense;           /* ... and they are now (with hysteresis) */
+    bool      show_outline;          /* feature edges: borders, creases, material and type changes */
+    float     outline_angle;         /* crease angle, degrees; the skin is rebuilt when it changes */
+    bool      mid_faces;             /* quadratic faces drawn through their mid-side nodes (the skin is rebuilt when it changes) */
+    float*    axis_rgb[CV_AXIS_N];   /* 3 floats per group value */
+    float     point_size;
+    bool      shading;               /* off: flat true colours; on: light + shadow */
+    int       look;                  /* how the shading lights: 0 Engineering (a head light), 1 Studio (app_look.c) */
+    bool      render_view;           /* the master switch: on, the studio settings below; off, the plain view (flat or headlight, G.bg, no floor / shadows / AO) */
+    bool      render_view_forced;    /* off for this session by a big model on a software renderer: the ini keeps on */
+    bool      plain_shading;         /* the light with render view off: false flat, true headlight */
+    bool      look_ao;               /* Studio: ambient occlusion */
+    bool      look_ao_moving;        /* ... also while the view moves (never on a software renderer) */
+    bool      look_shadow;           /* Studio: the key light's shadows (a shadow map each frame) */
+    bool      look_floor;            /* Studio: a floor under the model with a soft contact shadow */
+    bool      look_smooth;           /* Studio: smooth normals across the skin, sharp edges kept */
+    int       render_samples;        /* Render image: samples per still, 16 / 64 / 256 */
+    float     look_ao_radius;        /* how far a point occludes, a fraction of the model's size */
+    float     look_ao_strength;      /* 0 .. 1 */
+    int       bg_mode;               /* the view's backdrop: 0 plain (bg), 1 Abaqus, 2 ANSYS, 3 studio, 4 white (render_bg.h) */
+    float     look_exposure;         /* the light's scale, 1 as tuned */
+    char      look_mats[512];        /* the presets chosen per material name: "STEEL=Stainless steel;ALU=Aluminium" */
+    float     model_alpha;           /* the faces' opacity, 0..1 (1 opaque); an element set's multiplies it (app_see.c) */
+    int       cmap;
+    int       bands;
+
+    /* view */
+    cv_camera cam;
+    bool      sym[3];                /* mirror copies across a plane normal to X, Y, Z */
+    int       sym_at[3];             /* CV_SYM_*: where that plane sits */
+    bool      rep[3];                /* replicate: a row of copies along X, Y, Z (periodic models) */
+    int       rep_n[3];              /* copies along that axis, the model included */
+    float     rep_gap[3];            /* space between copies; 0: they touch (pitch = length of the model) */
+    bool      rep_follow;            /* copies follow the deformation: shifted by the deformed cell edges */
+    bool      cyc_on;                /* cyclic symmetry: the sector turned about an axis */
+    int       cyc_n;                 /* sectors in 360 degrees */
+    int       cyc_show;              /* sectors drawn, the model included (1..cyc_n) */
+    int       cyc_axis;              /* 0 X, 1 Y, 2 Z */
+    float     cyc_o[3];              /* a point on the axis */
+    bool      up_z;                  /* turntable about world Z instead of Y */
+    bool      orbit_free;            /* free orbit: dragging turns about the screen's axes, no fixed up */
+    bool      orbit_cursor;          /* drag rotates about the model point under the cursor */
+    bool      orbit_box;             /* off the model, a drag rotates about the box of what is drawn */
+    bool      zoom_cursor;           /* the wheel zooms toward the cursor */
+    bool      wheel_invert;          /* wheel up zooms out */
+    bool      show_pivot;            /* mark the point the view turns / zooms about while navigating */
+    int       nav_mode;              /* CV_NAV_*: what the mouse is doing to the view */
+    bool      nav_live;              /* a drag is on: the mark shows only then */
+    v3        nav_pt;                /* the pivot / zoom point */
+    float     nav_box[4];            /* box zoom: x0, y0, x1, y1 in window pixels */
+    bool      flight;                /* free flight: WASD + mouse look */
+    float     fly_speed;             /* model diagonals per second */
+    int       fly_clip;              /* CV_EYE_*: in flight, what the eye does to the model just ahead of it */
+    float     fly_clip_depth;        /* ... this far ahead, in model diagonals */
+    bool      eye_hide_on;           /* the skin was built with the elements at the eye hidden */
+    float     eye_n[3], eye_d, eye_f1, eye_f2;   /* ... at this plane and deformation */
+    int       vp_x, vp_y, vp_w, vp_h;   /* 3D area in window pixels */
+
+    /* displacement animation (within one step) */
+    bool      anim_on;
+    int       anim_mode;             /* 0: 0 -> 1 -> 0,  1: -1 .. +1 (mode shapes) */
+    float     anim_period;           /* seconds per cycle */
+    float     anim_factor;           /* current multiplier on the deformation */
+    float     anim_factor2;          /* ... and on the imaginary part (harmonic steps) */
+
+    /* title bar */
+    uint64_t  file_bytes;
+    double    title_t;
+    int       title_frames;
+
+    /* step playback */
+    bool      playing;
+    float     fps;
+    double    last_tick;
+
+    /* probe */
+    bool      probe_on;
+    cv_pick   probe;
+    float     probe_value;
+    int       pick_kinds;            /* 1 << CV_PK_*: what a click probes and a pick selects (never none) */
+    uint32_t  probe_face;            /* the face probed: element << 3 | its face, UINT32_MAX none */
+    uint32_t  probe_edge[3];         /* the edge probed: its corners, the mid-side node; [0] UINT32_MAX none */
+    bool      tips;                  /* tooltips over the controls (the status bar's "tips") */
+    bool      probe_tag;             /* the probe's tag in the view: what and its value, a leader to it (T) */
+    float     probe_tag_off[2];      /* the tag dragged from its place beside the item, px at scale 1 */
+    int       tag_groups;            /* 1 << CV_TAG_*: the Inspect groups whose lines the tag shows below its head */
+    /* max in a box: the field's extremes among the shown nodes (elements) inside a dragged box */
+    bool      box_arm;               /* the next left drag in the view draws that box */
+    bool      box_pick;              /* the box being drawn is one (not a box zoom) */
+    struct { bool on; uint32_t max_at, min_at, n; float vmax, vmin; bool elem; unsigned gen; } boxq;   /* gen: G.field_gen it holds for */
+    uint32_t* sel;                   /* the selected elements (indices), sel_n of them */
+    uint32_t  sel_n;
+    uint32_t* seln;                  /* the selected nodes (indices), seln_n of them */
+    uint32_t  seln_n;
+    uint32_t* self;                  /* the selected faces: element << 3 | face (as G.skin.face), sorted, self_n of them */
+    uint32_t  self_n;
+    uint32_t* sele;                  /* the selected edges: corner node pairs low, high (2 an edge), sorted, sele_n of them */
+    uint32_t  sele_n;
+    bool      sel_visible;           /* only the side facing the camera: nodes on faces turned toward it, elements with such a face */
+    bool      sel_mark_max, sel_mark_min;   /* the balls on the selection's extremes, off by default (the values are in the probe either way) */
+    uint8_t*  sel_inside;            /* per node, 1: it was in the last box (as dragged), to select again when they change */
+    uint8_t*  sel_front;             /* per node, 1: on a face turned toward the camera as the box was dragged; NULL: not judged */
+    uint8_t*  sel_front_e;           /* per element: 1 such a face, 0 none turned this way, 2 no face on the skin */
+    bool      sel_crossing;          /* ... by a crossing box (else a window) */
+    int       sel_mode;              /* CV_SEL_* (selset.h): how what is picked next goes with the selection */
+    int       sel_tool;              /* CV_ST_*: what a click in the view does (the Selection window's tools) */
+    bool      show_select;           /* the Selection window */
+    bool      sel_filters;           /* ... with its filter rows open */
+    bool      sel_open[4];           /* ... and its other parts: CV_SELG_* (the filters are sel_filters) */
+    char      sel_note[160];         /* what the last selection step did or why it did nothing */
+    float     lasso[2 * 512];        /* the lasso being drawn: window pixels, lasso_n points */
+    int       lasso_n;
+    uint8_t*  hide;                  /* per element, 1: hidden by hand (context menu), NULL none */
+    /* the context menu (right click in the view): where, and what was under it */
+    bool      menu_on;
+    float     menu_x, menu_y;
+    cv_pick   menu_pick;
+    float     menu_p[3], menu_n[3];  /* the point hit and its face normal (model frame) */
+    int       menu_stl;              /* the imported geometry under it, in front of the model; -1 none */
+
+    bool      show_msgs;
+    bool      show_calc_help;        /* the formula builder window */
+    bool      show_units;            /* the units window */
+    bool      show_fail;             /* the strength materials window */
+    bool      show_cpal;             /* the colour palettes window (ui_cpal.c) */
+    bool      show_report;           /* the Report builder window (ui_report.c) */
+    int       rep_skip;              /* report: the CV_RP_* parts left out */
+    int       rep_pics;              /* report: the CV_REP_PIC_* pictures taken */
+    bool      rep_pdf;               /* report: PDF, else Markdown */
+    bool      show_mesh;             /* the mesh quality window */
+    bool      mesh_limits_open;      /* ... with the user's limits shown */
+    bool      show_deck;             /* the Deck window: steps, amplitudes, model changes, submodel */
+    bool      show_removed;          /* elements removed by *MODEL CHANGE in the step on screen stay drawn */
+    /* labels on the model */
+    int       label_kinds;           /* bit k set: the labels show kind CV_LABEL_k; any mix (app_label_on) */
+    float     label_px;              /* text height, px (before ui scale) */
+    float     label_spacing;         /* the gap kept between labels, px; 0: every one, overlapping */
+    float     label_rgb[3], label_box_rgba[4];
+    bool      label_sel_only, label_probe_only;
+    bool      label_front;           /* drawn in front of everything (nodes facing away are left out anyway) */
+    unsigned  label_gen;             /* bumped when the labelled things change (model, step, field, selection) */
+    char      label_note[64];        /* "labels: node id, shown 420 of 18 000"; "" when off */
+    /* measurements (app_measure.c): their window, and what their labels show */
+    bool      show_measure;
+    /* reinforcement of concrete shells, the field REBAR (app_shell.c, rebar.h): the
+       design values in the model's units (MPa and mm with N and mm), under REBAR in Fields */
+    float     rebar_fcd, rebar_fyd, rebar_cover;
+    /* a subgroup of Fields to open and scroll to once ("CONTACT", "REBAR", a field's name):
+       --contact-window, --rebar-window, the menus */
+    char      fields_open[32];
+    int       meas_show;             /* CV_MSHOW_*: the labels give both values, the undeformed or the deformed one */
+    bool      show_about;            /* the About window: author, licence, libraries */
+    cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
+    bool      show_conv;             /* the convergence window */
+    float     bg[3];                 /* view background */
+    bool      export_req;            /* save the 3D view as PNG after this frame */
+    char      note[1100];            /* short status-bar note (e.g. where an export went) */
+    double    note_t;
+    bool      show_geo_pts, show_geo_crv, show_geo_srf;   /* cgx geometry layers */
+    float     geo_size;
+    bool      show_hl;               /* deck set / surface highlights */
+    float     hl_size;
+    bool      show_bc, show_loads;   /* deck supports / loads as glyphs */
+    bool      show_disc;             /* springs / dashpots / masses as symbols */
+    bool      show_links;            /* coupling spiders */
+    /* contact (app_contact.c): the Contact subgroup of Fields, the .cel's contact elements, the
+       ties and contact pairs ticked there (or under Groups > Couplings), the key over the view */
+    bool      show_contact;          /* the Contact settings window (more... in the subgroup) */
+    bool      cel_show;              /* any of it drawn: the contact display, the pairs' surfaces, the tied nodes */
+    int       cel_pick;              /* the .cel set drawn: -1 the increment on screen, else its index */
+    bool      cel_master;            /* ... with their master faces */
+    bool      cel_surfs;             /* the contact pairs' surfaces in their slave / master colours */
+    bool      cel_front;             /* ... their slave nodes and lines in front of the model (inside an assembly) */
+    /* the contact display (app_cdisp.c): how the slave nodes are drawn, coloured by what */
+    int       cel_draw;              /* CV_CDRAW_*: the interface layer, links, the .cel's elements */
+    int       cel_by;                /* CV_CBY_*: the gap, CPRESS, CSLIP, CSHEAR, the status */
+    bool      cel_closed, cel_open;  /* the closed / open slave nodes as balls (filled / rings) */
+    bool      cel_true;              /* with the shape exaggerated, the slave nodes drawn at their true gap off the face */
+    float     cel_gap_max;           /* the gap colours' open end, 0 auto (the widest gap shown) */
+    float     cel_pen_max;           /* ... their penetration end, 0 auto (the deepest, at least the tolerance) */
+    float     cel_tol;               /* closed within this gap (without CPRESS), penetrating beyond it; 0 auto */
+    float     cel_near;              /* open within this gap: near open; 0 auto */
+    float     cel_lo, cel_hi;        /* the CPRESS, CSLIP, CSHEAR colours' ends (the gap's: the gap colours'); 0 auto */
+    float     cel_alpha;             /* the interface layer's opacity */
+    float     cel_ccx_alpha;         /* the .cel's elements' opacity */
+    float     cel_min;               /* the layer's least thickness, model units: closed faces a thin skin; 0 none */
+    bool      cel_edges;             /* the layer's edges outlined */
+    int       tie_nodes;             /* a tie's slave nodes: 0 tied and not tied, 1 tied only, 2 not tied only, 3 none */
+    bool      contact_key;           /* the colours' key over the view while any of it is drawn */
+    cv_anchor ckey_pos;              /* ... dragged to (unset: bottom-left, above the axes) */
+    bool      show_vec;              /* arrows of the current 3-component field */
+    bool      vec_colored;
+    float     vec_pct;               /* longest arrow, percent of the model diagonal */
+    bool      show_tensor;           /* glyphs of the current stress / strain field (app_tensor.c) */
+    int       tensor_style;          /* CV_GLYPH_* (glyph.h) */
+    bool      tensor_colored;        /* glyphs coloured by the selected scalar, else grey */
+    float     tensor_scale;          /* the largest glyph, times the mean element size */
+    bool      show_traj;             /* principal stress trajectories (app_traj.c) */
+    int       traj_which;            /* 0 S1 (largest), 1 S3 (smallest), 2 both */
+    float     traj_spacing;          /* distance between trajectories, times the mean element size */
+    float     bc_scale, load_scale;  /* supports / springs and load arrows, times sym_len */
+    bool      sym_auto;              /* symbol size follows the model's size (else sym_size) */
+    float     sym_size;              /* symbol size by hand, model units */
+    float     sym_thick;             /* thickness of the symbols' lines, times the default (4.5 % of the symbol size) */
+    bool      sym_thin;              /* crowded supports and loads: one of a kind per patch of their size (off: every node) */
+
+    /* file dialogs */
+    char      exe_dir[1024];
+    bool      native_dlg_missing;  /* portal / native dialog not available: use ours */
+    bool      dlg_running;
+    bool      browser_open;
+    char      browse_dir[1024];
+    bool      show_help;
+    bool      hide_legend, hide_axes; /* View: legend and axes gizmo off */
+    bool      legend_box;            /* a white box with a border behind the legend, for pictures on a page */
+    bool      hide_panels;           /* H: the 3D view alone, for screenshots */
+    bool      ui_glass;              /* glass panels: the view drawn behind the panels too */
+    float     ui_glass_alpha;        /* their backgrounds' opacity, 0.2..1 */
+    float     ui_glass_boxes, ui_glass_buttons, ui_glass_headers;   /* their widgets' opacity: fields, buttons, headers */
+    bool      ui_float;              /* with glass: the panes as floating cards, a gap round each (ui_glass.c) */
+    bool      ui_palette;            /* Ctrl+K: the command palette in the middle (ui_palette.c); off: the panel's search box */
+    bool      ui_rail;               /* the left panel's tabs as an icon rail at the window's edge (ui_rail.c); off: a text strip */
+    bool      ui_modern;             /* phone-like widgets: switches, segments, chips, value-in-slider (ui_modern.c); off: Nuklear's */
+    bool      ui_field_picker;       /* the top bar's field and component as one picker with search (ui_fpick.c); off: two combos */
+    char      toolbar_pins[1024];    /* the top bar: ids in order, comma separated, empty = default (app_cmds_lib.c, ui_tbar.c) */
+    bool      tbar_edit;             /* the Customize toolbar window is open */
+    bool      show_settings;         /* the Settings window is open (ui_settings.c) */
+    int       panel_tab;             /* CV_PTAB_*: the left panel's tab (ui_tabs.c) */
+    char      cmd_recent[256];       /* the last features used, newest first, comma separated (the search box's Recent) */
+    bool      scene_on, insp_on;     /* the Scene pane (left, [) and the Inspector (right, ]) shown */
+    float     scene_w, insp_w;       /* their widths, px at scale 1 (dragged by the inner edge) */
+    int       insp_tab;              /* CV_TAB_*: the Inspector's tab */
+    /* legend look (right-click the legend) */
+    bool      legend_reverse;        /* colour map turned around */
+    bool      legend_grey;           /* greyscale, for printing */
+    int       legend_fmt;            /* 0 auto, 1 fixed decimals, 2 scientific */
+    int       legend_decimals;
+    int       units;                 /* CV_SYS_*: the unit system the model was built in (0: not set) */
+    int       unit_in[CV_Q_N];       /* each quantity in the file: unit index (units.h), -1 the system's */
+    int       unit_show[CV_Q_N];     /* each quantity shown in: unit index, -1 as input */
+    int       csys;                  /* results in: 0 global, 1..3 cylindrical about X, Y, Z */
+    float     csys_o[3];             /* ... through this point */
+    bool      legend_edit;           /* the legend settings window is open */
+    cv_anchor legend_pos, gizmo_pos;  /* dragged to: view corner + gap (unset: top-right, bottom-left) */
+    /* title block: "Label: value" lines in a corner of the view (app_title.c, ui_title.c) */
+    bool      title_on;
+    bool      title_edit;            /* its settings window is open */
+    bool      title_line[CV_TB_N];   /* each automatic line on */
+    bool      title_file_date;       /* the date: the result file's (when it was solved), else today */
+    char      title_free[CV_TB_FREE][2][64];   /* free lines: label, text; shown when the text is set */
+    char      title_text[CV_TB_TEXT]; /* the template drawn (tbtext.h): made from the boxes above, or typed */
+    bool      title_hand;            /* the template was edited by hand: the boxes leave it alone */
+    char      title_date_fmt[48];    /* {date}, {date_file}: strftime, %-d no leading zero */
+    cv_anchor title_pos;             /* dragged to (unset: bottom-right) */
+    bool      idle_redraw;           /* draw only when something changes (app_idle.c); off: every frame */
+    int       max_fps;               /* the most frames a second; 0: as the display goes (vsync) */
+    bool      ndof_on;               /* a 3D mouse moves the camera (ndof.h); no device: nothing */
+    float     ndof_speed;            /* its sensitivity, 1 = the default */
+    bool      ndof_zoom_lift;        /* lift / push down the cap zooms, forward / back pans vertically */
+    bool      ndof_flip[6];          /* reverse pan x, pan y, zoom, tilt, spin, roll */
+    bool      ndof_lock_rot, ndof_lock_pan, ndof_dominant;
+    float     ndof_dead;             /* dead zone, % of travel */
+    bool      ndof_found;            /* a device answered cv_ndof_open */
+    bool      orbit_pivot_on;        /* the last mouse rotation's pivot is remembered */
+    v3        orbit_pivot;           /* ... the model point it turned about (the 3D mouse turns about it too) */
+    bool      sidecar;               /* keep each model's post-processing in <model>.ccxview (app_sidecar.c) */
+} cv_app;
+
+extern cv_app G;
+
+const char* app_unit(const char* field, int comp);   /* the unit shown, "" when unknown or no unit set */
+void app_units_changed(void);        /* file or shown units changed: values decoded again */
+void app_rebar_changed(void);        /* the reinforcement's design values changed: REBAR worked out again */
+/* cv_field_options with component names in the chosen coordinate system */
+int  app_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
+
+/* actions the UI calls */
+void app_open(const char* path);
+void app_open_dialog(int kind);      /* native dialog for a CV_DLG_* kind, else the built-in browser */
+void app_start_dir(char* out, size_t n);
+void app_set_step(int step);
+void app_hist_open(uint32_t node, uint32_t elem);   /* plot the field at this node over all steps */
+void app_lin_open(const float A[3], const float B[3], uint32_t na, uint32_t nb);  /* linearize the stress on the line A..B */
+/* membrane and bending of the sampled line, the bending masked as lin_asme asks; false if no line */
+bool app_lin_mb(double m[6], double b[6]);
+void app_lin_close(void);
+/* kept stress classification lines (G.scl) */
+int  app_scl_keep(const char* name);        /* the shown straight path, under this name; its index, -1 none */
+void app_scl_show(int i);                   /* make kept line i the path, linearized */
+void app_scl_delete(int i);
+int  app_scl_current(void);                 /* the kept line the path is, -1 none */
+void app_scl_clear(void);
+bool app_scl_add(const cv_scl* l);          /* append one (read from the model's .ccxview); false: out of memory */
+void app_pick_cancel(void);                 /* drop a pending second click */
+void app_marks_sync(void);                  /* the picked-node markers, redrawn when the picks change */
+/* the cap of the clip plane n . x = d through the solid elements, deformed by f1 DISP
+   (in the shader) + f2 DISPI; rebuilt only when something changed */
+void app_clip_caps(bool on, const float n[3], float d, float f1, float f2);
+bool app_lin_csv(const char* path);
+void app_hist_close(void);
+bool app_hist_csv(const char* path);
+void app_select(const char* field, int comp);
+void app_select_src(const char* field, int comp, int src);
+/* Show the formula expr as the field (field_src 2). false: it does not compile,
+   calc_err says why, and the field shown stays. */
+bool app_calc_set(const char* expr);
+/* The formula library (calclib.h), loaded on first use from --formula-lib or
+   ccxview_formulas.txt beside the ini; every change is written back. */
+const struct cv_calclib* app_formulas(void);
+bool app_formula_save(const char* name, const char* expr);   /* add / replace */
+void app_formula_delete(int i);
+void app_cpal_import(const char* path);        /* palettes from JSON / XML (ui_cpal.c) */
+void app_cpal_use(int i);                      /* the legend shows the user's palette i */
+void app_formulas_import(const char* path);    /* merge a text file; reports what was skipped */
+void app_formulas_export(void);                /* <model>_formulas.txt */
+void app_fail_set(int crit, int out);   /* show the failure field (field_src 3) */
+void app_mesh_set(int q);               /* show a mesh quality measure (field_src 4), per element */
+/* The same, as the user's choice (Fields tree, top bar, a window, the command line):
+   a chosen field takes precedence over a colouring by type, material, group or a
+   plain colour, so the faces switch to it (#26). Restoring a view or a reload uses
+   the plain setters above and keeps the colouring that was saved. */
+void app_pick_field(const char* field, int comp, int src);
+bool app_pick_calc(const char* expr);
+void app_pick_fail(int crit, int out);
+void app_pick_mesh(int q);
+void app_faces_show_field(void);        /* faces coloured by the field, if they were not */
+void app_set_elem_mode(bool on);
+void app_groups_changed(void);
+void app_fit(void);
+void app_fit_element(uint32_t e);    /* centre the orbit on element e, close up */
+int  app_check(const char* path);    /* --check: headless parse, messages to stdout; exit code */
+void app_sym_toggled(int axis);      /* picks the plane, reframes */
+void app_sym_changed(void);          /* plane moved: reframe */
+float app_sym_plane(int axis);
+float app_rep_pitch(int axis);       /* distance between replicated copies along the axis, undeformed */
+void app_rep_refresh(void);          /* after the displacements change: the cell's face jumps */
+int  app_copies(void);               /* instances drawn: the model, mirror and replicate copies */
+void app_copy_matrix(int i, float* M);   /* model matrix of instance i (0: identity) */
+void app_export_png(void);
+void app_export_animation(void);         /* per the Export section: deformation cycles or every step, PNGs or MP4 */
+int  app_export_progress(int* done, int* total);  /* a frame export running? fills done / total */
+void app_export_cancel(void);            /* stop a frame export; a video keeps what it has */
+/* app_report.c: the Report builder. The pictures, CV_REP_PIC_* bits of G.rep_pics */
+enum { CV_REP_PIC_CUR = 1, CV_REP_PIC_ISO = 2, CV_REP_PIC_FRONT = 4, CV_REP_PIC_TOP = 8, CV_REP_PIC_RIGHT = 16, CV_REP_PIC_N = 5 };
+const char* app_report_pic_name(int i);         /* "Current view", "Isometric" ... */
+void app_report_build(void);                    /* G.rep_*: the pictures over the next frames, then the report */
+bool app_report_busy(void);                     /* taking them: the builder window stays out of the view */
+void app_report_tick(void);                     /* each frame, after drawing */
+bool app_export_report(const char* path, bool pdf);   /* the model summary as Markdown or PDF: path (.pdf: PDF), or <model>_report.md / .pdf beside the model when NULL */
+bool app_export_data(bool vtk);          /* nodes + field as CSV, or mesh + field as VTK, beside the model */
+bool app_project(v3 p, float* sx, float* sy);   /* world -> window pixels; false when behind the eye */
+/* app_select.c -- the selection: elements G.sel and nodes G.seln. Every change goes
+   through app_sel_apply: the lists in which (1 elements, 2 nodes) combined with the
+   current ones by mode (CV_SEL_*: NEW also empties the other list), then the field's
+   max and min over the selection (its nodes, or its elements per element) to G.boxq,
+   the probe to the max, its outer faces outlined, the labels. false: nothing selected.
+   The box, CAD style: dragged left to right a window (the shown elements wholly
+   inside), right to left a crossing (any node inside); by projection, so elements
+   behind the front faces count; it goes in by G.sel_mode. */
+enum { CV_ST_NONE, CV_ST_CLICK, CV_ST_LASSO, CV_ST_FACE, CV_ST_CHAIN, CV_ST_PART, CV_ST_N };
+bool app_sel_apply(const uint32_t* el, uint32_t ne, const uint32_t* nd, uint32_t nn, int mode, int which);
+int  app_sel_which(void);                       /* what the ticks say a pick takes: 1 elements | 2 nodes; elements when neither */
+bool app_sel_any(void);                         /* anything selected: elements, nodes, faces or edges */
+bool app_box_select(float x_start, float y_start, float x_end, float y_end);
+bool app_box_reselect(void);                    /* the last box again (G.pick_kinds or the facing side changed) */
+bool app_lasso_select(const float* xy, int n);  /* the lasso: the elements wholly inside it (window pixels) */
+void app_sel_clear(void);
+void app_sel_refresh(void);                     /* the outline again: the shape changed */
+void app_sel_field_changed(void);               /* the extremes again: the field changed */
+void app_sel_facing(uint8_t* node, uint8_t* elem, uint8_t* tri);   /* the side facing the camera (per node, element, skin triangle; tri may be NULL) */
+/* app_selfe.c: the selected faces G.self and edges G.sele (which: 1 faces, 2 edges;
+   NEW empties the other), taken by a box from its nodes (the kinds ticked), by a
+   click (app_selfe_take, NEW toggles), drawn on the skin (lines as vertex pairs,
+   the faces' triangles toned). Not in the named selections. */
+void app_selfe_clear(void);
+bool app_selfe_apply(const uint32_t* fc, uint32_t nf, const uint32_t* ed, uint32_t ne, int mode, int which);
+uint32_t app_selfe_box(const uint8_t* inside, bool crossing, int mode, bool fresh);
+bool app_selfe_take(uint32_t face, const uint32_t edge[2], int mode);
+void app_selfe_draw(cv_fvec* lp, cv_fvec* ld, cv_fvec* tp, cv_fvec* td, cv_fvec* tv);
+bool app_selfe_drop_hidden(const uint8_t* shown_nodes);
+/* the selection's totals, one per kind (CV_PK_*: count, size, min, max, weighted average;
+   undeformed), kept until the selection or field changes */
+const cv_selstat* app_selstats(void);
+void app_selstats_dirty(void);
+/* app_seltools.c: the other ways to select, each by the mode given: elements bring
+   their nodes when nodes are ticked (and go in only when elements are), nodes are
+   nodes whatever is ticked; only what is shown */
+bool app_sel_take_elems(const uint32_t* el, uint32_t ne, int mode);
+bool app_sel_take_nodes(const uint32_t* nd, uint32_t nn, int mode);
+bool app_sel_click(float px, float py);         /* the armed tool (G.sel_tool) at the pixel; false: not taken */
+bool app_sel_ctrl_click(float px, float py);    /* Ctrl+click: what the pick kind picks there in or out of the selection */
+bool app_sel_invert(void);                      /* the ticked kinds: what is shown and not selected */
+bool app_sel_to_nodes(void);                    /* the selected elements' nodes, the elements dropped */
+bool app_sel_to_elems(bool any);                /* the shown elements with every (any) node selected, the nodes dropped */
+bool app_sel_grow(bool shrink);                 /* one layer of neighbours more (fewer), elements and nodes */
+bool app_sel_boundary(void);                    /* the selected elements' boundary: its nodes, the elements on it */
+/* a deck set or surface by name ("set:", "surf:" to say which), "type:C3D20R",
+   "mat:NAME" or "mat:N" */
+bool app_sel_by_name(const char* name, int mode);
+bool app_sel_by_ids(const char* text, bool nodes, int mode);   /* "1-100, 205"; bad tokens in G.sel_note */
+bool app_sel_spec(const char* spec);            /* --select: "ids:1-100", "set:EHOLE", "add:...", "invert", ... */
+/* app_selfilter.c: keep what passes q (or what faces the camera) of the selection, or
+   of everything shown when nothing is selected; add: what passes anywhere joins,
+   remove: what passes leaves */
+bool app_sel_filter(const cv_selfilter* q, int mode);
+bool app_sel_filter_facing(int mode);
+/* app_seluse.c: what is done with the selection. Named selections hold file ids
+   (sorted) and live in the model's .ccxview; the deck lines are a separate small
+   file to *INCLUDE, never the solver input itself */
+typedef struct { char name[48]; uint32_t* eid; uint32_t ne; uint32_t* nid; uint32_t nn; } cv_namedsel;
+void app_sel_sets_overlap(char* out, size_t n);  /* "EHOLE 40/40, EALL 48/240": deck sets it shares members with */
+int  app_nsel_count(void);
+const cv_namedsel* app_nsel_at(int i);
+int  app_nsel_save(const char* name);            /* the selection under this name (replacing one so named): its index, -1 */
+bool app_nsel_add_ids(const char* name, const uint32_t* eid, uint32_t ne, const uint32_t* nid, uint32_t nn);
+bool app_nsel_take(int i, int mode);
+bool app_nsel_rename(int i, const char* name);
+void app_nsel_delete(int i);
+void app_nsel_clear(void);
+char* app_sel_inp_text(const char* name);        /* *ELSET / *NSET lines of the selection, malloc'd */
+void app_sel_inp_path(const char* name, char* out, size_t n);   /* <model>_<name>.inp */
+bool app_sel_inp_save(const char* name);
+bool app_sel_crop(void);                         /* the crop box round the selection */
+bool app_sel_clip(void);                         /* the clip plane through its centre, across the clip axis */
+void app_sel_drop_hidden(void);                  /* what is shown changed: the hidden part leaves the selection */
+void app_probe_at(uint32_t node_or_elem, bool element);   /* probe it, the view stays */
+/* what lies under the pixel (mirror and replicate copies too), the probe untouched;
+   o, d: the ray in the model's frame */
+bool app_pick(float px, float py, cv_pick* out, float o[3], float d[3]);
+/* hiding elements by hand (on top of groups, sets and crop): hide these, show only
+   these, or show everything again (the hand-hidden ones and every group) */
+void app_hide_elems(const uint32_t* elems, uint32_t n);
+void app_isolate_elems(const uint32_t* elems, uint32_t n);
+/* a deck element set: hidden (its eye), or the only one shown (its "only", the
+   others' cleared); both in Groups > Element sets, where they can be undone */
+void app_hide_set(const char* name, bool only);
+/* Show all: every visibility filter of the elements back to "shown" -- types,
+   materials and groups, the element sets' "only" and hidden, cgx sets, elements
+   hidden by hand. The crop box, the clip plane, *MODEL CHANGE and the node sets'
+   and surfaces' highlights are left as they are (their own switches). */
+void app_show_all(void);
+bool app_any_hidden(void);           /* anything Show all would bring back */
+uint32_t app_hidden_by_hand(void);   /* elements hidden by hand (menu, Selection) */
+/* the axis clip plane through p, across the axis nearest the normal n, cutting
+   away the side the eye is on */
+void app_clip_at(const float p[3], const float n[3]);
+bool app_sel_csv(void);                          /* the selection to <model>_selection.csv */
+size_t app_sel_ids(char* out, size_t n);         /* its element ids, 16 a line, comma separated (an *ELSET body) */
+void app_menu_open(float x, float y);            /* the context menu at this pixel, what lies there picked */
+void app_probe_pixel(float x, float y);          /* probe what lies under the pixel, as a click does */
+/* app_inspect.c: the face and edge a click probes (G.pick_kinds), from the ray o + t d;
+   every kind ticked outlined in the view; a face's ring or an edge's nodes, the field over them */
+static inline bool app_pk(int kind) { return (G.pick_kinds >> kind) & 1; }
+int  app_pick_head(void);                         /* the kind the probe's line names: a face, edge, node, element ticked */
+void app_pick_kind_apply(const float o[3], const float d[3]);
+/* the face (element << 3 | face) and the element's edge nearest a pick on the ray (corners, mid; UINT32_MAX none) */
+void app_pick_face_edge(const cv_pick* p, const float o[3], const float d[3], uint32_t* face, uint32_t edge[3]);
+void app_pick_clear(void);                        /* no face, no edge */
+void app_pick_sync(void);                         /* the outline again when what it rests on changed */
+int  app_pick_nodes_of(int kind, uint32_t out[8]);   /* CV_PK_FACE: the face's ring, CV_PK_EDGE: a, (mid,) b; 0 none */
+int  app_pick_nodes(uint32_t out[8]);             /* those of the head kind (a face or edge); 0 none */
+float app_pick_average_of(int kind);              /* the field over them (the element's value per element) */
+float app_pick_average(void);                     /* ... of the head kind */
+bool app_pick_anchor(float p[3]);                 /* where the probed item is drawn: the node, the centre of the element, face or edge */
+const char* app_version(void);                 /* "0.1.5", "dev" for a local build */
+/* app_label.c: labels on the model */
+const char* app_label_name(int kind);          /* "node id", ... for the panel */
+const char* app_label_key(int kind);           /* "node", ... for --labels */
+int  app_label_parse(const char* keys);        /* "node,value,loads" -> the kinds' bits; 0 when one is unknown */
+static inline bool app_label_on(int kind) { return (G.label_kinds >> kind) & 1; }
+void app_label_set(int kind, bool on);        /* a kind on or off, with what it needs (the Gauss points, the min / max balls) */
+void app_label_changed(void);                  /* the labelled things changed: anchors again next frame */
+void app_label_frame(cv_draw* d);              /* per frame, before cv_render_draw: thin, lay out, upload when needed; sets d->label_px */
+bool app_label_key_kind(const char* kind);     /* a kind of label key: node, elem, gp, min, max, measure, set, link, load, support, material */
+bool app_label_box(int k, float r[4]);         /* the k-th label drawn last frame: its box, window px (x, y, w, h); false past the last */
+/* app_labelpos.c: labels moved by hand, an offset in px (before the interface scale)
+   from where each would be, by its key; kept per model in the post-processing file */
+int  app_label_moved_count(void);
+bool app_label_moved_get(int i, cv_label_off* o);
+bool app_label_move(const char* kind, const char* id, float dx, float dy);   /* adds or replaces */
+bool app_label_unmove(const char* kind, const char* id);                     /* false: it was not moved */
+void app_label_moved_clear(void);
+bool app_label_at(float x, float y, cv_label_off* key);   /* the label shown at a window pixel: its key and offset */
+bool app_label_grab(float x, float y);         /* a press: true when on a label, which then follows app_label_drag */
+void app_label_drag(float dx, float dy);       /* px the mouse moved */
+void app_label_release(void);
+bool app_label_dragging(void);
+bool app_probe_tag_shown(float r[4]);           /* the tag drawn last frame: its box */
+void app_probe_tag_box(const float r[4]);      /* the probe's tag drawn this frame (x, y, w, h px), NULL none: a press on it drags it */
+void app_label_menu_at(float x, float y);      /* the context menu opens here: a moved label under it? */
+bool app_label_menu_moved(void);
+void app_label_menu_reset(void);
+/* app_measure.c: measurements between nodes, kept by file node ids. Cleared when
+   another model opens (app_measure_model), kept on a reload of the same file. */
+int  app_measure_count(void);
+bool app_measure_get(int i, int* kind, uint32_t ids[3]);    /* file node ids; ids[2] 0 for a distance */
+bool app_measure_add(int kind, const uint32_t* node_ids);   /* 2 or 3 file node ids; false when one is not in the model */
+void app_measure_remove(int i);
+void app_measure_clear(void);
+int  app_measure_nodes(int kind);                    /* how many nodes it takes: 2 or 3 */
+const char* app_measure_kind_name(int kind);         /* "distance", "angle", "circle" */
+/* its values: [0] undeformed, [1] deformed (the step's DISP at scale 1; the same when
+   the step has none); v: distance d dx dy dz, angle degrees, circle R cx cy cz nx ny nz.
+   false when its nodes are gone or three are collinear (a circle) */
+bool app_measure_values(int i, double v[2][7], bool* has_def);
+void app_measure_text(int i, int which, char* out, size_t n);   /* which: CV_MSHOW_* (the label's text) */
+void app_measure_line(int i, int state, char* out, size_t n);   /* the window's: state 0 undeformed, 1 deformed */
+size_t app_measure_copy(char* out, size_t n);        /* every one as text, a line per state */
+bool app_measure_csv(void);                          /* to <model>_measurements.csv */
+/* picking: armed with a kind, the clicks give its nodes (first may be a node index,
+   UINT32_MAX none); app_measure_pick takes a click's node and is true when it did */
+void app_measure_arm(int kind, uint32_t first);
+bool app_measure_pick(uint32_t node);
+void app_measure_cancel(void);
+int  app_measure_armed(void);                        /* the kind + 1 being picked, 0 none */
+const char* app_measure_prompt(void);                /* what to click next, "" when not picking */
+bool app_measure_model(const char* path);            /* a model loaded: true and cleared when it is another file */
+void app_measure_sync(void);                         /* per frame: lines and labels follow the changes */
+/* the label anchors: n of them, pos[3] disp[6] each to anc (9 per), texts to txt, the
+   measurement each belongs to (its index) to which */
+uint32_t app_measure_anchors(float* anc, char (*txt)[96], uint32_t* which, uint32_t max);
+/* the shown .frd field's stored components at a node (global, as the file has them);
+   names 12 chars each; returns how many, 0 for a calculated, failure, mesh or .dat field */
+int app_field_comps(uint32_t node, char names[][12], float* vals, int max);
+void app_goto_node(uint32_t node);       /* centre the camera on a node, probe it */
+bool app_find(uint32_t id, bool element);/* by file id: probe + centre; false if absent */
+void app_reload(void);                   /* open the same file again, keeping camera, step and field */
+void app_path_start(uint32_t node);      /* first node of the path; the next pick ends it */
+void app_path_end(uint32_t node);
+void app_path_ray(uint32_t node, int dir);  /* from node along dir (1 inward normal, 2..4 X, Y, Z) to the far face */
+void app_path_clear(void);
+bool app_path_csv(const char* path);     /* dist, (id,) x, y, z, value per point */
+float app_path_value(uint32_t i);        /* the shown nodal field at path point i, NaN where none */
+void app_path_rebuild(void);             /* after path_surface changed */
+bool app_compare_open(const char* path); /* second .frd on the same mesh; false with a message when not */
+void app_compare_close(void);
+bool app_view_save(const char* path);    /* camera, step, field, layers -> a small INI */
+bool app_view_load(const char* path);
+/* app_sidecar.c -- each model's post-processing (view, units, hidden sets, paths,
+   kept lines, labels ...) in <model>.ccxview beside it, restored on open and
+   written when it changes; never the solver's own files */
+bool app_sidecar_path(char* out, size_t n);  /* where the open model's goes; false: none (web, nothing open) */
+bool app_sidecar_on(void);                   /* the setting and --no-sidecar allow it */
+bool app_sidecar_save(void);                 /* now, whether it changed or not */
+void app_sidecar_load(bool reload);          /* after a load; reload: the parts a reload keeps stay as they are */
+void app_sidecar_units(void);                /* the units part alone, nothing redrawn (the headless runs) */
+void app_sidecar_tick(void);                 /* per frame: written a moment after a change */
+void app_sidecar_flush(void);                /* written now if it changed (before unload, at quit) */
+void app_sidecar_forget(void);               /* delete the file, open the model afresh */
+void app_view(int preset);
+void app_view_nohist(int preset);             /* the same, not kept for undo (report pictures) */
+enum { CV_NAV_NONE, CV_NAV_ROTATE, CV_NAV_PAN, CV_NAV_ZOOM, CV_NAV_ROLL, CV_NAV_BOX, CV_NAV_LOOK, CV_NAV_LASSO };
+void cam_orbit_about(float yaw, float pitch, bool on, v3 pivot);   /* cam_orbit, the pivot (if on) keeping its place in the view */
+void cam_turn(v3 axis, float a, v3 pivot);       /* the camera turned about a world axis through pivot */
+bool cam_roll(float a);                          /* about the view axis; false: turntable, switched to free */
+bool app_ndof_apply(const cv_ndof_state* s, float dt);   /* a 3D mouse state moves the camera for dt s; false: nothing to do */
+bool app_center_at(float px, float py);         /* the point under the pixel to the view centre (and pivot) */
+bool app_normal_to(float px, float py);         /* look straight at the face under the pixel */
+void app_box_zoom(float x0, float y0, float x1, float y1);
+float app_dist_max(void);                        /* the farthest zoom out: the model still a few % of the view */
+float app_zoom_factor(float f);                  /* a zoom factor on the distance, held within app_dist_max */
+float app_pixel_size(v3 p);                      /* world length of one pixel at p's depth */
+void app_view_push(void);                        /* remember the view for undo */
+bool app_view_undo(int dir);                     /* -1: back, +1: forward */
+void app_colormap(int cm);
+void app_set_faces_mode(int fm);
+void app_set_flight(bool on);
+/* hide whole elements with a node beyond the eye's plane n . p > d (deformed by f1, f2);
+   on = false shows them again. Rebuilds the skin in the background when the plane moved. */
+void app_eye_hide(bool on, const float n[3], float d, float f1, float f2);
+/* app_look.c: the Studio look */
+void app_look_frame(cv_draw* d);              /* each frame, before the depth pass: the look's fields, the normals */
+bool app_eff_shade(void);                     /* what the frame draws: the settings through the render view switch (they are never overwritten by it) */
+bool app_eff_look(void);                      /* the studio light is on */
+int  app_eff_bg_mode(void);                   /* the backdrop: G.bg_mode, plain with render view off */
+void app_render_view(bool on);                /* switch it, with a note */
+void app_look_clear(void);                    /* a new model */
+int  app_lighting(void);                      /* the Lighting list's choice: 0 flat, 1 headlight, 2 studio (headlight and flat with render view off) */
+void app_set_lighting(int k);
+void app_show_materials(void);                /* faces by material, lit by the studio */
+void app_look_changed(void);                  /* a look setting or a preset changed: the materials' colours again */
+bool app_look_materials(void);                /* Studio with faces by material: they take the materials' looks */
+const float* app_look_class_rgb(void);        /* those looks' colours per material class (sRGB); NULL when not */
+void app_look_runs(int runs);                 /* after cv_render_groups: the runs' metallic and roughness */
+/* the preset deck material `mat` (1-based, as the material axis' values) looks like; *user: chosen,
+   not guessed; why: the guess's reason */
+int  app_look_preset(uint32_t mat, bool* user, char* why, int n);
+void app_look_set(uint32_t mat, int preset);  /* -1: back to the guess */
+void app_group_colors_changed(void);
+/* app_eclass.c: the faces' categorical colouring in the faces mode shown (type, material,
+   group, element set, section): per element its class, the classes, their colours */
+bool app_face_classes(const uint16_t** of, int* n, const float** rgb);
+const char* app_face_classes_title(void);            /* "element set" ... */
+bool app_face_class_label(int i, char* out, size_t n);
+void app_refresh_range(void);
+bool app_busy(void);
+/* app_idle.c -- no redraw while nothing changes */
+void app_wake(void);                         /* draw the next few frames (an event, a change made outside a frame) */
+void app_wake_hover(void);    /* the mouse moved, no button down: fewer frames (HOVER_FPS) */
+bool app_redraw_needed(void);
+bool app_idle_skip(void);                    /* true: this frame is skipped (slept, no swap); call before any sg_ call */
+size_t app_total_msgs(void);
+/* app_render.c: "Render image", a still by progressive accumulation */
+void app_render_start(int samples, const char* png);   /* png NULL: named as the view export names it */
+void app_render_cancel(void);
+bool app_render_active(void);
+
+/* app_integ.c: integrals of the field shown, step by step, over a region: a volume
+   (elements), a surface (element faces) or nodes (a sum). The region is taken when
+   the window opens: a deck set or surface by name, "selection" (G.sel / G.seln) or
+   "shown" (the shown elements, their outer faces, their nodes). */
+enum { CV_IK_VOLUME, CV_IK_SURFACE, CV_IK_NODES, CV_IK_N };
+enum { CV_IQ_MAX = 40 };
+enum { CV_IQ_INTEG, CV_IQ_SUM, CV_IQ_FORCE };   /* an integral (with its average), a sum over nodes, a force or moment */
+typedef struct {
+    bool    open;
+    int     kind;                     /* CV_IK_* */
+    char    target[64];               /* the set's name, "selection", "shown" */
+    char    what[200];                /* "volume of set EALL: 240 elements" */
+    char    note[200];                /* what was left out and why, "" none */
+    double  about[3];                 /* nodes: the point the moment is taken about */
+    int     nq;                       /* quantities: components, the shown scalar, forces, moments */
+    char    name[CV_IQ_MAX][24];
+    int     how[CV_IQ_MAX];           /* CV_IQ_* */
+    int     n;                        /* rows: the steps that have the field */
+    int*    step;  float* t;
+    double* size;                     /* volume, area or nodes counted, per row */
+    double* val;                      /* n * nq: the integrals (sums) */
+} app_integ_t;
+extern app_integ_t GI;
+const char* app_integ_kind(int kind);                    /* "volume", "surface", "nodes" */
+/* opens the window over that region; false (G.note says why) when there is none */
+bool app_integ_open(int kind, const char* target);
+bool app_integ_open_spec(const char* spec);               /* "KIND:TARGET[@x,y,z]" (--integrate) */
+void app_integ_close(void);
+void app_integ_refresh(void);                             /* GI.about changed: the rows again */
+bool app_integ_csv(const char* path);
+void app_integ_csv_path(char* out, size_t n);             /* <model>_integral_<what>.csv */
+/* --integrate-csv: read the model here, write the CSV, no window; exit code */
+int  app_integ_headless(const char* model, const char* spec, const char* field, const char* out);
+
+/* app_gauss.c: integration-point fields from a .dat */
+void gp_set(cv_dat* d, const char* path);
+void gp_localize(void);                /* records in local systems to global, with the deck */
+void gp_clear(void);
+bool gp_loaded(void);
+const char* gp_path(void);
+int  gp_fields(const char** names, int max);
+bool gp_desc(const char* name, cv_field_desc* d);
+bool gp_refresh(void);
+void gp_refresh_geometry(void);
+void gp_build_nodal(void);
+/* the Gauss points as last drawn (shown elements): position, displacement, value, the
+   element and point number of each; for the labels */
+typedef struct { const float *pos, *disp, *val; const uint32_t* elem; const uint8_t* ip; uint32_t n; } gp_points;
+gp_points gp_last(void);
+void app_gauss_changed(void);          /* layer toggled: rebuild the points */
+void gp_values(const float** v, size_t* n);
+bool gp_probe(uint32_t e, const float hit[3], float scale, int* ip, float* value);
+bool gp_sibling(const char* frd_path, char* out, size_t n);
+const cv_dat_block* gp_table(uint32_t e, cv_datip* t);   /* the Inspector's table: e's points */
+int  gp_nearest(uint32_t e, const float hit[3], float scale);
+const cv_dat_block* gp_block(void);     /* the .dat block on the model, NULL none */
+
+/* app_nrec.c: a .dat field recovered at the nodes (G.nodal_recovery) */
+/* app_enodal.c: element-nodal results, a value for every node of every element */
+bool  app_en_active(void);                       /* the model shows one */
+bool  app_en_listed(const cv_step* st, int fi);  /* field fi is offered in the lists (folded into Stress, or the setting off: no) */
+const char* app_field_title(const cv_step* st, int fi);   /* the name the lists show: Stress, Shell stress, STRPOS (shell top) ... */
+int   app_en_head(const cv_step* st, int fi);    /* the entry a folded field belongs to (fi when none) */
+bool  app_en_has_shells(void);                   /* the step has shell surface stresses: the sides apply */
+bool  app_en_compute(int step, int fi);          /* decode the entry headed by field fi and its scalars; false: none to show */
+void  app_en_apply(void);                        /* the scalars again: shown elements, side, averaging changed */
+void  app_en_stop(void);                         /* another field is chosen: not element-nodal until app_en_compute says so */
+void  app_en_clear(void);                        /* model closed */
+void  app_en_raw_clear(void);                    /* units or file changed: decode again */
+void  app_en_values(const float** v, size_t* n); /* the front scalars of every slot, then the back's: the range */
+uint32_t app_en_elem_of(size_t i);               /* the element of entry i of app_en_values */
+float app_en_value(uint32_t elem, uint32_t node, int face);   /* its own value at the node; face 1 the shell's reverse; NaN none */
+bool  app_en_shell(uint32_t elem);
+int   app_en_own(uint32_t elem, uint32_t node, float* top, float* bottom);   /* its own values, not averaged: 1 one, 2 a shell's top and bottom, 0 none */
+float app_en_probe(uint32_t elem, uint32_t node);                           /* the one number for the probe (NaN none) */
+void  app_en_streams(void);                      /* the triangles to the renderer */
+void  app_en_changed(void);                      /* the setting changed: the faces, legend, range */
+bool  app_nrec_active(void);            /* the model shows it */
+void  nrec_clear(void);
+bool  nrec_compute(void);               /* the per element-node values from gp_block, after gp_refresh */
+void  nrec_apply(void);                 /* the averaging, G.avg_pct; hidden elements out */
+float nrec_value(uint32_t e, uint32_t node);   /* NaN none */
+void  nrec_values(const float** v, size_t* n); /* per connectivity slot, as averaged */
+bool  nrec_big(void);                   /* so many slots that the slider applies on release */
+void  app_nrec_changed(void);           /* the setting changed: legend, faces, range */
+
+/* app_deck.c: the input deck -- sets, surfaces, materials */
+void deck_set(cv_inp* d, const char* path);
+void deck_clear(void);
+bool deck_loaded(void);
+unsigned deck_gen(void);             /* bumped when the deck changes: what was derived from it is stale */
+const cv_inp* deck_get(void);
+const char* deck_path(void);
+bool* deck_set_flags(void);          /* per set: an elset marked "only" (show only the marked), a node set highlighted */
+bool* deck_set_hidden_flags(void);   /* per set: an elset hidden (wins over "only"); NULL without a deck */
+bool* deck_surf_flags(void);
+float* deck_set_alpha(void);         /* per set: an elset's opacity, 1 opaque (app_see.c); NULL without a deck */
+bool deck_file_reader(void* user, const char* path, char** data, size_t* size);
+const char* deck_material_name(uint32_t k);
+const cv_elemmap* deck_elemmap(const cv_frd* f);   /* material and axes per .frd element, NULL none */
+bool deck_any_elset_on(void);
+bool deck_any_elset_hidden(void);
+void deck_apply_mask(const cv_frd* f, uint8_t* vis);
+void deck_refresh_highlight(void);   /* highlights and the support / load glyphs */
+bool deck_has_bc(void);
+bool deck_has_loads(void);
+bool deck_has_discrete(void);
+/* values CalculiX wrote in local systems turned to global in place (inp.h) */
+void deck_localize(int step, const cv_field_desc* d, float* vals);   /* step: index into G.frd */
+void deck_localize_dat(cv_dat* dat, const cv_frd* f);
+bool deck_read(const char* path, cv_inp* d);                         /* includes from its folder */
+void deck_compare_open(const char* frd_path);                         /* the comparison run's own deck */
+void deck_compare_localize(const cv_frd* f, int step, const cv_field_desc* d, float* vals);
+void deck_compare_close(void);
+bool* deck_link_flags(void);         /* per link: drawn (spiders) / highlighted (tie, contact surfaces) */
+/* arrow as line pairs: head at tip, shaft back along dir (unit) by len; d = displacement carried */
+/* d: 6 wide, DISP then -DISPI (app_node_disp6); disp gets 6 per vertex, uploaded with app_aux_upload */
+void deck_seg(cv_fvec* pos, cv_fvec* disp, const float* a, const float* b, const float* d);   /* one line, both ends moving by d */
+/* where a deck node is drawn and how it moves; false when it is not shown */
+bool deck_node_pd(uint32_t id, float p[3], float d[6]);
+uint32_t deck_elem(const cv_frd* f, uint32_t id);    /* the shown element of a deck element id, UINT32_MAX if none */
+void app_symbol_size(void);          /* G.sym_len from the model or the hand-set size; redraws the symbols */
+/* a symbol body (render.h, cv_render_inst) appended to v: from a to b, a radius at either end */
+void deck_inst(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal, const float d[6]);
+/* the same with each end moving on its own: a line between two nodes stretches with them */
+void deck_inst2(cv_fvec* v, const float a[3], const float b[3], float ra, float rb, float scal,
+                const float da[6], const float db[6]);
+/* the lines of pos / disp (deck_seg pairs) as tubes of radius r, uploaded to instance layer `which` */
+void deck_lines_inst(int which, const cv_fvec* pos, const cv_fvec* disp, float r);
+float deck_stroke(void);             /* the radius of a symbol's stroke: G.sym_len and G.sym_thick */
+void loads_refresh(void);            /* app_loads.c: the support and load glyphs of the step on screen */
+int  deck_step(void);                 /* app_loads.c: the deck's *STEP on screen (0-based), -1 no deck */
+void deck_step_time(int st, double* ts, double* tt);   /* the step time and total time on screen */
+void deck_apply_removed(const cv_frd* f, uint8_t* vis); /* app_deck.c: *MODEL CHANGE, the step on screen */
+const uint32_t* deck_removed(int64_t* n);  /* the element ids removed in the step on screen */
+void app_node_disp6(uint32_t node, float d[6]);
+void app_aux_upload(int which, const cv_fvec* pos, const cv_fvec* disp6, const float* scal);
+/* lines (vertex pairs, as app_aux_upload takes them) as dots along them, close enough
+   to read as a thicker line: GL core lines are one pixel whatever the width asked */
+void app_aux_dots(int which, const cv_fvec* pos, const cv_fvec* disp6);
+bool app_field_is_vector(void);      /* the selected .frd field has 3 components */
+void app_vectors_changed(void);
+bool app_field_is_tensor(void);      /* app_tensor.c: the selected .frd field is a symmetric tensor */
+void app_tensors_changed(void);
+void app_traj_changed(void);         /* trajectories toggled or set: traced again */
+float app_tensor_cross_lim(void);    /* the sign-coloured layers' scale: +- this, 0 when none is shown */
+/* the reference magnitude of the selected tensor field: the 98th percentile of the
+   largest principal magnitude over the shown elements' centres (0: none) */
+float app_tensor_ref(void);
+bool deck_sibling(const char* path, const char* ext, char* out, size_t n);
+
+/* app_fbd.c: cgx geometry */
+void geo_set(cv_fbd* g, bool evaluated);
+void geo_clear(void);
+bool geo_loaded(void);
+bool geo_evaluated(void);
+const cv_fbd* geo_get(void);
+bool* geo_set_flags(void);
+bool geo_set_hidden(const char* name);
+bool geo_any_on(void);
+bool geo_bounds(v3* lo, v3* hi);
+void geo_refresh(void);
+void geo_set_toggled(int i);
+void geo_show_all(void);
+void geo_sets_into_deck(const cv_fbd* g, cv_inp* d);
+void app_eval_cgx(void);             /* re-open the .fbd, evaluated by cgx */
+
+/* app_stl.c: imported geometry, STL files shown beside the results (parts of the
+   assembly that were not analysed): never deformed, not probed, not on the mirror
+   copies, but the view turns, zooms and centres on them as on the model. They
+   belong to the model: kept on a reload, cleared when another model opens. (An
+   STL opened with no model open is the model itself: app_open.) A layer as the
+   sidecar keeps it: */
+typedef struct {
+    char  path[1024];        /* absolute */
+    bool  visible;
+    float alpha;             /* opacity 0..1, 1 opaque (default) */
+    float rgb[3];
+    float scale;             /* the file's lengths times this (0.001 .. 1000: files in other units) */
+} cv_stl_layer;
+/* read and listed (CV_MESH_N at most); false, with a message, when it cannot be read
+   or no model is open; true without a second copy when the path is listed already */
+bool app_stl_add(const char* path);
+int  app_stl_count(void);
+bool app_stl_get(int i, cv_stl_layer* out);
+void app_stl_set(int i, const cv_stl_layer* in);    /* everything but the path */
+const char* app_stl_name(int i);                    /* the file's base name */
+uint32_t app_stl_tris(int i);
+void app_stl_remove(int i);
+void app_stl_clear(void);
+bool app_stl_bounds(v3* lo, v3* hi);                /* the shown layers, scaled; false: none */
+/* the nearest shown layer triangle along the ray o + t d (world): t, INFINITY none; *layer its index (may be NULL) */
+float app_stl_ray(const float o[3], const float d[3], int* layer);
+/* Import STL: added to the open model, kept for the model being loaded, or -- no
+   model at all -- opened as the model */
+void app_stl_import(const char* path);
+void app_stl_queue(const char* path);               /* added once the model being loaded is in */
+void app_stl_queue_add(void);                       /* the load finished: add what waits */
+void app_stl_queue_drop(void);                      /* the load failed: what waits is not added (said so) */
+/* several files at once (a drop): the model first (.frd before .inp, .fbd, .dat; the
+   rest of them its siblings), then the STLs as its imported geometry; STLs alone
+   join the open model, or the first is the model when none is open */
+void app_open_files(const char* const* paths, int n);
+void app_stl_draw(cv_draw* d);                      /* d->mesh from the layers */
+void app_dialog_done(const char* path);             /* the open dialog's pick: a model, the comparison or a geometry file */
+
+/* app_see.c: see-through faces -- the model's opacity (G.model_alpha) times each
+   element set's (deck_set_alpha), drawn as a glass shell over what lies inside */
+void app_see_refresh(void);          /* the skin, the colouring or an opacity changed */
+void app_see_skin(void);             /* the skin was built again: its triangles' turn worked out afresh */
+bool app_see_set(const char* name, float alpha);   /* an element set's opacity by name; false: no such set */
+
+/* app_contact.c: contact elements (jobname.cel), ties and contact pairs in their
+   slave and master colours (cv_key_rgb), the slave nodes CalculiX could not tie
+   (jobname_WarnNode*.nam). The files beside the model are read with it; a .cel or
+   .nam opened or dropped joins the open model. */
+void app_contact_model(void);                /* a model loaded: its .cel and .nam (a reload reads them again) */
+bool app_contact_open(const char* path);     /* a .cel or .nam (Open, a drop, --cel); false with a message */
+void app_contact_queue(const char* path);    /* opened while a model loads: read once it is in */
+void app_contact_clear(void);
+void app_contact_refresh(void);              /* the step, the shape or a choice changed: drawn again */
+void app_contact_skin(void);                 /* the skin was built again: its faces looked up afresh */
+const cv_cel* app_contact_cel(void);         /* the .cel read, NULL none */
+const char* app_contact_cel_path(void);
+int  app_contact_cel_set(void);              /* the .cel set drawn, -1 none */
+uint32_t app_contact_cel_count(void);        /* its distinct contact elements */
+int  app_contact_nam_count(void);            /* the warning node sets read */
+const char* app_contact_nam(int i, uint32_t* n, bool* miss);   /* its file's name, node count, whether it lists untied nodes */
+/* link k (a tie or contact pair): its slave surface's nodes, those in a warning set */
+void app_contact_pair_nodes(int k, uint32_t* slave, uint32_t* untied);
+bool app_contact_drawn(int what[CV_KEY_N]);  /* what is drawn now, by CV_KEY_* (counts); false: nothing */
+bool app_contact_s2s(void);                  /* ... the contact elements surface to surface (slave faces) */
+/* the distinct contact elements of the set drawn (indices into its elem), NULL none */
+const uint32_t* app_contact_cel_uniq(uint32_t* n);
+/* the nodes of deck surface si as shown indices, each once (malloc'd, NULL none) */
+uint32_t* app_contact_surf_nodes(int si, uint32_t* n);
+
+/* app_cdisp.c: the contact display. Each slave node (of the .cel set drawn and of the
+   deck's contact pairs ticked and active in the step) against its master face: projected
+   onto it on the true deformed shape, its gap (COPEN, else measured), its status
+   (contact.h). Drawn one way (CV_CDRAW_*): an interface layer over the slave faces as
+   thick as the gap (app_clayer.c), links (the node to its projection), or the .cel's
+   contact elements as CalculiX wrote them; coloured by one value (CV_CBY_*); the closed
+   and open slave nodes as balls on top, as ticked. */
+enum { CV_CDRAW_LAYER, CV_CDRAW_LINKS, CV_CDRAW_CCX, CV_CDRAW_N };
+enum { CV_CBY_GAP, CV_CBY_CPRESS, CV_CBY_CSLIP, CV_CBY_CSHEAR, CV_CBY_STATUS, CV_CBY_N };
+typedef struct {
+    int   nodes;                 /* slave nodes with a status */
+    int   cat[6];                /* ... by status (CV_CST_*) */
+    int   closed, open, pen;     /* closed (penetrating among them), open */
+    float lo, hi;                /* the gap colours' ends, lo < 0 < hi */
+    float tol, near;             /* as used (auto or set) */
+    float gmin, gmax;            /* the gaps found */
+    bool  copen;                 /* gaps from CalculiX's COPEN */
+    bool  measured;              /* gaps measured from the shape (where there is no COPEN) */
+    int   draw;                  /* CV_CDRAW_* drawn now, -1 nothing */
+    bool  balls;                 /* slave nodes drawn as balls */
+    int   by;                    /* what colours it (CV_CBY_*) */
+    float llo, lhi;              /* ... its colours' ends (CV_CBY_GAP: lo, hi) */
+    bool  lknown;                /* ... any slave node has that value (CONTACT in the .frd) */
+    int   lpen;                  /* the layer's faces with a penetrating corner (outlined magenta) */
+} cv_cinfo;
+void app_cdisp_refresh(void);                /* from app_contact_refresh */
+extern const char* const cv_cby_names[CV_CBY_N];     /* "gap", "pressure", ... (app_clayer.c) */
+extern const char* const cv_cdraw_names[CV_CDRAW_N]; /* "layer", "links", "ccx" */
+int  app_cby_parse(const char* s);           /* "gap|cpress|cslip|cshear|status" (or pressure ...) or the number; -1 not one */
+int  app_cdraw_parse(const char* s);         /* "layer|links|ccx" (solids) or the number; -1 not one */
+void app_cby_map(float t, float rgb[3]);     /* the colours of CPRESS, CSLIP, CSHEAR at t 0..1 */
+/* the old contact_mode ("links,status,gap,solids,layer" or its bits 1 2 4 8 16): the draw
+   style and (when it says) what colours it; false when not understood */
+bool app_cdisp_parse_mode(const char* s, int* draw, int* by);
+/* the CONTACT field's component chosen in Fields (app_select): the display coloured by it */
+void app_cdisp_field_chosen(const char* field, int comp);
+/* the CONTACT component that shows what the display is coloured by, -100 none in this step */
+int  app_cdisp_by_comp(int by);
+void app_cdisp_clear(void);
+const cv_cinfo* app_cdisp_info(void);
+/* the CONTACT field's STATUS: per node its CV_CST_ number, NaN where not a slave node;
+   false when there is no contact to classify */
+bool app_cdisp_status_field(float* out);
+const char* app_cdisp_status_name(double v); /* the name of a status number, NULL when not one */
+
+/* app_settings.c: the ini file */
+void settings_load(void);                    /* into G, before the first frame */
+void settings_load_units(void);              /* the unit keys alone, for the headless runs */
+void settings_window_size(int* w, int* h);   /* before the window exists */
+void settings_save(int win_w, int win_h);
+bool settings_apply(const char* key_eq_value);   /* --opt; false for an unknown key */
+void settings_apply_model(void);                 /* the --opt keys a model's load sets afresh, again after it */
+void settings_add_recent(const char* path);
+int  settings_recent(const char** out, int max);
+const char* settings_last_dir(void);
+void settings_free(void);
+
+/* app_title.c: the title block's lines, the template filled in, those with data
+   only; label "" spans the block. units: the units line's text ("" or "not set":
+   none). Returns the count. */
+typedef struct { char label[48]; char text[256]; bool span; } cv_title_line;
+int  app_title_lines(cv_title_line* out, int max, const char* units);
+const char* app_title_line_name(int k);    /* CV_TB_*: "Title", "Result file" ... */
+void app_title_generate(char* out, size_t n);   /* the template the boxes make */
+void app_title_sync(void);                 /* G.title_text from the boxes, unless typed by hand */
+void app_title_shown(char* out, size_t n);  /* field, step, deformation as Markdown key/value rows (report) */
+extern const char app_title_keys[];        /* the placeholders, for the help line */
+
+/* colour map lookup with the legend's reverse / grey applied */
+void app_cmap_rgb(float t, float rgb[3]);
+void app_legend_fmt(char* out, size_t n, double v);   /* a legend number in the chosen format */
+const char* app_field_category(double v);   /* a category field's name for value v (CONTACT STATUS), NULL for an amount */
+
+/* camera helpers */
+void cam_basis(const cv_camera* c, v3* eye, v3* fwd, v3* right, v3* up);
+v3   cam_up_axis(void);                  /* world +Y or +Z */
+void cam_orbit(float yaw, float pitch);  /* turn by a drag: turntable or free, per G.orbit_free */
+void app_set_orbit_free(bool on);        /* switch, keeping the current view */
+bool app_cursor_point(float px, float py, v3* out, bool* on_model);
+bool app_box_point(float px, float py, v3* out);   /* the cursor's point on the box of what is drawn */
+
+#endif

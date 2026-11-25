@@ -1,0 +1,20 @@
+#!/bin/sh
+# The project's author commits as one identity. A commit by "Basem ..." under any
+# other address (a machine with its own git config) is refused, with the command
+# that fixes that clone. Other contributors are not checked.
+# Active once core.hooksPath points here; the Makefile sets that in a git checkout.
+want="b.rajjoub@gmail.com"
+for who in AUTHOR COMMITTER; do
+    ident=$(git var GIT_${who}_IDENT) || exit 0
+    name=${ident%% <*}
+    mail=${ident#*<}; mail=${mail%%>*}
+    case "$name" in
+        [Bb]asem*)
+            if [ "$mail" != "$want" ]; then
+                echo "commit refused: $who is '$name <$mail>', this project uses <$want>." >&2
+                echo "fix this clone:  git config user.name 'Basem Rajjoub' && git config user.email $want" >&2
+                exit 1
+            fi ;;
+    esac
+done
+exit 0

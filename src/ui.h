@@ -1,0 +1,60 @@
+/* ui.h -- Nuklear panels. Works in framebuffer pixels and scales itself by the
+   desktop scale (sokol's dpi scale, CCXVIEW_SCALE, GDK_SCALE) x a user zoom. */
+#ifndef CV_UI_H
+#define CV_UI_H
+
+#include <stdbool.h>
+
+struct nk_context;
+
+void  ui_init(void);
+void  ui_frame(struct nk_context* ctx, int fb_w, int fb_h);  /* also sets G.vp_* */
+float ui_scale(void);
+void  ui_zoom(int dir);      /* +1 bigger, -1 smaller, 0 reset */
+float ui_get_zoom(void);
+void  ui_set_zoom(float z);
+float ui_get_font_size(void);            /* UI font height, pixels at scale 1 */
+void  ui_set_font_size(float px);        /* rounded, 10 .. 24; applied next frame */
+bool  ui_get_pixel_font(void);           /* ProggyClean (13 px) instead of Inter */
+void  ui_set_pixel_font(bool on);
+const char* ui_get_theme(void);          /* theme by name, as saved in the settings */
+void  ui_set_theme(const char* name);    /* unknown names are ignored */
+void  ui_focus_open(void);   /* Ctrl+L: cursor into the path box */
+/* ui_search.c: the feature search box (Ctrl+K) */
+void  ui_focus_search(void);            /* Ctrl+K: the box focused, the recent features listed */
+void  ui_search_escape(void);           /* Esc: clear the query, close the list */
+void  ui_search_set(const char* q);     /* --search: the box pre-filled */
+void  ui_search_clear(void);
+bool  ui_search_focused(void);          /* the box has the keyboard */
+const char* ui_search_first(void);      /* the id of the best result of the query now, NULL for none */
+void  ui_search_blur(void);             /* the box lets the keyboard go, its query stays */
+/* ui_palette.c: the command palette (Ctrl+K with G.ui_palette) */
+void  ui_palette_open(const char* q);   /* q NULL: as it was */
+void  ui_palette_close(void);
+bool  ui_palette_shown(void);
+extern unsigned ui_mouse_mods;          /* the modifiers of the last mouse press (ui_modern.c: Ctrl+click types a value) */
+void  ui_palette_key(int sapp_keycode, bool ctrl, bool alt);   /* while shown: Esc, Up, Down, PageUp/Down, Enter */
+bool  ui_palette_typing(void);          /* its box has the keyboard */
+int   ui_palette_sel(void);             /* the selected row, the rows */
+int   ui_palette_count(void);
+const char* ui_palette_sel_id(void);    /* the selected feature's id, NULL for none */
+void  ui_panel_tab(int t);              /* ui_rail.c: the left panel open on tab t (Ctrl+1..5) */
+void  ui_fpick_open(const char* q);     /* --field-picker: its list open, q typed (NULL: none) */
+void  ui_fpick_escape(void);            /* ui_fpick.c: Esc closes the field picker's list */
+/* a panel under the mouse keeps the event from the 3D view (legend and hint
+   never do; the axes gizmo lets the wheel through) */
+bool  ui_mouse_captured(struct nk_context* ctx, bool wheel);
+/* a text or number field is being edited: keys are typing, not shortcuts */
+bool  ui_text_focus(struct nk_context* ctx);
+void  ui_wheel_focus(struct nk_context* ctx);   /* wheel scrolls the panel under it */
+
+
+/* ---- ui_test.c: the interface driven by a script, see there */
+struct sapp_event;
+void ui_test_start(const char* dir, void (*send_event)(const struct sapp_event*));
+bool ui_test_on(void);
+void ui_test_frame(struct nk_context* ctx);   /* once a frame, before the frame's input goes to Nuklear */
+const char* ui_test_shot(void);               /* a failure this frame: save the window there */
+int  ui_test_result(void);                    /* -1 while running, then the number of failed cases */
+
+#endif

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ccxview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #333; overflow: hidden; }
+  #canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #status { position: fixed; left: 0; right: 0; top: 45%; text-align: center; color: #bbb;
+            font: 15px system-ui, sans-serif; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+<div id="status">loading ccxview...</div>
+<script>
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    arguments: ['/showcase.frd'],
+    onRuntimeInitialized: function() { document.getElementById('status').remove(); },
+    printErr: function(t) { console.error(t); },
+  };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

@@ -1,0 +1,60 @@
+# To do
+
+Pre-processing stays out of scope. Work top to bottom: each step builds on the one
+before it, so no step rewrites code an earlier one wrote. One commit per step.
+
+## 1. GUI: after the Inspector pane (0.1.17)
+1. **#28:** answered with 0.1.18 (tag, folded Inspect tab, pick kinds as checkboxes,
+   face / edge selection and totals); close it once the reporter confirms.
+2. **Extras (optional).** Pin (freeze Inspect to compare two picks); back / forward
+   through recent picks.
+3. **Then decide** on the other floating windows. Keep as centred dialogs: Units,
+   Formula, Strength materials, Mesh quality, About, Messages. Keep floating: History,
+   Path, Convergence, Integrals (a bottom dock could come later). Candidates for more
+   pane tabs: Find, Contact settings, Legend settings, Title block.
+4. **Known limits.** A face's area and normal, an edge's length and the selection's
+   totals (volume, area, length) are taken on the undeformed mesh; the named
+   selections and the selection's CSV and deck lines hold elements and nodes, not
+   the faces and edges selected; on shells the normal is not oriented and the surface match uses
+   the deck's face number. `--find` with a restored `.ccxview` ends with nothing probed.
+
+## 2. Open points (no order)
+
+### Export
+- All time steps to VTU for ParaView, on all cores (#43): a big feature, for later.
+
+### Shell forces (#19)
+- Reinforcement: transverse shear (the sandwich's core) and compression steel
+  are not designed; the facet method (Capra-Maury) of Code_Aster is not offered.
+- The sandwich's lever arm is fixed at h - 2c; Annex F iterates the inner layer
+  (about 19 % more steel in pure bending than Code_Aster SSLS134).
+- Qx Qy at the mid-side nodes of quadratic shells come from two points through
+  the thickness only.
+
+### Deck (#2)
+- The ramp of a load inside a static step is not drawn (the end value is).
+- LOAD CASE=2 (the imaginary part of a steady state dynamics load) is left out;
+  a switch to show it instead of load case 1 could follow.
+
+### Integrals
+- Surfaces defined on shell elements use the shell's face numbers, which may not
+  be the expanded solid's.
+- The moment point (nodes:SET@x,y,z) is in model coordinates, not in the length
+  shown.
+
+### Display
+- See-through STL layers are sorted as wholes, by their box centres: one layer
+  inside another's box, or two interleaved, can still blend the wrong way
+  (sorting triangles would fix it, at a cost per frame).
+- `--field NAME:COMP` with an unknown component falls back to the default field
+  and says so only in the message window; print it to stderr too, with the
+  valid labels.
+
+### 3D mouse (#41)
+- Backends are in, none tested on a device: macOS (3DconnexionClient by dlopen), Linux (spacenavd's socket, `ndof.c`),
+  Windows (Raw Input); web has none (WebHID is blocked while 3DxWare runs). Buttons 1 / 2 = Fit / iso view. The camera motion
+  (`app_ndof_apply`, rates scaled to the distance, `ndof_on`, `ndof_speed`) is ready and tested; Linux protocol tested
+  against a fake daemon. Left: a hand test per platform with a real device (axis signs, roll direction, the 0.2 s
+  release rule on Linux, whether Windows needs the same), newer devices' button-number reports on Windows, free
+  flight (`G`), invert per axis / lock rotation or translation / dominant axis, button mapping options (Fit, Reset,
+  named views), a View panel group.

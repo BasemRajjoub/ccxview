@@ -1,0 +1,219 @@
+/* app_int.h -- what the app_*.c files share among themselves (not the UI). */
+#ifndef CV_APP_INT_H
+#define CV_APP_INT_H
+
+#include "app.h"
+#include "contact.h"
+#include "sokol_gfx.h"
+
+/* command-line options, parsed in app.c, applied when a file has loaded */
+typedef struct {
+    int         faces;          /* --faces field|type|material|group|plain, -1 = keep */
+    float       crop[6];        /* --crop x0,x1,y0,y1,z0,z1 (fractions) */
+    bool        crop_set;
+    bool        fly;            /* --fly: start in free flight */
+    int         fly_clip;       /* --fly-clip / --fly-hide [DEPTH]: ... the eye cuts / hides elements (CV_EYE_*) */
+    float       fly_depth;      /* ... that far ahead; 0 the saved depth */
+    bool        gauss;          /* --gauss: start on the first .dat field */
+    bool        cgx;            /* --cgx: evaluate a cgx script on open */
+    bool        mirror[3];      /* --mirror xyz */
+    bool        rep[3];         /* --opt repK=1: replicate along axis K from the start */
+    bool        eval_next;      /* the next open evaluates with cgx */
+    bool        gp;             /* --gp: Gauss point layer on */
+    bool        vectors;        /* --vectors: arrow layer on */
+    int         tensor;         /* --tensor STYLE: glyph layer on with that CV_GLYPH_* style, -1 = keep */
+    int         traj;           /* --trajectories s1|s3|both: 0 s1, 1 s3, 2 both, -1 = keep */
+    bool        conv;           /* --conv: open the convergence window */
+    int         win_w, win_h;   /* --size WxH */
+    const char* field;          /* --field NAME[:COMP]: start on that .frd field, that option (else the first) */
+    const char* calc;           /* --calc FORMULA: start on that calculated field */
+    const char* formula_lib;    /* --formula-lib FILE: the formula library file (else ccxview_formulas.txt beside the ini) */
+    const char* fail;           /* --fail CRIT[:OUT]: start on that failure field */
+    const char* mesh;           /* --mesh MEASURE: start on that mesh quality field */
+    float       target[3];      /* --target x,y,z: orbit centre */
+    bool        target_set;
+    float       zoom;           /* --zoom F: closer by F */
+    int         export_kind;    /* --export KIND: 1 png, 3 csv, 4 vtk, 5 seq, 6 mp4, 7 seqsteps, 8 mp4steps, 9 gif, 10 gifsteps */
+    bool        export_anim;    /* --export seq/mp4...: started by frame() once the loaded model's view is laid out */
+    const char* opts[32];       /* --opt key=value, applied after the settings file */
+    int         nopts;
+    const char* find;           /* --find ID or eID: probe it after load */
+    float       box[4];         /* --box x0,y0,x1,y1: max in that box of the view (fractions), after load */
+    bool        box_set;
+    bool        details;        /* --details: the Inspector shown on its Inspect tab (with --find or --box) */
+    bool        about;          /* --about: the About window open */
+    bool        deck_window;    /* --deck-window: the Deck window open (steps, amplitudes, submodel) */
+    bool        contact_window; /* --contact-window: the Contact subgroup of Fields and its settings window open */
+    bool        no_panels;      /* --no-panels: the view alone, as H does (pictures) */
+    const char* cel[4];         /* --cel FILE: contact elements (.cel) or a warning node set (.nam), after load */
+    int         ncel;
+    const char* set_alpha[8];   /* --set-alpha NAME:A: an element set's opacity */
+    int         nset_alpha;
+    const char* labels;         /* --labels KIND: what the labels show, by key */
+    float       range[2];       /* --range MIN,MAX: the legend's range, locked */
+    bool        range_set;
+    float       menu[2];        /* --menu x,y: the context menu at that point of the view (fractions) */
+    float       probe_at[2];    /* --probe-at x,y: a click there (fractions of the view), as G.pick_kinds pick */
+    bool        probe_set;
+    bool        menu_set;
+    bool        mesh_window;    /* --mesh-window: the Mesh quality window open, its limits shown */
+    const char* view_file;      /* --view FILE: a saved view state, applied after load */
+    bool        no_idle_skip;   /* --no-idle-skip: draw every frame, as before (app_idle.c) */
+    int max_fps; bool max_fps_set;   /* --max-fps: over the saved setting */
+    bool        no_sidecar;     /* --no-sidecar: neither read nor write <model>.ccxview this run */
+    bool        watch;          /* --watch: reload when the file changes */
+    const char* compare;        /* --compare FILE */
+    const char* stl[CV_MESH_N]; /* --stl FILE: imported geometry, after load */
+    int         nstl;
+    float       stl_alpha;      /* --stl-alpha A: their opacity, < 0 unset (1) */
+    const char* path_ids;       /* --path A,B: node ids to plot between */
+    const char* measure[16];    /* --measure dist:A,B | angle:A,B,C | circle:A,B,C (node ids) */
+    const char* label_off[16];  /* --label-offset KIND:ID:DX,DY */
+    int         nlabel_off;
+    int         nmeasure;
+    bool        measure_window; /* --measure-window: the Measurements window open */
+    bool        rebar_window;   /* --rebar-window: REBAR's options open in Fields */
+    const char* select[32];     /* --select SPEC: selection steps, in order, after load (app_sel_spec) */
+    int         nselect;
+    bool        select_window;  /* --selection-window: the Selection window open */
+    long        hist_id;        /* --history N: node id whose history to plot, 0 none */
+    const char* lin_ids;        /* --linearize A,B: node ids of the line */
+    const char* integ;          /* --integrate KIND:TARGET[@x,y,z]: the Integrals window over it */
+    const char* integ_csv;      /* --integrate-csv OUT: its CSV for every step, no window */
+    int         look;           /* --look iso|+x|-x|+y|-y|+z|-z, -1 = default */
+    float       bg[3];          /* --bg white|black|r,g,b */
+    bool        bg_set;
+    const char* sets[8];        /* --set NAME: tick a deck set / surface */
+    int         nsets;
+    const char* hide_sets[8];   /* --hide-set NAME: hide a deck element set */
+    int         nhide_sets;
+    int         step;           /* --step N (1-based, -1 = last) */
+    bool        gp_under;       /* --gp-under: Gauss points depth-tested against faces */
+    bool        xray;           /* --xray: Gauss points through the faces */
+    bool        no_faces;       /* --no-faces */
+    float       gp_size;        /* --gp-size N */
+    float       avg_pct;        /* --avg-pct N: nodal recovery on, averaging below N % */
+    int         elem_avg;       /* --elem-avg none|scalar|tensor: element-nodal results' averaging, -1 unset */
+    int         shell_side;     /* --shell-side both|top|bottom, -1 unset */
+    bool        no_edges;       /* --no-edges */
+    float       outline;        /* --outline off|on|DEG: 0 off, > 0 the crease angle, < 0 unset */
+    const char* argv_path;      /* the file to open */
+    const char* report;         /* --report FILE: write the model summary, quit */
+    const char* shot_path;      /* --shot out.png: render, save the window, quit */
+    int         shot_frames;    /* --frames N */
+    int         render_n;       /* --render N out.png: N samples of Render image into the --shot path */
+    int         frame_no;
+    int         browse;         /* --browse: start with the built-in browser open (1), --browse-stl: to import an STL (2) */
+    const char* ui_test;        /* --ui-test DIR: run the interface script (ui_test.c), failure pictures into DIR */
+} cv_opts;
+extern cv_opts O;
+
+/* app_field.c: decoded fields, colours, displacement, the current step */
+void         cache_clear(void);
+const float* cache_get(int step, int field);
+void  units_apply(const char* field, int ncomp, float* v, size_t n);   /* model units -> shown */
+float units_len_raw(void);           /* shown lengths -> model lengths (the shape) */
+int          find_field(int step, const char* name);
+/* field d of step `step` of G.frd into out[node * ncomp + c], as cv_frd_read_field
+   (not yet turned global nor converted); SHELL and REBAR worked out */
+void         field_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs);
+/* app_shell.c: shell section forces (shell.h) as the field SHELL and the reinforcement
+   of concrete shells (rebar.h) as REBAR, in every step with STRESS when the deck has shells */
+void shell_attach(void);                 /* after a load, deck and .frd in place */
+void shell_clear(void);
+bool shell_field(const cv_field_desc* d);   /* SHELL or REBAR: no bytes in the file */
+void shell_read(int step, const cv_field_desc* d, float* out, cv_msgs* msgs);   /* its values, file units */
+/* app_label.c: the loads' and supports' label anchors, recorded while the symbols are built */
+void label_sink_begin(int kinds);                /* the kinds' bits: records when loads or supports are among them */
+/* a load's or a support's label; at: where it sits and what it is, its moved-label key
+   ("940 dof 2": node and DOF, "12.3 p": element id and face and kind, "bolt 7" ...) */
+void label_sink_add(const float p[3], const float d[6], const char* text, bool support, const char* at);
+/* app_labelpos.c's moved labels, for app_label.c: bumped when they change, how many, one */
+unsigned label_moved_gen(void);
+int label_moved_n(void);
+const cv_label_off* label_moved(int j);
+/* app_label.c: the label drawn last frame at a window pixel (topmost, not hidden by the
+   model): true and its key, with its offset when it is moved */
+bool label_hit(float x, float y, cv_label_off* key);
+void         init_group_colors(void);
+void         refresh_tri_colors(void);
+void         refresh_tri_values(void);
+void         refresh_field(void);
+void         refresh_gauss(void);
+void         refresh_markers(void);
+#define to_csys app_to_csys
+float*       to_csys(const cv_field_desc* d, const cv_frd* f, const float* vals);   /* a copy in the chosen cylindrical system, or NULL */
+
+/* app_overlay.c: vector arrows, clip caps */
+void         refresh_vectors(void);
+/* app_tensor.c: tensor glyphs */
+void         refresh_tensors(void);
+/* app_traj.c: principal stress trajectories (CV_INST_TRAJ1 / TRAJ3) */
+void         refresh_traj(void);
+void         app_traj_tick(void);       /* each frame: a trace put off during playback, once it stops */
+
+/* app_path.c: path plot, history */
+void         refresh_path(void);
+void         refresh_hist(void);
+/* a step's .frd field decoded (localized, in the shown units): the cache's when it
+   holds it, else into the scratch buffer; a cv_calc_get_fn */
+typedef struct { float* buf; size_t cap; } step_scratch;
+const float* step_field_get(void* scratch, int step, int field);
+/* app_integ.c: integrals over a set, step by step */
+void         refresh_integ(void);
+void         integ_stale(void);      /* the rows made again on the next refresh (the units changed) */
+
+/* app_linearize.c: stress linearization, locating points in the solid */
+#define line_locate app_line_locate
+#define line_interp app_line_interp
+void         refresh_lin(void);
+void         line_locate(const float A[3], const float B[3], int n, uint32_t* el, float* w);   /* elements + shape weights of n points on A..B */
+bool         line_interp(uint32_t e, const float* w, const float* v, int nc, float* out);
+#define elem_locate app_elem_locate
+/* natural coordinates of p in solid element e (types 1..6): true when inside, N its 20
+   shape-function weights there (node order of the element as line_interp expects) */
+bool         elem_locate(uint32_t e, const double p[3], double N[20]);
+
+/* app_cam.c: camera, symmetry, picking */
+void view_bounds(void);
+int  sym_auto(int axis);
+void sym_matrix(int copy, float* M);     /* model matrix of mirror copy `copy` (bit k = axis k) */
+void copy_ray(int i, const float o[3], const float d[3], float mo[3], float md[3]);   /* world ray -> instance i's model frame */
+bool app_render_begin(cv_draw* d);            /* a Render image sample this frame: jitters d; true: draw the scene into app_render_scene_pass */
+sg_pass app_render_scene_pass(const float bg[3]);
+void app_render_present(sg_pass* sp);         /* after the scene pass: accumulate, open sp with the average in it (saves on the last) */
+void app_render_tick(void);                   /* --render: start once loaded */
+void app_render_free(void);
+void cam_matrices(float* mvp, float* mv, float* proj_out);
+void do_pick(float px, float py);
+void app_probe_keep(float px, float py);      /* the probe there, the selection kept (Ctrl+click) */
+
+/* app_load.c: background jobs, opening files, dialogs */
+void unload(void);
+bool app_load_headless(const char* path);   /* read a model into G without a window (--integrate-csv) */
+void poll_job(void);
+void poll_dialog(void);
+
+/* app_cdisp.c: its slave nodes, for the interface layer */
+typedef struct {
+    uint32_t node;              /* shown index */
+    uint32_t m[4]; uint8_t nm;  /* its master face's corners; nm 0: not paired */
+    cv_cproj pj;                /* onto it, on the true deformed shape */
+    float    dist;              /* from the node to the foot */
+    float    gap, press, shear, slip;   /* NaN unknown; slip |CSLIP1, CSLIP2| */
+    int8_t   st;                /* CV_CST_*, -1 none */
+    bool     elem;              /* a contact element pairs it */
+    int      link;              /* its deck contact pair, -1 none */
+} cv_cslave;
+const cv_cslave* app_cdisp_slave(uint32_t node);   /* a shown node's, NULL when it is no slave node */
+const uint32_t*  app_cdisp_faces(size_t* nf);      /* the slave faces, 4 corners each (a triangle: the 4th UINT32_MAX) */
+/* the point of weights w over nodes m[0..n): where it is undeformed, how it moves */
+void app_cdisp_wpt(const uint32_t* m, int n, const float* w, float p[3], float d[6]);
+/* app_clayer.c: the interface layer over the slave faces; the value of a slave node the
+   display is coloured by (NaN unknown), the colours over the values found (vmin..vmax) */
+void  app_clayer_draw(const uint8_t* shown, cv_cinfo* I);
+void  app_clayer_clear(void);
+float app_cby_value(const cv_cslave* q, int by);
+void  app_cby_colours(cv_cinfo* I, float vmin, float vmax);
+
+#endif

@@ -1,0 +1,105 @@
+/* field.h -- scalars that can be painted: components, magnitude, von Mises,
+   principal values;
+   ranges, per-element means, auto deformation scale. Headless. */
+#ifndef CV_FIELD_H
+#define CV_FIELD_H
+
+#include "frd.h"
+
+/* Derived components. Principal values need to know where the shears are:
+   .frd writes XY YZ ZX, the .dat xy xz yz, hence two sets of codes. */
+enum { CV_COMP_MAG = -1, CV_COMP_MISES = -2,
+       CV_COMP_P1 = -3, CV_COMP_P2 = -4, CV_COMP_P3 = -5,               /* shears XY YZ ZX */
+       CV_COMP_P1_XZ = -6, CV_COMP_P2_XZ = -7, CV_COMP_P3_XZ = -8,      /* shears xy xz yz */
+       CV_COMP_STATUS = -9 };   /* CONTACT: the contact status, worked out by the app (NaN here) */
+#define CV_MAX_OPTS (CV_MAX_COMP + 5)   /* components + magnitude, von Mises, 3 principal (or a status) */
+
+typedef struct {
+    char label[40];
+    int  comp;            /* component index, or one of the CV_COMP_ codes above */
+} cv_scalar_opt;
+
+/* Options for one field, derived ones first (magnitude / von Mises / principal). */
+const char* cv_field_title(const char* name);     /* the name as shown: STRPOS -> "STRPOS (shell top)" */
+bool  cv_comp_match(const char* label, const char* given);   /* also the old labels: "S1 max" */
+int   cv_field_options(const cv_field_desc* d, cv_scalar_opt* out, int max);
+
+/* One scalar per node from decoded values (vals[node*ncomp + c]). NaN stays NaN. */
+void  cv_field_scalar(const float* vals, int ncomp, uint32_t n, int comp, float* out);
+
+float cv_von_mises(const float s[6]);   /* SXX SYY SZZ SXY SYZ SZX */
+/* Principal values of a symmetric tensor, largest first. Shears XY YZ ZX, or
+   xy xz yz with xz_order. Strains must hold tensor shears (CalculiX does). */
+void  cv_principal(const float s[6], bool xz_order, float out[3]);
+
+/* 0: not a tensor; 1: shears XY YZ ZX (.frd); 2: shears xy xz yz (.dat). */
+int   cv_tensor_order(const cv_field_desc* d);
+/* 3 for a vector (3 comps, or FEMaster's D1..D6 / F1..F6: the first 3 are the vector,
+   the rest rotations / moments), else 0 */
+int   cv_vec_comps(const cv_field_desc* d);
+
+/* Cylindrical coordinates about an axis (0 X, 1 Y, 2 Z) through o: r, t (hoop), a (axial).
+   Q holds the unit vectors e_r, e_t, e_a as rows; on the axis e_r is any normal. */
+void  cv_cyl_basis(const float p[3], const float o[3], int axis, float Q[3][3]);
+/* A CalculiX *TRANSFORM or *ORIENTATION system: the two points of its data line,
+   a[0..2] and a[3..5]; cyl for TYPE=C / SYSTEM=C. */
+typedef struct { double a[6]; bool cyl; } cv_csys;
+/* Its unit axes e1 e2 e3 at point p as the rows of Q, as CalculiX's transformatrix:
+   rectangular e1 along a, e2 in the a-b plane; cylindrical e1 radial, e2 hoop,
+   e3 along a->b, and on the axis CalculiX's own choice of e1. */
+void  cv_csys_axes(const cv_csys* c, const float p[3], double Q[3][3]);
+/* Values in the local axes Q (rows) turned to global in place: a vector of 3, or a
+   tensor of 6 with shears XY YZ ZX. */
+void  cv_vec_to_global(const double Q[3][3], float v[3]);
+void  cv_ten_to_global(const double Q[3][3], float s[6]);
+
+/* Vectors (3 components) and tensors (6) can be turned; the rest stays global. */
+bool  cv_cyl_applies(const cv_field_desc* d);
+/* Values vals[node*ncomp + c] turned in place into the local system at each node. */
+void  cv_cyl_values(const cv_field_desc* d, const float* xyz, uint32_t n, int axis, const float o[3], float* vals);
+/* Component name in the local system: D1 -> Dr, SXY -> Srt, SZX -> Sar. */
+void  cv_cyl_comp_name(const cv_field_desc* d, int c, char out[12]);
+
+/* Principal values (largest first) and their unit directions vec[k] of a
+   symmetric tensor, by Jacobi rotations. false for NaN input. */
+bool  cv_principal_dirs(const float s[6], bool xz_order, float val[3], float vec[3][3]);
+
+/* Stress linearization (ASME VIII-2 Annex 5-A) of a tensor sampled at n equally
+   spaced points (6 values each) over a line of length t: membrane m = (1/t) int s dx,
+   bending b = (6/t^2) int s (t/2 - x) dx -- the bending at the start; the end sees -b.
+   Simpson's rule for odd n, trapezoids otherwise. false if n < 2 or a value is NaN. */
+bool   cv_linearize(const float* s, int n, double t, double m[6], double b[6]);
+/* The linear part at distance x along that line: m + b (1 - 2x/t). */
+void   cv_lin_at(const double m[6], const double b[6], double t, double x, double out[6]);
+/* ASME VIII-2 5-A.4.1.2: bending only from the components normal to the line. In the
+   frame with x along dir, drop xx, xy and zx from the bending tensor b (XX YY ZZ XY
+   YZ ZX order); the rest is turned back. dir need not be unit; zero dir: unchanged. */
+void   cv_bend_mask(double b[6], const float dir[3]);
+/* von Mises and Tresca (largest principal difference) of a symmetric tensor */
+double cv_mises6(const double s[6]);
+double cv_tresca6(const double s[6], bool xz_order);
+
+/* min/max ignoring NaN. false if every value is NaN. */
+bool  cv_range(const float* v, size_t n, float* mn, float* mx);
+
+/* Where a value t in [0,1] lands with `bands` discrete steps: the centre of its
+   band, so the colour is the same as the shader's (render.c mirrors this). */
+static inline float cv_band_center(float t, int bands) {
+    if (bands <= 0) return t;
+    float b = (float)bands, k = t * b;
+    if (k < 0) k = 0;
+    k = (float)(int)k;                       /* floor for k >= 0 */
+    if (k > b - 1) k = b - 1;
+    return (k + 0.5f) / b;
+}
+
+/* Signed data (mn < 0 < mx) gets a range symmetric about zero. */
+void  cv_center_zero(float* mn, float* mx);
+
+/* Mean of each element's node values (NaN if any node is NaN). */
+void  cv_elem_mean(const cv_frd* f, const float* nodal, float* per_elem);
+
+/* Magnify small displacements to ~10% of the model; never shrink real motion. */
+float cv_auto_deform(float peak_disp, float model_diag);
+
+#endif
