@@ -37,7 +37,7 @@ anything else) to ccxview, you agree to the following:
    patent claims you can license that your contribution infringes.
 4. **Your right to agree.** The contribution is your own original work, or you
    have the right to submit it under these terms; it does not include code
-   copied from projects whose licence does not allow this (for example GPL
+   copied from projects whose licence does not allow this (for example copyleft
    code). If your employer has rights in your work, you have their permission.
 5. **No obligation.** The owner does not have to use your contribution, and the
    contribution comes as is, without warranty.

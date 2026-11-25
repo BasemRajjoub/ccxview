@@ -6,10 +6,6 @@ Required Notice: Copyright 2026 Basem Rajjoub (https://basemrajjoub.com/)
 ccxview is licensed under the PolyForm Small Business License 1.0.0, whose
 full text is below, together with the Additional Permission that follows.
 
-ccxview 0.1.26 and earlier were released under the GNU General Public License,
-version 3 or later; those releases remain under that licence. Everything from
-version 0.2.0 on is under the terms in this file.
-
 The libraries and fonts in vendor/ keep their own licences; see
 vendor/README.md.
 

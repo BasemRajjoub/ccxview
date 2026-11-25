@@ -42,4 +42,4 @@ ccxview model.frd --calc "S1 - S3" --export mp4
 
 ## Licence
 
-ccxview is source-available under the [PolyForm Small Business License 1.0.0](LICENSE): free for individuals, for companies with fewer than 100 people and under about USD 1 million revenue, and for personal, academic, research, non-profit and government use. Larger companies need a commercial licence: https://basemrajjoub.com/. Versions 0.1.26 and earlier were released under GPL-3.0-or-later. Vendored libraries keep their own licences: [vendor/README.md](vendor/README.md). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
+ccxview is source-available under the [PolyForm Small Business License 1.0.0](LICENSE): free for individuals, for companies with fewer than 100 people and under about USD 1 million revenue, and for personal, academic, research, non-profit and government use. Larger companies need a commercial licence: https://basemrajjoub.com/. Vendored libraries keep their own licences: [vendor/README.md](vendor/README.md). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
