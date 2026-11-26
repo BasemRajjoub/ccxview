@@ -593,6 +593,11 @@ void window_legend_settings(struct nk_context* ctx, float s, float row) {
         tip(ctx, "Back to the defaults: legend top-right, gizmo bottom-left. Both are moved by dragging them");
         if (nk_button_label(ctx, "Reset legend and gizmo positions")) G.legend_pos.set = G.gizmo_pos.set = false;
         if (nk_button_label(ctx, "close")) G.legend_edit = false;
+        /* the rows come and go (lock range, a colour, decimals): the height follows them, the next frame */
+        struct nk_window* win = ctx->current;
+        float need = win->layout->at_y + win->layout->row.height + ctx->style.window.padding.y
+                   + ctx->style.window.border - win->bounds.y;
+        if (fabsf(need - win->bounds.h) > 0.5f) nk_window_set_size(ctx, "Legend settings", nk_vec2(win->bounds.w, need));
     }
     if (nk_window_is_hidden(ctx, "Legend settings")) G.legend_edit = false;
     nk_end(ctx);

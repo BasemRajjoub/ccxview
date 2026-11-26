@@ -883,6 +883,14 @@ static void range_huge(struct nk_context* ctx) { G.range_lock = true; G.rmin = 0
 static void range_inf(struct nk_context* ctx) { G.range_lock = true; G.rmin = -INFINITY; G.rmax = INFINITY; }
 static bool range_huge_drawn(struct nk_context* ctx) { return legend_settings_shown(ctx); }
 static void range_free(struct nk_context* ctx) { G.range_lock = false; app_refresh_range(); }
+/* every conditional row on: a locked range, a colour each way, fixed decimals (issue 56: the window cut its last rows) */
+static void legend_all_rows(struct nk_context* ctx) { G.range_lock = true; G.oor_mode[0] = G.oor_mode[1] = 2; G.legend_fmt = 1; }
+static void legend_rows_back(struct nk_context* ctx) { G.oor_mode[0] = G.oor_mode[1] = 1; G.legend_fmt = 0; G.box_arm = false; range_free(ctx); }
+static bool legend_settings_fit(struct nk_context* ctx) {
+    struct nk_window* w = win_of(ctx, "Legend settings");
+    const mark* m = find_mark("Legend settings", "Back to the defaults: legend top-right");
+    return w && m && m->r.y + m->r.h <= w->bounds.y + w->bounds.h;
+}
 /* the Colour palettes window (#53): one made from the legend, used, grown by a colour, deleted */
 static int cpal_was_cmap, cpal_was_bands;
 static void cpal_open(struct nk_context* ctx) {
@@ -1973,6 +1981,12 @@ static const step script[] = {
     AT_WIN("Legend", 0.5f, 0.6f), RCLICK, WAIT(2), EXPECT(legend_settings_shown, "the legend settings open"),
     DO(range_huge), WAIT(3), EXPECT(range_huge_drawn, "the boxes of a 2e11 range are drawn"),
     DO(range_inf), WAIT(3), EXPECT(range_huge_drawn, "the boxes of an inf range are drawn"), DO(range_free),
+    AT_CLOSE("Legend settings"), CLICK, WAIT(2), EXPECT(legend_settings_gone, "the legend settings close"),
+    PANELS_ANSWER,
+
+    CASE("legend settings: every row shows, a locked range with its colours and decimals too (issue 56)"),
+    DO(open_legend_settings), DO(legend_all_rows), WAIT(4), EXPECT(legend_settings_fit, "the window holds its last row"),
+    AT_TIP("Legend settings", TIP_BOX), CLICK, EXPECT(box_armed, "max in a box answers"), DO(legend_rows_back),
     AT_CLOSE("Legend settings"), CLICK, WAIT(2), EXPECT(legend_settings_gone, "the legend settings close"),
     PANELS_ANSWER,
 
