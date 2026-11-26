@@ -12,6 +12,8 @@ Fast, portable viewer for CalculiX results and models. One small executable writ
 [macOS](https://github.com/BasemRajjoub/ccxview/releases/latest/download/ccxview-macos-arm64.tar.gz) ·
 [Web, one HTML file](https://github.com/BasemRajjoub/ccxview/releases/latest/download/ccxview-web.zip)
 
+**Support:** if ccxview saves you time, [buy me a coffee](https://buymeacoffee.com/basem.rajjoub).
+
 ## Features
 
 - **Fast:** 5 million elements (800 MB `.frd`) read in 0.45 s; fields decoded only when shown; GPU drawing, software fallback.
