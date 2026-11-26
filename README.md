@@ -12,7 +12,7 @@ Fast, portable viewer for CalculiX results and models. One small executable writ
 [macOS](https://github.com/BasemRajjoub/ccxview/releases/latest/download/ccxview-macos-arm64.tar.gz) ·
 [Web, one HTML file](https://github.com/BasemRajjoub/ccxview/releases/latest/download/ccxview-web.zip)
 
-**Support:** if ccxview saves you time, [buy me a coffee](https://buymeacoffee.com/basem.rajjoub).
+💖 **Support:** if ccxview saves you time, [buy me a coffee](https://buymeacoffee.com/basem.rajjoub) ☕
 
 ## Features
 
