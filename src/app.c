@@ -67,6 +67,8 @@ static void event(const sapp_event* ev);
 
 bool cv_save_png(const char* path, int w, int h);
 bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h, const float* bg);
+unsigned char* cv_read_png_region(int x, int y, int w, int h, int fb_h, const float* bg);
+bool cv_write_png_rgba(const char* path, const unsigned char* px, int w, int h);
 unsigned char* cv_read_pixels_region(int x, int y, int w, int h, int fb_h);
 void cv_snk_before_shutdown(void);
 
@@ -854,6 +856,28 @@ bool app_export_data(bool vtk) {
     return ok;
 }
 
+/* "saved <path>" (the status bar's note, a link to the file) or "could not write <path>" */
+static void saved_note(const char* path, bool ok) {
+    snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", path);
+    G.note_t = cv_now();
+    cv_msg_add(&G.msgs, 0, false, G.note);
+    if (ok) CV_EXPORTED(path);
+}
+
+/* a still the user asked for (a PNG, Render image's end) waits here while the system's
+   "save as" is open; def: the name beside the model it offers */
+static struct { unsigned char* px; int w, h; char def[1100]; } g_still;
+
+static void still_write(const char* path, const unsigned char* px, int w, int h) {
+    saved_note(path, cv_write_png_rgba(path, px, w, h));
+}
+
+/* ask where a still goes: not in scripted runs (--export, --render, --shot, --ui-test: the
+   system's dialogs off), nor while another dialog is open */
+static bool still_ask(void) {
+    return !G.native_dlg_missing && !G.dlg_running && !O.export_kind && !O.render_n && !O.shot_path && !O.report;
+}
+
 void export_now(void) {
     char base[1024], path[1100];
     snprintf(base, sizeof base, "%s", G.path);
@@ -871,11 +895,37 @@ void export_now(void) {
         k++;
     } while (cv_file_size(path) > 0 && k < 1000);
     /* 2 px in from each side: the neighbouring panels draw their borders on the edge */
-    bool ok = cv_save_png_region(path, G.vp_x + 2, G.vp_y + 2, G.vp_w - 4, G.vp_h - 4, sapp_height(), G.png_alpha && G.seq_left == 0 ? G.bg : NULL);
-    snprintf(G.note, sizeof G.note, ok ? "saved %s" : "could not write %s", path);
-    G.note_t = cv_now();
-    cv_msg_add(&G.msgs, 0, false, G.note);
-    if (ok) CV_EXPORTED(path);
+    int x = G.vp_x + 2, y = G.vp_y + 2, w = G.vp_w - 4, h = G.vp_h - 4;
+    if (G.seq_left == 0 && still_ask()) {     /* a still: the picture now, where it goes once the dialog says */
+        unsigned char* px = cv_read_png_region(x, y, w, h, sapp_height(), G.png_alpha ? G.bg : NULL);
+        char abs[1100];
+        if (px && cv_abs_path(path, abs, sizeof abs) && cv_filedlg_save_start("", abs, CV_DLG_SAVE_PNG)) {
+            free(g_still.px);
+            g_still.px = px; g_still.w = w; g_still.h = h;
+            snprintf(g_still.def, sizeof g_still.def, "%s", path);
+            G.dlg_kind = CV_DLG_SAVE_PNG;
+            G.dlg_running = true;
+            return;
+        }
+        if (px) { still_write(path, px, w, h); free(px); return; }
+    }
+    bool ok = cv_save_png_region(path, x, y, w, h, sapp_height(), G.png_alpha && G.seq_left == 0 ? G.bg : NULL);
+    saved_note(path, ok);
+}
+
+/* the save dialog's answer for the still it holds: written where it said (.png added to a
+   bare name), nothing on Cancel, the usual place when there was no dialog after all */
+void app_still_done(int st, const char* path) {
+    if (!g_still.px) return;
+    char p[1100];
+    snprintf(p, sizeof p, "%s", st == CV_DLG_DONE ? path : g_still.def);
+    if (st == CV_DLG_CANCELLED) {
+        snprintf(G.note, sizeof G.note, "picture not saved");
+        G.note_t = cv_now();
+    } else if (cv_path_add_ext(p, sizeof p, ".png")) still_write(p, g_still.px, g_still.w, g_still.h);
+    else saved_note(p, false);
+    free(g_still.px);
+    g_still.px = NULL;
 }
 
 static void cleanup(void) {

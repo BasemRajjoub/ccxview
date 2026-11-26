@@ -12,11 +12,17 @@
 
 enum { CV_DLG_IDLE, CV_DLG_RUNNING, CV_DLG_DONE, CV_DLG_CANCELLED, CV_DLG_UNAVAILABLE };
 /* what the dialog is for: its title and the file types it shows first */
-enum { CV_DLG_MODEL, CV_DLG_STL, CV_DLG_COMPARE, CV_DLG_FORMULAS, CV_DLG_PALETTES };
+enum { CV_DLG_MODEL, CV_DLG_STL, CV_DLG_COMPARE, CV_DLG_FORMULAS, CV_DLG_PALETTES, CV_DLG_SAVE_PNG };
 
 /* parent: "x11:<hex window id>" or "" ; start_dir may be NULL; kind CV_DLG_MODEL ...
    false when it cannot start: an abandoned dialog is still closing. */
 bool cv_filedlg_start(const char* parent, const char* start_dir, int kind);
+/* A "save as" dialog (kind CV_DLG_SAVE_PNG), def_path the name and folder it offers; its answer
+   comes by cv_filedlg_poll as the open dialog's does. false: there is no native one here (Linux,
+   the web) or one is still closing -- the caller saves where it always did. */
+bool cv_filedlg_save_start(const char* parent, const char* def_path, int kind);
+/* p given the extension ext (".png") when its file name has none; false when it does not fit */
+bool cv_path_add_ext(char* p, size_t n, const char* ext);
 /* Non-blocking. On CV_DLG_DONE the path is copied to out. Terminal states
    (DONE / CANCELLED / UNAVAILABLE) are reported once, then it is IDLE again. */
 int  cv_filedlg_poll(char* out, size_t n);

@@ -77,7 +77,7 @@ void gp_set(cv_dat* d, const char* path) {
         bool seen = b->is_coord;
         for (int k = 0; k < i && !seen; k++) seen = !P.dat.b[k].is_coord && !strcmp(P.dat.b[k].name, b->name);
         if (seen) continue;
-        char t[200];                             /* a message holds 119 characters */
+        char t[200];                             /* kept to one line of the messages */
         if (snprintf(t, sizeof t, "%s (.dat): integration point values - Fields > %s (.dat), or the Inspector's "
                                   "integration points group", b->name, b->name) > 119)
             snprintf(t, sizeof t, "%s (.dat): point values in Fields and the Inspector", b->name);

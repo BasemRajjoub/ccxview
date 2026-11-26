@@ -184,6 +184,7 @@ sg_pass app_render_scene_pass(const float bg[3]);
 void app_render_present(sg_pass* sp);         /* after the scene pass: accumulate, open sp with the average in it (saves on the last) */
 void app_render_tick(void);                   /* --render: start once loaded */
 void app_render_free(void);
+void app_still_done(int st, const char* path); /* app.c: the save dialog's answer (CV_DLG_DONE ...) for the still picture it holds */
 void cam_matrices(float* mvp, float* mv, float* proj_out);
 void do_pick(float px, float py);
 void app_probe_keep(float px, float py);      /* the probe there, the selection kept (Ctrl+click) */

@@ -29,6 +29,12 @@ bool cv_open_url(const char* url) {
     return (INT_PTR)ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL) > 32;
 }
 
+bool cv_open_file(const char* path) {
+    wchar_t w[1024];
+    if (!path[0] || !MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1024)) return false;
+    return (INT_PTR)ShellExecuteW(NULL, L"open", w, NULL, NULL, SW_SHOWNORMAL) > 32;
+}
+
 bool cv_map_open(cv_map* m, const char* path) {
     memset(m, 0, sizeof *m);
     wchar_t wpath[1024];
@@ -249,11 +255,11 @@ void cv_set_window_icon(const void* hwnd) {
 #include <sys/wait.h>
 #endif
 
-bool cv_open_url(const char* url) {
-    if (!url_ok(url)) return false;
+/* open / xdg-open on what, not waited for */
+static bool launch(const char* what) {
 #ifdef __EMSCRIPTEN__
-    EM_ASM({ window.open(UTF8ToString($0), "_blank", "noopener"); }, url);
-    return true;
+    (void)what;
+    return false;
 #else
     pid_t p = fork();                      /* twice, so no child is left to reap */
     if (p < 0) return false;
@@ -261,9 +267,9 @@ bool cv_open_url(const char* url) {
         if (fork() == 0) {
             unsetenv("LD_LIBRARY_PATH");    /* the launcher's bundled libraries are not the browser's */
 #if defined(__APPLE__)
-            execlp("open", "open", url, (char*)NULL);
+            execlp("open", "open", what, (char*)NULL);
 #else
-            execlp("xdg-open", "xdg-open", url, (char*)NULL);
+            execlp("xdg-open", "xdg-open", what, (char*)NULL);
 #endif
             _exit(127);
         }
@@ -274,6 +280,18 @@ bool cv_open_url(const char* url) {
     return true;
 #endif
 }
+
+bool cv_open_url(const char* url) {
+    if (!url_ok(url)) return false;
+#ifdef __EMSCRIPTEN__
+    EM_ASM({ window.open(UTF8ToString($0), "_blank", "noopener"); }, url);
+    return true;
+#else
+    return launch(url);
+#endif
+}
+
+bool cv_open_file(const char* path) { return path[0] && path[0] != '-' && launch(path); }   /* never read as an option */
 
 bool cv_map_open(cv_map* m, const char* path) {
     memset(m, 0, sizeof *m);

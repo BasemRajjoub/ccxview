@@ -428,9 +428,12 @@ static void panel_legend(struct nk_context* ctx, float s, float row) {
 
 void panel_status(struct nk_context* ctx, float s, float row, float width) {
     char mid[160], badge[48];
+    /* a note that says where a file went: a link to it, kept 15 s and while the mouse is on it */
+    const char* saved = G.note[0] ? cv_note_saved_path(G.note) : NULL;
+    bool note_on = G.note[0] && cv_now() - G.note_t < (saved ? 15.0 : 5.0);
     if (app_measure_armed())
         snprintf(mid, sizeof mid, "%s", app_measure_prompt());
-    else if (G.note[0] && cv_now() - G.note_t < 5.0)
+    else if (note_on)
         snprintf(mid, sizeof mid, "%s", G.note);
     else if (G.loaded && G.flight)
         snprintf(mid, sizeof mid, "FREE FLIGHT   WASD move  E/Space up  Q down  Shift fast  drag look  wheel speed  Esc exit");
@@ -489,7 +492,11 @@ void panel_status(struct nk_context* ctx, float s, float row, float width) {
         nk_label(ctx, mid, NK_TEXT_LEFT);
     } else {
         nk_layout_row_push(ctx, midw);
-        nk_label(ctx, mid, NK_TEXT_LEFT);
+        bool over = false;
+        if (note_on && saved && !app_measure_armed() && cv_file_size(saved) > 0) {
+            uik_file_link(ctx, mid, saved, &over);
+            if (over) G.note_t = CV_MAX(G.note_t, cv_now() - 10.0);    /* stays while the mouse is on it */
+        } else nk_label(ctx, mid, NK_TEXT_LEFT);
     }
     nk_layout_row_push(ctx, sw); uii_vsep(ctx);
     nk_layout_row_push(ctx, ub);

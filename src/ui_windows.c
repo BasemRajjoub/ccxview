@@ -26,7 +26,7 @@ void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh)
         nk_label(ctx, "parser and loader messages", NK_TEXT_LEFT);
         if (nk_button_label(ctx, "copy all")) {              /* to the clipboard, one per line */
             CV_VEC(char) txt = {0};
-            char line[200];
+            char line[400];
             for (int l = 0; l < 2; l++)
                 for (size_t i = 0; i < lists[l]->n; i++) {
                     const cv_msg* m = &lists[l]->a[i];
@@ -42,7 +42,9 @@ void window_messages(struct nk_context* ctx, float s, float row, int fw, int fh)
         for (int l = 0; l < 2; l++) {
             for (size_t i = 0; i < lists[l]->n; i++) {
                 const cv_msg* m = &lists[l]->a[i];
-                char line[200];
+                char line[400];
+                const char* saved = m->where ? NULL : cv_note_saved_path(m->text);
+                if (saved && cv_file_size(saved) > 0) { uik_file_link(ctx, m->text, saved, NULL); continue; }   /* a click opens it */
                 if (m->where) snprintf(line, sizeof line, "%s %llu: %s", m->is_offset ? "byte" : "line",
                                        (unsigned long long)m->where, m->text);
                 else snprintf(line, sizeof line, "%s", m->text);

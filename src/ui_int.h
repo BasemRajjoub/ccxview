@@ -150,6 +150,8 @@ void uik_cols(struct nk_context* ctx, int n);                          /* a row 
 void uik_wide_row(struct nk_context* ctx, float extra);                /* dynamic cell + static cell of extra px */
 void uik_note(struct nk_context* ctx, const char* text);
 bool uik_link(struct nk_context* ctx, const char* text, const char* help);
+bool uik_link_cell(struct nk_context* ctx, const char* text, const char* help, struct nk_color idle, bool* hovered);   /* in the next cell; idle: its colour off the mouse */
+bool uik_file_link(struct nk_context* ctx, const char* text, const char* path, bool* hovered);   /* text in the next cell; a click opens path with the system's app */
 void uik_trail(struct nk_context* ctx, float px);                      /* the next row gets a static cell of px at its end ... */
 bool uik_trail_toggle(struct nk_context* ctx, nk_bool* on, const char* label, const char* help);   /* ... this fills it */
 void uik_label_cells(struct nk_context* ctx, const char* label, const char* help, int n, float extra);

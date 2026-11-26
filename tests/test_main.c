@@ -697,6 +697,21 @@ static void test_portal_wire(void) {
         CHECK(cv_dbus_openfile_body(body, 16, "", "tok", NULL, CV_DLG_STL) == 0);   /* too small a buffer */
     }
 
+    /* Save picture: a PNG filter; a name typed without an extension gets .png, one with any keeps it */
+    {
+        const char* const* globs;
+        CHECK(strcmp(cv_filedlg_filter(CV_DLG_SAVE_PNG, &globs), "PNG picture (*.png)") == 0 && !strcmp(globs[0], "*.png") && !globs[1]);
+        char p[32];
+        snprintf(p, sizeof p, "C:\\a.b\\shot"); CHECK(cv_path_add_ext(p, sizeof p, ".png") && !strcmp(p, "C:\\a.b\\shot.png"));
+        snprintf(p, sizeof p, "/x.y/z.jpg"); CHECK(cv_path_add_ext(p, sizeof p, ".png") && !strcmp(p, "/x.y/z.jpg"));
+        snprintf(p, sizeof p, "/tmp/"); CHECK(!cv_path_add_ext(p, sizeof p, ".png"));
+        char q[8] = "abcdef"; CHECK(!cv_path_add_ext(q, sizeof q, ".png") && !strcmp(q, "abcdef"));
+    }
+    /* the status note's clickable file: only where it says where something was saved */
+    CHECK(!strcmp(cv_note_saved_path("saved /m/a_step1.png"), "/m/a_step1.png"));
+    CHECK(!strcmp(cv_note_saved_path("export stopped; saved C:\\m\\a.mp4"), "C:\\m\\a.mp4"));
+    CHECK(!cv_note_saved_path("picture not saved") && !cv_note_saved_path("could not write /m/a.png") && !cv_note_saved_path("saved "));
+
     uint8_t msg[1024];
     size_t n = cv_dbus_build_response(msg, sizeof msg, 0, "file:///data/m%C3%BCller/r.frd");
     CHECK(n > 0);

@@ -163,12 +163,18 @@ void uik_note(struct nk_context* ctx, const char* text) {
 /* dim text that acts as a link: brighter and underlined under the mouse; true when clicked */
 bool uik_link(struct nk_context* ctx, const char* text, const char* help) {
     row_n(ctx, 1);
+    return uik_link_cell(ctx, text, help, P.dim, NULL);
+}
+
+bool uik_link_cell(struct nk_context* ctx, const char* text, const char* help, struct nk_color idle, bool* hovered) {
     struct nk_rect r;
+    if (hovered) *hovered = false;
     tipn(ctx, help);
     if (!nk_widget(&r, ctx)) return false;
     bool over = nk_input_is_mouse_hovering_rect(&ctx->input, r) && !(ctx->current->popup.win && ctx->current->popup.active);
+    if (hovered) *hovered = over;
     const struct nk_user_font* f = ctx->style.font;
-    struct nk_color c = over ? P.text : P.dim;
+    struct nk_color c = over ? P.text : idle;
     float px = ctx->style.text.padding.x, tw = f->width(f->userdata, f->height, text, (int)strlen(text));
     nk_draw_text(nk_window_get_canvas(ctx), nk_rect(r.x + px, r.y + (r.h - f->height) * 0.5f, r.w - px, f->height), text, (int)strlen(text), f, nk_rgba(0, 0, 0, 0), c);
     if (over) {
@@ -176,6 +182,24 @@ bool uik_link(struct nk_context* ctx, const char* text, const char* help) {
         nk_stroke_line(nk_window_get_canvas(ctx), r.x + px, y, r.x + px + CV_MIN(tw, r.w - px), y, 1.f, c);
     }
     return over && nk_input_mouse_clicked(&ctx->input, NK_BUTTON_LEFT, r);
+}
+
+/* a file just saved, named in the status bar or the messages: a click opens it with the system's
+   app (picture viewer, PDF reader ...); plain text on the web, where it went to the downloads */
+bool uik_file_link(struct nk_context* ctx, const char* text, const char* path, bool* hovered) {
+#ifdef __EMSCRIPTEN__
+    (void)path;
+    if (hovered) *hovered = false;
+    nk_label(ctx, text, NK_TEXT_LEFT);
+    return false;
+#else
+    if (!uik_link_cell(ctx, text, "Open it with the app the system has for it", P.accent_text, hovered)) return false;
+    if (!cv_open_file(path)) {
+        snprintf(G.note, sizeof G.note, "could not open %s", path);
+        G.note_t = cv_now();
+    }
+    return true;
+#endif
 }
 
 /* the small toggle in the cell uik_trail made: "pin" in text, dim, brighter on hover, accent when on */

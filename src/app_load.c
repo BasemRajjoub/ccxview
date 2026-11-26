@@ -928,6 +928,11 @@ void app_start_dir(char* out, size_t n) {
    could not take the click -- that one is closed and the built-in browser opens:
    a click on Open or Import always shows a dialog. */
 void app_open_dialog(int kind) {
+    if (G.dlg_running && G.dlg_kind == CV_DLG_SAVE_PNG) {     /* a picture waits on that one */
+        snprintf(G.note, sizeof G.note, "the Save picture dialog is still open");
+        G.note_t = cv_now();
+        return;
+    }
     char dir[1024];
     app_start_dir(dir, sizeof dir);
     G.dlg_kind = kind;
@@ -978,6 +983,11 @@ void poll_dialog(void) {
     int st = cv_filedlg_poll(path, sizeof path);
     if (st == CV_DLG_RUNNING) return;
     G.dlg_running = false;
+    if (G.dlg_kind == CV_DLG_SAVE_PNG) {         /* where a still picture goes */
+        G.dlg_kind = CV_DLG_MODEL;
+        app_still_done(st, path);
+        return;
+    }
     if (st == CV_DLG_DONE) {
         app_dialog_done(path);
     } else if (st == CV_DLG_UNAVAILABLE) {      /* remember, and fall back to ours */

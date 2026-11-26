@@ -306,7 +306,8 @@ static const char* const g_txt[] = { "*.txt", NULL };
 static const char* const g_pal[] = { "*.json", "*.xml", NULL };
 static const char* const g_all[] = { "*", NULL };
 typedef struct { const char* name; const char* const* globs; } dfilter;
-static const struct { const char* title; const char* desc; dfilter f[3]; } kinds[5] = {
+static const char* const g_png[] = { "*.png", NULL };
+static const struct { const char* title; const char* desc; dfilter f[3]; } kinds[6] = {
     { "Open CalculiX model or results", "CalculiX files, STL geometry",
       { { "CalculiX, STL (*.frd, *.inp, *.dat, *.fbd, *.stl, *.cel)", g_model }, { "STL geometry (*.stl)", g_stl }, { "All files", g_all } } },
     { "Import STL geometry", "STL geometry",
@@ -317,8 +318,20 @@ static const struct { const char* title; const char* desc; dfilter f[3]; } kinds
       { { "Formula library (*.txt)", g_txt }, { "All files", g_all }, { NULL, NULL } } },
     { "Import colour palettes", "Colour palettes (JSON, XML)",
       { { "Colour palettes (*.json, *.xml)", g_pal }, { "All files", g_all }, { NULL, NULL } } },
+    { "Save picture", "PNG picture",
+      { { "PNG picture (*.png)", g_png }, { "All files", g_all }, { NULL, NULL } } },
 };
 static int kind_ok(int k) { return k >= 0 && k < (int)(sizeof kinds / sizeof kinds[0]) ? k : CV_DLG_MODEL; }
+
+bool cv_path_add_ext(char* p, size_t n, const char* ext) {
+    const char* base = p;
+    for (const char* q = p; *q; q++) if (*q == '/' || *q == '\\') base = q + 1;
+    if (strchr(base, '.')) return true;
+    size_t a = strlen(p), b = strlen(ext);
+    if (!base[0] || a + b + 1 > n) return false;
+    memcpy(p + a, ext, b + 1);
+    return true;
+}
 
 const char* cv_filedlg_filter(int kind, const char* const** globs) {
     kind = kind_ok(kind);
@@ -397,6 +410,7 @@ bool cv_dbus_openfile_check(const uint8_t* body, size_t len, char* title, size_t
 bool cv_filedlg_start(const char* parent, const char* start_dir, int kind) { (void)parent; (void)start_dir; cv_web_pick_start(kind_ok(kind)); return true; }
 int  cv_filedlg_poll(char* out, size_t n) { return cv_web_pick_poll(out, n); }
 void cv_filedlg_abandon(void) {}              /* the browser's picker: a new one replaces it */
+bool cv_filedlg_save_start(const char* parent, const char* def_path, int kind) { (void)parent; (void)def_path; (void)kind; return false; }   /* a download instead */
 #elif defined(__linux__)
 #include <stddef.h>
 #include <sys/socket.h>
@@ -618,6 +632,7 @@ done:
 static int native_open(const char* parent, const char* start_dir, int kind, char* out, size_t n) {
     return portal_open(parent, start_dir, kind, out, n);
 }
+#define NO_NATIVE_SAVE                         /* the portal's SaveFile is not spoken: saved as before */
 
 /* Connect + authenticate + Hello, nothing visible. For tests. */
 bool cv_dbus_hello(char* unique, size_t n) {
@@ -665,6 +680,18 @@ static int native_open(const char* parent, const char* start_dir, int kind, char
     snprintf(out, n, "%s", r);
     return 1;
 }
+
+static int native_save(const char* parent, const char* def_path, int kind, char* out, size_t n) {
+    (void)parent;
+    kind = kind_ok(kind);
+    const char* const* pats = kinds[kind].f[0].globs;
+    int np = 0;
+    while (pats[np]) np++;
+    const char* r = tinyfd_saveFileDialog(kinds[kind].title, def_path, np, pats, kinds[kind].desc);
+    if (!r || !r[0]) return 0;
+    snprintf(out, n, "%s", r);
+    return 1;
+}
 #endif
 
 /* ============================================================================
@@ -677,6 +704,7 @@ static struct {
     bool      lock_ready;
     cv_thread thread;
     int       state, kind;
+    bool      save;                 /* a "save as" dialog: start holds the path it offers */
     bool      abandoned;            /* given up on: its answer is not reported */
     char      parent[64], start[1024], result[1024];
 } D;
@@ -684,14 +712,19 @@ static struct {
 static void worker(void* p) {
     (void)p;
     char out[1024] = "";
+#ifdef NO_NATIVE_SAVE
     int r = native_open(D.parent, D.start[0] ? D.start : NULL, D.kind, out, sizeof out);
+#else
+    int r = D.save ? native_save(D.parent, D.start, D.kind, out, sizeof out)
+                   : native_open(D.parent, D.start[0] ? D.start : NULL, D.kind, out, sizeof out);
+#endif
     cv_mutex_lock(&D.lock);
     snprintf(D.result, sizeof D.result, "%s", out);
     D.state = D.abandoned ? CV_DLG_IDLE : r > 0 ? CV_DLG_DONE : r == 0 ? CV_DLG_CANCELLED : CV_DLG_UNAVAILABLE;
     cv_mutex_unlock(&D.lock);
 }
 
-bool cv_filedlg_start(const char* parent, const char* start_dir, int kind) {
+static bool start(const char* parent, const char* start_dir, int kind, bool save) {
     if (!D.lock_ready) { cv_mutex_init(&D.lock); D.lock_ready = true; }
     cv_mutex_lock(&D.lock);
     int s = D.state;
@@ -701,10 +734,22 @@ bool cv_filedlg_start(const char* parent, const char* start_dir, int kind) {
     snprintf(D.parent, sizeof D.parent, "%s", parent ? parent : "");
     snprintf(D.start, sizeof D.start, "%s", start_dir ? start_dir : "");
     D.kind = kind_ok(kind);
+    D.save = save;
     D.abandoned = false;
     D.state = CV_DLG_RUNNING;
     if (!cv_thread_start(&D.thread, worker, NULL)) D.state = CV_DLG_UNAVAILABLE;
     return true;
+}
+
+bool cv_filedlg_start(const char* parent, const char* start_dir, int kind) { return start(parent, start_dir, kind, false); }
+
+bool cv_filedlg_save_start(const char* parent, const char* def_path, int kind) {
+#ifdef NO_NATIVE_SAVE
+    (void)parent; (void)def_path; (void)kind;
+    return false;
+#else
+    return start(parent, def_path, kind, true);
+#endif
 }
 
 void cv_filedlg_abandon(void) {

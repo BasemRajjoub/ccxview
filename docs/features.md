@@ -862,8 +862,9 @@ is drawn offscreen with the camera moved by a sub-pixel (Halton 2,3, so edges ar
 antialiased), the ambient occlusion noise turned and the key light's direction nudged,
 each sample joins a float average (RGBA32F, RGBA16F where 32F cannot be rendered to) and
 the window shows the average with "rendering 23/64" in the status. The last frame saves
-the view as a PNG named as the view export names it. Esc or any move of the camera stops
-it. `--render N out.png` renders N samples after the load (waiting as --shot does), writes
+the view as a PNG, through the Save dialog as the PNG export does. Esc or any move of the
+camera stops it. A playing animation (the swing, the steps) holds on its frame while the
+samples are taken, so they do not smear it, and goes on after. `--render N out.png` renders N samples after the load (waiting as --shot does), writes
 the view to out.png and quits. A transparent background is not applied to it.
 
 ## Post-processing kept with the model
@@ -904,6 +905,15 @@ PNG of the view (with a transparent background when asked), MP4 video or PNG
 sequence of a deformation cycle or of every step, CSV, VTK for ParaView, and a
 view file to reproduce a picture later. All
 available from the command line for scripting ([usage.md](usage.md)).
+
+The PNG of the view (Ctrl+E) and Render image's picture are taken at once, then the
+system's Save dialog asks where they go, offering `<model>_stepN.png` beside the model;
+Cancel saves nothing. Where there is no such dialog (Linux, which has the portal's Open
+only; the web, which downloads; scripted runs) the picture goes beside the model as
+before. A playing animation holds on its frame while a picture is taken. The status
+bar's "saved <file>" (any export: pictures, videos, CSV, reports) is a link: a click opens
+the file with the system's app for it; it stays 15 s, and while the mouse is on it, and
+the same line in Messages opens it too.
 
 ## FEMaster results
 

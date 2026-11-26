@@ -32,6 +32,7 @@ typedef struct { char name[256]; bool dir; uint64_t size; } cv_dirent;
 int  cv_list_dir(const char* dir, cv_dirent** out);
 bool cv_exe_dir(char* out, size_t n);        /* folder holding the executable */
 bool cv_open_url(const char* url);            /* in the default browser; http(s) only; false: could not start it */
+bool cv_open_file(const char* path);          /* with the system's app for it (a picture viewer ...); false: none here (the web) or could not start it */
 bool cv_is_dir(const char* path);
 bool cv_abs_path(const char* path, char* out, size_t n);   /* absolute, normalised; false if it cannot be resolved */
 char cv_path_sep(void);

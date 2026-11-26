@@ -42,7 +42,7 @@ enum { CV_MSG_MAX = 500 };
 typedef struct {
     uint64_t where;
     bool     is_offset;   /* where = byte offset instead of line number */
-    char     text[120];
+    char     text[300];    /* room for the path in "saved <path>" */
 } cv_msg;
 
 typedef struct {
@@ -77,6 +77,15 @@ static inline bool cv_ends_with_ci(const char* s, const char* suf) {
     if (a < b) return false;
     for (size_t i = 0; i < b; i++) if ((s[a - b + i] | 32) != (suf[i] | 32)) return false;
     return true;
+}
+
+/* the file a note names when it says where something went: "saved <path>", "export
+   stopped; saved <path>"; NULL for any other note ("not saved", "unsaved ...") */
+static inline const char* cv_note_saved_path(const char* note) {
+    const char* p = !strncmp(note, "saved ", 6) ? note : strstr(note, "; saved ");
+    if (!p) return NULL;
+    p += p == note ? 6 : 8;
+    return *p ? p : NULL;
 }
 
 static inline const char* cv_basename(const char* p) {

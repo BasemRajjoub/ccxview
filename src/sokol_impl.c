@@ -91,15 +91,15 @@ bool cv_save_png_rgb_region(const char* path, int x, int y, int w, int h, int fb
     return ok != 0;
 }
 
-/* Save a window-space rectangle (top-left origin, framebuffer pixels) as PNG.
+/* Read a window-space rectangle (top-left origin, framebuffer pixels) for a PNG; caller frees.
    Alpha is forced opaque so the image looks the same in every viewer. */
 /* bg: the colour the frame was cleared to with alpha 0, for a transparent picture; the
    panels' text (legend, gizmo) is drawn without alpha, so a pixel that left the clear
    colour counts as opaque. NULL: an opaque picture */
-bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h, const float* bg) {
-    if (w <= 0 || h <= 0) return false;
+unsigned char* cv_read_png_region(int x, int y, int w, int h, int fb_h, const float* bg) {
+    if (w <= 0 || h <= 0) return NULL;
     unsigned char* px = malloc((size_t)w * h * 4);
-    if (!px) return false;
+    if (!px) return NULL;
     glPixelStorei(0x0D05 /* GL_PACK_ALIGNMENT */, 1);
     glReadPixels(x, fb_h - (y + h), w, h, 0x1908 /* GL_RGBA */, 0x1401 /* GL_UNSIGNED_BYTE */, px);
     if (!bg) for (size_t i = 0; i < (size_t)w * h; i++) px[4 * i + 3] = 255;
@@ -110,10 +110,21 @@ bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h, 
             if (q[3] == 0 && (abs(q[0] - b0) > 2 || abs(q[1] - b1) > 2 || abs(q[2] - b2) > 2)) q[3] = 255;
         }
     }
+    return px;
+}
+
+/* what cv_read_png_region read, written as a PNG (rows bottom first) */
+bool cv_write_png_rgba(const char* path, const unsigned char* px, int w, int h) {
     stbi_flip_vertically_on_write(1);
-    int ok = stbi_write_png(path, w, h, 4, px, w * 4);
+    return stbi_write_png(path, w, h, 4, px, w * 4) != 0;
+}
+
+bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h, const float* bg) {
+    unsigned char* px = cv_read_png_region(x, y, w, h, fb_h, bg);
+    if (!px) return false;
+    bool ok = cv_write_png_rgba(path, px, w, h);
     free(px);
-    return ok != 0;
+    return ok;
 }
 
 /* ccxview bakes its own font, so sokol_nuklear's atlas is never initialised;
