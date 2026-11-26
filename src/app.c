@@ -357,11 +357,20 @@ static void eye_caps(bool eye_clip, const cv_draw* d) {
     if (!on) memset(built_n, 0, sizeof built_n);        /* off frees the projection: the next one is a rebuild */
 }
 
+/* a still picture is being taken (Render image's samples, a PNG's frames, the Report's
+   views): the animation pauses on the frame it was at, and goes on from there after */
+static bool still_capture(void) {
+    return app_render_active() || G.export_req || app_report_busy();
+}
+
 /* Displacement animation: the deformation swings within the current step. */
 static void tick_anim(void) {
+    static double paused, off;           /* when the pause began; the time spent paused */
+    if (still_capture()) { if (paused == 0) paused = cv_now(); return; }
+    if (paused != 0) { off += cv_now() - paused; paused = 0; }
     G.anim_factor2 = 0.f;
     if (!G.anim_on) { G.anim_factor = 1.f; return; }
-    double ph = fmod(cv_now(), (double)CV_MAX(G.anim_period, 0.1f)) / CV_MAX(G.anim_period, 0.1f);
+    double ph = fmod(cv_now() - off, (double)CV_MAX(G.anim_period, 0.1f)) / CV_MAX(G.anim_period, 0.1f);
     if (G.seq_left > 0 && !G.seq_steps)     /* exporting the deformation: exact cycles */
         ph = (double)(((G.seq_total - G.seq_left) % G.seq_total + G.seq_total) % G.seq_total) / G.seq_total;
     const double two_pi = 6.283185307179586;
@@ -467,7 +476,7 @@ static void frame(void) {
         O.integ = NULL;
     }
 
-    if (G.playing && G.loaded && G.frd.n_steps > 1) {
+    if (G.playing && G.loaded && G.frd.n_steps > 1 && !still_capture()) {   /* a still holds its increment */
         double now = cv_now();
         if (now - G.last_tick >= 1.0 / CV_MAX(G.fps, 0.1f)) {
             G.last_tick = now;
