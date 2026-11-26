@@ -122,6 +122,34 @@ static void test_pyramid_skin(void) {
     tp_no_degenerate(&s);
     cv_skin_free(&s);
 
+    /* flat seams are no outline, whatever the types (#58): a pyramid leaning on a brick,
+       its side 2-5-3 in the brick's face x = 1; a tet whose bottom lies in the
+       pyramid's base plane, along the edge 2-3 */
+    {
+        static const float a[3] = { 1, 0, 0 }, b[3] = { 1, 1, 0 };
+        tm_init(&m);
+        tm_brick(&m, 0, 0, -1, 1);
+        uint32_t w[8] = { tm_node(&m, 0, 0, 0), tm_node(&m, 1, 0, 0), tm_node(&m, 1, 1, 0), tm_node(&m, 0, 1, 0) };
+        w[4] = w[5] = w[6] = w[7] = tm_node(&m, 1, .5f, 1);
+        tm_elem(&m, 1, 1, w, 8);
+        CHECK_EQ(cv_elem_type(&m.f, 1), CV_PYR5);
+        CHECK(cv_skin_build(&s, &m.f, NULL));
+        CHECK_EQ(s.n_face, 5 + 4);
+        CHECK(!tm_has_fedge(&m, &s, a, b));
+        tp_no_degenerate(&s);
+        cv_skin_free(&s);
+
+        tm_init(&m);
+        tp_pyramid(&m, 0, 1, v);
+        uint32_t t[4] = { v[1], v[2], tm_node(&m, 2, .5f, 0), v[4] };
+        tm_elem(&m, 3, 1, t, 4);
+        CHECK(cv_skin_build(&s, &m.f, NULL));
+        CHECK_EQ(s.n_face, 5 - 1 + 4 - 1);
+        CHECK(!tm_has_fedge(&m, &s, a, b));
+        tp_no_degenerate(&s);
+        cv_skin_free(&s);
+    }
+
     /* not pyramids: an ordinary hex, a hex with only two top nodes one */
     uint32_t h[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
     CHECK(!cv_hex_pyramid(h, NULL));
