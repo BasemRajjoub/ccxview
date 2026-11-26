@@ -70,7 +70,7 @@ uint32_t cv_selfilter_elems(const cv_frd* f, const cv_selfilter* q, const float*
         uint32_t e = el[k];
         bool ok;
         if (v) ok = pass_value(q, v[k], thr);
-        else if (q->kind == CV_SQ_TYPE) ok = f->etype[e] == q->code;
+        else if (q->kind == CV_SQ_TYPE) ok = cv_elem_type(f, e) == (int)q->code;
         else if (q->kind == CV_SQ_MAT) ok = f->emat && f->emat[e] == q->code;
         else { float c[3]; centroid(f, e, c); float x = cv_selfilter_coord(q, c); ok = x >= q->lo && x <= q->hi; }
         if (ok) el[m++] = e;

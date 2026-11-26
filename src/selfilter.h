@@ -20,7 +20,7 @@ typedef struct {
     int      axis;          /* 0..2: the cylinder's axis along X, Y, Z ... */
     float    at[3];         /* ... through this point */
     float    value;         /* above / below it; top: the percentage */
-    uint32_t code;          /* the FRD type code, the material number */
+    uint32_t code;          /* the FRD type code (CV_PYR5 a pyramid), the material number */
 } cv_selfilter;
 
 /* A coordinate of point p as the filter reads it */

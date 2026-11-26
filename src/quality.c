@@ -1,6 +1,7 @@
 /* quality.c -- mesh quality of one element (see quality.h). */
 #include "quality.h"
 #include "gauss.h"
+#include "frd.h"         /* CV_PYR5 */
 #include <math.h>
 #include <string.h>
 #include <strings.h>
@@ -70,7 +71,7 @@ int cv_mq_find(const char* key) {
 
 /* ---- element kinds ------------------------------------------------------------------ */
 
-enum { K_NONE, K_HEX, K_WEDGE, K_TET, K_TRI, K_QUAD, K_LINE };
+enum { K_NONE, K_HEX, K_WEDGE, K_TET, K_TRI, K_QUAD, K_LINE, K_PYR };
 
 static int kind(int t) {
     switch (t) {
@@ -80,13 +81,14 @@ static int kind(int t) {
     case 7: case 8:   return K_TRI;
     case 9: case 10:  return K_QUAD;
     case 11: case 12: return K_LINE;
+    case CV_PYR5:     return K_PYR;
     }
     return K_NONE;
 }
 
 int cv_mq_dim(int t) {
     switch (kind(t)) {
-    case K_HEX: case K_WEDGE: case K_TET: return 3;
+    case K_HEX: case K_WEDGE: case K_TET: case K_PYR: return 3;
     case K_TRI: case K_QUAD: return 2;
     case K_LINE: return 1;
     }
@@ -102,7 +104,7 @@ const char* cv_mq_applies(int q) {
     return "solids and shells only";
 }
 
-static const int kCorners[] = { 0, 8, 6, 4, 3, 4, 2 };
+static const int kCorners[] = { 0, 8, 6, 4, 3, 4, 2, 5 };
 
 static double user_lim[CV_MQ_N];                     /* 0: the usual */
 
@@ -123,7 +125,7 @@ double cv_mq_usual_limit(int q, int t) {
     case CV_MQ_SKEW:      return k == K_LINE ? NAN : 0.9;
     case CV_MQ_ANGLE_MIN: return k == K_LINE ? NAN : simplex ? 5 : 10;
     case CV_MQ_ANGLE_MAX: return k == K_LINE ? NAN : simplex ? 170 : 160;
-    case CV_MQ_WARP:      return k == K_HEX || k == K_WEDGE || k == K_QUAD ? 10 : NAN;
+    case CV_MQ_WARP:      return k == K_HEX || k == K_WEDGE || k == K_QUAD || k == K_PYR ? 10 : NAN;
     case CV_MQ_SHAPE:     return k == K_TRI ? 0.01 : k == K_TET ? 1e-4 : NAN;
     case CV_MQ_CCX:       return k == K_LINE || k == K_NONE ? NAN : 0;
     case CV_MQ_HMQI:      return k == K_LINE || k == K_NONE ? NAN : 1;
@@ -221,7 +223,7 @@ static void scores(int t, double sum_e2, double out[CV_MQ_N]) {
 
     int k = kind(t);
     double C = k == K_HEX ? 41.56921938 : k == K_TET ? 124.70765802 : k == K_WEDGE ? 62.35382905
-             : k == K_QUAD ? 4.0 : 6.92820323, V = out[CV_MQ_SIZE];
+             : k == K_PYR ? 96.0 : k == K_QUAD ? 4.0 : 6.92820323, V = out[CV_MQ_SIZE];
     if (V == V && sum_e2 > 0)
         out[CV_MQ_ANSYS] = V <= 0 ? 0 : cv_mq_dim(t) == 3 ? C * V / sqrt(sum_e2 * sum_e2 * sum_e2) : C * V / sum_e2;
 
@@ -254,6 +256,7 @@ static const int kWedgeEdges[][2] = { {0,1},{1,2},{2,0},{3,4},{4,5},{5,3},{0,3},
 static const int kTetEdges[][2]   = { {0,1},{1,2},{2,0},{0,3},{1,3},{2,3} };
 static const int kTriEdges[][2]   = { {0,1},{1,2},{2,0} };
 static const int kQuadEdges[][2]  = { {0,1},{1,2},{2,3},{3,0} };
+static const int kPyrEdges[][2]   = { {0,1},{1,2},{2,3},{3,0},{0,4},{1,4},{2,4},{3,4} };
 
 /* faces: 4 indices, the last -1 for a triangle */
 static const int kHexFaces[][4]   = { {0,1,2,3},{4,7,6,5},{0,4,5,1},{1,5,6,2},{2,6,7,3},{3,7,4,0} };
@@ -261,11 +264,13 @@ static const int kWedgeFaces[][4] = { {0,1,2,-1},{3,4,5,-1},{0,1,4,3},{1,2,5,4},
 static const int kTetFaces[][4]   = { {0,1,2,-1},{0,3,1,-1},{1,3,2,-1},{2,3,0,-1} };
 static const int kTriFaces[][4]   = { {0,1,2,-1} };
 static const int kQuadFaces[][4]  = { {0,1,2,3} };
+static const int kPyrFaces[][4]   = { {0,1,2,3},{0,4,1,-1},{1,4,2,-1},{2,4,3,-1},{3,4,0,-1} };
 
 /* the three edges at each corner, right-handed for a valid element */
 static const int kHexCorner[][3]   = { {1,3,4},{2,0,5},{3,1,6},{0,2,7},{7,5,0},{4,6,1},{5,7,2},{6,4,3} };
 static const int kWedgeCorner[][3] = { {1,2,3},{2,0,4},{0,1,5},{5,4,0},{3,5,1},{4,3,2} };
 static const int kTetCorner[][3]   = { {1,2,3},{2,0,3},{0,1,3},{2,1,0} };
+static const int kPyrCorner[][3]   = { {1,3,4},{2,0,4},{3,1,4},{0,2,4} };     /* the base; the apex has four */
 
 /* ---- shape function derivatives: at a few integration points (size) and every node
    (Jacobian ratio), per element kind and node count. */
@@ -358,6 +363,7 @@ static void faces_of(int k, const int (**f)[4], int* nf) {
     case K_TET:   *f = kTetFaces;   *nf = 4; return;
     case K_TRI:   *f = kTriFaces;   *nf = 1; return;
     case K_QUAD:  *f = kQuadFaces;  *nf = 1; return;
+    case K_PYR:   *f = kPyrFaces;   *nf = 5; return;
     }
     *f = NULL; *nf = 0;
 }
@@ -369,6 +375,7 @@ static void edges_of(int k, const int (**e)[2], int* ne) {
     case K_TET:   *e = kTetEdges;   *ne = 6; return;
     case K_TRI:   *e = kTriEdges;   *ne = 3; return;
     case K_QUAD:  *e = kQuadEdges;  *ne = 4; return;
+    case K_PYR:   *e = kPyrEdges;   *ne = 8; return;
     }
     *e = NULL; *ne = 0;
 }
@@ -490,9 +497,9 @@ void cv_mq_elem(int t, int nn, const double (*x)[3], double out[CV_MQ_N]) {
             if (s < sj) sj = s;
         }
     } else {
-        const int (*C)[3] = k == K_HEX ? kHexCorner : k == K_WEDGE ? kWedgeCorner : kTetCorner;
-        double f = k == K_TET ? sqrt(2.0) : k == K_WEDGE ? 2 / sqrt(3.0) : 1;
-        for (int i = 0; i < nc; i++) {
+        const int (*C)[3] = k == K_HEX ? kHexCorner : k == K_WEDGE ? kWedgeCorner : k == K_PYR ? kPyrCorner : kTetCorner;
+        double f = k == K_TET || k == K_PYR ? sqrt(2.0) : k == K_WEDGE ? 2 / sqrt(3.0) : 1;
+        for (int i = 0; i < (k == K_PYR ? 4 : nc); i++) {
             double e[3][3];
             for (int j = 0; j < 3; j++) sub(c[C[i][j]], c[i], e[j]);
             double l = len(e[0]) * len(e[1]) * len(e[2]), s = l > 0 ? f * det3(e[0], e[1], e[2]) / l : 0;
@@ -513,16 +520,18 @@ void cv_mq_elem(int t, int nn, const double (*x)[3], double out[CV_MQ_N]) {
     out[CV_MQ_SJAC] = sj;
 
     /* size and the Jacobian ratio, from the shape functions (CalculiX node order) */
-    int dim = k == K_TRI || k == K_QUAD ? 2 : 3;
-    const dtab* T = table(t, nn);
-    int un = nn;
+    /* a pyramid: as the Hex8 with its top four nodes the apex, which integrates its
+       volume exactly; its Jacobian at the apex is 0 by that, so the ratio is the base's */
+    int dim = k == K_TRI || k == K_QUAD ? 2 : 3, tt = k == K_PYR ? 1 : t;
+    const dtab* T = table(tt, k == K_PYR ? 8 : nn);
+    int un = k == K_PYR ? 8 : nn;
     if (!T) { T = table(t, nc); un = nc; }          /* an odd node count: the corners alone */
     if (T) {
         double xc[MAXN][3];
-        for (int i = 0; i < un; i++) memcpy(xc[i], x[cv_frd_node_pos(t, un, i)], sizeof xc[i]);
+        for (int i = 0; i < un; i++) memcpy(xc[i], k == K_PYR ? c[i < 4 ? i : 4] : x[cv_frd_node_pos(t, un, i)], sizeof xc[i]);
         double V = 0, jmin = INFINITY, jmax = -INFINITY;
         for (int p = 0; p < T->np; p++) V += T->w * detj(T->dq[p], un, (const double (*)[3])xc, dim, n);
-        for (int i = 0; i < un; i++) {
+        for (int i = 0; i < (k == K_PYR ? 4 : un); i++) {
             double j = detj(T->dn[i], un, (const double (*)[3])xc, dim, n);
             if (j < jmin) jmin = j;
             if (j > jmax) jmax = j;

@@ -36,6 +36,7 @@ static int g_fail = 0, g_checks = 0;
 #include "t_measure.h"
 #include "t_tbtext.h"
 #include "t_mesh.h"
+#include "t_pyramid.h"
 #include "t_cpal.h"
 
 /* ---- helpers ---- */
@@ -1709,6 +1710,9 @@ int main(void) {
     test_loads();
     test_inp_many_sets();
     test_collapsed_pyramid();
+    test_pyramid_skin();
+    test_pyramid_inp();
+    test_pyramid_quality();
     test_inp_surface_order();
     test_inp_surface_late_sets();
     test_inp_dsload_set_order();

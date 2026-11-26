@@ -110,7 +110,17 @@ size_t   cv_frd_slots(const cv_frd* f);
 void     cv_frd_read_elnod(const cv_frd* f, const cv_field_desc* d, float* out, cv_msgs* msgs);
 
 int         cv_frd_type_nodes(int frd_type);   /* nodes per element, 0 if unknown */
-const char* cv_frd_type_name(int frd_type);
+const char* cv_frd_type_name(int frd_type);   /* CV_PYR5 too: "Pyramid5" */
+
+/* A pyramid is no .frd type: CalculiX writes a C3D5 as a Hex8 with its top four nodes
+   the apex, and the .inp reader keeps one so. Any Hex8 one face of which has four
+   distinct corners and the other four nodes one is taken as a pyramid; the element
+   stays type 1, CV_PYR5 is what it is shown, grouped, filtered and measured as. */
+enum { CV_PYR5 = 13 };
+/* hex8 c: a pyramid? out (may be NULL): the base, its corners turning about the apex
+   right-handed (as C3D5 numbers them), then the apex */
+bool cv_hex_pyramid(const uint32_t c[8], uint32_t out[5]);
+int  cv_elem_type(const cv_frd* f, uint32_t e);   /* etype[e], CV_PYR5 for a pyramid */
 
 /* The 1UDATE text ("30.september.2026", as CalculiX writes it) as ISO 8601,
    "2026-09-30"; false (out empty) when it does not read as a date */

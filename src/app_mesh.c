@@ -80,21 +80,24 @@ static void worker(void* p) {
         uint32_t de = J->src ? J->src[e] : UINT32_MAX;
         int t = f->etype[e];
         uint32_t nn;
+        uint32_t pyr[5];                             /* a pyramid: its five nodes */
         if (de != UINT32_MAX) {                      /* the .inp element it was made from */
             const cv_frd* dm = J->dm;
-            uint32_t b = dm->eoff[de];
-            nn = dm->eoff[de + 1] - b;
+            const uint32_t* cn = dm->conn + dm->eoff[de];
+            nn = dm->eoff[de + 1] - dm->eoff[de];
             t = dm->etype[de];
+            if (t == 1 && nn == 8 && cv_hex_pyramid(cn, pyr)) { t = CV_PYR5; cn = pyr; nn = 5; }
             if (nn > 32) nn = 0;
             for (uint32_t i = 0; i < nn; i++)
-                for (int a = 0; a < 3; a++) x[i][a] = J->dx[3 * (size_t)dm->conn[b + i] + a];
+                for (int a = 0; a < 3; a++) x[i][a] = J->dx[3 * (size_t)cn[i] + a];
         } else {
-            uint32_t b = f->eoff[e];
-            nn = f->eoff[e + 1] - b;
+            const uint32_t* cn = f->conn + f->eoff[e];
+            nn = f->eoff[e + 1] - f->eoff[e];
+            if (t == 1 && nn == 8 && cv_hex_pyramid(cn, pyr)) { t = CV_PYR5; cn = pyr; nn = 5; }
             if (nn > 32) nn = 0;
             for (uint32_t i = 0; i < nn; i++)
                 for (int a = 0; a < 3; a++) {
-                    size_t k = 3 * (size_t)f->conn[b + i] + a;
+                    size_t k = 3 * (size_t)cn[i] + a;
                     x[i][a] = f->xyz[k] + (J->d ? J->d[k] : 0.f);
                 }
         }

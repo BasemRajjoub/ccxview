@@ -123,7 +123,7 @@ static void elem_lines(uint32_t n, uint32_t e) {
     const cv_frd* f = &G.frd;
     char a[32];
     cur = GR_ELEM;
-    line(true, "element %u   %s", f->elem_id[e], cv_frd_type_name(f->etype[e]));
+    line(true, "element %u   %s", f->elem_id[e], cv_frd_type_name(cv_elem_type(f, e)));
     const char* mat = deck_material_name(f->emat[e]);
     line(false, "material %u%s%s   group %u", f->emat[e], mat ? "  " : "", mat ? mat : "", f->egrp[e]);
     const cv_inp* dk = deck_get();

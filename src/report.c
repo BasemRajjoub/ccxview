@@ -139,10 +139,12 @@ static void quality(FILE* out, const cv_frd* m) {
     uint32_t nmeas = 0;
     for (uint32_t e = 0; e < m->n_elems; e++) {
         int t = m->etype[e];
-        uint32_t b = m->eoff[e], nn = m->eoff[e + 1] - b;
+        uint32_t nn = m->eoff[e + 1] - m->eoff[e], pyr[5];
+        const uint32_t* cn = m->conn + m->eoff[e];
+        if (t == 1 && nn == 8 && cv_hex_pyramid(cn, pyr)) { t = CV_PYR5; cn = pyr; nn = 5; }
         if (!cv_mq_dim(t) || nn > 32 || !nn) continue;
         double x[32][3], v[CV_MQ_N];
-        for (uint32_t i = 0; i < nn; i++) for (int a = 0; a < 3; a++) x[i][a] = m->xyz[3 * (size_t)m->conn[b + i] + a];
+        for (uint32_t i = 0; i < nn; i++) for (int a = 0; a < 3; a++) x[i][a] = m->xyz[3 * (size_t)cn[i] + a];
         cv_mq_elem(t, (int)nn, (const double (*)[3])x, v);
         nmeas++;
         for (int q = 0; q < CV_MQ_N; q++) {
@@ -254,7 +256,7 @@ bool cv_report_md(FILE* out, const cv_frd* f, const cv_inp* d, const cv_report_o
             P("| Result file | %u nodes, %u elements (CalculiX expands shells and beams into solids) |\n", f->n_nodes, f->n_elems);
         P("\n");
         uint32_t per[16] = {0}, dim[4] = {0};
-        for (uint32_t e = 0; e < m->n_elems; e++) { int t = m->etype[e]; if (t > 0 && t < 16) per[t]++; dim[cv_mq_dim(t)]++; }
+        for (uint32_t e = 0; e < m->n_elems; e++) { int t = cv_elem_type(m, e); if (t > 0 && t < 16) per[t]++; dim[cv_mq_dim(t)]++; }
         P("Elements by type\n\n| Type | Dimension | Elements |\n|---|---|---|\n");
         for (int t = 1; t < 16; t++) if (per[t]) {
             int dm = cv_mq_dim(t);

@@ -33,6 +33,17 @@ static int faces_of(int t, const face_t** out, bool* solid) {
     }
 }
 
+/* A face of a collapsed element (a pyramid or a wedge written as a hex) repeats
+   corners: the repeats go, a quad so becomes a triangle, and under three corners
+   it is no face at all (0). */
+static int distinct_corners(uint32_t v[4], int n) {
+    for (int i = 0; i < n && n > 0;) {
+        if (n > 1 && v[i] == v[(i + 1) % n]) { for (int j = i + 1; j < n; j++) v[j - 1] = v[j]; n--; }
+        else i++;
+    }
+    return n < 3 ? 0 : n;
+}
+
 int cv_elem_face_corners(const cv_frd* f, uint32_t e, int face, uint32_t out[4]) {
     const face_t* ft; bool solid;
     int nf = faces_of(f->etype[e], &ft, &solid);
@@ -40,7 +51,7 @@ int cv_elem_face_corners(const cv_frd* f, uint32_t e, int face, uint32_t out[4])
     if (face < 0 || face >= nf) return 0;
     const uint32_t* cn = f->conn + f->eoff[e];
     for (int i = 0; i < ft[face].n; i++) out[i] = cn[ft[face].v[i]];
-    return ft[face].n;
+    return distinct_corners(out, ft[face].n);
 }
 
 static bool face_mids(const cv_frd* f, uint32_t e, const face_t* fc, uint32_t m[4]);
@@ -69,7 +80,7 @@ int cv_elem_face_nodes(const cv_frd* f, uint32_t e, int face, uint32_t out[8]) {
     if (face < 0 || face >= nf) return 0;
     int n = cv_elem_face_corners(f, e, face, out);
     uint32_t m[4];
-    if (face_mids(f, e, &ft[face], m)) for (int i = 0; i < n; i++) out[n + i] = m[i];
+    if (n == ft[face].n && face_mids(f, e, &ft[face], m)) for (int i = 0; i < n; i++) out[n + i] = m[i];
     else return n;
     return 2 * n;
 }
@@ -156,10 +167,14 @@ fail:
 
 bool cv_groups_build(cv_groups* g, const cv_frd* f) {
     memset(g, 0, sizeof *g);
-    if (axis_build(&g->axis[CV_AXIS_TYPE], NULL, f->etype, f->n_elems) &&
-        axis_build(&g->axis[CV_AXIS_MAT], f->emat, NULL, f->n_elems) &&
-        axis_build(&g->axis[CV_AXIS_GRP], f->egrp, NULL, f->n_elems))
-        return true;
+    uint8_t* ty = malloc(CV_MAX(f->n_elems, 1));    /* the types shown: a pyramid apart from the hexes */
+    if (!ty) return false;
+    for (uint32_t e = 0; e < f->n_elems; e++) ty[e] = (uint8_t)cv_elem_type(f, e);
+    bool ok = axis_build(&g->axis[CV_AXIS_TYPE], NULL, ty, f->n_elems) &&
+              axis_build(&g->axis[CV_AXIS_MAT], f->emat, NULL, f->n_elems) &&
+              axis_build(&g->axis[CV_AXIS_GRP], f->egrp, NULL, f->n_elems);
+    free(ty);
+    if (ok) return true;
     cv_groups_free(g);
     return false;
 }
@@ -245,6 +260,10 @@ static void face_key(const cv_frd* f, uint32_t code, fkey* out) {
         while (j >= 0 && k[j] > x) { k[j + 1] = k[j]; j--; }
         k[j + 1] = x;
     }
+    /* once each: a collapsed hex's side {a, b, p, p} is the tet face {a, b, p} it meets */
+    int u = 0;
+    for (int i = 0; i < 4; i++) if (!u || k[i] != k[u - 1]) k[u++] = k[i];
+    while (u < 4) k[u++] = UINT32_MAX;
     memcpy(out->k, k, sizeof k);
     out->code = code;
 }
@@ -261,7 +280,6 @@ typedef struct {
     CV_VEC(uint32_t) tri_elem;
     CV_VEC(uint64_t) edges;      /* collected, deduplicated at the end */
     CV_VEC(uint32_t) faces;      /* element << 3 | local face */
-    bool degen;                  /* FEMaster's pyramid: a hex with the apex four times; its top is no face, its sides triangles */
 } emit_t;
 
 /* The mid-side node of a quadratic element between its corners a and b (local,
@@ -313,15 +331,13 @@ static void put_edge(emit_t* o, uint32_t a, uint32_t b) {
    through its mid-side nodes: a corner triangle at every corner and the middle,
    so the colours and the shape follow every node of the face; else corners only. */
 static bool emit_face(emit_t* o, const cv_frd* f, uint32_t e, const face_t* fc, int local, bool mid) {
-    if (!cv_push(o->faces, (e << 3) | (uint32_t)local)) return false;
     const uint32_t* cn = f->conn + f->eoff[e];
     uint32_t v[4], m[4];
     int n = fc->n;
     for (int i = 0; i < n; i++) v[i] = cn[fc->v[i]];
-    if (o->degen && n == 4) {                         /* a quad with two equal corners is a triangle */
-        for (int i = 0; i < 4; i++)
-            if (v[i] == v[(i + 1) % 4]) { for (int j = i + 1; j < 3; j++) v[j] = v[j + 1]; n = 3; break; }
-    }
+    n = distinct_corners(v, n);                       /* a quad with two equal corners is a triangle */
+    if (!n) return true;
+    if (!cv_push(o->faces, (e << 3) | (uint32_t)local)) return false;
     if (!cv_reserve(o->tri, o->tri.n + 18) || !cv_reserve(o->tri_elem, o->tri_elem.n + 6) ||
         !cv_reserve(o->edges, o->edges.n + 8))
         return false;
@@ -399,7 +415,7 @@ static int skin_face(const cv_frd* f, uint32_t code, uint32_t v[4], bool* shell)
     const face_t* fc = &ft[code & 7];
     const uint32_t* cn = f->conn + f->eoff[code >> 3];
     for (int i = 0; i < fc->n; i++) v[i] = cn[fc->v[i]];
-    return fc->n;
+    return distinct_corners(v, fc->n);
 }
 
 typedef struct {
@@ -430,7 +446,7 @@ static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
         if (mid) {
             const face_t* ft; bool solid;
             faces_of(f->etype[e], &ft, &solid);
-            if (!face_mids(f, e, &ft[code & 7], mids)) mids[0] = mids[1] = mids[2] = mids[3] = UINT32_MAX;
+            if (n != ft[code & 7].n || !face_mids(f, e, &ft[code & 7], mids)) mids[0] = mids[1] = mids[2] = mids[3] = UINT32_MAX;
         }
         for (int i = 0; i < n; i++) {
             uint32_t a = v[i], b = v[(i + 1) % n];
@@ -517,10 +533,6 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
             for (int i = 0; i < nf; i++) if (!emit_face(&o, f, e, &ft[i], i, mid)) goto oom;
             continue;
         }
-        if (f->etype[e] == 1) {                       /* a collapsed hex: its top face is no face */
-            const uint32_t* c = f->conn + f->eoff[e];
-            if (c[4] == c[5] && c[5] == c[6] && c[6] == c[7]) o.degen = true;
-        }
         for (int i = 0; i < nf; i++) off[face_min(f, e, &ft[i]) + 1]++;
     }
     for (uint32_t i = 0; i < N; i++) off[i + 1] += off[i];
@@ -553,7 +565,7 @@ bool cv_skin_build_opt(cv_skin* s, const cv_frd* f, const uint8_t* vis, float cr
             if (!cv_reserve(keys, n) || !cv_reserve(matched, n)) {
                 cv_free_vec(keys); cv_free_vec(matched); goto oom;
             }
-            for (uint32_t i = 0; i < n; i++) { face_key(f, faces[b + i], &keys.a[i]); matched.a[i] = o.degen && keys.a[i].k[0] == keys.a[i].k[3]; }   /* one node: no face */
+            for (uint32_t i = 0; i < n; i++) { face_key(f, faces[b + i], &keys.a[i]); matched.a[i] = keys.a[i].k[2] == UINT32_MAX; }   /* under three nodes: no face */
             for (uint32_t i = 0; i < n; i++) {
                 if (matched.a[i]) continue;
                 for (uint32_t j = i + 1; j < n; j++) {

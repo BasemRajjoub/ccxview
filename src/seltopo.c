@@ -151,6 +151,7 @@ bool cv_sel_boundary(const cv_frd* f, const uint32_t* el, uint32_t ne,
         for (int i = 0; i < nf; i++) {
             facet* x = &fa[m++];
             int nc = cv_elem_face_corners(f, e, i, x->c);
+            if (!nc) { m--; continue; }               /* a collapsed hex's top */
             sort4(x->c, nc);
             x->e = e; x->face = (int8_t)i; x->edge = -1;
         }

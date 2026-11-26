@@ -77,8 +77,9 @@ double cv_mq_hm_worst(int q, int frd_type);
 double cv_mq_penalty(int q, int frd_type, double v);
 int    cv_mq_governing(int frd_type, const double v[CV_MQ_N]);
 
-/* every measure of one element; x: its nn nodes in .frd order. Thread safe once
-   cv_mq_init() has run (the shape function tables). */
+/* every measure of one element; x: its nn nodes in .frd order -- a pyramid (CV_PYR5,
+   frd.h) its five, the base then the apex (cv_hex_pyramid gives them). Thread safe
+   once cv_mq_init() has run (the shape function tables). */
 void   cv_mq_init(void);
 void   cv_mq_elem(int frd_type, int nn, const double (*x)[3], double out[CV_MQ_N]);
 

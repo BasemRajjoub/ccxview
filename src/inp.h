@@ -343,7 +343,8 @@ uint32_t cv_elemmap_dat(const cv_elemmap* m, const cv_inp* d, uint32_t id, int i
 /* the *TRANSFORM a node id stands in: index into d->transforms, -1 none */
 int cv_inp_node_transform(const cv_inp* d, uint32_t node);
 
-/* CalculiX element type name -> FRD type code (0 = not drawable), node count. */
+/* CalculiX element type name -> FRD type code (0 = not drawable), node count in the
+   deck (C3D5: type 1, five nodes, stored as a Hex8 with the apex four times). */
 int cv_inp_elem_type(const char* name, int* nn);
 
 #endif

@@ -505,7 +505,7 @@ bool app_sel_csv(void) {
                 for (int a = 0; a < 3; a++) c[a] += G.frd.xyz[3 * i + a] / (double)m;
                 if (val && !G.elem_mode && G.scalar[i] == G.scalar[i]) { mn = CV_MIN(mn, G.scalar[i]); mx = CV_MAX(mx, G.scalar[i]); }
             }
-            fprintf(fp, "%u,%s,%u,%.9g,%.9g,%.9g", G.frd.elem_id[e], cv_frd_type_name(G.frd.etype[e]), G.frd.emat[e], c[0], c[1], c[2]);
+            fprintf(fp, "%u,%s,%u,%.9g,%.9g,%.9g", G.frd.elem_id[e], cv_frd_type_name(cv_elem_type(&G.frd, e)), G.frd.emat[e], c[0], c[1], c[2]);
             if (val && G.elem_mode) fprintf(fp, ",%.9g", G.elem_val[e]);
             else if (val) fprintf(fp, ",%.9g,%.9g", mn, mx);
             fputc('\n', fp);

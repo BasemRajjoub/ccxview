@@ -21,7 +21,35 @@ int cv_frd_type_nodes(int t) {
     return (t > 0 && t < (int)CV_COUNT(kTypes)) ? kTypes[t].nodes : 0;
 }
 const char* cv_frd_type_name(int t) {
+    if (t == CV_PYR5) return "Pyramid5";
     return (t > 0 && t < (int)CV_COUNT(kTypes)) ? kTypes[t].name : "?";
+}
+
+bool cv_hex_pyramid(const uint32_t c[8], uint32_t out[5]) {
+    static const int8_t F[6][4] = { {0,1,2,3}, {4,7,6,5}, {0,4,5,1}, {1,5,6,2}, {2,6,7,3}, {3,7,4,0} };   /* inward */
+    for (int i = 0; i < 6; i++) {
+        uint32_t apex = UINT32_MAX;
+        bool ok = true;
+        for (int j = 0; j < 8 && ok; j++) {
+            bool base = F[i][0] == j || F[i][1] == j || F[i][2] == j || F[i][3] == j;
+            if (base) continue;
+            if (apex == UINT32_MAX) apex = c[j];
+            else ok = c[j] == apex;
+        }
+        for (int a = 0; a < 4 && ok; a++) {
+            ok = c[F[i][a]] != apex;
+            for (int b = a + 1; b < 4 && ok; b++) ok = c[F[i][a]] != c[F[i][b]];
+        }
+        if (!ok) continue;
+        if (out) { for (int a = 0; a < 4; a++) out[a] = c[F[i][a]]; out[4] = apex; }
+        return true;
+    }
+    return false;
+}
+
+int cv_elem_type(const cv_frd* f, uint32_t e) {
+    int t = f->etype[e];
+    return t == 1 && f->eoff[e + 1] - f->eoff[e] == 8 && cv_hex_pyramid(f->conn + f->eoff[e], NULL) ? CV_PYR5 : t;
 }
 
 /* ---- numbers ------------------------------------------------------------- */

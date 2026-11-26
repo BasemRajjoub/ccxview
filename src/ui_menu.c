@@ -83,7 +83,7 @@ static void build(void) {
         char mn[72];
         if (mat) snprintf(mn, sizeof mn, "material %s", mat); else snprintf(mn, sizeof mn, "material %u", f->emat[e]);
         pair(M_HIDE_MAT, M_ONLY_MAT, 0, "%s", mn);
-        pair(M_HIDE_TYPE, M_ONLY_TYPE, 0, "every %s", cv_frd_type_name(f->etype[e]));
+        pair(M_HIDE_TYPE, M_ONLY_TYPE, 0, "every %s", cv_frd_type_name(cv_elem_type(f, e)));
         const cv_inp* d = deck_get();
         int ns = 0;
         for (int i = 0; d && i < d->nsets && ns < NSETS; i++) {

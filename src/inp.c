@@ -13,6 +13,7 @@
 
 static const struct { const char* name; int type, nn; } kElem[] = {
     {"C3D8", 1, 8}, {"C3D8R", 1, 8}, {"C3D8I", 1, 8}, {"F3D8", 1, 8},
+    {"C3D5", 1, 5},                                 /* kept as CalculiX writes it: a Hex8, the apex four times */
     {"C3D6", 2, 6}, {"F3D6", 2, 6},
     {"C3D4", 3, 4}, {"F3D4", 3, 4},
     {"C3D20", 4, 20}, {"C3D20R", 4, 20},
@@ -262,6 +263,7 @@ typedef struct {
     int16_t camp, csub;                 /* AMPLITUDE= and SUBMODEL, STEP= of the open load card */
     bool mc_add, mc_pair;               /* the open *MODEL CHANGE: ADD, TYPE=CONTACT PAIR */
     CV_VEC(uint32_t) shells;            /* ids of S3..S8R elements */
+    CV_VEC(uint32_t) pyrs;              /* ids of C3D5 elements: their faces numbered as a pyramid's */
     bool cshell;                        /* the open *ELEMENT block is shells */
     bool nodefile, elfile;              /* this step already had a *NODE FILE / *EL FILE */
     char outsys_c;                      /* 'G' / 'L' of the open output request */
@@ -404,6 +406,10 @@ static void link_add_elem(P* p, uint32_t e, void* a) {
     if (!cv_push(v->elems, e)) p->oom = true;
 }
 
+static bool is_pyr(const P* p, uint32_t id) {       /* p->pyrs sorted */
+    return bsearch(&id, p->pyrs.a, p->pyrs.n, sizeof id, cv_cmp_u32) != NULL;
+}
+
 static void finish_element(P* p) {
     if (!p->in_elem) return;
     p->in_elem = false;
@@ -416,9 +422,14 @@ static void finish_element(P* p) {
     if (!cv_push(p->eid, p->cur_id) || !cv_push(p->etype, (uint8_t)p->ctype) ||
         !cv_push(p->eoff, (uint32_t)p->conn.n)) { p->oom = true; return; }
     uint32_t frd_order[27];
-    for (int i = 0; i < p->cnn; i++) frd_order[cv_frd_node_pos(p->ctype, p->cnn, i)] = p->cur_nodes[i];
-    for (int i = 0; i < p->cnn; i++) if (!cv_push(p->conn, frd_order[i])) { p->oom = true; return; }
+    int nn = p->cnn;
+    if (p->ctype == 1 && nn == 5) {                 /* a pyramid: the base, then the apex as the top four */
+        for (int i = 0; i < 8; i++) frd_order[i] = p->cur_nodes[i < 4 ? i : 4];
+        nn = 8;
+    } else for (int i = 0; i < nn; i++) frd_order[cv_frd_node_pos(p->ctype, nn, i)] = p->cur_nodes[i];
+    for (int i = 0; i < nn; i++) if (!cv_push(p->conn, frd_order[i])) { p->oom = true; return; }
     if (p->cshell && !cv_push(p->shells, p->cur_id)) { p->oom = true; return; }
+    if (p->ctype == 1 && p->cnn == 5 && !cv_push(p->pyrs, p->cur_id)) { p->oom = true; return; }
     set_add(p, p->cset, p->cur_id);
 }
 
@@ -1715,6 +1726,19 @@ bool cv_inp_parse(cv_inp* d, const char* data, size_t size, cv_inp_reader rd, vo
     cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
     if (p.shells.n) qsort(p.shells.a, p.shells.n, sizeof(uint32_t), cv_cmp_u32);
     d->shells = p.shells.a; d->nshells = (uint32_t)p.shells.n; p.shells.a = NULL;
+    /* a C3D5's faces S1..S5 are its base, then the sides 1-5-2, 2-5-3, 3-5-4, 4-5-1;
+       stored as a Hex8 those are its S1 and S3..S6 (S2, the top, is the apex) */
+    if (p.pyrs.n) {
+        qsort(p.pyrs.a, p.pyrs.n, sizeof(uint32_t), cv_cmp_u32);
+        for (uint32_t i = 0; i < d->ndloads; i++) {
+            cv_dload* q = &d->dloads[i];
+            if (q->elem && q->kind != CV_DL_EDGE && q->face >= 1 && q->face < 5 && is_pyr(&p, q->elem)) q->face++;
+        }
+        for (int i = 0; i < d->nsurfs; i++)
+            for (uint32_t k = 0; k < d->surfs[i].n; k++)
+                if (d->surfs[i].face[k] >= 1 && d->surfs[i].face[k] < 5 && is_pyr(&p, d->surfs[i].elem[k])) d->surfs[i].face[k]++;
+    }
+    cv_free_vec(p.pyrs);
 
     for (size_t k = 0; k < p.mats.n; k++) free(p.mats.a[k]);
     cv_free_vec(p.mats); cv_free_vec(p.mprop); cv_free_vec(p.secs); cv_free_vec(p.lsrc); cv_free_vec(p.sects); cv_free_vec(p.shoffs); cv_free_vec(p.sdofs);
@@ -1731,7 +1755,7 @@ oom:
     cv_free_vec(p.node_id); cv_free_vec(p.xyz); cv_free_vec(p.eid); cv_free_vec(p.eoff);
     cv_free_vec(p.conn); cv_free_vec(p.etype); cv_free_vec(p.sects); cv_free_vec(p.shoffs);
     cv_free_vec(p.trs); cv_free_vec(p.node_tr); cv_free_vec(p.oris); cv_free_vec(p.osects); cv_free_vec(p.layers); cv_free_vec(p.steps);
-    cv_free_vec(p.shells); cv_free_vec(p.sinfo); cv_free_vec(p.mchg);
+    cv_free_vec(p.shells); cv_free_vec(p.pyrs); cv_free_vec(p.sinfo); cv_free_vec(p.mchg);
     for (size_t i = 0; i < p.amps.n; i++) cv_free_vec(p.amps.a[i].tv);
     cv_free_vec(p.amps);
     for (size_t i = 0; i < p.subs.n; i++) { cv_free_vec(p.subs.a[i].nodes); cv_free_vec(p.subs.a[i].surf); }
