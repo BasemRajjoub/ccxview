@@ -79,6 +79,22 @@ static void test_seltopo(void) {
     cv_skin_free(&sk);
     sg_free(&g);
 
+    /* #58: a flat S4 beside two S3 is one face to the flood, as to the outline */
+    {
+        static tm_mesh m;
+        tm_init(&m);
+        uint32_t a = tm_node(&m, 0, 0, 0), b = tm_node(&m, 1, 0, 0), c = tm_node(&m, 2, 0, 0);
+        uint32_t d = tm_node(&m, 0, 1, 0), e = tm_node(&m, 1, 1, 0), h = tm_node(&m, 2, 1, 0);
+        uint32_t q[4] = { a, b, e, d }, t0[3] = { b, c, h }, t1[3] = { b, h, e };
+        tm_elem(&m, 9, 1, q, 4); tm_elem(&m, 7, 1, t0, 3); tm_elem(&m, 7, 1, t1, 3);
+        CHECK(cv_skin_build_crease(&sk, &m.f, NULL, 30.f));
+        CHECK_EQ(sk.n_face, 3);
+        r = cv_sel_face_flood(&m.f, &sk, 0, 30.f, &n);
+        CHECK_EQ(n, 3);
+        free(r);
+        cv_skin_free(&sk);
+    }
+
     /* ---- the lasso's test ---- */
     const float sq[] = { 0, 0, 10, 0, 10, 10, 0, 10 }, vee[] = { 0, 0, 5, 8, 10, 0, 5, 10 };
     CHECK(cv_point_in_poly(5, 5, sq, 4));

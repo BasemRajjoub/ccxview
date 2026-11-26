@@ -543,8 +543,8 @@ it was left, and at first the filters and the kept ones are folded:
 - Lasso: drawn round what you want with the left button held, the elements
   wholly inside (the nodes inside, when ticked).
 - Faces: a click on an outer face takes every face reached from it without
-  crossing a feature edge (the outline's crease angle, a change of material or
-  element type, an edge of one or three faces): a fillet, a hole's wall, a flat
+  crossing a feature edge (the outline's crease angle, a change of material,
+  or from shell to solid, an edge of one or three faces): a fillet, a hole's wall, a flat
   side. Their elements and the nodes of the faces.
 - Edge chain: a click near a feature edge takes the nodes along it, on through
   smooth turns (up to the crease angle) to a corner: a hole's rim, an edge.

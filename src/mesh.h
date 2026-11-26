@@ -49,7 +49,8 @@ uint32_t cv_box_elems(const cv_frd* f, const uint8_t* vis, const uint8_t* inside
    Feature edges are the part's outline, which stays readable on a mesh too
    fine for its element edges: skin edges used by one face only (shell borders,
    open meshes), by three or more, or by two faces that differ in material or
-   element type or meet at more than the crease angle; and every beam. The
+   kind (a shell beside a solid; not S3 beside S4, a wedge beside a hex) or
+   meet at more than the crease angle; and every beam. The
    angle is taken on the undeformed quads and triangles (not the split
    triangles, so a flat quad has no crease along its diagonal); a shell has no
    inside, so its faces count as parallel whichever way their normals point. */
@@ -80,6 +81,10 @@ int  cv_elem_face_corners(const cv_frd* f, uint32_t e, int face, uint32_t out[4]
    nodes, the one between corners 0 and 1 first. Returns 3, 4, 6 or 8; 0 for none. */
 int  cv_elem_face_nodes(const cv_frd* f, uint32_t e, int face, uint32_t out[8]);
 int  cv_elem_nfaces(const cv_frd* f, uint32_t e);     /* 0 for a beam; 1 for a shell */
+/* -1 when the normal nm of a face (corners v[n]) of solid e points into it, else +1.
+   The face tables do not all turn one way (a wedge's bottom looks in, its sides
+   out; a hex's faces all in), nor do meshes numbered the other way round. */
+int  cv_face_out_sign(const cv_frd* f, uint32_t e, const uint32_t* v, int n, const double nm[3]);
 void cv_skin_free(cv_skin* s);
 
 /* ---- picking ------------------------------------------------------------ */

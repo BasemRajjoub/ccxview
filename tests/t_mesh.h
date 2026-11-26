@@ -171,6 +171,45 @@ static void test_feature_edges(void) {
     CHECK(cv_skin_build(&s, &m.f, NULL));
     CHECK_EQ(s.n_fedge, 9);
     cv_skin_free(&s);
+
+    /* #58: a flat S4 beside two S3 (a 2x1 strip): the 6 border edges; the seam
+       from quad to triangle and the triangles' diagonal are no outline */
+    tm_init(&m);
+    {
+        uint32_t a = tm_node(&m, 0, 0, 0), b = tm_node(&m, 1, 0, 0), c = tm_node(&m, 2, 0, 0);
+        uint32_t d = tm_node(&m, 0, 1, 0), e = tm_node(&m, 1, 1, 0), g = tm_node(&m, 2, 1, 0);
+        uint32_t q[4] = { a, b, e, d }, t0[3] = { b, c, g }, t1[3] = { b, g, e };
+        tm_elem(&m, 9, 1, q, 4); tm_elem(&m, 7, 1, t0, 3); tm_elem(&m, 7, 1, t1, 3);
+    }
+    CHECK(cv_skin_build(&s, &m.f, NULL));
+    CHECK_EQ(s.n_fedge, 6);
+    {
+        const float a[3] = { 1, 0, 0 }, b[3] = { 1, 1, 0 }, c[3] = { 2, 1, 0 };
+        CHECK(!tm_has_fedge(&m, &s, a, b) && !tm_has_fedge(&m, &s, a, c));
+    }
+    cv_skin_free(&s);
+    m.emat[2] = 2;                                   /* another material: a seam again */
+    CHECK(cv_skin_build(&s, &m.f, NULL));
+    CHECK_EQ(s.n_fedge, 8);
+    cv_skin_free(&s);
+
+    /* ... and a hex beside two wedges (a 2x1x1 block): the box's 12 edges, the
+       four along x cut at x = 1 (16), no ring where the hex meets the wedges */
+    tm_init(&m);
+    tm_brick(&m, 0, 0, 0, 1);
+    for (int k = 0; k < 2; k++) {
+        static const float w[2][3][2] = { { {1,0}, {2,0}, {2,1} }, { {1,0}, {2,1}, {1,1} } };
+        uint32_t v[6];
+        for (int i = 0; i < 6; i++) v[i] = tm_node(&m, w[k][i % 3][0], w[k][i % 3][1], (float)(i / 3));
+        tm_elem(&m, 2, 1, v, 6);
+    }
+    CHECK(cv_skin_build(&s, &m.f, NULL));
+    CHECK_EQ(s.n_fedge, 16);
+    {
+        const float a[3] = { 1, 0, 0 }, b[3] = { 1, 0, 1 };
+        CHECK(!tm_has_fedge(&m, &s, a, b));
+    }
+    cv_skin_free(&s);
 }
 
 /* ---- quadratic faces through their mid-side nodes ---------------------------------- */

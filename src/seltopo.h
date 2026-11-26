@@ -32,7 +32,7 @@ bool cv_sel_boundary(const cv_frd* f, const uint32_t* el, uint32_t ne,
 uint32_t cv_skin_face_of_tri(const cv_frd* f, const cv_skin* s, size_t t);
 /* The skin faces reached from face k without crossing an edge where the faces
    meet at more than crease_deg (normals of the undeformed corners; a shell face
-   either way round), differ in material or element type, or where one, three
+   either way round), differ in material or kind (shell, solid), or where one, three
    or more faces meet. Indices into s->face. */
 uint32_t* cv_sel_face_flood(const cv_frd* f, const cv_skin* s, uint32_t k, float crease_deg, uint32_t* n);
 

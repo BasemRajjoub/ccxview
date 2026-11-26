@@ -232,6 +232,8 @@ uint32_t* cv_sel_face_flood(const cv_frd* f, const cv_skin* s, uint32_t k0, floa
         uint32_t e = s->face[k] >> 3, c[4];
         int nc = cv_elem_face_corners(f, e, (int)(s->face[k] & 7), c);
         newell(f, c, nc, nrm + 3 * k);
+        if (!is_shell(f->etype[e]) && cv_face_out_sign(f, e, c, nc, nrm + 3 * k) < 0)   /* as the outline's */
+            for (int j = 0; j < 3; j++) nrm[3 * k + j] = -nrm[3 * k + j];
         first[k] = (uint32_t)m;
         for (int j = 0; j < nc; j++) {
             uint64_t a = c[j], b = c[(j + 1) % nc];
@@ -260,7 +262,7 @@ uint32_t* cv_sel_face_flood(const cv_frd* f, const cv_skin* s, uint32_t k0, floa
                 while (hi + 1 < m && srt[hi + 1].key == kp) hi++;
                 if (hi - lo != 1) continue;               /* an open edge, or three faces or more */
                 uint32_t o = srt[lo].face == k ? srt[hi].face : srt[lo].face, eo = s->face[o] >> 3;
-                if (seen[o] || f->etype[eo] != f->etype[ek] || (f->emat && f->emat[eo] != f->emat[ek])) continue;
+                if (seen[o] || is_shell(f->etype[eo]) != is_shell(f->etype[ek]) || (f->emat && f->emat[eo] != f->emat[ek])) continue;
                 double d = nrm[3 * k] * nrm[3 * o] + nrm[3 * k + 1] * nrm[3 * o + 1] + nrm[3 * k + 2] * nrm[3 * o + 2];
                 if (is_shell(f->etype[ek])) d = fabs(d);
                 if (d < cmin) continue;                   /* a crease */

@@ -50,6 +50,18 @@ int cv_elem_nfaces(const cv_frd* f, uint32_t e) {
     return faces_of(f->etype[e], &ft, &solid);
 }
 
+int cv_face_out_sign(const cv_frd* f, uint32_t e, const uint32_t* v, int n, const double nm[3]) {
+    double d = 0;                                   /* face centre less element centre, along nm */
+    uint32_t k0 = f->eoff[e], ne = f->eoff[e + 1] - k0;
+    for (int c = 0; c < 3; c++) {
+        double fc = 0, ec = 0;
+        for (int i = 0; i < n; i++) fc += f->xyz[3 * v[i] + c];
+        for (uint32_t i = 0; i < ne; i++) ec += f->xyz[3 * f->conn[k0 + i] + c];
+        d += nm[c] * (fc / n - ec / CV_MAX(ne, 1));
+    }
+    return d < 0 ? -1 : 1;
+}
+
 int cv_elem_face_nodes(const cv_frd* f, uint32_t e, int face, uint32_t out[8]) {
     const face_t* ft; bool solid;
     int nf = faces_of(f->etype[e], &ft, &solid);
@@ -372,6 +384,13 @@ static void face_normal(const cv_frd* f, const uint32_t* v, int n, float out[3])
     out[0] = (float)(nx / l); out[1] = (float)(ny / l); out[2] = (float)(nz / l);
 }
 
+/* ... a solid's turned outward, so a wedge's sides compare with a hex's (#58) */
+static void solid_normal(const cv_frd* f, uint32_t e, const uint32_t* v, int n, bool shell, float out[3]) {
+    face_normal(f, v, n, out);
+    double d[3] = { out[0], out[1], out[2] };
+    if (!shell && cv_face_out_sign(f, e, v, n, d) < 0) for (int k = 0; k < 3; k++) out[k] = -out[k];
+}
+
 /* corners of skin face `code` and whether it is a shell face */
 static int skin_face(const cv_frd* f, uint32_t code, uint32_t v[4], bool* shell) {
     const face_t* ft; bool solid;
@@ -427,10 +446,12 @@ static bool skin_features(cv_skin* s, const cv_frd* f, const uint8_t* vis, float
             uint32_t code0 = s->face[sl->face], e0 = code0 >> 3, v0[4];
             bool shell0;
             int n0 = skin_face(f, code0, v0, &shell0);
-            if (f->etype[e0] != f->etype[e] || (f->emat && f->emat[e0] != f->emat[e])) { sl->feat = 1; continue; }
-            if (!have_nm) { face_normal(f, v, n, nm); have_nm = true; }
+            /* a shell meeting a solid, or another material, is a seam of the part; a triangle
+               among quads (S3 in an S4 mesh, a wedge among hexes) is only the mesher's (#58) */
+            if (shell0 != shell || (f->emat && f->emat[e0] != f->emat[e])) { sl->feat = 1; continue; }
+            if (!have_nm) { solid_normal(f, e, v, n, shell, nm); have_nm = true; }
             float n0m[3];
-            face_normal(f, v0, n0, n0m);
+            solid_normal(f, e0, v0, n0, shell0, n0m);
             float d = nm[0] * n0m[0] + nm[1] * n0m[1] + nm[2] * n0m[2];
             if (shell || shell0) d = fabsf(d);
             bool degenerate = (nm[0] == 0 && nm[1] == 0 && nm[2] == 0) || (n0m[0] == 0 && n0m[1] == 0 && n0m[2] == 0);
