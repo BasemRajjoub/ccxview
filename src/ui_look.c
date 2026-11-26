@@ -22,7 +22,7 @@ static void look_combo(struct nk_context* ctx) {
     if (uik_combo(ctx, "Lighting", items, G.render_view ? 3 : 2, &k, help)) app_set_lighting(k);   /* render view off: flat | headlight */
 }
 
-/* the top bar's Render list: floor, shadows, AO, the backdrop, Render image */
+/* the top bar's Render list: floor, shadows, AO, the backdrop, Render image (the Export picture) */
 void uii_render_menu(struct nk_context* ctx, float s, float row) {
     nk_layout_row_dynamic(ctx, row, 1);
     tip(ctx, "A floor under the model, fading out to the backdrop, with a soft shadow where parts touch or hover over it");
@@ -38,23 +38,9 @@ void uii_render_menu(struct nk_context* ctx, float s, float row) {
         snprintf(b, sizeof b, "%s %s", G.bg_mode == k ? "*" : " ", cv_bg_names[k]);
         if (nk_combo_item_label(ctx, b, NK_TEXT_LEFT)) G.bg_mode = k;
     }
-    tip(ctx, "A still by accumulating samples, saved as a PNG next to the model (more in the Render tab)");
-    char lab[48];
-    snprintf(lab, sizeof lab, "Render image (%d samples)", G.render_samples);
-    if (nk_combo_item_label(ctx, lab, NK_TEXT_LEFT)) app_render_start(G.render_samples, NULL);
+    tip(ctx, "The Export picture window, Rendered: a still by accumulating samples, then the Save dialog");
+    if (nk_combo_item_label(ctx, "Render image...", NK_TEXT_LEFT)) app_picture_window(true);
     (void)s;
-}
-
-/* samples [16 | 64 | 256]  [Render image] */
-static void render_row(struct nk_context* ctx) {
-    static const char* items[] = { "16", "64", "256" };
-    static const int vals[] = { 16, 64, 256 };
-    int cur = G.render_samples <= 16 ? 0 : G.render_samples <= 64 ? 1 : 2, k = cur;
-    if (uik_combo(ctx, "Samples", items, 3, &k, "Samples per image: more is smoother and slower")) G.render_samples = vals[k];
-    static const char* b[] = { "Render image" };
-    static const char* t[] = { "A still by accumulating samples (jittered camera, ambient occlusion and light: smooth edges, little noise). "
-                               "Always of the render view. Saved as a PNG of the view next to the model; Esc or moving the view stops it" };
-    if (uik_buttons(ctx, NULL, 1, b, t) == 0) app_render_start(G.render_samples, NULL);
 }
 
 static void materials(struct nk_context* ctx) {
@@ -111,7 +97,10 @@ void section_render(struct nk_context* ctx, float s, float row) {
     G.look_ao_radius = pct / 100.f;
     uik_check(ctx, "also while moving", &G.look_ao_moving, "Keep the occlusion while the view moves. Never on a software renderer: it is too slow there");
     uik_group(ctx, "Image");
-    render_row(ctx);
+    static const char* ib[] = { "Render image..." };
+    static const char* it[] = { "The Export picture window, Rendered: a still by accumulating samples (jittered camera, ambient occlusion and "
+                                "light: smooth edges, little noise), its look and what is on it, then the Save dialog" };
+    if (uik_buttons(ctx, NULL, 1, ib, it) == 0) app_picture_window(true);
     uik_group(ctx, "Materials");
     materials(ctx);
     static const char* b[] = { "Show materials" };

@@ -57,7 +57,7 @@ static int wanted(double now, double* gap) {
     *gap = G.max_fps > 0 ? 1.0 / G.max_fps : 0;
     if (!G.idle_redraw || O.no_idle_skip) return DRAW_ALWAYS;
     if (O.shot_path || app_render_active() || ui_test_on() || O.export_anim || O.probe_set || O.menu_set || O.box_set || O.nselect || O.integ) return DRAW_ALWAYS;
-    if (G.video || G.seq_left > 0 || G.export_req || app_report_busy()) return DRAW_ALWAYS;        /* frames written, not shown: never paced */
+    if (G.video || G.seq_left > 0 || app_picture_busy() || app_report_busy()) return DRAW_ALWAYS;        /* frames written, not shown: never paced */
     if (app_busy() || G.dlg_running || G.flight || G.anim_on || (G.playing && G.loaded && G.frd.n_steps > 1)) return DRAW_PACED;
     if (G.note[0] && now - G.note_t < 5.5) app_wake();          /* the status note fades out at 5 s */
     if (g_left > 0) return DRAW_PACED;

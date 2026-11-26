@@ -391,6 +391,7 @@ void ui_frame(struct nk_context* ctx, int fw, int fh) {
     window_failure(ctx, s, row, fw, fh);
     uii_window_cpal(ctx, s, row, fw, fh);
     uii_window_report(ctx, s, row, fw, fh);
+    uii_window_picture(ctx, s, row, fw, fh);
     window_mesh(ctx, s, row, fw, fh);
     window_convergence(ctx, s, row, fw, fh);
     window_legend_settings(ctx, s, row);

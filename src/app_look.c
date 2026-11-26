@@ -203,7 +203,7 @@ void app_look_frame(cv_draw* d) {
     d->ao_strength = G.look_ao_strength;
     /* the floor: under the box of the shape as drawn, a hair lower so a part resting on it does not cut it */
     memcpy(d->bg_plain, G.bg, sizeof d->bg_plain); d->bg_mode = app_eff_bg_mode();
-    d->floor_on = d->look && G.look_floor && G.show_faces && !(G.png_alpha && G.export_req) && d->diag > 0.f;
+    d->floor_on = d->look && G.look_floor && G.show_faces && !app_picture_alpha() && d->diag > 0.f;
     d->floor_hold = G.playing && soft;
     d->shadow = d->look && G.look_shadow && G.show_faces && !cv_render_see_on() && !(moving && soft);
     d->shadow_size = soft ? CV_SHADOW_SOFT : CV_SHADOW_SIZE;

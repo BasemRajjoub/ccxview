@@ -130,7 +130,9 @@ static const setting S[] = {
     SEC("Deformation and animation"),
     B(deform_auto), I(anim_mode, 0, 1), F(anim_period, 0.2f, 20), F(fps, 0.1f, 60),
     SEC("Export"),
-    I(exp_kind, 0, 1), B(exp_video), B(exp_gif), I(exp_cycles, 1, 20), I(exp_fps, 1, 60), B(exp_lock_range), B(png_alpha),
+    I(exp_kind, 0, 1), B(exp_video), B(exp_gif), I(exp_cycles, 1, 20), I(exp_fps, 1, 60), B(exp_lock_range),
+    I(pic_quality, 0, 1), I(pic_look, 0, 2), B(pic_floor), B(pic_shadow), B(pic_ao), I(pic_backdrop, 0, 4), I(pic_bg, 0, 2),
+    B(pic_legend), B(pic_axes), B(pic_title), B(pic_tags), B(pic_markers),
     I(rep_skip, 0, 511), I(rep_pics, 0, 31), B(rep_pdf),
     SEC("Panes: the Scene (left) and the Inspector (right) shown, their widths in pixels at scale 1"),
     B(scene_on), F(scene_w, 120, 2000), B(insp_on), F(insp_w, 120, 2000),
@@ -276,6 +278,8 @@ void settings_load(void) {
         if (k >= 0 && k < CV_PK_N) G.pick_kinds = 1 << k;
     }
     cv_cfg_unset(&C, "pick_kind");
+    if (cv_cfg_get_bool(&C, "png_alpha", false) && !cv_cfg_get(&C, "pic_bg", NULL)) G.pic_bg = 1;   /* before the Export picture */
+    cv_cfg_unset(&C, "png_alpha");
     for (int i = 0; i < NS; i++) if (S[i].kind != '#') get_one(&S[i]);
     ui_set_zoom(cv_cfg_get_float(&C, "ui_zoom", 1.f));
     ui_set_font_size(cv_cfg_get_float(&C, "ui_font", ui_get_font_size()));

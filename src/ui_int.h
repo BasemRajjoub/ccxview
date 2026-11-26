@@ -288,6 +288,7 @@ void window_units(struct nk_context* ctx, float s, float row, int fw, int fh);
 void window_failure(struct nk_context* ctx, float s, float row, int fw, int fh);
 void uii_window_cpal(struct nk_context* ctx, float s, float row, int fw, int fh);   /* ui_cpal.c */
 void uii_window_report(struct nk_context* ctx, float s, float row, int fw, int fh); /* ui_report.c */
+void uii_window_picture(struct nk_context* ctx, float s, float row, int fw, int fh); /* ui_picture.c */
 void section_failure(struct nk_context* ctx, float s, float row);
 void window_mesh(struct nk_context* ctx, float s, float row, int fw, int fh);     /* ui_mesh.c */
 void section_mesh(struct nk_context* ctx, float s, float row);

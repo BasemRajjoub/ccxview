@@ -131,7 +131,8 @@ static void x_vtk(void) { app_export_data(true); }
 static void x_report(void) { app_export_report(NULL, false); }
 static void x_report_pdf(void) { app_export_report(NULL, true); }
 static void x_report_builder(void) { G.show_report = !G.show_report; }
-static void x_render(void) { app_render_start(G.render_samples, NULL); }
+static void x_render(void) { app_picture_window(true); }
+static void x_picture(void) { app_picture_window(false); }
 static void x_mats(void) { app_show_materials(); }
 static void x_prev(void) { app_set_step(G.step - 1); }
 static void x_next(void) { app_set_step(G.step + 1); }
@@ -164,6 +165,8 @@ static void x_nopick(void) { app_pick_cancel(); }
 
 static const char* const it_light[]  = { "flat", "headlight", "studio" };
 static const char* const it_samples[] = { "16", "64", "256" };
+static const char* const it_picq[]  = { "quick (as on screen)", "rendered" };
+static const char* const it_picbg[] = { "as shown", "transparent", "white" };
 static const char* const it_axis[]   = { "X", "Y", "Z" };
 static const char* const it_up[]     = { "Y", "Z" };
 static const char* const it_anim[]   = { "0..1", "-1..1" };
@@ -375,13 +378,15 @@ const cv_cmd cv_cmds[] = {
     FLT("look_ao_strength", "Occlusion strength", "ao creases", "How dark the creases get", G.look_ao_strength, 0.f, 1.f, 0.01f, NULL, RND("Ambient occlusion")),
     FLT("look_ao_radius", "Occlusion radius", "ao creases", "How far a point occludes, as a share of the model's size", G.look_ao_radius, 0.001f, 0.5f, 0.001f, NULL, RND("Ambient occlusion")),
     BOOLP("look_ao_moving", "Occlusion while moving", "ao", "Keep the occlusion while the view moves", G.look_ao_moving, NULL, RND("Ambient occlusion")),
-    ENUMG("render_samples", "Render samples", "quality image still anti-aliasing", "Samples per image: more is smoother and slower", it_samples, g_samples, s_samples, RND("Image")),
-    ACT("render_image", "Render image", "still picture ray raytrace photo high quality", "A still by accumulating samples, saved as a PNG next to the model", x_render, RND("Image")),
+    ACT("render_image", "Render image", "still picture ray raytrace photo high quality", "The Export picture window with Rendered quality: samples accumulated, then saved as a PNG", x_render, RND("Image")),
     ACT("show_materials", "Show materials", "colour by material look metal plastic", "Colour the faces by material, lit by the studio: each material takes its look", x_mats, RND("Materials")),
     GO("goto_looks", "Material looks", "metal steel plastic glass rubber roughness", "The look of each deck material", RND("Materials")),
     /* ---- Export ---- */
-    ACT("export_png", "Export image", "screenshot picture png save capture", "The 3D view with legend and axes as <model>_stepN.png beside the model (Ctrl+E)", x_png, EXP("Picture")),
-    BOOLP("png_alpha", "Transparent PNG background", "alpha cutout picture", "The PNG with a transparent background: only the model, legend and axes on the page", G.png_alpha, NULL, EXP("Picture")),
+    ACT("export_picture", "Export picture...", "image png screenshot render still save legend axes transparent white background", "The Export picture window: quick or rendered, the look, what is on it, the background", x_picture, EXP("Picture")),
+    ACT("export_png", "Save picture", "screenshot image png save capture export", "The PNG of the view with the Export picture's settings, through the Save dialog (Ctrl+E)", x_png, EXP("Picture")),
+    ENUMP("pic_quality", "Picture quality", "image png render quick rendered still", "Quick: the view as drawn. Rendered: samples accumulated", G.pic_quality, it_picq, NULL, EXP("Picture")),
+    ENUMG("render_samples", "Picture samples", "render quality image still anti-aliasing", "Samples per rendered picture: more is smoother and slower", it_samples, g_samples, s_samples, EXP("Picture")),
+    ENUMP("pic_bg", "Picture background", "png alpha transparent white cutout image", "The picture's background: as shown, transparent or white", G.pic_bg, it_picbg, NULL, EXP("Picture")),
     ENUMP("exp_kind", "Animation: what loops", "video movie deformation cycle every step", "A deformation cycle, or every increment once", G.exp_kind, it_exp, NULL, EXP("Animation")),
     BOOLP("exp_video", "Animation: one video file", "mp4 gif movie png sequence frames", "One video file (MP4 or GIF) instead of a PNG sequence", G.exp_video, NULL, EXP("Animation")),
     BOOLP("exp_gif", "Animation: GIF", "animated gif mp4 movie", "The video file as an animated GIF instead of MP4", G.exp_gif, NULL, EXP("Animation")),

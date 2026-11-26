@@ -121,7 +121,7 @@ ccxview model.frd --faces set               # faces by: field, type, material, g
 ccxview model.frd --look studio           # the faces' light: flat (exact colours), headlight (render view off), studio (physically based, render view on)
 ccxview model.frd --render-view off       # the plain view: flat / headlight light, the background colour, no floor, shadows, AO (on by default; key V)
 ccxview model.frd --background abaqus    # the backdrop: plain, abaqus, ansys, studio (default), white
-ccxview model.frd --render 64 out.png     # Render image: 64 accumulated samples (smooth edges, calm AO), the view as a PNG
+ccxview model.frd --render 64 out.png     # a rendered picture: 64 accumulated samples of the render view (smooth edges, calm AO), as a PNG
 ccxview model.frd --fly-clip 0.01           # free flight, the model cut 1% of its size ahead of the eye
 ccxview model.frd --fly-hide 0.01           # ... or whole elements there hidden
 ccxview model.frd --box 0.5,0.2,0.9,0.8     # box selection (fractions of the view; x0 > x1: crossing)
@@ -269,7 +269,7 @@ It prints what it selected and the field's max and min over it.
 | click the legend's unit / right-click the legend | units / legend settings |
 | right-click the title block | its lines, date format, free text and the text they make, editable by hand (drag it to move it, like the legend) |
 | tips (status bar) | tooltips on or off (kept in the settings) |
-| Ctrl+O / Ctrl+E / Ctrl+F | open / export PNG / find |
+| Ctrl+O / Ctrl+E / Ctrl+F | open / save the picture of the view (with the Export picture's settings) / find |
 | Ctrl+K (or Ctrl+Shift+P) | the command palette in the middle of the window: type what you want ("shadow", "background", "png"); Up / Down (they wrap), PageUp / PageDown or the mouse select; Enter runs it (a switch flips, an action runs, a list or number goes to its place; the selected one also shows its control in the row) and closes; Ctrl+Enter does the same and keeps it open; Alt+Enter or its "pin" puts it on the top bar; Esc or a click beside it closes. Empty, it lists the recently used, then a few suggestions. With "Command palette" off (Settings > Interface, `ui_palette=0`): the search box at the top of the left panel instead, Enter goes to the first result |
 | Ctrl+1 .. Ctrl+5 | the left panel on Model, Results, View, Render, Export (it shows if hidden) |
 | Esc | cancel a pending pick (path end, measurement nodes), close the menu, put a selection tool down, clear the selection |
@@ -316,7 +316,7 @@ component. The bar ids `tb:field` and `tb:comp` both stand for it.
   mesh quality (Mesh quality... for the summary and worst elements).
 - **View**: look from, camera, colours and legend, symbol sizes, copies (mirror, replicate,
   cyclic symmetry), clip and crop; Measurements... and Selection... (the Inspector's tabs).
-- **Render**: the studio look. **Export**: pictures, animations, data, the file (compare, watch, reload).
+- **Render**: the studio look, Render image. **Export**: Export picture... (quality, look, background, overlays) and Save (Ctrl+E), animations, data, the file (compare, watch, reload).
 - **Inspector** (right panel): tabs Inspect, Selection, Measure.
 - **Toolbar**: deformation scale, animation, colour map, bands, orthographic (customizable: right-click).
 - **Status bar**: units, messages.

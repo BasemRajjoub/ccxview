@@ -697,10 +697,12 @@ static void anim_segments(struct nk_context* ctx) {
 void section_export(struct nk_context* ctx, float s, float row) {
     (void)s; (void)row;
     uik_group(ctx, "Picture");
-    static const char* const il[1] = { "Image of the view (Ctrl+E)" };
-    static const char* const it[1] = { "The 3D view with legend and axes as <model>_stepN.png beside the model, numbered, never overwritten" };
-    if (uik_buttons(ctx, NULL, 1, il, it) == 0) app_export_png();
-    uik_check(ctx, "transparent background", &G.png_alpha, "The PNG with a transparent background: only the model, legend and axes on the page");
+    static const char* const il[2] = { "Export picture...", "Save (Ctrl+E)" };
+    static const char* const it[2] = { "The Export picture window: quick or rendered, the look, what is on it (legend, axes, title ...), the background",
+                                       "The PNG of the view at once with the Export picture's settings, then the Save dialog" };
+    int pk = uik_buttons(ctx, NULL, 2, il, it);
+    if (pk == 0) app_picture_window(false);
+    else if (pk == 1) app_export_png();
 
     /* animation: what loops, in which form, how long */
     uik_group(ctx, "Animation");

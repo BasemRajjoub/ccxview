@@ -810,8 +810,9 @@ background colour of Settings > Background, no floor, shadows, ambient occlusion
 The settings are not changed by the switch, only not used. The little arrow beside the box
 opens a list with Floor, Shadows, Ambient occlusion, the Backdrop and Render image. On a
 software renderer a model of over 2 million skin triangles opens with it off for that
-session (a message says so; the ini keeps your choice). Render image always renders the render
-view, then puts the switch back. Exports follow the screen.
+session (a message says so; the ini keeps your choice). Render image opens the Export
+picture window with Rendered picked (see Export). Exports follow the screen unless the
+Export picture's settings say otherwise.
 
 The Lighting list (the Render tab) has three settings: flat (exact
 colours, as in the legend), headlight (the older shading, a light at the eye) and studio.
@@ -835,8 +836,8 @@ look_ao_radius, look_ao_moving, look_smooth, look_exposure, look_mats
 The Backdrop list (the Render tab) picks the view's background: plain
 (the colour of the white / grey / black buttons and the picker), the gradients of Abaqus
 and ANSYS, a studio vignette (the default) or white. A gradient is dithered against
-banding; the studio's reflections take a little of its colours. A transparent PNG export
-leaves the backdrop out. Settings key bg_mode (0 plain .. 4 white); `--background
+banding; the studio's reflections take a little of its colours. A picture exported with a
+transparent background leaves the backdrop out. Settings key bg_mode (0 plain .. 4 white); `--background
 plain|abaqus|ansys|studio|white`.
 
 The floor (Render tab, "Floor"; key look_floor, `--opt look_floor=0` to leave it out)
@@ -856,16 +857,19 @@ the model's shadow in the key direction on top of the contact shadow. About one 
 faces: cheap on a GPU, a third of the frame on a software renderer with a million elements, where
 it is also skipped while the view moves. The key light's direction can be offset a little
 (cv_draw.light_jitter) for soft shadows by accumulation.
-Render image (the Render tab or the top bar's list: samples 16 / 64 / 256, key render_samples) makes a
+A Rendered picture (the Export picture window's Quality; the Render tab's and the top bar's
+Render image open that window with it picked; samples 16 / 64 / 256, key render_samples) is a
 still by progressive accumulation, no path tracer: for N frames the scene alone (no UI)
 is drawn offscreen with the camera moved by a sub-pixel (Halton 2,3, so edges are
 antialiased), the ambient occlusion noise turned and the key light's direction nudged,
 each sample joins a float average (RGBA32F, RGBA16F where 32F cannot be rendered to) and
-the window shows the average with "rendering 23/64" in the status. The last frame saves
-the view as a PNG, through the Save dialog as the PNG export does. Esc or any move of the
-camera stops it. A playing animation (the swing, the steps) holds on its frame while the
+the window shows the average with "rendering 23/64" in the status. On the last frame the
+overlays the picture includes (legend, axes, title block) are drawn over the average and the
+view is saved as a PNG through the Save dialog. Esc or any move of the camera stops it and
+puts the view back. A playing animation (the swing, the steps) holds on its frame while the
 samples are taken, so they do not smear it, and goes on after. `--render N out.png` renders N samples after the load (waiting as --shot does), writes
-the view to out.png and quits. A transparent background is not applied to it.
+the view to out.png and quits; it always renders the render view, without the overlays. A
+rendered picture is opaque: a transparent background is not applied to it.
 
 ## Post-processing kept with the model
 
@@ -901,13 +905,31 @@ BE2/BE3).
 
 ## Export
 
-PNG of the view (with a transparent background when asked), MP4 video or PNG
+PNG of the view (quick or rendered, with a transparent or white background when asked), MP4 video or PNG
 sequence of a deformation cycle or of every step, CSV, VTK for ParaView, and a
 view file to reproduce a picture later. All
 available from the command line for scripting ([usage.md](usage.md)).
 
-The PNG of the view (Ctrl+E) and Render image's picture are taken at once, then the
-system's Save dialog asks where they go, offering `<model>_stepN.png` beside the model;
+One Export picture window (the Export tab's "Export picture...", the command palette, the
+Render tab's and the top bar's Render image) sets how the PNG of the view is taken, and its
+"Save picture..." takes it:
+
+- Quality: Quick (the view as drawn on screen) or Rendered (the accumulation above, 16 / 64 /
+  256 samples).
+- Look: as shown, the render view (with its own Floor, Shadows, Ambient occlusion and
+  Backdrop) or the plain view.
+- Background: as shown, transparent (Quick only: the model and the overlays alone) or white.
+- Include: Legend, Axes, Title block, Probe tag and labels, Min / max markers. Each is kept
+  when the view shows it; unticked, it is left out. Ticking never adds what the view hides.
+
+These settings change the picture only: the view is set to them for a few frames with the
+window out of the way, read back, and put back as it was. They are kept in the ini (keys
+pic_quality, pic_look, pic_floor, pic_shadow, pic_ao, pic_backdrop, pic_bg, pic_legend,
+pic_axes, pic_title, pic_tags, pic_markers); the defaults give the picture as on screen.
+Ctrl+E (and the Export tab's "Save", the menu's "Save a picture") takes it at once with them.
+`--shot` and `--render` do not use them.
+
+The picture is taken, then the system's Save dialog asks where they go, offering `<model>_stepN.png` beside the model;
 Cancel saves nothing. Where there is no such dialog (Linux, which has the portal's Open
 only; the web, which downloads; scripted runs) the picture goes beside the model as
 before. A playing animation holds on its frame while a picture is taken. The status

@@ -233,8 +233,14 @@ typedef struct {
     int       exp_cycles;            /* deformation cycles recorded */
     int       exp_fps;               /* frames per second of a video / cycle */
     bool      exp_lock_range;        /* keep the colour range fixed while recording */
-    bool      png_alpha;             /* the PNG of the view with a transparent background */
-    int       png_alpha_arm;         /* frames drawn with the background cleared to alpha 0 before the export reads them */
+    /* the Export picture (app_picture.c): its own settings, the view's put back after it */
+    int       pic_quality;           /* 0 quick (as drawn), 1 rendered (render_samples accumulated) */
+    int       pic_look;              /* CV_PIC_LOOK_*: as shown, the render view or the plain one */
+    bool      pic_floor, pic_shadow, pic_ao;   /* ... the render view's, for the picture */
+    int       pic_backdrop;          /* ... and its backdrop (render_bg.h CV_BG_*) */
+    int       pic_bg;                /* CV_PIC_BG_*: as shown, transparent, white */
+    bool      pic_legend, pic_axes, pic_title, pic_tags, pic_markers;   /* left out when unticked */
+    bool      show_picture;          /* the Export picture window (ui_picture.c) */
     int       tree[CV_TREE_N];       /* CV_TREE_*: panel section expanded (nk_collapse_states) */
     int       seq_warm;              /* frames to let pass before recording: the arming frame is drawn with the old state */
     void*     video;                 /* an MP4 being written (cv_video*), frames of the sequence go there */
@@ -470,7 +476,6 @@ typedef struct {
     cv_sta    sta;                   /* convergence history of the run, if the .sta / .cvg were beside it */
     bool      show_conv;             /* the convergence window */
     float     bg[3];                 /* view background */
-    bool      export_req;            /* save the 3D view as PNG after this frame */
     char      note[1100];            /* short status-bar note (e.g. where an export went) */
     double    note_t;
     bool      show_geo_pts, show_geo_crv, show_geo_srf;   /* cgx geometry layers */
@@ -653,7 +658,15 @@ float app_rep_pitch(int axis);       /* distance between replicated copies along
 void app_rep_refresh(void);          /* after the displacements change: the cell's face jumps */
 int  app_copies(void);               /* instances drawn: the model, mirror and replicate copies */
 void app_copy_matrix(int i, float* M);   /* model matrix of instance i (0: identity) */
-void app_export_png(void);
+/* app_picture.c: the Export picture. Picture-only overrides of the view, then put back */
+enum { CV_PIC_LOOK_SHOWN, CV_PIC_LOOK_RENDER, CV_PIC_LOOK_PLAIN };
+enum { CV_PIC_BG_SHOWN, CV_PIC_BG_ALPHA, CV_PIC_BG_WHITE };
+void app_export_png(void);               /* the picture with G.pic_* over the next frames (Ctrl+E): the Save dialog after */
+void app_picture_window(bool rendered);  /* the Export picture window; rendered: Quality set to Rendered */
+void app_picture_tick(void);             /* each frame, after drawing */
+bool app_picture_busy(void);             /* being taken: the window out of the view, the animation held */
+bool app_picture_alpha(void);            /* ... with a transparent background */
+bool app_picture_labels_off(void);       /* ... without the labels */
 void app_export_animation(void);         /* per the Export section: deformation cycles or every step, PNGs or MP4 */
 int  app_export_progress(int* done, int* total);  /* a frame export running? fills done / total */
 void app_export_cancel(void);            /* stop a frame export; a video keeps what it has */
@@ -918,7 +931,9 @@ bool app_redraw_needed(void);
 bool app_idle_skip(void);                    /* true: this frame is skipped (slept, no swap); call before any sg_ call */
 size_t app_total_msgs(void);
 /* app_render.c: "Render image", a still by progressive accumulation */
-void app_render_start(int samples, const char* png);   /* png NULL: named as the view export names it */
+void app_render_start(int samples, const char* png);   /* --render: of the render view, to png (NULL: O.shot_path) */
+void app_render_still(int samples);           /* the Export picture's: the view as set, the average left in the frame */
+bool app_render_finished(void);               /* ... it is there now (once) */
 void app_render_cancel(void);
 bool app_render_active(void);
 

@@ -2,9 +2,11 @@
    For N frames the scene (not the UI) is drawn into an offscreen target of the swapchain's
    formats, each time with a sub-pixel camera jitter (Halton 2,3: antialiased edges), a
    turned AO noise and a nudged key light; every sample joins a float running average
-   (blend: acc = s * 1/n + acc * (1 - 1/n)), and the average is what the window shows. The
-   last frame saves a PNG of the view, named as the view export names it. Esc, or any move
-   of the camera, stops it. app.c frame() calls begin / scene_pass / present. */
+   (blend: acc = s * 1/n + acc * (1 - 1/n)), and the average is what the window shows. A
+   still of the Export picture (app_picture.c) ends with the average in the frame, the UI's
+   overlays (legend, axes, title block) drawn over it, and is read back from there; --render
+   saves the average alone to its file and quits. Esc, or any move of the camera, stops it.
+   app.c frame() calls begin / scene_pass / present. */
 #include "app_int.h"
 #include "render_ao.h"
 #include "sokol_app.h"
@@ -14,7 +16,6 @@
 #include <string.h>
 
 bool cv_save_png_region(const char* path, int x, int y, int w, int h, int fb_h, const float* bg);
-void export_now(void);                       /* app.c: the next free <model>_stepN.png */
 
 static const char* kVS =
     GLSL_HDR
@@ -33,8 +34,9 @@ static struct {
     bool on;
     int n, i, w, h;                           /* samples wanted, done; the target's size */
     float mvp0[16];                           /* the view it started from */
-    char path[1100];                          /* "": the view export's name */
+    char path[1100];                          /* --render: "" for O.shot_path */
     double t0;
+    bool still, finished;                     /* the Export picture's: its average left in the frame */
     bool made, cli_started;
     int cli_wait;
     bool restore;                             /* render view was off: back off when done */
@@ -45,6 +47,7 @@ static struct {
 
 bool app_render_active(void) { return R.on; }
 int  app_render_done(void) { return R.i; }
+bool app_render_finished(void) { bool f = R.finished; R.finished = false; return f; }
 
 void app_render_cancel(void) {
     if (!R.on) return;
@@ -57,10 +60,22 @@ void app_render_cancel(void) {
 
 void app_render_start(int n, const char* path) {
     if (!G.loaded || R.on) return;
-    R.restore = !G.render_view;               /* a still is always of the render view */
+    R.restore = !G.render_view;               /* --render: always of the render view */
     if (R.restore) app_render_view(true);
     R.on = true; R.n = n < 1 ? 1 : n; R.i = 0;
+    R.still = R.finished = false;
     snprintf(R.path, sizeof R.path, "%s", path ? path : "");
+    R.t0 = cv_now();
+    app_wake();
+}
+
+/* the Export picture's samples: the view as it is set (app_picture.c chose its look) */
+void app_render_still(int n) {
+    if (!G.loaded || R.on) return;
+    R.restore = false;
+    R.on = true; R.n = n < 1 ? 1 : n; R.i = 0;
+    R.still = true; R.finished = false;
+    R.path[0] = 0;
     R.t0 = cv_now();
     app_wake();
 }
@@ -163,7 +178,8 @@ static void quad(sg_pipeline pip, sg_view tex, float wgt) {
 }
 
 /* the scene pass is over: add it to the average, then the swapchain pass sp is open with the
-   average drawn into it; on the last sample the PNG is saved from it and the pass reopened on top */
+   average drawn into it; on the last sample of --render the PNG is saved from it and the pass
+   reopened on top, of a still it stays for the UI to be drawn over and app_picture.c to read */
 void app_render_present(sg_pass* sp) {
     sg_begin_pass(&(sg_pass){ .action.colors[0].load_action = SG_LOADACTION_LOAD, .attachments.colors[0] = R.acc_att });
     quad(R.pip_acc, R.col_tex, 1.f / (float)(R.i + 1));
@@ -172,14 +188,14 @@ void app_render_present(sg_pass* sp) {
     sg_begin_pass(sp);
     quad(R.pip_show, R.acc_tex, 1.f);
     if (R.i < R.n) return;
-    sg_end_pass();
     R.on = false;
-    if (R.restore) { R.restore = false; app_render_view(false); }
     fprintf(stderr, "rendered %d samples in %.1f s\n", R.n, cv_now() - R.t0);
-    if (O.render_n || R.path[0]) {
-        bool ok = cv_save_png_region(R.path[0] ? R.path : O.shot_path, G.vp_x + 2, G.vp_y + 2, G.vp_w - 4, G.vp_h - 4, sapp_height(), NULL);
-        if (!ok) fprintf(stderr, "cannot write %s\n", R.path[0] ? R.path : O.shot_path);
-    } else export_now();
+    if (R.still) { R.finished = true; return; }
+    sg_end_pass();
+    if (R.restore) { R.restore = false; app_render_view(false); }
+    const char* out = R.path[0] ? R.path : O.shot_path;
+    if (out && !cv_save_png_region(out, G.vp_x + 2, G.vp_y + 2, G.vp_w - 4, G.vp_h - 4, sapp_height(), NULL))
+        fprintf(stderr, "cannot write %s\n", out);
     if (O.render_n) sapp_request_quit();
     sg_pass again = *sp;
     again.action.colors[0].load_action = SG_LOADACTION_LOAD;

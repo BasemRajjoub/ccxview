@@ -201,6 +201,7 @@ static void close_all(struct nk_context* ctx) {
     G.show_contact = false;
     G.show_cpal = false;
     G.show_report = false;
+    G.show_picture = false;
     ui_search_clear();
     G.show_select = false; G.sel_tool = CV_ST_NONE; G.sel_mode = CV_SEL_NEW;
     G.scene_on = G.insp_on = true; G.pick_kinds = CV_PK_DEFAULT;
@@ -679,6 +680,34 @@ static bool shadow_off(struct nk_context* ctx) { return !G.look_shadow; }
 static bool floor_off(struct nk_context* ctx) { return !G.look_floor; }
 static void render_16(struct nk_context* ctx) { G.render_samples = 16; }
 static void render_stop(struct nk_context* ctx) { app_render_cancel(); }
+static bool pic_window_rendered(struct nk_context* ctx) { return G.show_picture && G.pic_quality == 1 && win_of(ctx, "Export picture"); }
+static void pic_look_render(struct nk_context* ctx) { (void)ctx; G.pic_look = CV_PIC_LOOK_RENDER; }
+/* the Export picture: the legend and the axes left out, a white page; the view's own put back */
+static int pic_bg_mode;
+static void pic_open(struct nk_context* ctx) {
+    (void)ctx;
+    G.pic_quality = 0; G.pic_look = CV_PIC_LOOK_SHOWN; G.pic_bg = CV_PIC_BG_WHITE;
+    G.pic_legend = G.pic_axes = false; G.pic_title = G.pic_tags = G.pic_markers = true;
+    G.hide_legend = G.hide_axes = false; G.bg_mode = 0; pic_bg_mode = G.bg_mode;
+    G.note[0] = 0;
+    G.show_picture = true;
+}
+static bool pic_shown(struct nk_context* ctx) { return G.show_picture && win_of(ctx, "Export picture"); }
+static bool pic_saved(struct nk_context* ctx) {
+    (void)ctx;
+    if (app_picture_busy()) return false;
+    const char* p = strstr(G.note, "saved ");
+    const char* e = p ? strstr(p, ".png") : NULL;
+    bool ok = e && cv_file_size(p + 6) > 100 && !G.hide_legend && !G.hide_axes && G.bg_mode == pic_bg_mode;
+    if (!ok) fprintf(stderr, "export picture: note '%s', legend %d axes %d bg %d\n", G.note, G.hide_legend, G.hide_axes, G.bg_mode);
+    return ok;
+}
+static void pic_rendered(struct nk_context* ctx) { (void)ctx; G.pic_quality = 1; G.render_samples = 16; G.note[0] = 0; }
+static bool pic_rendering(struct nk_context* ctx) { (void)ctx; return app_picture_busy() && app_render_active() && G.hide_legend && G.hide_axes; }
+static void pic_end(struct nk_context* ctx) {
+    (void)ctx;
+    G.pic_quality = 0; G.pic_bg = CV_PIC_BG_SHOWN; G.pic_legend = G.pic_axes = true; G.show_picture = false;
+}
 static bool look_popup(struct nk_context* ctx) { return popup_open(ctx, "Scene"); }
 static bool look_studio(struct nk_context* ctx) { return G.shading && G.look == 1 && !popup_open(ctx, "Scene"); }
 static bool title_user_off(struct nk_context* ctx) { return !G.title_line[CV_TB_USER]; }
@@ -2081,10 +2110,18 @@ static const step script[] = {
     AT_POPUP("Scene", 0.5f, 0.88f), CLICK, WAIT(2), EXPECT(bg_white, "the last preset, white, is picked"),
     AT_TIP("Scene", "A floor under the model"), CLICK, WAIT(2), EXPECT(floor_off, "the Floor box turns the floor off"), DO(floor_on),
     AT_TIP("Scene", "The key light's shadows"), CLICK, WAIT(2), EXPECT(shadow_off, "the Shadows box turns the shadows off"), DO(floor_on),
-    CASE("rendering: Render image starts the accumulation (of the render view, though it is off), Esc stops it and puts it back"),
-    DO(close_all), DO(render_open), DO(rv_off), DO(render_16), WAIT(3), AT_TIP("Scene", "A still by accumulating samples"), CLICK, WAIT(2),
-    EXPECT(rv_during_render, "rendering, the render view on for it"), DO(render_stop), WAIT(2), EXPECT(rv_restored, "stopped, the render view off again"),
-    DO(rv_on), DO(sections_open), WAIT(2),
+    CASE("rendering: Render image opens the Export picture, Rendered; its look the render view (off in the view), Esc stops it and puts it back"),
+    DO(close_all), DO(render_open), DO(rv_off), DO(render_16), WAIT(3), AT_TIP("Scene", "The Export picture window, Rendered"), CLICK, WAIT(3),
+    EXPECT(pic_window_rendered, "the Export picture window, Rendered picked"), DO(pic_look_render), WAIT(2),
+    AT_TIP("Export picture", "Take the picture"), CLICK, WAIT(6),
+    EXPECT(rv_during_render, "rendering, the render view on for it"), DO(render_stop), WAIT(3), EXPECT(rv_restored, "stopped, the render view off again"),
+    DO(pic_end), DO(rv_on), DO(sections_open), WAIT(2), PANELS_ANSWER,
+    CASE("export picture: the legend and the axes left out on a white page, saved, the view put back; Rendered accumulates first"),
+    DO(close_all), DO(fit_view), DO(pic_open), WAIT(3), EXPECT(pic_shown, "the Export picture window opens"),
+    AT_TIP("Export picture", "Take the picture"), CLICK, WAIT(10), EXPECT(pic_saved, "a PNG saved, the legend, axes and backdrop back"),
+    DO(pic_rendered), WAIT(3), AT_TIP("Export picture", "Take the picture"), CLICK, WAIT(6), EXPECT(pic_rendering, "Rendered: the samples, the overlays left out meanwhile"),
+    WAIT(60), EXPECT(pic_saved, "its average saved, the view put back"),
+    DO(pic_end), DO(sections_open), WAIT(2), PANELS_ANSWER,
     CASE("inspect: the pick boxes: a face ticked and clicked, then the same click's edge with the node, the element alone, back"),
     DO(close_all), DO(fit_view), WAIT(2), AT_TIP("Inspector", "A click picks a face"), CLICK, WAIT(2), AT_MODEL, CLICK, WAIT(3),
     EXPECT(face_picked, "a face: its nodes, the status bar"),

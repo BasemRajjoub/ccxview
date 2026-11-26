@@ -181,6 +181,8 @@ static void init(void) {
     G.tree[CV_TREE_LAYERS] = G.tree[CV_TREE_GROUPS] = G.tree[CV_TREE_FIELDS] = G.tree[CV_TREE_VIEW] = 1;
     G.tree[CV_TREE_CAMERA] = G.tree[CV_TREE_COLOURS] = G.tree[CV_TREE_CONTACT] = 1;
     G.exp_video = true; G.exp_cycles = 1; G.exp_fps = 30; G.exp_lock_range = true;
+    G.pic_floor = G.pic_shadow = G.pic_ao = true; G.pic_backdrop = 3;   /* the picture: as on screen */
+    G.pic_legend = G.pic_axes = G.pic_title = G.pic_tags = G.pic_markers = true;
     G.watch = O.watch;
     if (!O.ui_test) settings_load();     /* the user's last choices override the defaults above */
     if (O.max_fps_set) G.max_fps = CV_MAX(O.max_fps, 0);
@@ -362,7 +364,7 @@ static void eye_caps(bool eye_clip, const cv_draw* d) {
 /* a still picture is being taken (Render image's samples, a PNG's frames, the Report's
    views): the animation pauses on the frame it was at, and goes on from there after */
 static bool still_capture(void) {
-    return app_render_active() || G.export_req || app_report_busy();
+    return app_render_active() || app_picture_busy() || app_report_busy();
 }
 
 /* Displacement animation: the deformation swings within the current step. */
@@ -403,7 +405,7 @@ static void poll_watch(void) {
 /* Glass panels: the scene over the whole window, seen through the panels. G.vp_* stay the free
    area (camera, picking, labels' room); not on a frame a picture is taken of, so exports keep it. */
 static bool glass_frame(void) {
-    return G.ui_glass && G.loaded && !G.hide_panels && G.vp_w > 1 && G.vp_h > 1 && !G.export_req &&
+    return G.ui_glass && G.loaded && !G.hide_panels && G.vp_w > 1 && G.vp_h > 1 && !app_picture_busy() &&
            G.seq_left == 0 && !O.export_anim && !G.video && !app_render_active() && !app_report_busy();
 }
 
@@ -577,7 +579,7 @@ static void frame(void) {
         }
         eye_caps(eye_clip, &d);
         d.hl_size = G.hl_size * ui_scale();
-        d.labels = G.label_kinds != 0 || app_measure_count() > 0;   /* the measurements are labels too */
+        d.labels = (G.label_kinds != 0 || app_measure_count() > 0) && !app_picture_labels_off();   /* the measurements are labels too */
         d.labels_on_top = G.label_front || G.label_probe_only ||   /* names, Gauss points and the probe's: inside the model */
                           (G.label_kinds & (1 << CV_LABEL_SETS | 1 << CV_LABEL_LINKS | 1 << CV_LABEL_MATERIALS | 1 << CV_LABEL_GPVALUE | 1 << CV_LABEL_GPID));
         memcpy(d.label_rgb, G.label_rgb, sizeof d.label_rgb); memcpy(d.label_box_rgba, G.label_box_rgba, sizeof d.label_box_rgba);
@@ -623,7 +625,7 @@ static void frame(void) {
             cv_render_depth_end(&d);
         }
     }
-    bool alpha_png = G.png_alpha && G.export_req;   /* a transparent picture: no backdrop */
+    bool alpha_png = app_picture_alpha();   /* a transparent picture: no backdrop */
     float bgm[3];
     cv_bg_colors(alpha_png ? CV_BG_PLAIN : app_eff_bg_mode(), G.bg, NULL, NULL, bgm);
     if (G.loaded) cv_render_floor_prepare(&d);    /* the floor's contact shadow: its own passes, before this one */
@@ -676,11 +678,7 @@ static void frame(void) {
     if (rend) { sg_end_pass(); app_render_present(&sp); }
     snk_render(sapp_width(), sapp_height());
     sg_end_pass();
-    /* a transparent PNG: two frames cleared to alpha 0 first (the read-back sees the frame before) */
-    if (G.export_req) {
-        if (G.png_alpha && G.png_alpha_arm < 2) G.png_alpha_arm++;
-        else { G.export_req = false; G.png_alpha_arm = 0; export_now(); }
-    }
+    app_picture_tick();                  /* the Export picture: its settings a few frames, then read back */
     if (O.export_anim && G.loaded && !app_busy()) { O.export_anim = false; app_export_animation(); }
     app_report_tick();                   /* the Report builder's pictures: one view a few frames */
     if (G.seq_left > 0 && !app_busy() && G.seq_warm > 0) G.seq_warm--;
@@ -711,10 +709,6 @@ static void frame(void) {
     }
     sg_commit();
 }
-
-/* Export: the 3D view as drawn (legend and axes included, panels excluded),
-   next to the model as <model>_step<N>.png, numbered so nothing is overwritten. */
-void app_export_png(void) { if (G.loaded) G.export_req = true; }
 
 /* one animation cycle as <model>_stepN_animNN.png: Animate is forced on for
    the run and restored afterwards */
@@ -864,7 +858,7 @@ static void saved_note(const char* path, bool ok) {
     if (ok) CV_EXPORTED(path);
 }
 
-/* a still the user asked for (a PNG, Render image's end) waits here while the system's
+/* a still the user asked for (the Export picture, quick or rendered) waits here while the system's
    "save as" is open; def: the name beside the model it offers */
 static struct { unsigned char* px; int w, h; char def[1100]; } g_still;
 
@@ -878,6 +872,8 @@ static bool still_ask(void) {
     return !G.native_dlg_missing && !G.dlg_running && !O.export_kind && !O.render_n && !O.shot_path && !O.report;
 }
 
+/* the view as drawn (panels excluded) as <model>_step<N>.png beside the model, numbered so
+   nothing is overwritten, or where the Save dialog says; app_picture.c set it up */
 void export_now(void) {
     char base[1024], path[1100];
     snprintf(base, sizeof base, "%s", G.path);
@@ -897,7 +893,7 @@ void export_now(void) {
     /* 2 px in from each side: the neighbouring panels draw their borders on the edge */
     int x = G.vp_x + 2, y = G.vp_y + 2, w = G.vp_w - 4, h = G.vp_h - 4;
     if (G.seq_left == 0 && still_ask()) {     /* a still: the picture now, where it goes once the dialog says */
-        unsigned char* px = cv_read_png_region(x, y, w, h, sapp_height(), G.png_alpha ? G.bg : NULL);
+        unsigned char* px = cv_read_png_region(x, y, w, h, sapp_height(), app_picture_alpha() ? G.bg : NULL);
         char abs[1100];
         if (px && cv_abs_path(path, abs, sizeof abs) && cv_filedlg_save_start("", abs, CV_DLG_SAVE_PNG)) {
             free(g_still.px);
@@ -909,7 +905,7 @@ void export_now(void) {
         }
         if (px) { still_write(path, px, w, h); free(px); return; }
     }
-    bool ok = cv_save_png_region(path, x, y, w, h, sapp_height(), G.png_alpha && G.seq_left == 0 ? G.bg : NULL);
+    bool ok = cv_save_png_region(path, x, y, w, h, sapp_height(), app_picture_alpha() && G.seq_left == 0 ? G.bg : NULL);
     saved_note(path, ok);
 }
 
